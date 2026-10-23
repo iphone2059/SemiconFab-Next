@@ -2,20 +2,8 @@
   "version": 1,
   "dependencies": {
     "net11.0": {
-      "fab_contracts": {
-        "type": "Project",
-        "dependencies": {
-          "fab_ids": "[1.0.0, )"
-        }
-      },
-      "fab_ids": {
+      "fab_shared": {
         "type": "Project"
-      },
-      "fab_industrial_profiles": {
-        "type": "Project",
-        "dependencies": {
-          "fab_ids": "[1.0.0, )"
-        }
       }
     }
   }

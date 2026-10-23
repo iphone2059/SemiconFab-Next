@@ -13,7 +13,9 @@ ADR-0001 落地后，12 个业务域仍是 `x_domain` / `x_application` / `x_inf
 
 - 12 个业务域：`site_service`、`manufacturing_service`、`process_engineering_service`、`equipment_service`、`material_handling_service`、`maintenance_service`、`quality_service`、`site_resources_service`、`orchestration_service`、`experiment_service`、`analytics_service`、`identity_service`。
 - EAP：`eap_service`；工业接口：`industrial_interfaces_service`；仿真内核：`simulation_engine`。
-- 共享内核保持独立：`fab_ids`、`fab_contracts`、`fab_contracts_adapters`、`fab_messaging`、`fab_observability`、`fab_hosting`、`fab_configuration`、`fab_industrial_profiles`、`fab_security_policies`、`fab_optimization_abstractions`。
+- 共享内核后续按 ADR-0004 合并为单一 `fab_shared`；本 ADR 列出的 10 个共享库已不再单独成项目。原列：
+
+`fab_ids`、`fab_contracts`、`fab_contracts_adapters`、`fab_messaging`、`fab_observability`、`fab_hosting`、`fab_configuration`、`fab_industrial_profiles`、`fab_security_policies`、`fab_optimization_abstractions`。
 - 宿主保持独立：`api_service`、`worker_service`、`realtime_service`、`ot_gateway_service`；测试：`simulation_tests`、`orchestration_tests`、`api_tests`。
 
 ## 关联规则

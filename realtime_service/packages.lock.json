@@ -1,14 +1,8 @@
 {
-  "version": 2,
+  "version": 1,
   "dependencies": {
     "net11.0": {
-      "fab.contracts": {
-        "type": "Project",
-        "dependencies": {
-          "Fab.Ids": "[1.0.0, )"
-        }
-      },
-      "fab.ids": {
+      "fab_shared": {
         "type": "Project"
       }
     }

@@ -9,8 +9,6 @@
     <RootNamespace>Fab.Simulation</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../fab_ids/fab_ids.csproj" />
-    <ProjectReference Include="../fab_contracts/fab_contracts.csproj" />
-    <ProjectReference Include="../fab_optimization_abstractions/fab_optimization_abstractions.csproj" />
+    <ProjectReference Include="../fab_shared/fab_shared.csproj" />
   </ItemGroup>
 </Project>

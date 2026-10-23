@@ -290,63 +290,45 @@
       "analytics_service": {
         "type": "Project",
         "dependencies": {
-          "fab_contracts": "[1.0.0, )",
-          "fab_ids": "[1.0.0, )"
+          "fab_shared": "[1.0.0, )"
         }
       },
       "api_service": {
         "type": "Project",
         "dependencies": {
           "analytics_service": "[1.0.0, )",
-          "fab_contracts": "[1.0.0, )",
+          "fab_shared": "[1.0.0, )",
           "identity_service": "[1.0.0, )",
           "orchestration_service": "[1.0.0, )",
           "site_service": "[1.0.0, )"
         }
       },
-      "fab_contracts": {
-        "type": "Project",
-        "dependencies": {
-          "fab_ids": "[1.0.0, )"
-        }
-      },
-      "fab_ids": {
+      "fab_shared": {
         "type": "Project"
-      },
-      "fab_optimization_abstractions": {
-        "type": "Project",
-        "dependencies": {
-          "fab_ids": "[1.0.0, )"
-        }
       },
       "identity_service": {
         "type": "Project",
         "dependencies": {
-          "fab_contracts": "[1.0.0, )",
-          "fab_ids": "[1.0.0, )"
+          "fab_shared": "[1.0.0, )"
         }
       },
       "orchestration_service": {
         "type": "Project",
         "dependencies": {
-          "fab_contracts": "[1.0.0, )",
-          "fab_ids": "[1.0.0, )",
+          "fab_shared": "[1.0.0, )",
           "simulation_engine": "[1.0.0, )"
         }
       },
       "simulation_engine": {
         "type": "Project",
         "dependencies": {
-          "fab_contracts": "[1.0.0, )",
-          "fab_ids": "[1.0.0, )",
-          "fab_optimization_abstractions": "[1.0.0, )"
+          "fab_shared": "[1.0.0, )"
         }
       },
       "site_service": {
         "type": "Project",
         "dependencies": {
-          "fab_contracts": "[1.0.0, )",
-          "fab_ids": "[1.0.0, )"
+          "fab_shared": "[1.0.0, )"
         }
       }
     }

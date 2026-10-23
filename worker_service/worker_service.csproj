@@ -13,7 +13,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../fab_contracts/fab_contracts.csproj" />
+    <ProjectReference Include="../fab_shared/fab_shared.csproj" />
     <ProjectReference Include="../orchestration_service/orchestration_service.csproj" />
   </ItemGroup>
 </Project>

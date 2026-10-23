@@ -10,7 +10,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../fab_contracts/fab_contracts.csproj" />
+    <ProjectReference Include="../fab_shared/fab_shared.csproj" />
     <ProjectReference Include="../site_service/site_service.csproj" />
     <ProjectReference Include="../identity_service/identity_service.csproj" />
     <ProjectReference Include="../orchestration_service/orchestration_service.csproj" />

@@ -1,6 +1,6 @@
 # ADR-0001 — 扁平、独立的项目布局
 
-- 状态：已采纳（2026-10-23）；项目粒度后续由 ADR-0002 调整（三层合并为单一 `*_service`）；前端包边界由 ADR-0003 调整（合并为单一 `web_app`）
+- 状态：已采纳（2026-10-23）；项目粒度后续由 ADR-0002 调整（三层合并为单一 `*_service`）；前端包边界由 ADR-0003 调整（合并为单一 `web_app`）；共享库粒度由 ADR-0004 调整（合并为单一 `fab_shared`）
 - 取代：`SemiconFab-Next-Engineering-v1.1/engineering/10-REPOSITORY-SOLUTION-LAYOUT.md` 中“单一 solution + src/apps/tests 容器”的仓库布局（外部规范包本身不修改）
 
 ## 背景
