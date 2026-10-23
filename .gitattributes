@@ -1,2 +1,6 @@
 * text=auto eol=lf
 *.ps1 text eol=crlf
+# Content-addressed assets and the documentation manifest bind exact bytes.
+assets/legacy/** -text
+docs/SemiconFab-Next-Engineering-v1.1/** -text
+docs/SemiconFab-Next-Engineering-v1.1/engineering/MODULE-MATRIX.csv whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

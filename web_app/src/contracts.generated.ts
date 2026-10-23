@@ -75,3 +75,34 @@ export interface SiteKpiDto {
   readonly observationEndUs: string;
   readonly fabCount: number;
 }
+export interface CatalogEntryDto {
+  readonly recordId: string;
+  readonly vendor: string;
+  readonly model: string;
+  readonly category: string;
+  readonly domain: string;
+  readonly conformanceLevel: string;
+  readonly completenessPct: number;
+  readonly missingFields: string[];
+  readonly record: Readonly<Record<string, unknown>>;
+  readonly legacy: Readonly<Record<string, unknown>>;
+  readonly price: Readonly<Record<string, unknown>> | null;
+}
+export interface CatalogSnapshotDto {
+  readonly contractVersion: number;
+  readonly importId: string;
+  readonly source: string;
+  readonly entries: CatalogEntryDto[];
+}
+export interface CatalogCategoryDto {
+  readonly category: string;
+  readonly domain: string;
+  readonly count: number;
+}
+export interface CatalogPageDto {
+  readonly importId: string;
+  readonly totalCount: number;
+  readonly matchedCount: number;
+  readonly categories: CatalogCategoryDto[];
+  readonly items: CatalogEntryDto[];
+}

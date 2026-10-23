@@ -16,6 +16,8 @@ def kind(value, language):
         return kind(normal, language) + ("?" if language == "cs" else " | null")
     if item == "array":
         return kind(value["items"], language) + "[]"
+    if item == "object" and value.get("additionalProperties") is True:
+        return "System.Text.Json.JsonElement" if language == "cs" else "Readonly<Record<string, unknown>>"
     return {"string": "string", "integer": "int" if language == "cs" else "number", "number": "double" if language == "cs" else "number", "boolean": "bool" if language == "cs" else "boolean"}[item]
 
 
@@ -37,6 +39,13 @@ for route, name, array in [("/api/v1/sites", "SiteDto", True), ("/api/v1/runs", 
         parameters.append({"name": "runId", "in": "query", "required": True, "schema": {"type": "string", "format": "uuid"}})
     paths[route] = {"get": {"parameters": parameters, "responses": {"200": response(name, array), "default": {"description": "ProblemDetails error"}}}}
 paths['/api/v1/runs']['post'] = {"parameters": [{"name": "Idempotency-Key", "in": "header", "required": True, "schema": {"type": "string", "maxLength": 128}}], "requestBody": {"required": True, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateRunRequest"}}}}, "responses": {"202": response('RunSummary'), "default": {"description": "ProblemDetails error"}}}
+paths['/api/v1/catalog'] = {"get": {"parameters": [
+    {"name": "domain", "in": "query", "schema": {"type": "string", "enum": ["ALL", "FAB", "OSAT"]}},
+    {"name": "category", "in": "query", "schema": {"type": "string"}},
+    {"name": "q", "in": "query", "schema": {"type": "string", "maxLength": 200}}],
+    "responses": {"200": response('CatalogPageDto'), "default": {"description": "ProblemDetails error"}}}}
+paths['/api/v1/catalog/{id}'] = {"get": {"parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+    "responses": {"200": response('CatalogEntryDto'), "default": {"description": "ProblemDetails error"}}}}
 openapi = {"openapi": "3.1.0", "info": {"title": "SemiconFab Next Development API", "version": "0.1.0", "description": "Loopback Development identity and local file store only; production and OT are unavailable."}, "paths": paths, "security": [{"LocalDevelopment": []}], "components": {"securitySchemes": {"LocalDevelopment": {"type": "apiKey", "in": "header", "name": "X-Fab-Dev-Key"}}, "schemas": json.loads(json.dumps(schema['$defs']).replace('#/$defs/', '#/components/schemas/'))}}
 targets = {ROOT / "fab_shared/src/Generated/Contracts.g.cs": "\n".join(cs) + "\n", ROOT / "web_app/src/contracts.generated.ts": "\n".join(ts) + "\n", ROOT / "contracts/openapi/openapi.json": json.dumps(openapi, ensure_ascii=False, indent=2) + "\n"}
 parser = argparse.ArgumentParser(description=__doc__)

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { InitializationDisposal } from './babylon-lifecycle';
+import { InitializationDisposal } from '../src/babylon-lifecycle';
 it('defers renderer disposal until asynchronous initialization settles and releases only once', () => {
   let disposed = 0;
   const lease = new InitializationDisposal(() => disposed++);

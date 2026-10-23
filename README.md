@@ -11,7 +11,8 @@
 - **一个测试项目**：`fab_tests` 合并原仿真、编排、API 测试。
 - **完全独立**：每个 csproj 自带 TargetFramework、编译开关与包版本；仓库不含 `*.sln` / `*.slnx`。
 - **按名字关联**：后端只用显式相对 `ProjectReference`；前端源码内部只用相对导入。
-- **设计基线**：功能边界以 `../SemiconFab-Next-Engineering-v1.1` 为准；布局决策见 `docs/adr/0001` … `0006`。
+- **设计基线**：功能边界以 [docs/SemiconFab-Next-Engineering-v1.1](docs/SemiconFab-Next-Engineering-v1.1/README.md) 为准；布局及目录决策见 `docs/adr/`。
+- **前端目录边界**：`web_app/src/` 仅放 `.ts` / `.tsx`；测试在同级 `web_app/tests/`，样式、许可及浏览器资产在同级 `web_app/assets/`。架构检查会阻止混放。
 
 ## 项目清单
 
@@ -20,7 +21,11 @@ fab_shared/   共享内核：StableId、Generated/Contracts.g.cs、确定性 DES
 fab_app/      唯一后端应用：API + Worker + Realtime/OT 占位模式（Sdk.Web）
 fab_tests/    唯一测试项目：仿真 / 编排 / API 集成测试
 web_app/      唯一前端站点：Vite + React + Babylon WebGPU
+  src/        TS/TSX 应用源码与生成类型
+  tests/      前端单元、代理及浏览器验收代码
+  assets/     CSS、数据许可与前端静态资源
 contracts/    JSON Schema（契约单一来源）、OpenAPI、protobuf
+assets/legacy/ 版本化迁移数据、完整原文件与校验清单（后端读取）
 docs/         模块档案 M01–M18、实施状态、ADR
 infrastructure/ assets/ scripts/ tools/ .github/   # 部署参考、资产、脚本、工具、CI
 ```
@@ -50,6 +55,19 @@ npx --yes pnpm@12.15.0 build
 
 ## 文档
 
+- 当前编码进度与验证：[迁移实施记录](docs/migration/progress.md)。首批设备目录位于 `/catalog`，对比位于 `/compare`；兼容 `/catalog-demo.html`、`/compare.html`。
+- 原版到新版迁移规划：[功能迁移与重构规划](docs/superpowers/plans/2026-10-24-main-to-next-refactor.md)（含 44 项功能清单与原版资产基线；以当前四项目架构为准）
 - 模块档案：`docs/modules/M01.md` … `M18.md`
 - 实施状态：`docs/IMPLEMENTATION-STATUS.md`
 - 决策记录：`docs/adr/`
+
+## 原版数据导入
+
+仓库已包含首份导入快照，正常运行不要求旁边存在旧仓库。重新导入时执行：
+
+```powershell
+python tools/migrate_legacy_data.py --source ../SemiconFab-main --output assets/legacy
+python tools/migrate_legacy_data.py --check
+```
+
+相同输入保持同一版本；错误记录生成字段级问题清单，且不会替换当前快照。`Fab__CatalogDirectory` 可指定另一份导入目录。API 当前沿用开发身份；本地 JSON 载入仅影响浏览器预览，不会发布数据或改动基地设备。

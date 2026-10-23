@@ -4,6 +4,10 @@ python tools/generate_contracts.py --check
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 python tools/check_architecture.py
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
+python -m unittest discover -s tools -p 'test_*.py'
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
+python tools/migrate_legacy_data.py --check
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
 $fabProjects = @(Get-ChildItem -LiteralPath . -Directory |
     ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Filter *.csproj -File -ErrorAction SilentlyContinue } |
     Sort-Object FullName)

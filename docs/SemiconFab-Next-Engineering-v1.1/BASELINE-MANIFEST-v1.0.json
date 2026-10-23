@@ -1,0 +1,108 @@
+{
+  "artifact": "SemiconFab Next Multi-FAB Architecture Specification",
+  "architecture_version": "1.0",
+  "baseline_date": "2026-10-23",
+  "source_status": "Design baseline; compliance pending",
+  "files": [
+    {
+      "path": "01-SCOPE-REQUIREMENTS.md",
+      "bytes": 4141,
+      "sha256": "a4c5edd2541df97996d33b9231e13d7d688f6c7c8f58297eb3e2dd361df4ef8c"
+    },
+    {
+      "path": "02-INDUSTRY-STANDARDS.md",
+      "bytes": 5372,
+      "sha256": "ec78d02fbbd1653ebb3d9a2ce49601d07754a904a2e1fa7cac41428602b8659a"
+    },
+    {
+      "path": "03-SYSTEM-ARCHITECTURE.md",
+      "bytes": 4427,
+      "sha256": "f5f78af373ddbbca9040faa4997741f360a6c115f83dd1bb05420f68ebf7391b"
+    },
+    {
+      "path": "04-FAB-DOMAIN-MODEL.md",
+      "bytes": 4757,
+      "sha256": "3d8389966a1260888a0e10f09cd7810ce11c9ab961f3308e53195a29b2738de3"
+    },
+    {
+      "path": "05-DETERMINISTIC-DES.md",
+      "bytes": 4911,
+      "sha256": "b248f4df19d0062524192d82cdf00d6a4a4c0e1302a61d083b51993f49cde499"
+    },
+    {
+      "path": "06-SHARED-RESOURCE-MODES.md",
+      "bytes": 5210,
+      "sha256": "a811529eeec77a4a9fb19585e61684d42d86e1bb276ec7a07531462a5e5dc79f"
+    },
+    {
+      "path": "07-DATA-STORAGE.md",
+      "bytes": 4505,
+      "sha256": "4b7edf5d1195d3defde99c0a940cb395ffc5c33f522e33a71c5bce256c473c3f"
+    },
+    {
+      "path": "08-API-EVENT-CONTRACTS.md",
+      "bytes": 3678,
+      "sha256": "380cc39b977e3eb40eaea0ebb37bffc5ee4550883cb3d65a8ec31e8d6d4204f6"
+    },
+    {
+      "path": "09-WEBGPU-RENDERING.md",
+      "bytes": 4210,
+      "sha256": "33f1c173b82b8b51b47babfe1e1ad2486b1f6f7c1ff19349ec2c172fec16ea45"
+    },
+    {
+      "path": "10-INDUSTRIAL-INTERFACES.md",
+      "bytes": 3484,
+      "sha256": "a1148cfbf52703451fc517f89ef905a7fb487208f21cf604f474d11b96f7e734"
+    },
+    {
+      "path": "11-SECURITY-OPERATIONS.md",
+      "bytes": 3420,
+      "sha256": "ac0d2944a61d8c46f29281d7e68ec0bebb3ee4e495d589eed176305d6b1e8507"
+    },
+    {
+      "path": "12-VERIFICATION-ACCEPTANCE.md",
+      "bytes": 4294,
+      "sha256": "e0a63a13525ff179615a3d6d9858013b210ac4011b8bc65a8cd70a226231d5c9"
+    },
+    {
+      "path": "13-IMPLEMENTATION-PLAN.md",
+      "bytes": 4680,
+      "sha256": "d080adeaba3c620f3d7d87a0d7036177075249bf9449f5ff2fde4fb272d67aec"
+    },
+    {
+      "path": "14-TRACEABILITY-REGISTER.md",
+      "bytes": 2602,
+      "sha256": "d429ec75f77440788c8b2e4e87366d3429461cabf5b4efdbbaf8b9114c4a951e"
+    },
+    {
+      "path": "README.md",
+      "bytes": 5470,
+      "sha256": "621b3f517a1831719dd0def9bc11620bc2da2a12e3af04ea37fbd27583f0a5e4"
+    },
+    {
+      "path": "contracts/fab_events.proto",
+      "bytes": 2403,
+      "sha256": "644de9977865f24f1bb56087f55be4c42d8cddad803408e44ad54cb280484e57"
+    },
+    {
+      "path": "examples/scenarios/site_independent.json",
+      "bytes": 947,
+      "sha256": "ff76327bbc1350fa58870ba55a15c0c149b90ef1661230c50398e8d470b7ce63"
+    },
+    {
+      "path": "examples/scenarios/site_shared_capacity.json",
+      "bytes": 1274,
+      "sha256": "a0911d4e4691feea7c6d8d9fa4f43aab3909e276646f577f7d08c59d4d7a237a"
+    },
+    {
+      "path": "examples/sql/001_initial.sql",
+      "bytes": 5432,
+      "sha256": "3d8450c179cd8293488976badd74bda141cf62cb6b50119152e71bee758f51ba"
+    },
+    {
+      "path": "examples/ts/webgpu-only.ts",
+      "bytes": 1539,
+      "sha256": "b1bc5497c539a0677894258e0f0b24e04a09fbed96fd7804e361d7cd1150497f"
+    }
+  ]
+}

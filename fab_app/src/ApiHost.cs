@@ -6,6 +6,7 @@ using Fab.Analytics;
 using Fab.Identity;
 using Fab.Orchestration;
 using Fab.Site;
+using Fab.Catalog;
 
 namespace Fab.App;
 
@@ -23,6 +24,8 @@ internal static class ApiHost
             builder.WebHost.UseUrls("http://127.0.0.1:5080");
         var data = Path.GetFullPath(builder.Configuration["Fab:DataDirectory"] ?? Path.Combine(builder.Environment.ContentRootPath, ".local", "data"));
         builder.Services.AddSingleton(new SiteDirectory(builder.Configuration.GetValue("Fab:FabCount", 3)));
+        builder.Services.AddSingleton(new CatalogService(Path.GetFullPath(builder.Configuration["Fab:CatalogDirectory"]
+            ?? Path.Combine(AppContext.BaseDirectory, "assets", "legacy"))));
         builder.Services.AddLocalOrchestration(data);
         if (builder.Configuration.GetValue("Fab:EmbeddedWorker", true))
             builder.Services.AddHostedService<SimulationWorker>();
@@ -42,6 +45,10 @@ internal static class ApiHost
                 return;
             }
             try { await next(context); }
+            catch (CatalogUnavailableException)
+            {
+                await Results.Problem(statusCode: 503, title: "Catalog data unavailable", extensions: new Dictionary<string, object?> { ["errorCode"] = "CATALOG_UNAVAILABLE" }).ExecuteAsync(context);
+            }
             catch (IdempotencyConflictException)
             {
                 await Results.Problem(statusCode: 409, title: "Idempotency key conflicts with an earlier request", extensions: new Dictionary<string, object?> { ["errorCode"] = "IDEMPOTENCY_CONFLICT" }).ExecuteAsync(context);
@@ -56,6 +63,9 @@ internal static class ApiHost
         app.MapGet("/health/live", () => Results.Ok(new { status = "live" }));
         app.MapGet("/health/ready", () => Results.Ok(new { status = "ready", environment = "Development", metadataStore = "local-file", productionReady = false })).RequireAuthorization();
         var api = app.MapGroup("/api/v1").RequireAuthorization();
+        api.MapGet("/catalog", (string? domain, string? category, string? q, CatalogService catalog) => catalog.Query(domain, category, q));
+        api.MapGet("/catalog/{id:guid}", (Guid id, CatalogService catalog) =>
+            catalog.Find(id) is { } entry ? Results.Ok(entry) : Results.Problem(statusCode: 404, title: "Catalog record not found"));
         api.MapGet("/sites", (SiteDirectory catalog) => catalog.GetSites());
         api.MapGet("/capabilities", () => new { contractVersion = 1, model = "SYNTHETIC_FIFO_SINGLE_TOOL_V1", independent = true, sharedCapacity = false, otControl = false, postgresql = false, binaryRealtime = false, productionReady = false });
         api.MapGet("/runs", (IRunService runs) => runs.List());

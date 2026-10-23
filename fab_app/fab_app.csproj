@@ -11,5 +11,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../fab_shared/fab_shared.csproj" />
+    <Content Include="../assets/legacy/**/*" Link="assets/legacy/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

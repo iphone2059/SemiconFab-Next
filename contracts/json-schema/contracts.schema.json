@@ -371,6 +371,159 @@
           "maximum": 32
         }
       }
+    },
+    "CatalogEntryDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recordId",
+        "vendor",
+        "model",
+        "category",
+        "domain",
+        "conformanceLevel",
+        "completenessPct",
+        "missingFields",
+        "record",
+        "legacy",
+        "price"
+      ],
+      "properties": {
+        "recordId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "vendor": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "domain": {
+          "type": "string",
+          "enum": [
+            "FAB",
+            "OSAT"
+          ]
+        },
+        "conformanceLevel": {
+          "type": "string"
+        },
+        "completenessPct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "missingFields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "record": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "legacy": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "price": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      }
+    },
+    "CatalogSnapshotDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "importId",
+        "source",
+        "entries"
+      ],
+      "properties": {
+        "contractVersion": {
+          "type": "integer",
+          "const": 1
+        },
+        "importId": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CatalogEntryDto"
+          }
+        }
+      }
+    },
+    "CatalogCategoryDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "domain",
+        "count"
+      ],
+      "properties": {
+        "category": {
+          "type": "string"
+        },
+        "domain": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "CatalogPageDto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "importId",
+        "totalCount",
+        "matchedCount",
+        "categories",
+        "items"
+      ],
+      "properties": {
+        "importId": {
+          "type": "string"
+        },
+        "totalCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "matchedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CatalogCategoryDto"
+          }
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CatalogEntryDto"
+          }
+        }
+      }
     }
   }
 }

@@ -95,7 +95,7 @@ STALE_NAMESPACES = (
     'Fab.Simulation.Core', 'Fab.Simulation.Models', 'Fab.Simulation.Runtime',
     'Fab.App.Hosting', 'Fab.Simulation.Tests', 'Fab.Orchestration.Tests', 'Fab.Api.Tests',
 )
-for folder, namespaces in ((ROOT / 'fab_shared', ('Fab.Simulation', 'Fab.Ids', 'Fab.Contracts')), (ROOT / 'fab_app', ('Fab.App', 'Fab.Site', 'Fab.Orchestration', 'Fab.Analytics', 'Fab.Identity')), (ROOT / 'fab_tests', ('Fab.Tests',))):
+for folder, namespaces in ((ROOT / 'fab_shared', ('Fab.Simulation', 'Fab.Ids', 'Fab.Contracts')), (ROOT / 'fab_app', ('Fab.App', 'Fab.Site', 'Fab.Orchestration', 'Fab.Analytics', 'Fab.Identity', 'Fab.Catalog')), (ROOT / 'fab_tests', ('Fab.Tests',))):
     seen = set()
     for source in folder.rglob('*.cs'):
         if {'obj', 'bin'} & set(source.parts):
@@ -113,6 +113,11 @@ assert not (ROOT / 'package.json').exists(), 'Repository root must not contain a
 assert not (ROOT / 'pnpm-workspace.yaml').exists(), 'Repository root must not contain a pnpm workspace manifest'
 assert not (ROOT / 'pnpm-lock.yaml').exists(), 'Repository root must not contain a workspace lockfile'
 web = ROOT / 'web_app'
+assert (web / 'assets').is_dir() and (web / 'tests').is_dir(), 'Frontend assets/tests must be siblings of src'
+for source in (web / 'src').rglob('*'):
+    if source.is_file():
+        assert source.suffix in {'.ts', '.tsx'}, f'Only TS/TSX belongs in web_app/src: {source}'
+        assert not re.search(r'\.(?:test|spec)\.', source.name), f'Frontend tests belong in web_app/tests: {source}'
 manifest = web / 'package.json'
 assert manifest.exists(), 'web_app/package.json is required'
 data = json.loads(manifest.read_text(encoding='utf-8'))

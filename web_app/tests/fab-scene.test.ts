@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SceneFacade, type SceneBackend } from './fab-scene';
+import { SceneFacade, type SceneBackend } from '../src/fab-scene';
 
 describe('renderer lifecycle', () => {
   it('disposes resources that finish loading after unmount', async () => {

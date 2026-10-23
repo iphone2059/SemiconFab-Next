@@ -1,0 +1,300 @@
+{
+  "name": "SemiconFab Next Engineering Specifications",
+  "version": "1.1",
+  "revision": "2026-10-23-review.1",
+  "baseline_date": "2026-10-23",
+  "file_count_without_manifest": 57,
+  "module_count": 18,
+  "purpose": "Design and reference artifacts; not executable application or industrial certification.",
+  "historical_manifests": [
+    "BASELINE-MANIFEST-v1.0.json"
+  ],
+  "generated_by": "tools/maintain_docs.py",
+  "files": [
+    {
+      "path": "01-SCOPE-REQUIREMENTS.md",
+      "bytes": 4361,
+      "sha256": "a60a45e720f258c4ad2d09f8ca1fdb5d2f15d2ccc6600508d5d3d2624f913407"
+    },
+    {
+      "path": "02-INDUSTRY-STANDARDS.md",
+      "bytes": 6022,
+      "sha256": "9393265d5e064fe640a706c91dc5249aefe095dc78ee4f93cab62c522c480255"
+    },
+    {
+      "path": "03-SYSTEM-ARCHITECTURE.md",
+      "bytes": 5899,
+      "sha256": "bd890176353794dcfd33ee89acccf74d011233c966ddd4a8cde0c75b50cd761f"
+    },
+    {
+      "path": "04-FAB-DOMAIN-MODEL.md",
+      "bytes": 6031,
+      "sha256": "ae8c33266351e76cae79a585cba4d0c8109363257e08d0bbc700992a6cccb40f"
+    },
+    {
+      "path": "05-DETERMINISTIC-DES.md",
+      "bytes": 10346,
+      "sha256": "00f2c7509468c498838d0005ac3433e731e35306ad42500750c882bb231b78d7"
+    },
+    {
+      "path": "06-SHARED-RESOURCE-MODES.md",
+      "bytes": 9863,
+      "sha256": "95172bf71dbfe5e769b430ffcd5004c6f0daf709705a5b483d79ceb0824e186d"
+    },
+    {
+      "path": "07-DATA-STORAGE.md",
+      "bytes": 7385,
+      "sha256": "2cebf8115b6c7d760ac67e92764a26adb1304b7fb373303ce1017dc6116a9a78"
+    },
+    {
+      "path": "08-API-EVENT-CONTRACTS.md",
+      "bytes": 8770,
+      "sha256": "04467bf3a1489efbf9fb440cb93a2aa153df05f2a044b4ec5522c9ca9c3e8547"
+    },
+    {
+      "path": "09-WEBGPU-RENDERING.md",
+      "bytes": 4504,
+      "sha256": "3b6c58d4085fea07a348fdbe6ef91454628745f1231123f0ad8ddb31b73e102d"
+    },
+    {
+      "path": "10-INDUSTRIAL-INTERFACES.md",
+      "bytes": 3484,
+      "sha256": "a1148cfbf52703451fc517f89ef905a7fb487208f21cf604f474d11b96f7e734"
+    },
+    {
+      "path": "11-SECURITY-OPERATIONS.md",
+      "bytes": 4017,
+      "sha256": "92116d4e398908718b9441a5e76dc6a6f1d27b527cf5b6e8ec90777e76b1038e"
+    },
+    {
+      "path": "12-VERIFICATION-ACCEPTANCE.md",
+      "bytes": 6665,
+      "sha256": "33de9d75fe35a5c53cf2d7c792e1e2f705035a6795fdbf55b7f495e60afa4411"
+    },
+    {
+      "path": "13-IMPLEMENTATION-PLAN.md",
+      "bytes": 4724,
+      "sha256": "c56d891211c817f91f940a619df3c55d64f722b054d63c81b223a235b9123505"
+    },
+    {
+      "path": "14-TRACEABILITY-REGISTER.md",
+      "bytes": 3462,
+      "sha256": "3d509d208056018ebdfc921458c110a6bb0282aca3392a4178ba0d54cab0106a"
+    },
+    {
+      "path": "BASELINE-MANIFEST-v1.0.json",
+      "bytes": 3429,
+      "sha256": "86a8081f66c0a173579c9f696d5dc29cbd5674872428f160a9314a1523e6c3e6"
+    },
+    {
+      "path": "README.md",
+      "bytes": 7384,
+      "sha256": "d2698d70f4f677d41c3041c2196d1610426cb603a85591acfc37d67695b6c9b5"
+    },
+    {
+      "path": "REVIEW-2026-10-23.md",
+      "bytes": 5654,
+      "sha256": "4fd40550eac168b6c70d80fa253de3d77b265c2a6c224540ec805d12da468224"
+    },
+    {
+      "path": "contracts/fab_events.proto",
+      "bytes": 4809,
+      "sha256": "7f1be4aa890f375e6134c43f7d932b329a45dcabb80138718978c2a1edd74778"
+    },
+    {
+      "path": "engineering/00-ENGINEERING-INDEX.md",
+      "bytes": 4437,
+      "sha256": "8ab83051b32a89b50b200d5540a4982fb9dd305277ae016049b32d0c6aecaf2e"
+    },
+    {
+      "path": "engineering/10-REPOSITORY-SOLUTION-LAYOUT.md",
+      "bytes": 9292,
+      "sha256": "4585b449efaccc888cfce66e94d986d8928587b27e369166896fb89b22f4c50e"
+    },
+    {
+      "path": "engineering/11-DEPENDENCY-RULES-AND-DI.md",
+      "bytes": 7038,
+      "sha256": "7789ac0817b3499587f1c9b89106fcfe553f8fd8c6b160140f680af097278cfc"
+    },
+    {
+      "path": "engineering/12-EXECUTION-TOPOLOGY.md",
+      "bytes": 10584,
+      "sha256": "125541ca3f4fa302b20ce17157a3a130e71c1f2536f9bea1e1261384349b0aec"
+    },
+    {
+      "path": "engineering/13-DATABASE-DETAIL-DESIGN.md",
+      "bytes": 12220,
+      "sha256": "87045525dc364a970d9f7317f01a8ae83ff34040f5dac0cfc864f981c1199aa4"
+    },
+    {
+      "path": "engineering/14-CONTRACTS-AND-EVENT-FLOWS.md",
+      "bytes": 8475,
+      "sha256": "e13f93b4285b1a09e62613355ebb6f3f8eb6596f9945412d5ba247596550b607"
+    },
+    {
+      "path": "engineering/15-FRONTEND-AND-WEBGPU-PROJECTS.md",
+      "bytes": 6320,
+      "sha256": "ac7b46cd0f97ca49d0c03640593ec2393218fa38eef6e925e089dc6c4da37fbb"
+    },
+    {
+      "path": "engineering/16-QUALITY-AND-DELIVERY.md",
+      "bytes": 5474,
+      "sha256": "7041e7f8169bd1b02a92b9a1761004d97d846f23e039d0042cb7f156ebc92903"
+    },
+    {
+      "path": "engineering/17-INDUSTRY-COMPLIANCE-PROFILES.md",
+      "bytes": 3819,
+      "sha256": "da85332c6aff7db7f5bbf258f44b0249d23e447628a3abb80acd0510cdfd81cf"
+    },
+    {
+      "path": "engineering/18-TECHNICAL-CONTRACT-EXAMPLES.md",
+      "bytes": 11235,
+      "sha256": "f1d59747fee5a1f05d625f041eef3ba9eb0ed3d53ac8913eb039de42edf37a79"
+    },
+    {
+      "path": "engineering/19-DELIVERY-WORKPACKAGES.md",
+      "bytes": 5818,
+      "sha256": "b110a16a0fe032ec83cbfc2a3d8fbeab145651281de9e50481c25c8b323bcced"
+    },
+    {
+      "path": "engineering/20-WINDOWS-DEV-SETUP.md",
+      "bytes": 3544,
+      "sha256": "71bad4bee0d92dcf0c08c857054f4d53bedf92056b90fb884173dc2ba3570c41"
+    },
+    {
+      "path": "engineering/21-PROJECT-REFERENCE-MATRIX.md",
+      "bytes": 5988,
+      "sha256": "342e27d12323dcc1b3ec58411d9c7d1a3d2f0760df3bdc9f05604a4eeae0e833"
+    },
+    {
+      "path": "engineering/90-DECISIONS-AND-OPEN-ITEMS.md",
+      "bytes": 5078,
+      "sha256": "755c8e9a71716f7f2965289b052a25dc93f2d978b46f5567e216b4470ab546f6"
+    },
+    {
+      "path": "engineering/MODULE-MATRIX.csv",
+      "bytes": 5675,
+      "sha256": "30ae368e05c3a1084db2a9ac046204a8c0f0b47b2a1301c48281eb3dcc6683c8"
+    },
+    {
+      "path": "engineering/modules/M01-site-governance.md",
+      "bytes": 8620,
+      "sha256": "59304adda132398e6026dbfab997b54e6644573e6a53be06bc47041c124abe38"
+    },
+    {
+      "path": "engineering/modules/M02-manufacturing-mes.md",
+      "bytes": 9420,
+      "sha256": "f93431d7544794e57ee0cc47c3faa5f4776ebe430289106b76e6ad65542e907a"
+    },
+    {
+      "path": "engineering/modules/M03-equipment.md",
+      "bytes": 9386,
+      "sha256": "b0fb8d06764831b2275c06d24db90f6bf35c81c004c99cf0a3df98bb14dbab40"
+    },
+    {
+      "path": "engineering/modules/M04-process-engineering.md",
+      "bytes": 8501,
+      "sha256": "4e1dd4632cb3374caf6db2c940306d9db6139b560cc6ebecdb3036e683b61798"
+    },
+    {
+      "path": "engineering/modules/M05-material-handling.md",
+      "bytes": 9022,
+      "sha256": "e117200cee4d3cf2df06cf9823f9234559816f0b2b1297f56856dac6da86e447"
+    },
+    {
+      "path": "engineering/modules/M06-maintenance.md",
+      "bytes": 8557,
+      "sha256": "6c6baa697dd679dc2a98d7d00129e527a3208e18d9ac5f40fbe78d2a625b2e89"
+    },
+    {
+      "path": "engineering/modules/M07-simulation-des.md",
+      "bytes": 11718,
+      "sha256": "ebdf165a9c7f2d313aa76bc9c79c07ed3249fbda16a9e89a6f116a7a1007c419"
+    },
+    {
+      "path": "engineering/modules/M08-site-resources.md",
+      "bytes": 9856,
+      "sha256": "46cb61f391d4b1c88eb4c5e1f2f6033dafe54eaeb5c05dfff67e3ec34c5e6e17"
+    },
+    {
+      "path": "engineering/modules/M09-orchestration.md",
+      "bytes": 11839,
+      "sha256": "2d66fd7fc5c8067c6c31132fa2fb5e4d3cf88cc97ad785d90445e0cd0fcaec67"
+    },
+    {
+      "path": "engineering/modules/M10-analytics.md",
+      "bytes": 8292,
+      "sha256": "202bcbd8facabac8442338c958f3a09bf8a7050db3383653b26cee0120330431"
+    },
+    {
+      "path": "engineering/modules/M11-react-workbench.md",
+      "bytes": 7561,
+      "sha256": "1690828e43a4925117570a8d1e5643884c9c2b1e8533b24d589eabc8b520d92e"
+    },
+    {
+      "path": "engineering/modules/M12-webgpu-renderer.md",
+      "bytes": 8418,
+      "sha256": "b4ebbd98c3d32417066cfe6a5b3fec6e3e0f13f8d1889c99754eda11548c0e24"
+    },
+    {
+      "path": "engineering/modules/M13-quality-fdc-spc.md",
+      "bytes": 8237,
+      "sha256": "8a6bb1e2f334b5cb89f091389e3e7719741b8f01f0cc7ef779b1695906b3ebd4"
+    },
+    {
+      "path": "engineering/modules/M14-eap-gem300.md",
+      "bytes": 8942,
+      "sha256": "78594e1152de235b381dec7a6d79784e3fa9e26a64a00bdba7457c29a2189df1"
+    },
+    {
+      "path": "engineering/modules/M15-ot-gateway.md",
+      "bytes": 8561,
+      "sha256": "9d5e8338204e8b5aed9a88077c7c634161b7f0895c789d21618c7022b33adc39"
+    },
+    {
+      "path": "engineering/modules/M16-identity-security.md",
+      "bytes": 8067,
+      "sha256": "efd15dfc23b81dc58298eb4c4d15a5d6bca7d0bdb0d5645fe00567762db4e94d"
+    },
+    {
+      "path": "engineering/modules/M17-experiments-optimization.md",
+      "bytes": 8759,
+      "sha256": "c18e5a59213967abe88e5f545263223c625b012e34f3e7697ffd8b54c875c370"
+    },
+    {
+      "path": "engineering/modules/M18-operations-platform.md",
+      "bytes": 8157,
+      "sha256": "b5dc810600e2c34dd7677fb5b3242a09442706d22e6ef5f9e457925f8076979c"
+    },
+    {
+      "path": "examples/scenarios/site_independent.json",
+      "bytes": 1524,
+      "sha256": "721fa5be23c113c4cf44c85c7708f86f8c184aac5ed73b99255bc678a5dfc808"
+    },
+    {
+      "path": "examples/scenarios/site_shared_capacity.json",
+      "bytes": 2501,
+      "sha256": "28768a20a4412fa9903f80496b76b6278946c3f994bfff3390c6c62424416189"
+    },
+    {
+      "path": "examples/sql/001_initial.sql",
+      "bytes": 10852,
+      "sha256": "8ee2b0b34c38e0f0e95d7a7a4c8995aa9b6528d0d7b83ace6df9a45cb45dc6ed"
+    },
+    {
+      "path": "examples/ts/webgpu-only.ts",
+      "bytes": 1622,
+      "sha256": "286692088cbfa338cdc5a4872ff14ed7209b70d25cd5e5fcfd7489d02f7f8ba9"
+    },
+    {
+      "path": "tools/maintain_docs.py",
+      "bytes": 7629,
+      "sha256": "a20bbf43b0bc0f77dfeba7b415e8532118f2b9205a4a6b05b752ba74253da3ee"
+    },
+    {
+      "path": "合并版规范.md",
+      "bytes": 397301,
+      "sha256": "d38e2152a013c6dc007f40f62960ff1ca6839e7d23222daa079d33a841e6a562"
+    }
+  ]
+}

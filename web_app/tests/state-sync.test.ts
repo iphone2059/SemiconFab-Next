@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ScopeGate, SequenceGate, startPolling } from './state-sync';
+import { ScopeGate, SequenceGate, startPolling } from '../src/state-sync';
 
 describe('scope lifecycle', () => {
   it('rejects late work even when returning to the same scope', () => {

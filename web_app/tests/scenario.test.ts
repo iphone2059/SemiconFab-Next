@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { validateScenario } from './scenario';
+import { validateScenario } from '../src/scenario';
 const fields = { lotCount: '24', processTimeUs: '1000000', durationUs: '60000000', warmupUs: '0', masterSeed: '42' };
 it('rejects more than 10000 lots per FAB', () => {
   expect(validateScenario({ ...fields, lotCount: '10001' })).toBeDefined();

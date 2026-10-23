@@ -13,3 +13,7 @@ public sealed record SimulationEventDto(string FabId, string EntityId, string Ki
 public sealed record FabSimulationResult(string FabId, string CompletedLots, string TotalLots, string SimulationTimeUs, string BusyTimeUs, string TraceHash, SimulationEventDto[] Events);
 public sealed record RunResult(string RunId, FabSimulationResult[] Fabs);
 public sealed record SiteKpiDto(string SiteId, string RunId, string CompletedLots, string TotalLots, string TotalBusyTimeUs, string ObservationEndUs, int FabCount);
+public sealed record CatalogEntryDto(string RecordId, string Vendor, string Model, string Category, string Domain, string ConformanceLevel, double CompletenessPct, string[] MissingFields, System.Text.Json.JsonElement Record, System.Text.Json.JsonElement Legacy, System.Text.Json.JsonElement? Price);
+public sealed record CatalogSnapshotDto(int ContractVersion, string ImportId, string Source, CatalogEntryDto[] Entries);
+public sealed record CatalogCategoryDto(string Category, string Domain, int Count);
+public sealed record CatalogPageDto(string ImportId, int TotalCount, int MatchedCount, CatalogCategoryDto[] Categories, CatalogEntryDto[] Items);

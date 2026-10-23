@@ -1,0 +1,404 @@
+.catalog-shell {
+  --catalog-bg: #f2f1ec;
+  --catalog-panel: #fbfaf6;
+  --catalog-ink: #183c3a;
+  --catalog-muted: #687c77;
+  --catalog-border: #d5ddd5;
+  --catalog-accent: #12675d;
+  background: var(--catalog-bg);
+  color: var(--catalog-ink);
+  color-scheme: light;
+  min-height: 100vh;
+  font-family: Manrope, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+}
+.catalog-shell[data-theme='dark'] {
+  --catalog-bg: #111e25;
+  --catalog-panel: #192a30;
+  --catalog-ink: #d6e8df;
+  --catalog-muted: #a0b6ad;
+  --catalog-border: #36514d;
+  --catalog-accent: #79d6bd;
+  color-scheme: dark;
+}
+.catalog-shell button,
+.catalog-file {
+  color: var(--catalog-accent);
+  background: transparent;
+  border: 1px solid var(--catalog-border);
+  border-radius: 5px;
+  padding: 9px 13px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.catalog-shell button:hover:not(:disabled),
+.catalog-file:hover {
+  background: color-mix(in srgb, var(--catalog-accent) 10%, transparent);
+}
+.catalog-shell :focus-visible {
+  outline: 2px solid var(--catalog-accent);
+  outline-offset: 3px;
+}
+.catalog-header {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  padding: 24px max(5vw, 20px);
+  border-bottom: 1px solid var(--catalog-border);
+}
+.catalog-brand {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.catalog-brand span {
+  color: var(--catalog-accent);
+}
+.catalog-brand small {
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--catalog-muted);
+}
+.catalog-header nav {
+  display: flex;
+  gap: 25px;
+  font-size: 13px;
+}
+.catalog-header nav a {
+  padding: 8px 0;
+}
+.catalog-header .active {
+  border-bottom: 2px solid var(--catalog-accent);
+  font-weight: 700;
+}
+.catalog-preferences {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.catalog-main {
+  margin: auto;
+  max-width: 1600px;
+  padding: 50px max(5vw, 20px) 20px;
+}
+.catalog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+  margin-bottom: 28px;
+}
+.catalog-eyebrow {
+  color: var(--catalog-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+.catalog-heading h1 {
+  font-size: clamp(24px, 3vw, 36px);
+  margin: 14px 0;
+  letter-spacing: -0.5px;
+}
+.catalog-heading p,
+.catalog-muted {
+  color: var(--catalog-muted);
+}
+.catalog-total {
+  display: flex;
+  flex-direction: column;
+  color: var(--catalog-muted);
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+}
+.catalog-total strong {
+  color: var(--catalog-accent);
+  font:
+    50px 'IBM Plex Mono',
+    Consolas,
+    monospace;
+}
+.catalog-notice {
+  padding: 14px 18px;
+  border-left: 3px solid var(--catalog-accent);
+  background: color-mix(in srgb, var(--catalog-accent) 7%, transparent);
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 20px 0;
+}
+.catalog-section {
+  background: var(--catalog-panel);
+  border: 1px solid var(--catalog-border);
+  border-radius: 8px;
+  margin: 20px 0;
+  overflow: hidden;
+}
+.catalog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 20px 22px;
+}
+.catalog-domains {
+  display: flex;
+  gap: 5px;
+  margin-right: auto;
+}
+.catalog-domains [aria-pressed='true'] {
+  background: var(--catalog-accent);
+  color: var(--catalog-bg);
+  border-color: var(--catalog-accent);
+}
+.catalog-file {
+  position: relative;
+}
+.catalog-file input {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  padding: 0;
+}
+.catalog-file:focus-within {
+  outline: 2px solid var(--catalog-accent);
+  outline-offset: 3px;
+}
+.catalog-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 0 22px 20px;
+}
+.catalog-filters label {
+  display: block;
+  color: var(--catalog-muted);
+  font-size: 11px;
+  flex: 1;
+}
+.catalog-filters label:first-child {
+  flex: 2;
+}
+.catalog-filters input,
+.catalog-filters select {
+  display: block;
+  margin-top: 7px;
+  background: var(--catalog-bg);
+  color: var(--catalog-ink);
+  border: 1px solid var(--catalog-border);
+  height: 42px;
+}
+.catalog-filters > button {
+  min-height: 42px;
+  background: var(--catalog-accent);
+  color: var(--catalog-bg);
+}
+.catalog-filters .catalog-hide-drafts {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+}
+.catalog-hide-drafts input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--catalog-accent);
+}
+.catalog-result-heading {
+  display: flex;
+  justify-content: space-between;
+  padding: 16px 22px;
+  border-top: 1px solid var(--catalog-border);
+  font-size: 11px;
+}
+.catalog-table-scroll {
+  overflow: auto;
+}
+.catalog-shell table {
+  white-space: normal;
+  font-size: 12px;
+}
+.catalog-shell th,
+.catalog-shell td {
+  color: var(--catalog-ink);
+  background: transparent;
+  border-top: 1px solid var(--catalog-border);
+  padding: 16px 20px;
+  vertical-align: top;
+  text-align: left;
+}
+.catalog-shell thead th {
+  background: color-mix(in srgb, var(--catalog-accent) 6%, transparent);
+  font-size: 11px;
+  color: var(--catalog-muted);
+}
+.catalog-shell table small {
+  display: block;
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--catalog-muted);
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.catalog-shell td strong {
+  font-weight: 650;
+}
+.catalog-list {
+  min-width: 850px;
+}
+.catalog-list input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--catalog-accent);
+}
+.catalog-level {
+  font:
+    10px Consolas,
+    monospace;
+  border: 1px solid var(--catalog-border);
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+.catalog-pagination {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 18px 22px;
+  border-top: 1px solid var(--catalog-border);
+  font-size: 12px;
+}
+.catalog-comparison {
+  table-layout: fixed;
+  min-width: 850px;
+}
+.catalog-comparison thead strong {
+  display: block;
+  color: var(--catalog-ink);
+  font-size: 14px;
+  margin: 8px 0;
+}
+.catalog-comparison th,
+.catalog-comparison td {
+  overflow-wrap: anywhere;
+}
+.catalog-comparison tbody th {
+  font:
+    10px Consolas,
+    monospace;
+  color: var(--catalog-muted);
+  width: 200px;
+}
+.catalog-field-table th {
+  font:
+    11px Consolas,
+    monospace;
+  width: 36%;
+  overflow-wrap: anywhere;
+}
+.catalog-field-table td {
+  overflow-wrap: anywhere;
+}
+.catalog-dialog {
+  width: min(1000px, 94vw);
+  max-height: 90vh;
+  padding: 0;
+  color: var(--catalog-ink);
+  background: var(--catalog-panel);
+  border: 1px solid var(--catalog-border);
+  border-radius: 10px;
+}
+.catalog-dialog::backdrop {
+  background: #142622a6;
+  backdrop-filter: blur(4px);
+}
+.catalog-dialog-head {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px;
+  border-bottom: 1px solid var(--catalog-border);
+}
+.catalog-dialog-head h2 {
+  margin: 10px 0;
+  font-size: 22px;
+}
+.catalog-dialog-head .catalog-muted {
+  font:
+    10px Consolas,
+    monospace;
+  overflow-wrap: anywhere;
+}
+.catalog-dialog-body {
+  padding: 0 24px 24px;
+}
+.catalog-dialog-body details {
+  margin: 22px 0;
+  font-size: 12px;
+}
+.catalog-dialog-body pre {
+  overflow: auto;
+  max-height: 400px;
+  font-size: 10px;
+}
+.catalog-error {
+  padding: 14px 18px;
+  background: #be4b3a15;
+  border: 1px solid #be4b3a55;
+  color: #ba5144;
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.catalog-empty {
+  padding: 40px 22px;
+  text-align: center;
+  color: var(--catalog-muted);
+}
+.catalog-footer {
+  color: var(--catalog-muted);
+  border-color: var(--catalog-border);
+  font-size: 10px;
+}
+@media (max-width: 760px) {
+  .catalog-header {
+    gap: 20px;
+    flex-wrap: wrap;
+    padding: 20px;
+  }
+  .catalog-header nav {
+    order: 3;
+    width: 100%;
+  }
+  .catalog-main {
+    padding-top: 30px;
+  }
+  .catalog-heading {
+    align-items: flex-start;
+  }
+  .catalog-total strong {
+    font-size: 32px;
+  }
+  .catalog-filters {
+    flex-wrap: wrap;
+  }
+  .catalog-filters label:first-child {
+    flex-basis: 100%;
+  }
+  .catalog-result-heading {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .catalog-toolbar,
+  .catalog-filters {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .catalog-footer {
+    gap: 15px;
+  }
+}
