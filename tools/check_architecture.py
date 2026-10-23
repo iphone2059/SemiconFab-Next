@@ -120,27 +120,26 @@ for name, (csproj, xml) in projects.items():
 for name in set(projects) - HOSTS - TESTS:
     assert not (graph[name] & HOSTS), f'Only hosts/tests may reference a host: {name} -> {sorted(graph[name] & HOSTS)}'
 
-# frontend packages
-packages = {}
-for folder in sorted(ROOT.glob('web_*')):
-    manifest = folder / 'package.json'
-    if not manifest.exists():
+# frontend: exactly one self-contained website project
+assert not (ROOT / 'package.json').exists(), 'Repository root must not contain a workspace package.json'
+assert not (ROOT / 'pnpm-workspace.yaml').exists(), 'Repository root must not contain a pnpm workspace manifest'
+assert not (ROOT / 'pnpm-lock.yaml').exists(), 'Repository root must not contain a workspace lockfile'
+web = ROOT / 'web_app'
+manifest = web / 'package.json'
+assert manifest.exists(), 'web_app/package.json is required'
+data = json.loads(manifest.read_text(encoding='utf-8'))
+deps = {**data.get('dependencies', {}), **data.get('devDependencies', {})}
+assert not [name for name in deps if name.startswith('@fab/')], 'web_app must not depend on internal @fab packages'
+assert not [value for value in deps.values() if str(value).startswith('workspace:')], 'web_app must not use workspace protocol'
+assert {'vitest', 'typescript', 'vite'} <= set(deps), 'web_app must own its frontend toolchain'
+assert (web / 'pnpm-lock.yaml').exists(), 'web_app must commit its own pnpm lockfile'
+other = [p.name for p in ROOT.glob('web_*') if p.is_dir() and p.name != 'web_app']
+assert not other, f'Only one frontend project is allowed: {other}'
+for source in (web / 'src').rglob('*'):
+    if source.suffix not in {'.ts', '.tsx'}:
         continue
-    packages[json.loads(manifest.read_text(encoding='utf-8'))['name']] = folder
-assert len(packages) == 9, f'Expected web app plus 8 frontend packages, found {len(packages)}'
-
-edges = {}
-for name, folder in packages.items():
-    data = json.loads((folder / 'package.json').read_text(encoding='utf-8'))
-    deps = {**data.get('dependencies', {}), **data.get('devDependencies', {})}
-    edges[name] = {dep for dep in deps if dep in packages}
-    if folder.name in {'web_fab_scene', 'web_state_sync'}:
-        assert not any(dep.startswith('@babylonjs/') for dep in deps), f'Engine implementation leaked into {name}'
-    for source in (folder / 'src').rglob('*'):
-        if source.suffix not in {'.ts', '.tsx'}:
-            continue
-        text = source.read_text(encoding='utf-8')
-        assert not re.search(r'getContext\(\s*[\'\"](?:webgl2?|experimental-webgl)[\'\"]', text), f'Forbidden WebGL context: {source}'
-acyclic(edges)
+    text = source.read_text(encoding='utf-8')
+    assert not re.search(r'getContext\(\s*[\'\"](?:webgl2?|experimental-webgl)[\'\"]', text), f'Forbidden WebGL context: {source}'
+    assert not re.search(r"from ['\"]@fab/", text), f'Internal package import must be relative: {source}'
 assert len(list((ROOT / 'docs/modules').glob('M*.md'))) == 18, 'Module record count changed'
-print(f'PASS: {len(projects)} independent .NET projects (one service per domain) / {len(packages)} frontend packages; flat layout, reference rules, DAG and module records.')
+print(f'PASS: {len(projects)} independent .NET projects (one service per domain) / 1 self-contained frontend project; flat layout, reference rules, DAG and module records.')

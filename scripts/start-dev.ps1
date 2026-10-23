@@ -34,8 +34,11 @@ try {
         } catch { Start-Sleep -Milliseconds 250 }
     }
     if (-not $fabReady) { throw 'API did not become ready. Inspect .local/api.log.' }
-    npx --yes pnpm@12.15.0 --filter @fab/web dev
-    $fabExitCode = $LASTEXITCODE
+    Push-Location -LiteralPath (Join-Path $fabProjectRoot 'web_app')
+    try {
+        npx --yes pnpm@12.15.0 dev
+        $fabExitCode = $LASTEXITCODE
+    } finally { Pop-Location }
 } finally {
     if (-not $fabApiProcess.HasExited) { Stop-Process -Id $fabApiProcess.Id }
 }

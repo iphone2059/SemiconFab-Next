@@ -1,13 +1,13 @@
 import { Component, StrictMode, useEffect, useMemo, useRef, useState, type ErrorInfo, type FormEvent, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiClient } from '@fab/api-client';
-import type { CreateRunRequest, RunResult, RunSummary, SiteDto } from '@fab/contracts';
-import { Panel, StatusPill } from '@fab/ui';
-import { Metric } from '@fab/widgets';
-import { CompletionBar } from '@fab/charting';
-import { ScopeGate, startPolling } from '@fab/state-sync';
-import { SceneFacade } from '@fab/fab-scene';
-import { createWebGpuBackend } from '@fab/babylon-webgpu';
+import { ApiClient } from './api-client';
+import type { CreateRunRequest, RunResult, RunSummary, SiteDto } from './contracts';
+import { Panel, StatusPill } from './ui';
+import { Metric } from './widgets';
+import { CompletionBar } from './charting';
+import { ScopeGate, startPolling } from './state-sync';
+import { SceneFacade } from './fab-scene';
+import { createWebGpuBackend } from './babylon-webgpu';
 import { validateScenario } from './scenario';
 import './styles.css';
 

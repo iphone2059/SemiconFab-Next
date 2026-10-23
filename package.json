@@ -1,6 +1,0 @@
-{
-  "name": "semiconfab-next", "private": true, "packageManager": "pnpm@12.15.0",
-  "engines": { "node": ">=24.22.0 <25" },
-  "scripts": { "dev": "pnpm --filter @fab/web dev", "build": "pnpm --filter @fab/web build", "typecheck": "pnpm --filter @fab/web typecheck", "test": "vitest run" },
-  "devDependencies": { "typescript": "7.0.2", "vitest": "5.0.5", "@types/node": "26.6.5", "@types/react": "19.3.0" }
-}

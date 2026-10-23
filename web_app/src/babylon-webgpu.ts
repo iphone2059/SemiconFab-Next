@@ -9,8 +9,8 @@ import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
-import type { FabPlacement, SceneBackend } from '@fab/fab-scene';
-import { InitializationDisposal } from './lifecycle';
+import type { FabPlacement, SceneBackend } from './fab-scene';
+import { InitializationDisposal } from './babylon-lifecycle';
 
 /** Estimated geometry in metres, right handed, +Y up. No authoritative simulation state. */
 export function createWebGpuBackend(): SceneBackend {

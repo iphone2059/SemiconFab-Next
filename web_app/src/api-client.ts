@@ -1,4 +1,4 @@
-import type { CreateRunRequest, RunResult, RunSummary, SiteDto } from '@fab/contracts';
+import type { CreateRunRequest, RunResult, RunSummary, SiteDto } from './contracts';
 export class ApiError extends Error { constructor(readonly status: number, message: string) { super(message); } }
 export class ApiClient {
   constructor(private readonly transport: typeof fetch = fetch) {}

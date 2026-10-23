@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createWebGpuBackend } from './index';
+import { createWebGpuBackend } from './babylon-webgpu';
 afterEach(() => vi.unstubAllGlobals());
 it('rejects missing WebGPU without ever creating a graphics context', async () => {
   vi.stubGlobal('window', { isSecureContext: true });

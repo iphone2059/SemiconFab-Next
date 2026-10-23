@@ -4,12 +4,12 @@
 
 ## 组织原则
 
-- **全部同级**：32 个 .NET 项目与 9 个前端包全部位于仓库根目录，没有 `src/`、`apps/`、`tests/`、`frontend/` 等容器层级。
+- **全部同级**：32 个 .NET 项目与 1 个自包含前端站点项目全部位于仓库根目录，没有 `src/`、`apps/`、`tests/`、`frontend/` 等容器层级。
 - **一域一项目**：每个业务域合并为单一 `*_service` 项目（原 domain/application/infrastructure 三层已合并）；服务之间不互相引用，只依赖共享内核。
-- **名称即关系**：全小写 + 下划线 `{域}_{角色}`；服务后缀 `_service`，测试后缀 `_tests`，共享库 `fab_*`，前端 `web_*`。
+- **名称即关系**：全小写 + 下划线 `{域}_{角色}`；服务后缀 `_service`，测试后缀 `_tests`，共享库 `fab_*`；前端只有 `web_app`。
 - **完全独立**：每个 csproj 自带 TargetFramework、编译开关与包版本，不依赖根目录 `Directory.Build.props` / `Directory.Packages.props`；仓库不含 `*.sln` / `*.slnx`。
-- **按名字关联**：后端只用显式相对 `ProjectReference`（如 `../fab_contracts/fab_contracts.csproj`）；前端只用 pnpm 包名（`@fab/...`）。
-- **设计基线**：功能边界以 `../SemiconFab-Next-Engineering-v1.1` 为准；布局决策见 `docs/adr/0001-flat-project-layout.md` 与 `docs/adr/0002-merge-domain-layers-into-services.md`。
+- **按名字关联**：后端只用显式相对 `ProjectReference`（如 `../fab_contracts/fab_contracts.csproj`）；前端源码内部只用相对导入。
+- **设计基线**：功能边界以 `../SemiconFab-Next-Engineering-v1.1` 为准；布局决策见 `docs/adr/0001-flat-project-layout.md`、`docs/adr/0002-merge-domain-layers-into-services.md` 与 `docs/adr/0003-single-web-app.md`。
 
 ## 项目族
 
@@ -28,8 +28,7 @@
 
 独立部署宿主（4）：api_service / worker_service / realtime_service / ot_gateway_service
 测试（3）：simulation_tests / orchestration_tests / api_tests
-前端（9）：web_app + web_contracts / web_api_client / web_ui / web_widgets / web_charting /
-           web_fab_scene / web_babylon_webgpu / web_state_sync
+前端（1）：web_app（单站点 Vite/React 项目，自带 package.json、lockfile 与 tsconfig）
 预留（8）：fab_native / contracts_tests / e2e_tests / gpu_acceptance_tests /
            ot_conformance_tests / performance_tests / simulation_golden_tests / shared_resources
 ```
@@ -48,7 +47,7 @@ dotnet run --project api_service
 ./scripts/verify.ps1
 ```
 
-前端：`npx --yes pnpm@12.15.0 install --frozen-lockfile`，然后 `typecheck` / `test` / `build`。
+前端（单站点）：`cd web_app; npx --yes pnpm@12.15.0 install --frozen-lockfile`，然后 `typecheck` / `test` / `build`。
 
 ## 文档
 

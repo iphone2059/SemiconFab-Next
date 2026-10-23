@@ -165,52 +165,10 @@ settings:
 importers:
 
   .:
-    devDependencies:
-      '@types/node':
-        specifier: 26.6.5
-        version: 26.6.5
-      '@types/react':
-        specifier: 19.3.0
-        version: 19.3.0
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.5
-        version: 5.0.5(@types/node@26.6.5)(vite@8.3.5(@types/node@26.6.5))
-
-  web_api_client:
     dependencies:
-      '@fab/contracts':
-        specifier: workspace:*
-        version: link:../web_contracts
-
-  web_app:
-    dependencies:
-      '@fab/api-client':
-        specifier: workspace:*
-        version: link:../web_api_client
-      '@fab/babylon-webgpu':
-        specifier: workspace:*
-        version: link:../web_babylon_webgpu
-      '@fab/charting':
-        specifier: workspace:*
-        version: link:../web_charting
-      '@fab/contracts':
-        specifier: workspace:*
-        version: link:../web_contracts
-      '@fab/fab-scene':
-        specifier: workspace:*
-        version: link:../web_fab_scene
-      '@fab/state-sync':
-        specifier: workspace:*
-        version: link:../web_state_sync
-      '@fab/ui':
-        specifier: workspace:*
-        version: link:../web_ui
-      '@fab/widgets':
-        specifier: workspace:*
-        version: link:../web_widgets
+      '@babylonjs/core':
+        specifier: 9.32.0
+        version: 9.32.0
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -218,6 +176,9 @@ importers:
         specifier: 19.3.1
         version: 19.3.1(react@19.3.1)
     devDependencies:
+      '@types/node':
+        specifier: 26.6.5
+        version: 26.6.5
       '@types/react':
         specifier: 19.3.0
         version: 19.3.0
@@ -227,42 +188,15 @@ importers:
       '@vitejs/plugin-react':
         specifier: 6.1.2
         version: 6.1.2(vite@8.3.5(@types/node@26.6.5))
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
       vite:
         specifier: 8.3.5
         version: 8.3.5(@types/node@26.6.5)
-
-  web_babylon_webgpu:
-    dependencies:
-      '@babylonjs/core':
-        specifier: 9.32.0
-        version: 9.32.0
-      '@fab/fab-scene':
-        specifier: workspace:*
-        version: link:../web_fab_scene
-
-  web_charting:
-    dependencies:
-      react:
-        specifier: 19.3.1
-        version: 19.3.1
-
-  web_contracts: {}
-
-  web_fab_scene: {}
-
-  web_state_sync: {}
-
-  web_ui:
-    dependencies:
-      react:
-        specifier: 19.3.1
-        version: 19.3.1
-
-  web_widgets:
-    dependencies:
-      react:
-        specifier: 19.3.1
-        version: 19.3.1
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@types/node@26.6.5)(vite@8.3.5(@types/node@26.6.5))
 
 packages:
 

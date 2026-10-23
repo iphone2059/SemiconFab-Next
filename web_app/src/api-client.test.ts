@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ApiClient, ApiError } from './index';
+import { ApiClient, ApiError } from './api-client';
 
 describe('HTTP contract', () => {
   it('preserves ProblemDetails and status on failure', async () => {

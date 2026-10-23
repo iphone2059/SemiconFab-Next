@@ -16,6 +16,7 @@ foreach ($fabProject in $fabProjects) {
         if ($LASTEXITCODE) { exit $LASTEXITCODE }
     }
 }
+Set-Location -LiteralPath (Join-Path (Get-Location) 'web_app')
 npx --yes pnpm@12.15.0 install --frozen-lockfile
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 npx --yes pnpm@12.15.0 typecheck

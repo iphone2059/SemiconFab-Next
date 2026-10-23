@@ -38,7 +38,7 @@ for route, name, array in [("/api/v1/sites", "SiteDto", True), ("/api/v1/runs", 
     paths[route] = {"get": {"parameters": parameters, "responses": {"200": response(name, array), "default": {"description": "ProblemDetails error"}}}}
 paths['/api/v1/runs']['post'] = {"parameters": [{"name": "Idempotency-Key", "in": "header", "required": True, "schema": {"type": "string", "maxLength": 128}}], "requestBody": {"required": True, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateRunRequest"}}}}, "responses": {"202": response('RunSummary'), "default": {"description": "ProblemDetails error"}}}
 openapi = {"openapi": "3.1.0", "info": {"title": "SemiconFab Next Development API", "version": "0.1.0", "description": "Loopback Development identity and local file store only; production and OT are unavailable."}, "paths": paths, "security": [{"LocalDevelopment": []}], "components": {"securitySchemes": {"LocalDevelopment": {"type": "apiKey", "in": "header", "name": "X-Fab-Dev-Key"}}, "schemas": json.loads(json.dumps(schema['$defs']).replace('#/$defs/', '#/components/schemas/'))}}
-targets = {ROOT / "fab_contracts/Generated/Contracts.g.cs": "\n".join(cs) + "\n", ROOT / "web_contracts/src/generated.ts": "\n".join(ts) + "\n", ROOT / "contracts/openapi/openapi.json": json.dumps(openapi, ensure_ascii=False, indent=2) + "\n"}
+targets = {ROOT / "fab_contracts/Generated/Contracts.g.cs": "\n".join(cs) + "\n", ROOT / "web_app/src/contracts.generated.ts": "\n".join(ts) + "\n", ROOT / "contracts/openapi/openapi.json": json.dumps(openapi, ensure_ascii=False, indent=2) + "\n"}
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--check", action="store_true")
 args = parser.parse_args()
