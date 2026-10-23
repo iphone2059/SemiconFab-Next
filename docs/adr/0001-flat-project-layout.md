@@ -40,3 +40,5 @@ C# 命名空间保持 PascalCase（`Fab.Site.Domain` 等），项目/程序集�
 - 无法再用一个 solution 一次性构建全部项目；`scripts/verify.ps1` 改为枚举根目录所有 csproj，逐项目独立构建与测试。
 - 模块文档、工具与前端 workspace 路径已同步更新；旧布局完整保留在基线提交 `165ba28`，可供对照或回滚。
 - 工程规范（依赖方向、Domain/Contracts 纯度、前端引擎边界、模块档案数量）继续由 `tools/check_architecture.py` 强制。
+
+> 2026-10-24 备注：原预留空目录（`fab_native`、`contracts_tests`、`e2e_tests`、`gpu_acceptance_tests`、`ot_conformance_tests`、`performance_tests`、`simulation_golden_tests`、`shared_resources`）已删除；未来需要时再按需创建（测试仍归入 `fab_tests` 或新项目）。
