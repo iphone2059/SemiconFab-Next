@@ -7,7 +7,7 @@ fab_security_policies / fab_optimization_abstractions，以及原 simulation_eng
 - 稳定 ID 与基础值类型：`StableId.cs`（命名空间 `Fab.Ids`）。
 - 版本化公开契约 DTO：`Generated/Contracts.g.cs`（由 `tools/generate_contracts.py` 生成，勿手改）。
 - 确定性离散事件仿真内核：`FabSimulation.cs` / `FabSimulationSession.cs` / `SyntheticFifoModel.cs` /
-  `StableEventQueue.cs` / `SplitMix64.cs`（命名空间 `Fab.Simulation.Core/Models/Runtime`，M07/M08）。
+  `StableEventQueue.cs` / `SplitMix64.cs`（命名空间 `Fab.Simulation`（原 Core/Models/Runtime 已合并），M07/M08）。
 - 消息/可观测性/Host/配置/行业 Profile/安全策略/优化抽象：保留命名空间，后续在本项目内实现。
 
 所有业务服务与宿主只依赖本共享内核；共享内核不引用任何业务项目。
@@ -39,6 +39,6 @@ var sameResult = resumed.RunToCompletion(cancellationToken);
 
 成员语义轨迹哈希 v1 为固定声明字段顺序的 System.Text.Json UTF-8 SHA-256：模型版本、当前 FAB ID/code/输入、观察窗、统计量、RNG state 和当前 FAB 日志。排除 Site/RunId、整体场景标识、其他 FAB 和墙钟。当前版本在 .NET 11 范围冻结编码；修改编码或模型须升级版本。
 
-2026-10-23 验证命令：`dotnet test simulation_tests/simulation_tests.csproj --verbosity minimal`。TDD 首轮：19 failed/0 passed（占位 API NotImplementedException）；实现后 19 passed；队列重用序号约束：1 failed/24 passed，再修复后 25 passed；规范十进制补充：5 failed/25 passed，再修复后 30 passed/0 failed。SDK 为 11.0.100-rc.2.26504.105；仅输出 SDK preview 提示，无编译警告/错误。覆盖每个事件边界的检查点 JSON 往返/恢复最终结果一致、固定 RNG 向量、FIFO、FAB 隔离、非法输入、取消、窗口边界、最大 10000 Lot 与篡改拒绝。无全 solution、跨平台、真实工厂或性能验收。
+2026-10-23 验证命令：`dotnet test fab_tests/fab_tests.csproj --verbosity minimal`。TDD 首轮：19 failed/0 passed（占位 API NotImplementedException）；实现后 19 passed；队列重用序号约束：1 failed/24 passed，再修复后 25 passed；规范十进制补充：5 failed/25 passed，再修复后 30 passed/0 failed。SDK 为 11.0.100-rc.2.26504.105；仅输出 SDK preview 提示，无编译警告/错误。覆盖每个事件边界的检查点 JSON 往返/恢复最终结果一致、固定 RNG 向量、FIFO、FAB 隔离、非法输入、取消、窗口边界、最大 10000 Lot 与篡改拒绝。无全 solution、跨平台、真实工厂或性能验收。
 
 

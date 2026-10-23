@@ -4,9 +4,9 @@ using System.Text;
 using System.Text.Json;
 using Fab.Contracts;
 using Fab.Ids;
-using Fab.Simulation.Models;
+using Fab.Simulation;
 
-namespace Fab.Simulation.Runtime;
+namespace Fab.Simulation;
 
 public sealed record SimulationCheckpoint(int SchemaVersion, string StateJson, string Checksum);
 

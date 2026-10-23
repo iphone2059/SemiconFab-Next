@@ -1,4 +1,4 @@
-"""Check flat independent layout: one shared kernel, one service per domain, single web app."""
+"""Check the final flat layout: shared kernel + single application + tests + single web app."""
 from pathlib import Path
 import json
 import re
@@ -6,17 +6,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = re.compile(r'^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$')
-
-SHARED = {'fab_shared'}
-SERVICES = {
-    'site_service', 'manufacturing_service', 'process_engineering_service', 'equipment_service',
-    'material_handling_service', 'maintenance_service', 'quality_service', 'site_resources_service',
-    'orchestration_service', 'experiment_service', 'analytics_service', 'identity_service',
-}
-PLATFORM = {'eap_service', 'industrial_interfaces_service'}
-HOSTS = {'api_service', 'worker_service', 'realtime_service', 'ot_gateway_service'}
-TESTS = {'simulation_tests', 'orchestration_tests', 'api_tests'}
-EXPECTED = SHARED | SERVICES | PLATFORM | HOSTS | TESTS
+EXPECTED = {'fab_shared', 'fab_app', 'fab_tests'}
 
 for legacy in ('src', 'apps', 'tests', 'frontend'):
     assert not (ROOT / legacy).exists(), f'Legacy container remains: {legacy}'
@@ -29,9 +19,8 @@ for csproj in sorted(ROOT.glob('*/*.csproj')):
     name = csproj.stem
     assert csproj.parent.parent == ROOT and csproj.parent.name == name, f'Project must live flat at repo root: {csproj}'
     assert NAME.match(name), f'Project name must be lower_snake_case: {name}'
-    assert not name.endswith(('_domain', '_application', '_infrastructure')), f'Domain layers must be merged into one project: {name}'
     projects[name] = (csproj, ET.parse(csproj).getroot())
-assert len(projects) == 22, f'Expected 22 independent projects, found {len(projects)}'
+assert len(projects) == 3, f'Expected 3 independent projects, found {len(projects)}'
 assert set(projects) == EXPECTED, 'Unexpected project set: ' + str(set(projects) ^ EXPECTED)
 
 graph = {}
@@ -67,28 +56,57 @@ def acyclic(edges):
 
 
 acyclic(graph)
+assert graph['fab_shared'] == set(), 'fab_shared must not reference any project'
+assert graph['fab_app'] <= {'fab_shared'}, f"fab_app may only reference fab_shared: {graph['fab_app']}"
+assert graph['fab_tests'] <= {'fab_app', 'fab_shared'}, f"fab_tests may only reference fab_app/fab_shared: {graph['fab_tests']}"
 
-for name, (csproj, xml) in projects.items():
-    refs = graph[name]
-    if name == 'fab_shared':
-        assert not refs, 'fab_shared is the shared kernel and must not reference any project'
-        assert not xml.findall('.//PackageReference'), 'fab_shared must stay package-free'
-        for required in ('StableId.cs', 'FabSimulation.cs', 'FabSimulationSession.cs', 'StableEventQueue.cs', 'SplitMix64.cs', 'SyntheticFifoModel.cs', 'Generated/Contracts.g.cs'):
-            assert (csproj.parent / required).exists(), f'fab_shared lost expected asset: {required}'
-    elif name in SERVICES:
-        assert refs <= SHARED, f'Service may only depend on the shared kernel: {name} -> {sorted(refs - SHARED)}'
-    elif name in PLATFORM:
-        assert refs <= SHARED, f'Platform service may only depend on shared kernel: {name} -> {refs}'
-    elif name in HOSTS:
-        assert refs <= SHARED | SERVICES | PLATFORM, f'Host can only compose shared/services: {name} -> {refs}'
-        assert not (refs & HOSTS), f'Host must not reference another host: {name} -> {refs}'
-    elif name in TESTS:
-        assert refs <= set(projects), 'Tests may reference any project'
-    else:
-        raise AssertionError('Unclassified project: ' + name)
+shared = projects['fab_shared'][0].parent
+for required in ('StableId.cs', 'FabSimulation.cs', 'FabSimulationSession.cs', 'StableEventQueue.cs', 'SplitMix64.cs', 'SyntheticFifoModel.cs', 'Generated/Contracts.g.cs'):
+    assert (shared / required).exists(), f'fab_shared lost expected asset: {required}'
 
-for name in set(projects) - HOSTS - TESTS:
-    assert not (graph[name] & HOSTS), f'Only hosts/tests may reference a host: {name} -> {sorted(graph[name] & HOSTS)}'
+app_path, appXml = projects['fab_app']
+app = app_path.parent
+assert appXml.attrib.get('Sdk') == 'Microsoft.NET.Sdk.Web', 'fab_app must be the single ASP.NET Core application (Sdk.Web)'
+assert appXml.findtext('.//OutputType') == 'Exe', 'fab_app must be an executable host'
+assert not appXml.findall('.//PackageReference'), 'fab_app must stay package-free (framework from Web SDK)'
+for required in ('Program.cs', 'ApiHost.cs', 'WorkerHost.cs', 'SiteDirectory.cs', 'FileRunStore.cs', 'SimulationWorker.cs', 'DevelopmentIdentityHandler.cs', 'SiteKpiCalculator.cs'):
+    assert (app / required).exists(), f'fab_app lost expected asset: {required}'
+program = (app / 'Program.cs').read_text(encoding='utf-8')
+for flag in ('--worker', '--realtime', '--ot', '--mode='):
+    assert flag in program, f'fab_app Program.cs must expose mode flag {flag}'
+assert 'public partial class Program' in program, 'fab_app must expose partial Program for WebApplicationFactory'
+api = (app / 'ApiHost.cs').read_text(encoding='utf-8')
+assert 'runs only in Development' in api, 'API mode must fail closed outside Development'
+assert 'MapGroup("/api/v1")' in api, 'API routes missing'
+
+tests_path, testsXml = projects['fab_tests']
+tests = tests_path.parent
+assert testsXml.findtext('.//IsTestProject') == 'true', 'fab_tests must be a test project'
+assert testsXml.findtext('.//OutputType') == 'Exe', 'fab_tests must be executable for the self-spawn orchestration test'
+assert testsXml.findtext('.//GenerateProgramFile') == 'false', 'fab_tests must not generate an entry point'
+for required in ('SimulationTests.cs', 'LocalOrchestrationTests.cs', 'ApiTests.cs'):
+    assert (tests / required).exists(), f'fab_tests lost expected test: {required}'
+
+# namespaces are consolidated per project (no stale layer packages)
+STALE_NAMESPACES = (
+    'Fab.Site.Domain', 'Fab.Site.Application', 'Fab.Site.Infrastructure',
+    'Fab.Orchestration.Application', 'Fab.Orchestration.Infrastructure',
+    'Fab.Analytics.Application', 'Fab.Identity.Infrastructure',
+    'Fab.Simulation.Core', 'Fab.Simulation.Models', 'Fab.Simulation.Runtime',
+    'Fab.App.Hosting', 'Fab.Simulation.Tests', 'Fab.Orchestration.Tests', 'Fab.Api.Tests',
+)
+for folder, namespaces in ((ROOT / 'fab_shared', ('Fab.Simulation', 'Fab.Ids', 'Fab.Contracts')), (ROOT / 'fab_app', ('Fab.App', 'Fab.Site', 'Fab.Orchestration', 'Fab.Analytics', 'Fab.Identity')), (ROOT / 'fab_tests', ('Fab.Tests',))):
+    seen = set()
+    for source in folder.rglob('*.cs'):
+        if {'obj', 'bin'} & set(source.parts):
+            continue
+        text = source.read_text(encoding='utf-8-sig')
+        for stale in STALE_NAMESPACES:
+            assert f'namespace {stale}' not in text and f'using {stale};' not in text, f'Stale namespace {stale} in {source}'
+        namespace = re.search(r'^namespace (Fab\.[A-Za-z0-9_.]+);', text, re.M)
+        if namespace:
+            seen.add(namespace.group(1))
+    assert seen and seen <= set(namespaces), f'Unexpected namespaces in {folder.name}: {sorted(seen - set(namespaces))}'
 
 # frontend: exactly one self-contained website project
 assert not (ROOT / 'package.json').exists(), 'Repository root must not contain a workspace package.json'
@@ -112,4 +130,4 @@ for source in (web / 'src').rglob('*'):
     assert not re.search(r'getContext\(\s*[\'\"](?:webgl2?|experimental-webgl)[\'\"]', text), f'Forbidden WebGL context: {source}'
     assert not re.search(r"from ['\"]@fab/", text), f'Internal package import must be relative: {source}'
 assert len(list((ROOT / 'docs/modules').glob('M*.md'))) == 18, 'Module record count changed'
-print(f'PASS: {len(projects)} independent .NET projects (shared kernel incl. simulation + one service per domain) / 1 self-contained frontend project; flat layout, reference rules, DAG and module records.')
+print(f'PASS: {len(projects)} independent .NET projects (fab_shared + fab_app + fab_tests) / 1 self-contained frontend project; flat layout, reference rules, DAG and module records.')

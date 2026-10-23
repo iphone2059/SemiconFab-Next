@@ -1,4 +1,4 @@
-namespace Fab.Simulation.Core;
+namespace Fab.Simulation;
 
 public sealed record ScheduledEvent(long TimeUs, int Priority, long EnqueueSequence, int Lot, string Kind);
 

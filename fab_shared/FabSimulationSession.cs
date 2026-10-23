@@ -1,10 +1,9 @@
 using System.Globalization;
 using System.Text.Json;
 using Fab.Contracts;
-using Fab.Simulation.Core;
-using Fab.Simulation.Models;
+using Fab.Simulation;
 
-namespace Fab.Simulation.Runtime;
+namespace Fab.Simulation;
 
 internal sealed record SimulationState(string EngineVersion, ScenarioDefinition Scenario, string FabId, long ClockUs,
     long NextEnqueueSequence, long EventSequence, long DurableEventSequence, ScheduledEvent? LastProcessedKey,

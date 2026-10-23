@@ -1,4 +1,4 @@
-namespace Fab.Simulation.Models;
+namespace Fab.Simulation;
 
 /// <summary>One equipment, one operation, all lots released at time zero.</summary>
 public sealed record SyntheticFifoModel(string FabId, string Code, int LotCount, long ProcessTimeUs)

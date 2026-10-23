@@ -1,10 +1,11 @@
 # SemiconFab Next 工程基座与首个独立仿真切片 Implementation Plan
 
 > 2026-10-23 布局迁移：本计划写于旧嵌套布局。项目已按 `docs/adr/0001-flat-project-layout.md` 改为根级扁平小写下划线目录、无总 solution、逐项目独立构建；下列路径已尽量机械更新。
-> 2026-10-23 二层合并：按 ADR-0002，各域 domain/application/infrastructure 已合并为单一 `*_service` 项目（`eap_service`、`industrial_interfaces_service`、`fab_shared` 同理）；下列模块名以 ADR-0002 为准。
+> 2026-10-23 二层合并：按 ADR-0002，各域 domain/application/infrastructure 已合并为单一 `*_service` 项目（`fab_app`、`fab_app`、`fab_shared` 同理）；下列模块名以 ADR-0002 为准。
 > 2026-10-23 前端合并：按 ADR-0003，8 个前端包合并为单一自包含 `web_app` 站点项目；根目录不再有 pnpm workspace。
 > 2026-10-24 共享内核合并：按 ADR-0004，10 个共享库合并为单一 `fab_shared`；.NET 项目 32 → 23。
 > 2026-10-24 仿真内核合并：按 ADR-0005，simulation_engine 并入 `fab_shared`；.NET 项目 23 → 22。
+> 2026-10-24 应用合并：按 ADR-0006，全部域/平台服务与宿主合并为 `fab_app`，测试合并为 `fab_tests`；.NET 项目 22 → 3。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement task-by-task. 用户已明确授权按审阅后的规范搭框架并开始编码，连续执行。
 
@@ -44,7 +45,7 @@
 
 ### Task 2: 确定性内核（engine 任务）
 
-**Files:** fab_shared、Models、Runtime，simulation_tests。
+**Files:** fab_shared、Models、Runtime，fab_tests。
 
 **Interfaces:** 固定契约见 Task 1；Runtime 公共 FabSimulation 无参构造，Execute 同步纯函数，可选内部 Checkpoint/恢复 API。
 
@@ -55,7 +56,7 @@
 
 ### Task 3: 编排与 Worker（orchestration 任务）
 
-**Files:** orchestration_*、worker_service、orchestration_tests。
+**Files:** orchestration_*、fab_app、fab_tests。
 
 **Interfaces:** `AddLocalOrchestration(IServiceCollection,string)`；`IRunService.Submit(CreateRunRequest,string principal,string key) -> RunSummary`，Get(Guid)、List()、GetResults(Guid)；可选托管 `SimulationWorker`。
 
@@ -77,7 +78,7 @@
 
 ### Task 5: API、开发启动与集成（主代理）
 
-**Files:** api_service、Identity/Site/Analytics 实现、api_tests、scripts、infrastructure、CI。
+**Files:** fab_app、Identity/Site/Analytics 实现、fab_tests、scripts、infrastructure、CI。
 
 - [ ] 先写请求验证、身份拒绝、Run 创建/查询全链路失败测试。
 - [ ] 提供仅本地 Development 的显式身份与数据路径，非 Development 启动失败关闭；真实 OT/Reatime 宿主不启动业务假服务。

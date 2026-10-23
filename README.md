@@ -1,49 +1,52 @@
 # SemiconFab-Next
 
-本仓库按 **扁平、独立、按名字关联、每个域一个服务项目** 的原则组织：仓库根目录下的每个子目录就是一个完全独立的项目；仓库没有总 solution，任何项目都可以单独还原、构建、测试和运行。
+本仓库按 **扁平、独立、按名字关联、最少项目** 的原则组织：仓库根目录下每个子目录就是一个完全独立的项目；没有总 solution、没有 pnpm workspace，任何项目都可以单独构建。
 
 ## 组织原则
 
-- **全部同级**：22 个 .NET 项目与 1 个自包含前端站点项目全部位于仓库根目录，没有 `src/`、`apps/`、`tests/`、`frontend/` 等容器层级。
-- **一域一项目**：每个业务域合并为单一 `*_service` 项目（原 domain/application/infrastructure 三层已合并）；服务之间不互相引用，只依赖共享内核。
-- **名称即关系**：全小写 + 下划线 `{域}_{角色}`；服务后缀 `_service`，测试后缀 `_tests`，共享内核 `fab_shared`；前端只有 `web_app`。
-- **完全独立**：每个 csproj 自带 TargetFramework、编译开关与包版本，不依赖根目录 `Directory.Build.props` / `Directory.Packages.props`；仓库不含 `*.sln` / `*.slnx`。
-- **按名字关联**：后端只用显式相对 `ProjectReference`（如 `../fab_shared/fab_shared.csproj`）；前端源码内部只用相对导入。
-- **设计基线**：功能边界以 `../SemiconFab-Next-Engineering-v1.1` 为准；布局决策见 `docs/adr/0001-flat-project-layout.md`、`0002-merge-domain-layers-into-services.md`、`0003-single-web-app.md`、`0004-merge-shared-kernel.md` 与 `0005-merge-simulation-into-shared.md`。
+- **全部同级**：3 个 .NET 项目 + 1 个前端站点全部位于仓库根目录。
+- **一个后端**：`fab_app` 合并全部域服务、平台服务与宿主，按运行模式（api/worker/realtime/ot）启动；服务之间不再有项目边界。
+- **一个前端**：`web_app` 是唯一站点（Vite + React），自包含 package.json / lockfile / tsconfig。
+- **一个共享内核**：`fab_shared` 持有 ID、生成契约、消息/可观测性/Host/配置基础与 M07/M08 确定性仿真内核。
+- **一个测试项目**：`fab_tests` 合并原仿真、编排、API 测试。
+- **完全独立**：每个 csproj 自带 TargetFramework、编译开关与包版本；仓库不含 `*.sln` / `*.slnx`。
+- **按名字关联**：后端只用显式相对 `ProjectReference`；前端源码内部只用相对导入。
+- **设计基线**：功能边界以 `../SemiconFab-Next-Engineering-v1.1` 为准；布局决策见 `docs/adr/0001` … `0006`。
 
-## 项目族
+## 项目清单
 
 ```text
-共享内核（1）：fab_shared（IDs / Contracts / 消息 / 可观测性 / Host / 配置 / 行业 Profile / 安全策略 / 优化抽象，以及 M07 确定性仿真引擎与 M08 协调内核；契约由 JSON Schema 生成）
-
-业务域服务（12）：site_service / manufacturing_service / process_engineering_service /
-                 equipment_service / material_handling_service / maintenance_service /
-                 quality_service / site_resources_service / orchestration_service /
-                 experiment_service / analytics_service / identity_service
-
-平台服务（2）：eap_service / industrial_interfaces_service
-独立部署宿主（4）：api_service / worker_service / realtime_service / ot_gateway_service
-测试（3）：simulation_tests / orchestration_tests / api_tests
-前端（1）：web_app（单站点 Vite/React 项目，自带 package.json、lockfile 与 tsconfig）
-预留（8）：fab_native / contracts_tests / e2e_tests / gpu_acceptance_tests /
-           ot_conformance_tests / performance_tests / simulation_golden_tests / shared_resources
+fab_shared/   共享内核：StableId、Generated/Contracts.g.cs、确定性 DES 引擎（FabSimulation 等）
+fab_app/      唯一后端应用：API + Worker + Realtime/OT 占位模式（Sdk.Web）
+fab_tests/    唯一测试项目：仿真 / 编排 / API 集成测试
+web_app/      唯一前端站点：Vite + React + Babylon WebGPU
+contracts/    JSON Schema（契约单一来源）、OpenAPI、protobuf
+docs/         模块档案 M01–M18、实施状态、ADR
+infrastructure/ assets/ scripts/ tools/ .github/   # 部署参考、资产、脚本、工具、CI
 ```
 
-## 构建与验证
+## 运行与验证
 
 ```powershell
-# 单项目独立构建（无 solution）
-dotnet build site_service/site_service.csproj
-dotnet run --project api_service
-
-# 本地开发（API + Web）
+# 本地开发：API(127.0.0.1:5080) + Web(127.0.0.1:5173)
 ./scripts/start-dev.ps1
 
-# 全量校验（逐项目 restore/build/test + 契约/架构检查 + 前端检查）
-./scripts/verify.ps1
-```
+# 单后端模式
+dotnet run --project fab_app                 # API（默认，内嵌 Worker）
+dotnet run --project fab_app -- --worker     # 独立 Worker
+dotnet run --project fab_app -- --realtime   # 占位：退出码 2
+dotnet run --project fab_app -- --ot         # 占位：退出码 2
 
-前端（单站点）：`cd web_app; npx --yes pnpm@12.15.0 install --frozen-lockfile`，然后 `typecheck` / `test` / `build`。
+# 全量校验：逐项目构建 + fab_tests + 契约/架构检查 + 前端检查
+./scripts/verify.ps1
+
+# 前端（在 web_app 内）
+cd web_app
+npx --yes pnpm@12.15.0 install --frozen-lockfile
+npx --yes pnpm@12.15.0 typecheck
+npx --yes pnpm@12.15.0 test
+npx --yes pnpm@12.15.0 build
+```
 
 ## 文档
 

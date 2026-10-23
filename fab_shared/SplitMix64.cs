@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Fab.Simulation.Core;
+namespace Fab.Simulation;
 
 /// <summary>Frozen SplitMix64 v1; state advances once per service start.</summary>
 public sealed class SplitMix64(ulong state)
