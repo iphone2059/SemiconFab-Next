@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 1,
   "dependencies": {
     "net11.0": {
       "Microsoft.AspNetCore.Mvc.Testing": {
@@ -287,117 +287,66 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
-      "fab.analytics.application": {
+      "analytics_service": {
         "type": "Project",
         "dependencies": {
-          "Fab.Analytics.Domain": "[1.0.0, )",
-          "Fab.Contracts": "[1.0.0, )"
+          "fab_contracts": "[1.0.0, )",
+          "fab_ids": "[1.0.0, )"
         }
       },
-      "fab.analytics.domain": {
+      "api_service": {
         "type": "Project",
         "dependencies": {
-          "Fab.Ids": "[1.0.0, )"
+          "analytics_service": "[1.0.0, )",
+          "fab_contracts": "[1.0.0, )",
+          "identity_service": "[1.0.0, )",
+          "orchestration_service": "[1.0.0, )",
+          "site_service": "[1.0.0, )"
         }
       },
-      "fab.api": {
+      "fab_contracts": {
         "type": "Project",
         "dependencies": {
-          "Fab.Analytics.Application": "[1.0.0, )",
-          "Fab.Contracts": "[1.0.0, )",
-          "Fab.Identity.Infrastructure": "[1.0.0, )",
-          "Fab.Orchestration.Infrastructure": "[1.0.0, )",
-          "Fab.Site.Application": "[1.0.0, )"
+          "fab_ids": "[1.0.0, )"
         }
       },
-      "fab.contracts": {
-        "type": "Project",
-        "dependencies": {
-          "Fab.Ids": "[1.0.0, )"
-        }
-      },
-      "fab.identity.application": {
-        "type": "Project",
-        "dependencies": {
-          "Fab.Contracts": "[1.0.0, )",
-          "Fab.Identity.Domain": "[1.0.0, )"
-        }
-      },
-      "fab.identity.domain": {
-        "type": "Project",
-        "dependencies": {
-          "Fab.Ids": "[1.0.0, )"
-        }
-      },
-      "fab.identity.infrastructure": {
-        "type": "Project",
-        "dependencies": {
-          "Fab.Identity.Application": "[1.0.0, )",
-          "Fab.Identity.Domain": "[1.0.0, )"
-        }
-      },
-      "fab.ids": {
+      "fab_ids": {
         "type": "Project"
       },
-      "fab.optimization.abstractions": {
+      "fab_optimization_abstractions": {
         "type": "Project",
         "dependencies": {
-          "Fab.Ids": "[1.0.0, )"
+          "fab_ids": "[1.0.0, )"
         }
       },
-      "fab.orchestration.application": {
+      "identity_service": {
         "type": "Project",
         "dependencies": {
-          "Fab.Contracts": "[1.0.0, )",
-          "Fab.Orchestration.Domain": "[1.0.0, )"
+          "fab_contracts": "[1.0.0, )",
+          "fab_ids": "[1.0.0, )"
         }
       },
-      "fab.orchestration.domain": {
+      "orchestration_service": {
         "type": "Project",
         "dependencies": {
-          "Fab.Ids": "[1.0.0, )"
+          "fab_contracts": "[1.0.0, )",
+          "fab_ids": "[1.0.0, )",
+          "simulation_engine": "[1.0.0, )"
         }
       },
-      "fab.orchestration.infrastructure": {
+      "simulation_engine": {
         "type": "Project",
         "dependencies": {
-          "Fab.Orchestration.Application": "[1.0.0, )",
-          "Fab.Orchestration.Domain": "[1.0.0, )",
-          "Fab.Simulation.Runtime": "[1.0.0, )"
+          "fab_contracts": "[1.0.0, )",
+          "fab_ids": "[1.0.0, )",
+          "fab_optimization_abstractions": "[1.0.0, )"
         }
       },
-      "fab.simulation.core": {
+      "site_service": {
         "type": "Project",
         "dependencies": {
-          "Fab.Ids": "[1.0.0, )"
-        }
-      },
-      "fab.simulation.models": {
-        "type": "Project",
-        "dependencies": {
-          "Fab.Optimization.Abstractions": "[1.0.0, )",
-          "Fab.Simulation.Core": "[1.0.0, )"
-        }
-      },
-      "fab.simulation.runtime": {
-        "type": "Project",
-        "dependencies": {
-          "Fab.Contracts": "[1.0.0, )",
-          "Fab.Simulation.Core": "[1.0.0, )",
-          "Fab.Simulation.Models": "[1.0.0, )"
-        }
-      },
-      "fab.site.application": {
-        "type": "Project",
-        "dependencies": {
-          "Fab.Contracts": "[1.0.0, )",
-          "Fab.Site.Domain": "[1.0.0, )"
-        }
-      },
-      "fab.site.domain": {
-        "type": "Project",
-        "dependencies": {
-          "Fab.Ids": "[1.0.0, )"
+          "fab_contracts": "[1.0.0, )",
+          "fab_ids": "[1.0.0, )"
         }
       }
     }

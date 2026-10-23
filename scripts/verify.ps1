@@ -7,7 +7,7 @@ if ($LASTEXITCODE) { exit $LASTEXITCODE }
 $fabProjects = @(Get-ChildItem -LiteralPath . -Directory |
     ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Filter *.csproj -File -ErrorAction SilentlyContinue } |
     Sort-Object FullName)
-if ($fabProjects.Count -ne 65) { throw "Expected 65 independent .NET projects, found $($fabProjects.Count)." }
+if ($fabProjects.Count -ne 32) { throw "Expected 32 independent .NET projects, found $($fabProjects.Count)." }
 foreach ($fabProject in $fabProjects) {
     dotnet build $fabProject.FullName -c Release
     if ($LASTEXITCODE) { exit $LASTEXITCODE }

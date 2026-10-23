@@ -1,4 +1,4 @@
-"""Check flat independent layout, project reference DAG, purity rules and frontend boundaries."""
+"""Check flat one-project-per-domain layout, reference rules, DAG and frontend boundaries."""
 from pathlib import Path
 import json
 import re
@@ -6,7 +6,22 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = re.compile(r'^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$')
-PURE = {'fab_ids', 'simulation_core', 'fab_optimization_abstractions', 'fab_security_policies', 'fab_industrial_profiles'}
+
+SHARED = {
+    'fab_ids', 'fab_contracts', 'fab_contracts_adapters', 'fab_messaging',
+    'fab_observability', 'fab_hosting', 'fab_configuration',
+    'fab_industrial_profiles', 'fab_security_policies', 'fab_optimization_abstractions',
+}
+SERVICES = {
+    'site_service', 'manufacturing_service', 'process_engineering_service', 'equipment_service',
+    'material_handling_service', 'maintenance_service', 'quality_service', 'site_resources_service',
+    'orchestration_service', 'experiment_service', 'analytics_service', 'identity_service',
+}
+PLATFORM = {'eap_service', 'industrial_interfaces_service'}
+ENGINE = 'simulation_engine'
+HOSTS = {'api_service', 'worker_service', 'realtime_service', 'ot_gateway_service'}
+TESTS = {'simulation_tests', 'orchestration_tests', 'api_tests'}
+PURE_SHARED = {'fab_ids', 'fab_contracts', 'fab_optimization_abstractions', 'fab_security_policies', 'fab_industrial_profiles'}
 
 for legacy in ('src', 'apps', 'tests', 'frontend'):
     assert not (ROOT / legacy).exists(), f'Legacy container remains: {legacy}'
@@ -19,8 +34,11 @@ for csproj in sorted(ROOT.glob('*/*.csproj')):
     name = csproj.stem
     assert csproj.parent.parent == ROOT and csproj.parent.name == name, f'Project must live flat at repo root: {csproj}'
     assert NAME.match(name), f'Project name must be lower_snake_case: {name}'
+    assert name not in {'x_domain', 'x_application', 'x_infrastructure'}
+    assert not name.endswith(('_domain', '_application', '_infrastructure')), f'Domain layers must be merged into one service project: {name}'
     projects[name] = (csproj, ET.parse(csproj).getroot())
-assert len(projects) == 65, f'Expected 65 independent projects, found {len(projects)}'
+assert len(projects) == 32, f'Expected 32 independent projects, found {len(projects)}'
+assert set(projects) == SHARED | SERVICES | PLATFORM | {ENGINE} | HOSTS | TESTS, 'Unexpected project set: ' + str(set(projects) - (SHARED | SERVICES | PLATFORM | {ENGINE} | HOSTS | TESTS))
 
 graph = {}
 for name, (csproj, xml) in projects.items():
@@ -56,28 +74,53 @@ def acyclic(edges):
 
 acyclic(graph)
 
+
+def no_io_sources(name):
+    csproj, _ = projects[name]
+    for source in csproj.parent.rglob('*.cs'):
+        if {'obj', 'bin'} & set(source.parts):
+            continue
+        text = source.read_text(encoding='utf-8-sig')
+        assert not re.search(r'^using (?:Microsoft\.AspNetCore|Microsoft\.EntityFrameworkCore|Npgsql|System\.Net\.Http)', text, re.M), f'I/O import in pure layer: {source}'
+
+
 for name, (csproj, xml) in projects.items():
     refs = graph[name]
-    pure = name.endswith('_domain') or name in PURE
-    if pure:
+    if name in PURE_SHARED:
         assert not xml.findall('.//FrameworkReference'), f'Framework leaked into pure layer: {name}'
         assert not xml.findall('.//PackageReference'), f'Package in pure layer requires review: {name}'
-        for source in csproj.parent.rglob('*.cs'):
-            if {'obj', 'bin'} & set(source.parts):
-                continue
-            text = source.read_text(encoding='utf-8-sig')
-            assert not re.search(r'^using (?:Microsoft\.AspNetCore|Microsoft\.EntityFrameworkCore|Npgsql|System\.Net\.Http)', text, re.M), f'I/O import in pure layer: {source}'
-    if name.endswith('_domain'):
-        assert refs <= {'fab_ids', 'fab_security_policies', 'fab_industrial_profiles', 'fab_optimization_abstractions'}, f'Domain dependency: {name} -> {refs}'
-    if name == 'fab_contracts':
-        assert refs <= {'fab_ids'}, 'fab_contracts must not reference domain implementation'
-    if name.endswith('_application'):
-        owner = name.removesuffix('_application')
-        for ref in refs:
-            assert not ref.endswith('_infrastructure'), f'Cross-domain implementation dependency: {name} -> {ref}'
-            assert not ref.endswith('_application'), f'Application-to-application dependency: {name} -> {ref}'
-            assert (not ref.endswith('_domain')) or ref == owner + '_domain', f'Foreign domain dependency: {name} -> {ref}'
+        no_io_sources(name)
+    if name == 'fab_ids':
+        assert not refs, 'fab_ids must be dependency-free'
+    elif name == 'fab_contracts':
+        assert refs <= {'fab_ids'}, 'fab_contracts must only reference fab_ids'
+    elif name in {'fab_optimization_abstractions', 'fab_security_policies', 'fab_industrial_profiles'}:
+        assert refs <= {'fab_ids'}, f'{name} must only reference fab_ids'
+    elif name == 'fab_contracts_adapters':
+        assert refs <= {'fab_contracts'}, 'fab_contracts_adapters must only reference fab_contracts'
+    elif name in {'fab_messaging', 'fab_observability', 'fab_hosting', 'fab_configuration'}:
+        assert refs <= {'fab_contracts'}, f'{name} must only reference fab_contracts'
+    elif name == ENGINE:
+        assert refs <= {'fab_ids', 'fab_contracts', 'fab_optimization_abstractions'}, f'{name} may only use shared kernels'
+        assert not xml.findall('.//FrameworkReference'), 'simulation_engine must stay framework-free'
+        assert not xml.findall('.//PackageReference'), 'simulation_engine must stay package-free'
+    elif name in SERVICES:
+        allowed = SHARED | ({ENGINE} if name == 'orchestration_service' else set())
+        assert refs <= allowed, f'Service may only depend on shared kernel: {name} -> {sorted(refs - allowed)}'
+    elif name in PLATFORM:
+        assert refs <= SHARED, f'Platform service may only depend on shared kernel: {name} -> {refs}'
+    elif name in HOSTS:
+        assert refs <= SHARED | SERVICES | PLATFORM | {ENGINE}, f'Host can only compose shared/services: {name} -> {refs}'
+        assert not (refs & HOSTS), f'Host must not reference another host: {name} -> {refs}'
+    elif name in TESTS:
+        assert refs <= set(projects), 'Tests may reference any project'
+    else:
+        raise AssertionError('Unclassified project: ' + name)
 
+for name in set(projects) - HOSTS - TESTS:
+    assert not (graph[name] & HOSTS), f'Only hosts/tests may reference a host: {name} -> {sorted(graph[name] & HOSTS)}'
+
+# frontend packages
 packages = {}
 for folder in sorted(ROOT.glob('web_*')):
     manifest = folder / 'package.json'
@@ -100,4 +143,4 @@ for name, folder in packages.items():
         assert not re.search(r'getContext\(\s*[\'\"](?:webgl2?|experimental-webgl)[\'\"]', text), f'Forbidden WebGL context: {source}'
 acyclic(edges)
 assert len(list((ROOT / 'docs/modules').glob('M*.md'))) == 18, 'Module record count changed'
-print(f'PASS: {len(projects)} independent .NET projects / {len(packages)} frontend packages; flat layout, DAG, module records and pure-layer boundaries.')
+print(f'PASS: {len(projects)} independent .NET projects (one service per domain) / {len(packages)} frontend packages; flat layout, reference rules, DAG and module records.')

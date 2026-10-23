@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 1,
   "dependencies": {
     "net11.0": {
       "Microsoft.NET.Test.Sdk": {
@@ -93,40 +93,27 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
-      "fab.contracts": {
+      "fab_contracts": {
         "type": "Project",
         "dependencies": {
-          "Fab.Ids": "[1.0.0, )"
+          "fab_ids": "[1.0.0, )"
         }
       },
-      "fab.ids": {
+      "fab_ids": {
         "type": "Project"
       },
-      "fab.optimization.abstractions": {
+      "fab_optimization_abstractions": {
         "type": "Project",
         "dependencies": {
-          "Fab.Ids": "[1.0.0, )"
+          "fab_ids": "[1.0.0, )"
         }
       },
-      "fab.simulation.core": {
+      "simulation_engine": {
         "type": "Project",
         "dependencies": {
-          "Fab.Ids": "[1.0.0, )"
-        }
-      },
-      "fab.simulation.models": {
-        "type": "Project",
-        "dependencies": {
-          "Fab.Optimization.Abstractions": "[1.0.0, )",
-          "Fab.Simulation.Core": "[1.0.0, )"
-        }
-      },
-      "fab.simulation.runtime": {
-        "type": "Project",
-        "dependencies": {
-          "Fab.Contracts": "[1.0.0, )",
-          "Fab.Simulation.Core": "[1.0.0, )",
-          "Fab.Simulation.Models": "[1.0.0, )"
+          "fab_contracts": "[1.0.0, )",
+          "fab_ids": "[1.0.0, )",
+          "fab_optimization_abstractions": "[1.0.0, )"
         }
       }
     }

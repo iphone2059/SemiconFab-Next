@@ -11,9 +11,9 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../fab_contracts/fab_contracts.csproj" />
-    <ProjectReference Include="../site_application/site_application.csproj" />
-    <ProjectReference Include="../identity_infrastructure/identity_infrastructure.csproj" />
-    <ProjectReference Include="../orchestration_infrastructure/orchestration_infrastructure.csproj" />
-    <ProjectReference Include="../analytics_application/analytics_application.csproj" />
+    <ProjectReference Include="../site_service/site_service.csproj" />
+    <ProjectReference Include="../identity_service/identity_service.csproj" />
+    <ProjectReference Include="../orchestration_service/orchestration_service.csproj" />
+    <ProjectReference Include="../analytics_service/analytics_service.csproj" />
   </ItemGroup>
 </Project>
