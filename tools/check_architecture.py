@@ -61,7 +61,7 @@ assert graph['fab_app'] <= {'fab_shared'}, f"fab_app may only reference fab_shar
 assert graph['fab_tests'] <= {'fab_app', 'fab_shared'}, f"fab_tests may only reference fab_app/fab_shared: {graph['fab_tests']}"
 
 shared = projects['fab_shared'][0].parent
-for required in ('StableId.cs', 'FabSimulation.cs', 'FabSimulationSession.cs', 'StableEventQueue.cs', 'SplitMix64.cs', 'SyntheticFifoModel.cs', 'Generated/Contracts.g.cs'):
+for required in ('src/StableId.cs', 'src/FabSimulation.cs', 'src/FabSimulationSession.cs', 'src/StableEventQueue.cs', 'src/SplitMix64.cs', 'src/SyntheticFifoModel.cs', 'src/Generated/Contracts.g.cs'):
     assert (shared / required).exists(), f'fab_shared lost expected asset: {required}'
 
 app_path, appXml = projects['fab_app']
@@ -69,13 +69,13 @@ app = app_path.parent
 assert appXml.attrib.get('Sdk') == 'Microsoft.NET.Sdk.Web', 'fab_app must be the single ASP.NET Core application (Sdk.Web)'
 assert appXml.findtext('.//OutputType') == 'Exe', 'fab_app must be an executable host'
 assert not appXml.findall('.//PackageReference'), 'fab_app must stay package-free (framework from Web SDK)'
-for required in ('Program.cs', 'ApiHost.cs', 'WorkerHost.cs', 'SiteDirectory.cs', 'FileRunStore.cs', 'SimulationWorker.cs', 'DevelopmentIdentityHandler.cs', 'SiteKpiCalculator.cs'):
+for required in ('src/Program.cs', 'src/ApiHost.cs', 'src/WorkerHost.cs', 'src/SiteDirectory.cs', 'src/FileRunStore.cs', 'src/SimulationWorker.cs', 'src/DevelopmentIdentityHandler.cs', 'src/SiteKpiCalculator.cs'):
     assert (app / required).exists(), f'fab_app lost expected asset: {required}'
-program = (app / 'Program.cs').read_text(encoding='utf-8')
+program = (app / 'src/Program.cs').read_text(encoding='utf-8')
 for flag in ('--worker', '--realtime', '--ot', '--mode='):
     assert flag in program, f'fab_app Program.cs must expose mode flag {flag}'
 assert 'public partial class Program' in program, 'fab_app must expose partial Program for WebApplicationFactory'
-api = (app / 'ApiHost.cs').read_text(encoding='utf-8')
+api = (app / 'src/ApiHost.cs').read_text(encoding='utf-8')
 assert 'runs only in Development' in api, 'API mode must fail closed outside Development'
 assert 'MapGroup("/api/v1")' in api, 'API routes missing'
 

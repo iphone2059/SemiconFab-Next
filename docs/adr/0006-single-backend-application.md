@@ -30,3 +30,5 @@ ADR-0005 后仍有 22 个 .NET 项目：`fab_shared`、12 个业务域服务、2
 - `fab_shared`：`Fab.Simulation.Core/Models/Runtime` → **`Fab.Simulation`**；`Fab.Ids`、`Fab.Contracts` 保留（公共契约与生成代码的稳定入口）。
 - `fab_app`：`Fab.Site.Domain/Application` → `Fab.Site`；`Fab.Orchestration.Application/Infrastructure` → `Fab.Orchestration`；`Fab.Analytics.Application` → `Fab.Analytics`；`Fab.Identity.Infrastructure` → `Fab.Identity`；`Fab.App.Hosting` → `Fab.App`。
 - `fab_tests`：三个测试命名空间 → **`Fab.Tests`**。
+
+> 2026-10-24 目录整理：`fab_app` 与 `fab_shared` 的 C# 源码统一移入各自项目内的 `src/`（生成契约位于 `fab_shared/src/Generated/`），`fab_tests` 暂保持根级源码。
