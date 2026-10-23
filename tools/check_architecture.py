@@ -84,7 +84,7 @@ tests = tests_path.parent
 assert testsXml.findtext('.//IsTestProject') == 'true', 'fab_tests must be a test project'
 assert testsXml.findtext('.//OutputType') == 'Exe', 'fab_tests must be executable for the self-spawn orchestration test'
 assert testsXml.findtext('.//GenerateProgramFile') == 'false', 'fab_tests must not generate an entry point'
-for required in ('SimulationTests.cs', 'LocalOrchestrationTests.cs', 'ApiTests.cs'):
+for required in ('src/SimulationTests.cs', 'src/LocalOrchestrationTests.cs', 'src/ApiTests.cs'):
     assert (tests / required).exists(), f'fab_tests lost expected test: {required}'
 
 # namespaces are consolidated per project (no stale layer packages)
