@@ -1,1 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType></PropertyGroup><ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /><ProjectReference Include="../../src/Orchestration/Fab.Orchestration.Infrastructure/Fab.Orchestration.Infrastructure.csproj" /></ItemGroup></Project>

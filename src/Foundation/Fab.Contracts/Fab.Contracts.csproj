@@ -1,5 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../Fab.Ids/Fab.Ids.csproj" />
-  </ItemGroup>
-</Project>

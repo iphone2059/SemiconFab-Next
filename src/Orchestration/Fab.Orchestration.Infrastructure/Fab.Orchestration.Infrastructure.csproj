@@ -1,8 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../Fab.Orchestration.Application/Fab.Orchestration.Application.csproj" />
-    <ProjectReference Include="../Fab.Orchestration.Domain/Fab.Orchestration.Domain.csproj" />
-    <ProjectReference Include="../../Simulation/Fab.Simulation.Runtime/Fab.Simulation.Runtime.csproj" />
-  </ItemGroup>
-  <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>
-</Project>

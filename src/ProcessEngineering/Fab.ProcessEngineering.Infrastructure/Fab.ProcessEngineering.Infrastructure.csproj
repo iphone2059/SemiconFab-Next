@@ -1,7 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../Fab.ProcessEngineering.Application/Fab.ProcessEngineering.Application.csproj" />
-    <ProjectReference Include="../Fab.ProcessEngineering.Domain/Fab.ProcessEngineering.Domain.csproj" />
-  </ItemGroup>
-  <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>
-</Project>

@@ -16,13 +16,13 @@ $env:ASPNETCORE_ENVIRONMENT = 'Development'
 $env:DOTNET_ENVIRONMENT = 'Development'
 $env:Fab__EmbeddedWorker = if ($SeparateWorker) { 'false' } else { 'true' }
 if ($ApiOnly) {
-    dotnet run --project apps/Fab.Api --no-launch-profile
+    dotnet run --project api_service --no-launch-profile
     exit $LASTEXITCODE
 }
 Write-Host 'API: http://127.0.0.1:5080; Web: http://localhost:5173'
-dotnet build apps/Fab.Api/Fab.Api.csproj -c Debug --verbosity quiet
+dotnet build api_service/api_service.csproj -c Debug --verbosity quiet
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
-$fabApiDll = Join-Path $fabProjectRoot 'apps/Fab.Api/bin/Debug/net11.0/Fab.Api.dll'
+$fabApiDll = Join-Path $fabProjectRoot 'api_service/bin/Debug/net11.0/api_service.dll'
 $fabApiProcess = Start-Process -FilePath 'dotnet' -ArgumentList @($fabApiDll) -WorkingDirectory $fabProjectRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $fabLocalDirectory 'api.log') -RedirectStandardError (Join-Path $fabLocalDirectory 'api-error.log')
 try {
     $fabReady = $false

@@ -1,4 +1,4 @@
 packages:
-  - apps/web
-  - frontend/packages/*
+  - web_*
+
 strictPeerDependencies: true

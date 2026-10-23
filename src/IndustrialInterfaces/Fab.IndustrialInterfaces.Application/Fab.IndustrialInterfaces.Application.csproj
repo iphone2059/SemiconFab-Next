@@ -1,6 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../Fab.IndustrialInterfaces.Domain/Fab.IndustrialInterfaces.Domain.csproj" />
-    <ProjectReference Include="../../Foundation/Fab.Contracts/Fab.Contracts.csproj" />
-  </ItemGroup>
-</Project>

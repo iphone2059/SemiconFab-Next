@@ -4,12 +4,18 @@ python tools/generate_contracts.py --check
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 python tools/check_architecture.py
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
-dotnet restore SemiconFab.slnx --locked-mode
-if ($LASTEXITCODE) { exit $LASTEXITCODE }
-dotnet build SemiconFab.slnx -c Release --no-restore
-if ($LASTEXITCODE) { exit $LASTEXITCODE }
-dotnet test SemiconFab.slnx -c Release --no-build --no-restore
-if ($LASTEXITCODE) { exit $LASTEXITCODE }
+$fabProjects = @(Get-ChildItem -LiteralPath . -Directory |
+    ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Filter *.csproj -File -ErrorAction SilentlyContinue } |
+    Sort-Object FullName)
+if ($fabProjects.Count -ne 65) { throw "Expected 65 independent .NET projects, found $($fabProjects.Count)." }
+foreach ($fabProject in $fabProjects) {
+    dotnet build $fabProject.FullName -c Release
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    if ($fabProject.BaseName -like '*_tests') {
+        dotnet test $fabProject.FullName -c Release --no-build
+        if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    }
+}
 npx --yes pnpm@12.15.0 install --frozen-lockfile
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 npx --yes pnpm@12.15.0 typecheck

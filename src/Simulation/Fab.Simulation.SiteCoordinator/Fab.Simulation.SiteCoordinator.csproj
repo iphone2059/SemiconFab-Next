@@ -1,6 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../Fab.Simulation.Runtime/Fab.Simulation.Runtime.csproj" />
-    <ProjectReference Include="../../SiteResources/Fab.SiteResources.Domain/Fab.SiteResources.Domain.csproj" />
-  </ItemGroup>
-</Project>

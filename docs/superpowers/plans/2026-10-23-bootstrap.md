@@ -1,5 +1,7 @@
 # SemiconFab Next 工程基座与首个独立仿真切片 Implementation Plan
 
+> 2026-10-23 布局迁移：本计划写于旧嵌套布局。项目已按 `docs/adr/0001-flat-project-layout.md` 改为根级扁平小写下划线目录、无总 solution、逐项目独立构建；下列路径已尽量机械更新。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement task-by-task. 用户已明确授权按审阅后的规范搭框架并开始编码，连续执行。
 
 **Goal:** 建立完整模块工程布局，并交付可构建、可运行的三 FAB 独立仿真开发闭环。
@@ -28,9 +30,9 @@
 
 ### Task 1: 工程/契约基座（主代理）
 
-**Files:** solution/global.json/Directory.Build.props、src/Foundation、全部模块 csproj、docs/modules、contracts/json-schema、tools/check_architecture.py。
+**Files:** global.json（无总 solution，各项目自带构建配置）、fab_* 共享库目录、全部模块 csproj、docs/modules、contracts/json-schema、tools/check_architecture.py。
 
-**Interfaces:** `Fab.Contracts` 的 ScenarioDefinition、FabScenario、RunSummary、FabExecutionSummary、FabSimulationResult、RunResult；`Fab.Simulation.Runtime.FabSimulation.Execute(ScenarioDefinition,string,CancellationToken)`。
+**Interfaces:** `fab_contracts` 的 ScenarioDefinition、FabScenario、RunSummary、FabExecutionSummary、FabSimulationResult、RunResult；`simulation_runtime.FabSimulation.Execute(ScenarioDefinition,string,CancellationToken)`。
 
 - [ ] 生成规范中的目录、项目引用和模块进度清单，空模块只保留项目与 README，不返回虚假成功。
 - [ ] 定义 DTO 与 JSON Schema，前端从 Schema 生成 TS 类型，禁止手写第二份协议。
@@ -38,7 +40,7 @@
 
 ### Task 2: 确定性内核（engine 任务）
 
-**Files:** src/Simulation/Core、Models、Runtime，tests/Unit/Fab.Simulation.Tests。
+**Files:** simulation_core、Models、Runtime，simulation_tests。
 
 **Interfaces:** 固定契约见 Task 1；Runtime 公共 FabSimulation 无参构造，Execute 同步纯函数，可选内部 Checkpoint/恢复 API。
 
@@ -49,7 +51,7 @@
 
 ### Task 3: 编排与 Worker（orchestration 任务）
 
-**Files:** src/Orchestration、apps/Fab.Worker、tests/Unit/Fab.Orchestration.Tests。
+**Files:** orchestration_*、worker_service、orchestration_tests。
 
 **Interfaces:** `AddLocalOrchestration(IServiceCollection,string)`；`IRunService.Submit(CreateRunRequest,string principal,string key) -> RunSummary`，Get(Guid)、List()、GetResults(Guid)；可选托管 `SimulationWorker`。
 
@@ -60,7 +62,7 @@
 
 ### Task 4: React 工作台与 WebGPU（frontend 任务）
 
-**Files:** apps/web、frontend/packages 全部包、pnpm 配置、TS 生成工具与 frontend 测试。
+**Files:** web_app、web_* 包目录 全部包、pnpm 配置、TS 生成工具与 frontend 测试。
 
 **Interfaces:** REST GET /api/v1/sites、GET/POST /api/v1/runs、GET /api/v1/runs/{id}、GET /api/v1/runs/{id}/results。生成 DTO 与后端同源。
 
@@ -71,7 +73,7 @@
 
 ### Task 5: API、开发启动与集成（主代理）
 
-**Files:** apps/Fab.Api、Identity/Site/Analytics 实现、tests/Integration、scripts、infrastructure、CI。
+**Files:** api_service、Identity/Site/Analytics 实现、api_tests、scripts、infrastructure、CI。
 
 - [ ] 先写请求验证、身份拒绝、Run 创建/查询全链路失败测试。
 - [ ] 提供仅本地 Development 的显式身份与数据路径，非 Development 启动失败关闭；真实 OT/Reatime 宿主不启动业务假服务。

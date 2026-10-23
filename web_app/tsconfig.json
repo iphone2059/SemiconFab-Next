@@ -1,0 +1,4 @@
+{
+  "compilerOptions": { "target": "ES2023", "lib": ["ES2023", "DOM", "DOM.Iterable"], "module": "ESNext", "moduleResolution": "Bundler", "jsx": "react-jsx", "strict": true, "noEmit": true, "skipLibCheck": true, "verbatimModuleSyntax": true, "allowImportingTsExtensions": true, "types": ["vite/client", "node"] },
+  "include": ["src", "vite.config.ts", "../web_contracts", "../web_api_client", "../web_ui", "../web_widgets", "../web_charting", "../web_fab_scene", "../web_babylon_webgpu", "../web_state_sync"]
+}

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RootNamespace>Fab.Api</RootNamespace>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../fab_contracts/fab_contracts.csproj" />
+    <ProjectReference Include="../site_application/site_application.csproj" />
+    <ProjectReference Include="../identity_infrastructure/identity_infrastructure.csproj" />
+    <ProjectReference Include="../orchestration_infrastructure/orchestration_infrastructure.csproj" />
+    <ProjectReference Include="../analytics_application/analytics_application.csproj" />
+  </ItemGroup>
+</Project>
