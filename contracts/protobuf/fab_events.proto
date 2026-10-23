@@ -1,0 +1,150 @@
+syntax = "proto3";
+
+package semiconfab.next.v1;
+
+// Versioned design seed; not a complete production protocol or proprietary SEMI message.
+// All uint64/int64 values in TypeScript must be decoded to bigint/string,
+// never truncated into an unsafe JS number.
+// contract_version=1; proto3 defaults do not imply semantic validity.
+// Validate IDs, membership, nonnegative simulation time, required fields and limits.
+
+message Identity {
+  string site_id = 1;
+  string fab_id = 2;      // Required for FAB events; empty for Site-owned events/streams.
+  string run_id = 3;
+}
+
+message EquipmentStateDelta {
+  string equipment_id = 1;
+  string internal_state = 2;
+  uint64 entity_version = 3;
+  int64 effective_sim_time_us = 4;
+}
+
+message CarrierMoved {
+  string carrier_id = 1;
+  string from_location_id = 2;
+  string to_location_id = 3;
+}
+
+message SharedCapacityAllocation {
+  string resource_id = 1;
+  string allocation_id = 2;
+  string requesting_fab_id = 3;
+  // Field 4 used floating-point quantity in the original design seed.
+  reserved 4;
+  reserved "granted_amount";
+  string unit = 5;
+  enum Decision {
+    DECISION_UNSPECIFIED = 0;
+    QUEUED = 1;
+    GRANTED = 2;
+    REJECTED = 3;
+    RELEASED = 4;
+    REVOKED = 5;
+  }
+  Decision decision = 6;
+  uint64 site_sequence = 7;
+  int64 granted_amount_in_base_unit = 8; // >=0; exact unit fixed by resource version.
+  string demand_id = 9;                 // Stable causal ID, not random arrival order.
+  int64 valid_from_sim_time_us = 10;
+  optional int64 valid_until_sim_time_us = 11; // Exclusive, >from; absent until release/revoke.
+  uint64 lease_epoch = 12;              // Transport/commit fence; excluded from replay hash.
+  uint64 grant_version = 13;            // Replayable ledger version; unchanged on re-lease.
+}
+
+message EventEnvelope {
+  uint32 contract_version = 1;
+  Identity identity = 2;
+  string event_id = 3;
+  string correlation_id = 4;
+  int64 simulation_time_us = 5;
+  // Authoritative processed-log order, not the scheduler enqueue sequence.
+  // Independent: (site,run,fab); SharedCapacity: (site,run), including FAB events.
+  uint64 sequence = 6;                   // Starts at 1; never resets on recovery.
+  uint64 wall_produced_unix_ms = 7;
+
+  oneof body {
+    EquipmentStateDelta equipment_state_delta = 20;
+    CarrierMoved carrier_moved = 21;
+    SharedCapacityAllocation shared_capacity_allocation = 22;
+  }
+
+  reserved 8 to 19;
+
+  string causation_id = 30;
+  optional int64 observed_at_unix_ms = 31; // Live observation only; not simulation time.
+  string producer_build = 32;
+}
+
+message Transform {
+  string entity_id = 1;
+  double x_m = 2;
+  double y_m = 3;
+  double z_m = 4;
+  double rotation_y_rad = 5;
+}
+
+message EntityPresentationState {
+  string entity_id = 1;
+  string visual_state = 2;
+  Transform transform = 3;
+  uint64 entity_version = 4;
+  string fab_id = 5;               // Required for FAB entities in a Site-scoped stream.
+}
+
+message StateSnapshot {
+  uint32 contract_version = 1;
+  Identity identity = 2;
+  uint64 last_applied_sequence = 3; // Authoritative watermark, 0 before first event.
+  int64 simulation_time_us = 4;
+  string projection_hash_sha256 = 5;
+  repeated EntityPresentationState entities = 6;
+  uint64 snapshot_version = 7;
+  string stream_id = 8;            // New opaque ID for every subscription/resync.
+  uint64 stream_sequence = 9;      // Snapshot establishes projection baseline 0.
+}
+
+message EntityRemoval {
+  string entity_id = 1;
+  uint64 entity_version = 2;       // Tombstone version; must exceed live version.
+  string fab_id = 3;               // Same scoped entity key as presentation state.
+}
+
+message StateDeltaBatch {
+  uint32 contract_version = 1;
+  Identity identity = 2;
+  // Projection order only. v1 assigns one sequence per atomic batch: start=end.
+  uint64 sequence_start = 3;
+  uint64 sequence_end = 4;
+  repeated EventEnvelope changes = 5; // Authoritative source sequences may be sparse.
+  string stream_id = 6;
+  uint64 last_applied_sequence = 7; // Authoritative watermark after this projection.
+  int64 simulation_time_us = 8;
+  repeated EntityRemoval removed_entities = 9;
+  repeated EntityPresentationState upserted_entities = 10; // Includes transform changes.
+}
+
+message ResyncRequired {
+  Identity identity = 1;
+  uint64 expected_next_sequence = 2;
+  string reason = 3;
+  string stream_id = 4;
+  uint32 contract_version = 5;
+}
+
+message ClientAck {
+  uint32 contract_version = 1;
+  Identity identity = 2;
+  string stream_id = 3;
+  uint64 highest_contiguous_stream_sequence = 4; // Applied, not just received.
+}
+
+message StreamMessage {
+  oneof payload {
+    StateSnapshot snapshot = 1;
+    StateDeltaBatch delta_batch = 2;
+    ResyncRequired resync_required = 3;
+    ClientAck ack = 4; // Client->server only; authentication belongs to transport.
+  }
+}

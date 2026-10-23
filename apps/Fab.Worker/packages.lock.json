@@ -1,0 +1,64 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net11.0": {
+      "fab.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Fab.Ids": "[1.0.0, )"
+        }
+      },
+      "fab.ids": {
+        "type": "Project"
+      },
+      "fab.optimization.abstractions": {
+        "type": "Project",
+        "dependencies": {
+          "Fab.Ids": "[1.0.0, )"
+        }
+      },
+      "fab.orchestration.application": {
+        "type": "Project",
+        "dependencies": {
+          "Fab.Contracts": "[1.0.0, )",
+          "Fab.Orchestration.Domain": "[1.0.0, )"
+        }
+      },
+      "fab.orchestration.domain": {
+        "type": "Project",
+        "dependencies": {
+          "Fab.Ids": "[1.0.0, )"
+        }
+      },
+      "fab.orchestration.infrastructure": {
+        "type": "Project",
+        "dependencies": {
+          "Fab.Orchestration.Application": "[1.0.0, )",
+          "Fab.Orchestration.Domain": "[1.0.0, )",
+          "Fab.Simulation.Runtime": "[1.0.0, )"
+        }
+      },
+      "fab.simulation.core": {
+        "type": "Project",
+        "dependencies": {
+          "Fab.Ids": "[1.0.0, )"
+        }
+      },
+      "fab.simulation.models": {
+        "type": "Project",
+        "dependencies": {
+          "Fab.Optimization.Abstractions": "[1.0.0, )",
+          "Fab.Simulation.Core": "[1.0.0, )"
+        }
+      },
+      "fab.simulation.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "Fab.Contracts": "[1.0.0, )",
+          "Fab.Simulation.Core": "[1.0.0, )",
+          "Fab.Simulation.Models": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}

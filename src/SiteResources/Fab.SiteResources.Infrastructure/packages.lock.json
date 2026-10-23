@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net11.0": {
+      "fab.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Fab.Ids": "[1.0.0, )"
+        }
+      },
+      "fab.ids": {
+        "type": "Project"
+      },
+      "fab.siteresources.application": {
+        "type": "Project",
+        "dependencies": {
+          "Fab.Contracts": "[1.0.0, )",
+          "Fab.SiteResources.Domain": "[1.0.0, )"
+        }
+      },
+      "fab.siteresources.domain": {
+        "type": "Project",
+        "dependencies": {
+          "Fab.Ids": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}

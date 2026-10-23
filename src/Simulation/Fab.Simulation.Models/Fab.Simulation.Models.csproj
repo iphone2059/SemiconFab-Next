@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Fab.Simulation.Core/Fab.Simulation.Core.csproj" />
+    <ProjectReference Include="../../Optimization/Fab.Optimization.Abstractions/Fab.Optimization.Abstractions.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Fab.Simulation.Core/Fab.Simulation.Core.csproj" />
+  </ItemGroup>
+</Project>

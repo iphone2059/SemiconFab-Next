@@ -1,0 +1,7 @@
+{
+  "type": "module",
+  "exports": "./src/index.ts",
+  "name": "@fab/fab-scene",
+  "private": true,
+  "version": "0.1.0"
+}

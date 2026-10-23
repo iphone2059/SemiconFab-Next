@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Fab.Maintenance.Application/Fab.Maintenance.Application.csproj" />
+    <ProjectReference Include="../Fab.Maintenance.Domain/Fab.Maintenance.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>
+</Project>

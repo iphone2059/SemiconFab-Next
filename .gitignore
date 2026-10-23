@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/TestResults/
+**/__pycache__/
+.local/
+.superpowers/
+.vs/
+*.user
+*.log
+playwright-report/
+test-results/
+.env

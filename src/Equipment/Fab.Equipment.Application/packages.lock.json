@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net11.0": {
+      "fab.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Fab.Ids": "[1.0.0, )"
+        }
+      },
+      "fab.equipment.domain": {
+        "type": "Project",
+        "dependencies": {
+          "Fab.Ids": "[1.0.0, )"
+        }
+      },
+      "fab.ids": {
+        "type": "Project"
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "@fab/web", "private": true, "version": "0.1.0", "type": "module",
+  "scripts": { "dev": "vite --host 127.0.0.1", "build": "vite build", "typecheck": "tsc --noEmit" },
+  "dependencies": { "@fab/contracts": "workspace:*", "@fab/api-client": "workspace:*", "@fab/ui": "workspace:*", "@fab/widgets": "workspace:*", "@fab/fab-scene": "workspace:*", "@fab/babylon-webgpu": "workspace:*", "@fab/state-sync": "workspace:*", "@fab/charting": "workspace:*", "react": "19.3.1", "react-dom": "19.3.1" },
+  "devDependencies": { "vite": "8.3.5", "@vitejs/plugin-react": "6.1.2", "@types/react": "19.3.0", "@types/react-dom": "19.3.0" }
+}

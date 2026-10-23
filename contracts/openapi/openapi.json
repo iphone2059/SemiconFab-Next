@@ -1,0 +1,572 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SemiconFab Next Development API",
+    "version": "0.1.0",
+    "description": "Loopback Development identity and local file store only; production and OT are unavailable."
+  },
+  "paths": {
+    "/api/v1/sites": {
+      "get": {
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SiteDto"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "ProblemDetails error"
+          }
+        }
+      }
+    },
+    "/api/v1/runs": {
+      "get": {
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunSummary"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "ProblemDetails error"
+          }
+        }
+      },
+      "post": {
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSummary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "ProblemDetails error"
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSummary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "ProblemDetails error"
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{id}/results": {
+      "get": {
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "ProblemDetails error"
+          }
+        }
+      }
+    },
+    "/api/v1/sites/{siteId}/kpi": {
+      "get": {
+        "parameters": [
+          {
+            "name": "siteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteKpiDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "ProblemDetails error"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "LocalDevelopment": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "LocalDevelopment": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Fab-Dev-Key"
+      }
+    },
+    "schemas": {
+      "FabDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fabId",
+          "code"
+        ],
+        "properties": {
+          "fabId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "SiteDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "siteId",
+          "code",
+          "templateHash",
+          "fabs"
+        ],
+        "properties": {
+          "siteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "templateHash": {
+            "type": "string"
+          },
+          "fabs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FabDto"
+            },
+            "minItems": 1,
+            "maxItems": 32
+          }
+        }
+      },
+      "FabScenario": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fabId",
+          "code",
+          "lotCount",
+          "processTimeUs"
+        ],
+        "properties": {
+          "fabId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "lotCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "processTimeUs": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          }
+        }
+      },
+      "ScenarioDefinition": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contractVersion",
+          "siteId",
+          "mode",
+          "masterSeed",
+          "durationUs",
+          "warmupUs",
+          "fabs"
+        ],
+        "properties": {
+          "contractVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "siteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "mode": {
+            "type": "string",
+            "const": "INDEPENDENT"
+          },
+          "masterSeed": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "durationUs": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "warmupUs": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "fabs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FabScenario"
+            },
+            "minItems": 1,
+            "maxItems": 32
+          }
+        }
+      },
+      "CreateRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scenario"
+        ],
+        "properties": {
+          "scenario": {
+            "$ref": "#/components/schemas/ScenarioDefinition"
+          }
+        }
+      },
+      "FabExecutionSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fabId",
+          "code",
+          "status",
+          "completedLots",
+          "totalLots",
+          "simulationTimeUs",
+          "traceHash",
+          "error"
+        ],
+        "properties": {
+          "fabId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "completedLots": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "totalLots": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "simulationTimeUs": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "traceHash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "RunSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runId",
+          "siteId",
+          "status",
+          "version",
+          "createdAtUtc",
+          "executions"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "siteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "createdAtUtc": {
+            "type": "string"
+          },
+          "executions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FabExecutionSummary"
+            }
+          }
+        }
+      },
+      "SimulationEventDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fabId",
+          "entityId",
+          "kind",
+          "simulationTimeUs",
+          "sequence"
+        ],
+        "properties": {
+          "fabId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "simulationTimeUs": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "sequence": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          }
+        }
+      },
+      "FabSimulationResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fabId",
+          "completedLots",
+          "totalLots",
+          "simulationTimeUs",
+          "busyTimeUs",
+          "traceHash",
+          "events"
+        ],
+        "properties": {
+          "fabId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "completedLots": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "totalLots": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "simulationTimeUs": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "busyTimeUs": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "traceHash": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimulationEventDto"
+            }
+          }
+        }
+      },
+      "RunResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runId",
+          "fabs"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fabs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FabSimulationResult"
+            },
+            "minItems": 1,
+            "maxItems": 32
+          }
+        }
+      },
+      "SiteKpiDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "siteId",
+          "runId",
+          "completedLots",
+          "totalLots",
+          "totalBusyTimeUs",
+          "observationEndUs",
+          "fabCount"
+        ],
+        "properties": {
+          "siteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "completedLots": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "totalLots": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "totalBusyTimeUs": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "observationEndUs": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "fabCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          }
+        }
+      }
+    }
+  }
+}
