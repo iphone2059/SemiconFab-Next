@@ -95,12 +95,6 @@
       },
       "fab_shared": {
         "type": "Project"
-      },
-      "simulation_engine": {
-        "type": "Project",
-        "dependencies": {
-          "fab_shared": "[1.0.0, )"
-        }
       }
     }
   }

@@ -99,13 +99,6 @@
       "orchestration_service": {
         "type": "Project",
         "dependencies": {
-          "fab_shared": "[1.0.0, )",
-          "simulation_engine": "[1.0.0, )"
-        }
-      },
-      "simulation_engine": {
-        "type": "Project",
-        "dependencies": {
           "fab_shared": "[1.0.0, )"
         }
       }

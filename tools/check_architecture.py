@@ -14,10 +14,9 @@ SERVICES = {
     'orchestration_service', 'experiment_service', 'analytics_service', 'identity_service',
 }
 PLATFORM = {'eap_service', 'industrial_interfaces_service'}
-ENGINE = 'simulation_engine'
 HOSTS = {'api_service', 'worker_service', 'realtime_service', 'ot_gateway_service'}
 TESTS = {'simulation_tests', 'orchestration_tests', 'api_tests'}
-EXPECTED = SHARED | SERVICES | PLATFORM | {ENGINE} | HOSTS | TESTS
+EXPECTED = SHARED | SERVICES | PLATFORM | HOSTS | TESTS
 
 for legacy in ('src', 'apps', 'tests', 'frontend'):
     assert not (ROOT / legacy).exists(), f'Legacy container remains: {legacy}'
@@ -32,7 +31,7 @@ for csproj in sorted(ROOT.glob('*/*.csproj')):
     assert NAME.match(name), f'Project name must be lower_snake_case: {name}'
     assert not name.endswith(('_domain', '_application', '_infrastructure')), f'Domain layers must be merged into one project: {name}'
     projects[name] = (csproj, ET.parse(csproj).getroot())
-assert len(projects) == 23, f'Expected 23 independent projects, found {len(projects)}'
+assert len(projects) == 22, f'Expected 22 independent projects, found {len(projects)}'
 assert set(projects) == EXPECTED, 'Unexpected project set: ' + str(set(projects) ^ EXPECTED)
 
 graph = {}
@@ -74,22 +73,14 @@ for name, (csproj, xml) in projects.items():
     if name == 'fab_shared':
         assert not refs, 'fab_shared is the shared kernel and must not reference any project'
         assert not xml.findall('.//PackageReference'), 'fab_shared must stay package-free'
-    elif name == ENGINE:
-        assert refs <= SHARED, f'simulation_engine may only use the shared kernel: {refs}'
-        assert not xml.findall('.//FrameworkReference'), 'simulation_engine must stay framework-free'
-        assert not xml.findall('.//PackageReference'), 'simulation_engine must stay package-free'
-        for source in csproj.parent.rglob('*.cs'):
-            if {'obj', 'bin'} & set(source.parts):
-                continue
-            text = source.read_text(encoding='utf-8-sig')
-            assert not re.search(r'^using (?:Microsoft\.AspNetCore|Microsoft\.EntityFrameworkCore|Npgsql|System\.Net\.Http)', text, re.M), f'I/O import in simulation_engine: {source}'
+        for required in ('StableId.cs', 'FabSimulation.cs', 'FabSimulationSession.cs', 'StableEventQueue.cs', 'SplitMix64.cs', 'SyntheticFifoModel.cs', 'Generated/Contracts.g.cs'):
+            assert (csproj.parent / required).exists(), f'fab_shared lost expected asset: {required}'
     elif name in SERVICES:
-        allowed = SHARED | ({ENGINE} if name == 'orchestration_service' else set())
-        assert refs <= allowed, f'Service may only depend on the shared kernel: {name} -> {sorted(refs - allowed)}'
+        assert refs <= SHARED, f'Service may only depend on the shared kernel: {name} -> {sorted(refs - SHARED)}'
     elif name in PLATFORM:
         assert refs <= SHARED, f'Platform service may only depend on shared kernel: {name} -> {refs}'
     elif name in HOSTS:
-        assert refs <= SHARED | SERVICES | PLATFORM | {ENGINE}, f'Host can only compose shared/services: {name} -> {refs}'
+        assert refs <= SHARED | SERVICES | PLATFORM, f'Host can only compose shared/services: {name} -> {refs}'
         assert not (refs & HOSTS), f'Host must not reference another host: {name} -> {refs}'
     elif name in TESTS:
         assert refs <= set(projects), 'Tests may reference any project'
@@ -121,4 +112,4 @@ for source in (web / 'src').rglob('*'):
     assert not re.search(r'getContext\(\s*[\'\"](?:webgl2?|experimental-webgl)[\'\"]', text), f'Forbidden WebGL context: {source}'
     assert not re.search(r"from ['\"]@fab/", text), f'Internal package import must be relative: {source}'
 assert len(list((ROOT / 'docs/modules').glob('M*.md'))) == 18, 'Module record count changed'
-print(f'PASS: {len(projects)} independent .NET projects (shared kernel + one service per domain) / 1 self-contained frontend project; flat layout, reference rules, DAG and module records.')
+print(f'PASS: {len(projects)} independent .NET projects (shared kernel incl. simulation + one service per domain) / 1 self-contained frontend project; flat layout, reference rules, DAG and module records.')

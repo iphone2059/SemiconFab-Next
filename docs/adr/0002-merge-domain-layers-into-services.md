@@ -1,7 +1,7 @@
 # ADR-0002 — 每个域的三层合并为单一服务项目
 
 - 状态：已采纳（2026-10-23）
-- 关联：前端包边界由 ADR-0003 调整（8 个包合并为单一 `web_app`）。在 [ADR-0001](0001-flat-project-layout.md) 的扁平、独立、无总 solution 原则之上调整项目粒度
+- 关联：前端包边界由 ADR-0003 调整；仿真引擎由 ADR-0005 并入 `fab_shared`。在 [ADR-0001](0001-flat-project-layout.md) 的扁平、独立、无总 solution 原则之上调整项目粒度
 
 ## 背景
 

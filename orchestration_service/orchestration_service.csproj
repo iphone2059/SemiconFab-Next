@@ -13,6 +13,5 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../fab_shared/fab_shared.csproj" />
-    <ProjectReference Include="../simulation_engine/simulation_engine.csproj" />
   </ItemGroup>
 </Project>
