@@ -9,6 +9,7 @@ import '@babylonjs/core/Culling/ray';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import type { AmhsStats, CutAxis, FabPlacement, HoveredTool, PickedTool, SceneBackend, SceneLayer, SceneViewPreset, XRayFilter } from './fab-scene';
 import { InitializationDisposal } from './babylon-lifecycle';
 import { loadLegacyFab, type LegacyRuntime } from './legacy-site';
@@ -144,7 +145,7 @@ export function createWebGpuBackend(): SceneBackend {
       selection.material = selectionMaterial;
       selection.isPickable = false;
       selection.isVisible = false;
-      waferMarker = MeshBuilder.CreateBox('wafer-follow-marker', { width: 0.55, height: 0.4, depth: 0.45 }, scene);
+      waferMarker = MeshBuilder.CreateBox('wafer-follow-marker', { width: 0.5, height: 0.35, depth: 0.4 }, scene);
       const waferMarkerMaterial = new StandardMaterial('wafer-follow-marker-material', scene);
       waferMarkerMaterial.diffuseColor = new Color3(0.96, 0.62, 0.04);
       waferMarkerMaterial.emissiveColor = new Color3(0.5, 0.24, 0.01);
@@ -160,14 +161,19 @@ export function createWebGpuBackend(): SceneBackend {
       waferDoorMaterial.specularColor = new Color3(0.5, 0.5, 0.5);
       const flange = MeshBuilder.CreateBox('wafer-follow-flange-mesh', { width: 0.12, height: 0.04, depth: 0.12 }, scene);
       flange.parent = waferMarker;
-      flange.position.y = 0.22;
+      flange.position.y = 0.195;
       flange.material = waferFlangeMaterial;
       flange.isPickable = false;
       const door = MeshBuilder.CreateBox('wafer-follow-door-mesh', { width: 0.44, height: 0.3, depth: 0.012 }, scene);
       door.parent = waferMarker;
-      door.position.z = 0.231;
+      door.position.z = 0.201;
       door.material = waferDoorMaterial;
       door.isPickable = false;
+      const waferLight = new PointLight('wafer-follow-light', new Vector3(0, 0.3, 0), scene);
+      waferLight.parent = waferMarker;
+      waferLight.diffuse = new Color3(0.96, 0.62, 0.04);
+      waferLight.intensity = 0.9;
+      waferLight.range = 4;
       let selectedIndex = -1;
       const updateSelectionBounds = () => {
         const root = scene?.getTransformNodeByName(`procedural-tool-${selectedIndex}`);
@@ -399,13 +405,17 @@ export function createWebGpuBackend(): SceneBackend {
     },
     setWaferPoint(x: number, y: number, z: number, visible: boolean, focus: boolean): void {
       if (!waferMarker) return;
+      const dx = x - waferMarker.position.x;
+      const dz = z - waferMarker.position.z;
+      if (visible && dx * dx + dz * dz > 0.00001) waferMarker.rotation.y = Math.atan2(dx, dz);
       waferMarker.position.set(x, y, z);
       waferMarker.setEnabled(visible);
       if (visible && focus && camera) {
         cameraTransition = undefined;
-        camera.setTarget(new Vector3(x, y + 0.3, z));
-        camera.radius = 36;
-        camera.beta = 1.05;
+        camera.setTarget(new Vector3(x, y, z));
+        camera.alpha = -Math.PI / 2;
+        camera.beta = Math.acos(0.6);
+        camera.radius = 10;
       }
     },
     setWaferTrail(points: readonly (readonly [number, number, number])[]): void {
