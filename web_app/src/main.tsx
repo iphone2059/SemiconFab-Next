@@ -5,6 +5,8 @@ import { readCatalogRoute } from './catalog-data';
 import { TwinPage } from './twin-page';
 import { ErrorBoundary } from './error-boundary';
 import WorkbenchApp from './workbench';
+import { Provider } from 'react-redux';
+import { store } from './store/store';
 import '../assets/styles.css';
 import '../assets/twin.css';
 import '../assets/original-twin-hud.css';
@@ -19,14 +21,16 @@ if (currentUrl.pathname === '/preview' || currentUrl.pathname === '/preview.html
 const route = readCatalogRoute(currentUrl);
 createRoot(container).render(
   <StrictMode>
-    <ErrorBoundary>
-      {route.view === 'workbench' ? (
-        <WorkbenchApp />
-      ) : route.view === 'twin' ? (
-        <TwinPage />
-      ) : (
-        <CatalogPage view={route.view === 'compare' ? 'compare' : 'catalog'} />
-      )}
-    </ErrorBoundary>
+    <Provider store={store}>
+      <ErrorBoundary>
+        {route.view === 'workbench' ? (
+          <WorkbenchApp />
+        ) : route.view === 'twin' ? (
+          <TwinPage />
+        ) : (
+          <CatalogPage view={route.view === 'compare' ? 'compare' : 'catalog'} />
+        )}
+      </ErrorBoundary>
+    </Provider>
   </StrictMode>,
 );

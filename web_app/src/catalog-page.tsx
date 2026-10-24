@@ -3,11 +3,12 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
   type ChangeEvent,
   type MouseEvent,
 } from 'react';
-import { ApiClient } from './api-client';
+import { useAppDispatch, useAppSelector } from './store/hooks';
+import { catalogActions } from './store/catalogSlice';
+import { useGetCatalogQuery } from './store/api';
 import type { CatalogEntryDto } from './contracts';
 import {
   catalogFields,
@@ -24,7 +25,6 @@ import legacyLicenseUrl from '../assets/legacy-LICENSE.txt?url';
 
 type Language = Preferences['language'];
 const text = (language: Language, zh: string, en: string) => (language === 'zh' ? zh : en);
-const api = new ApiClient();
 const pageSize = 40;
 const valueText = (value: unknown) =>
   value === null || value === undefined
@@ -315,48 +315,40 @@ function initialPreferences(): Preferences {
 }
 
 export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare' }) {
-  const [view, setView] = useState(initialView);
-  const [initial] = useState(() => readCatalogRoute(new URL(location.href)));
-  const [preferences, setPreferences] = useState(initialPreferences);
+  const dispatch = useAppDispatch();
+  const initial = useMemo(() => readCatalogRoute(new URL(location.href)), []);
+  const {
+    view, preferences, domain, category, query, hideDrafts, selected,
+    detailId, page, localEntries, localImportId, importError,
+  } = useAppSelector((state) => state.catalog);
   const language = preferences.language;
   const t = (zh: string, en: string) => text(language, zh, en);
-  const [entries, setEntries] = useState<readonly CatalogEntryDto[]>([]);
-  const [importId, setImportId] = useState('');
-  const [domain, setDomain] = useState<CatalogDomain>(initial.domain);
-  const [category, setCategory] = useState(initial.category);
-  const [query, setQuery] = useState(initial.query);
-  const [hideDrafts, setHideDrafts] = useState(initial.hideDrafts);
-  const [selected, setSelected] = useState<readonly string[]>(initial.compare);
-  const [detail, setDetail] = useState<CatalogEntryDto>();
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [localPreview, setLocalPreview] = useState(false);
-  const [reload, setReload] = useState(0);
-  const [page, setPage] = useState(0);
+  const catalogQuery = useGetCatalogQuery();
+  const entries = useMemo(
+    () => localEntries ?? (catalogQuery.data ? parseCatalogEntries({ entries: catalogQuery.data.items }) : []),
+    [localEntries, catalogQuery.data],
+  );
+  const importId = localEntries ? localImportId : (catalogQuery.data?.importId ?? '');
+  const localPreview = localEntries !== null;
+  const error = importError || (catalogQuery.error ? 'Catalog request failed' : '');
+  const loading = catalogQuery.isLoading && !localEntries;
+  const detail = entries.find((entry) => entry.recordId === detailId);
   const generation = useRef(0);
-  const request = useRef<AbortController | null>(null);
+  const hydrated = useRef(false);
   const deferredQuery = useDeferredValue(query);
   const filtered = useMemo(
     () => filterCatalog(entries, domain, category, deferredQuery, hideDrafts),
     [entries, domain, category, deferredQuery, hideDrafts],
   );
   const categories = useMemo(
-    () =>
-      [
-        ...new Set(
-          entries
-            .filter((entry) => domain === 'ALL' || entry.domain === domain)
-            .map((entry) => entry.category),
-        ),
-      ].sort(),
+    () => [...new Set(entries.filter((entry) => domain === 'ALL' || entry.domain === domain).map((entry) => entry.category))].sort(),
     [entries, domain],
   );
   const selectedEntries = useMemo(
-    () =>
-      selected.flatMap((id) => {
-        const entry = entries.find((item) => item.recordId === id);
-        return entry ? [entry] : [];
-      }),
+    () => selected.flatMap((id) => {
+      const entry = entries.find((item) => item.recordId === id);
+      return entry ? [entry] : [];
+    }),
     [selected, entries],
   );
   const missingIds = selected.filter((id) => !entries.some((entry) => entry.recordId === id));
@@ -364,63 +356,40 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
   const currentPage = Math.min(page, pageCount - 1);
 
   useEffect(() => {
-    const current = ++generation.current;
-    const controller = new AbortController();
-    request.current = controller;
-    setLoading(true);
-    setError('');
-    void api
-      .catalog({}, controller.signal)
-      .then((data) => {
-        if (controller.signal.aborted || current !== generation.current) return;
-        const parsed = parseCatalogEntries({ entries: data.items });
-        setEntries(parsed);
-        setImportId(data.importId);
-        setLocalPreview(false);
-        setDetail(undefined);
-        if (
-          readCatalogRoute(new URL(location.href)).view === 'compare' &&
-          !new URL(location.href).searchParams.has('compare')
-        )
-          setSelected(
-            parsed
-              .filter((entry) => entry.category === 'lithography')
-              .slice(0, 3)
-              .map((entry) => entry.recordId),
-          );
-      })
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted && current === generation.current)
-          setError(reason instanceof Error ? reason.message : 'Catalog request failed');
-      })
-      .finally(() => {
-        if (!controller.signal.aborted && current === generation.current) setLoading(false);
-      });
-    return () => {
-      ++generation.current;
-      controller.abort();
-    };
-  }, [reload]);
+    if (hydrated.current) return;
+    hydrated.current = true;
+    const route = readCatalogRoute(new URL(location.href));
+    dispatch(catalogActions.hydrate({
+      view: initialView,
+      preferences: initialPreferences(),
+      domain: route.domain,
+      category: route.category,
+      query: route.query,
+      hideDrafts: route.hideDrafts,
+      selected: [...route.compare],
+      page: 0,
+    }));
+  }, [dispatch, initialView]);
+
+  useEffect(() => {
+    if (view !== 'compare' || selected.length > 0 || entries.length === 0) return;
+    if (new URL(location.href).searchParams.has('compare')) return;
+    dispatch(catalogActions.selectedSet(entries.filter((entry) => entry.category === 'lithography').slice(0, 3).map((entry) => entry.recordId)));
+  }, [view, selected.length, entries, dispatch]);
 
   useEffect(() => {
     const restore = () => {
       const route = readCatalogRoute(new URL(location.href));
-      if (route.view === 'workbench' || route.view === 'twin') {
-        location.reload();
-        return;
-      }
-      setView(route.view);
-      setDomain(route.domain);
-      setCategory(route.category);
-      setQuery(route.query);
-      setHideDrafts(route.hideDrafts);
-      setSelected(route.compare);
-      setPage(0);
-      setPreferences(initialPreferences());
+      if (route.view === 'workbench' || route.view === 'twin') { location.reload(); return; }
+      dispatch(catalogActions.hydrate({
+        view: route.view, domain: route.domain, category: route.category, query: route.query,
+        hideDrafts: route.hideDrafts, selected: [...route.compare], page: 0,
+        preferences: initialPreferences(),
+      }));
     };
     window.addEventListener('popstate', restore);
     return () => window.removeEventListener('popstate', restore);
-  }, []);
+  }, [dispatch]);
 
   useEffect(() => {
     document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
@@ -448,20 +417,14 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
   }, [language, preferences.theme, view, domain, category, query, selected, hideDrafts]);
 
   function toggle(id: string): void {
-    setSelected((previous) =>
-      previous.includes(id)
-        ? previous.filter((value) => value !== id)
-        : previous.length < 4
-          ? [...previous, id]
-          : previous,
-    );
+    dispatch(catalogActions.selectedToggled(id));
   }
   function openView(next: 'catalog' | 'compare'): void {
     const url = new URL(location.href);
     url.pathname = next === 'compare' ? '/compare' : '/catalog';
     url.searchParams.set('compare', selected.join(','));
     if (location.pathname !== url.pathname) history.pushState(null, '', url);
-    setView(next);
+    dispatch(catalogActions.viewSet(next));
   }
   function navigate(event: MouseEvent<HTMLAnchorElement>, next: 'catalog' | 'compare'): void {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
@@ -474,24 +437,17 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
     event.currentTarget.value = '';
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
-      setError(t('文件超过 10 MiB。', 'File exceeds 10 MiB.'));
+      dispatch(catalogActions.importErrorSet(t('文件超过 10 MiB。', 'File exceeds 10 MiB.')));
       return;
     }
     const current = ++generation.current;
-    request.current?.abort();
-    setLoading(false);
     try {
       const parsed = parseCatalogEntries(JSON.parse(await file.text()));
       if (current !== generation.current) return;
-      setEntries(parsed);
-      setImportId(file.name);
-      setLocalPreview(true);
-      setDetail(undefined);
-      setError('');
-      setPage(0);
+      dispatch(catalogActions.localImportApplied({ entries: parsed, importId: file.name }));
     } catch (reason: unknown) {
       if (current === generation.current)
-        setError(reason instanceof Error ? reason.message : t('导入失败', 'Import failed'));
+        dispatch(catalogActions.importErrorSet(reason instanceof Error ? reason.message : t('导入失败', 'Import failed')));
     }
   }
 
@@ -522,10 +478,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
         <div className="catalog-preferences">
           <button
             onClick={() =>
-              setPreferences((value) => ({
-                ...value,
-                language: value.language === 'zh' ? 'en' : 'zh',
-              }))
+              dispatch(catalogActions.languageToggled())
             }
           >
             {language === 'zh' ? 'EN' : '中文'}
@@ -533,10 +486,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
           <button
             aria-label={t('切换主题', 'Toggle theme')}
             onClick={() =>
-              setPreferences((value) => ({
-                ...value,
-                theme: value.theme === 'light' ? 'dark' : 'light',
-              }))
+              dispatch(catalogActions.themeToggled())
             }
           >
             {preferences.theme === 'light' ? '◐' : '☀'}
@@ -578,7 +528,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
         {error && (
           <div className="catalog-error" role="alert">
             {error}{' '}
-            <button onClick={() => setReload((value) => value + 1)}>
+            <button onClick={() => { dispatch(catalogActions.localImportCleared()); void catalogQuery.refetch(); }}>
               {t('重新读取服务端目录', 'Reload server catalog')}
             </button>
           </div>
@@ -603,9 +553,9 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
                   key={value}
                   aria-pressed={domain === value}
                   onClick={() => {
-                    setDomain(value);
-                    setCategory('');
-                    setPage(0);
+                    dispatch(catalogActions.domainSet(value));
+                    dispatch(catalogActions.categorySet(''));
+                    dispatch(catalogActions.pageSet(0));
                   }}
                 >
                   {value === 'ALL' ? t('全部设备', 'All equipment') : value}
@@ -639,7 +589,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
               {t('导出目录', 'Export catalog')}
             </button>
             {localPreview && (
-              <button onClick={() => setReload((value) => value + 1)}>
+              <button onClick={() => { dispatch(catalogActions.localImportCleared()); void catalogQuery.refetch(); }}>
                 {t('恢复服务端目录', 'Restore server catalog')}
               </button>
             )}
@@ -653,8 +603,8 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
                 maxLength={200}
                 placeholder={t('厂商、型号或分类…', 'Vendor, model or category…')}
                 onChange={(event) => {
-                  setQuery(event.target.value);
-                  setPage(0);
+                  dispatch(catalogActions.querySet(event.target.value));
+                  dispatch(catalogActions.pageSet(0));
                 }}
               />
             </label>
@@ -663,8 +613,8 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
               <select
                 value={category}
                 onChange={(event) => {
-                  setCategory(event.target.value);
-                  setPage(0);
+                  dispatch(catalogActions.categorySet(event.target.value));
+                  dispatch(catalogActions.pageSet(0));
                 }}
               >
                 <option value="">{t('所有分类', 'All categories')}</option>
@@ -683,8 +633,8 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
                 type="checkbox"
                 checked={hideDrafts}
                 onChange={(event) => {
-                  setHideDrafts(event.target.checked);
-                  setPage(0);
+                  dispatch(catalogActions.hideDraftsSet(event.target.checked));
+                  dispatch(catalogActions.pageSet(0));
                 }}
               />
               {t('隐藏 draft 记录', 'Hide draft records')}
@@ -749,7 +699,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
                       </td>
                       <td>
                         <button
-                          onClick={() => setDetail(entry)}
+                          onClick={() => dispatch(catalogActions.detailIdSet(entry.recordId))}
                           aria-label={t(`查看 ${entry.model}`, `Inspect ${entry.model}`)}
                         >
                           {t('查看规格', 'Inspect')} ↗
@@ -771,7 +721,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
             </p>
           )}
           <div className="catalog-pagination">
-            <button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
+            <button disabled={currentPage === 0} onClick={() => dispatch(catalogActions.pageSet(currentPage - 1))}>
               {t('上一页', 'Previous')}
             </button>
             <span>
@@ -779,7 +729,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
             </span>
             <button
               disabled={currentPage >= pageCount - 1}
-              onClick={() => setPage(currentPage + 1)}
+              onClick={() => dispatch(catalogActions.pageSet(currentPage + 1))}
             >
               {t('下一页', 'Next')}
             </button>
@@ -801,7 +751,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
         </footer>
       </main>
       {detail && (
-        <EquipmentDetails entry={detail} language={language} onClose={() => setDetail(undefined)} />
+        <EquipmentDetails entry={detail} language={language} onClose={() => dispatch(catalogActions.detailIdSet(undefined))} />
       )}
     </div>
   );

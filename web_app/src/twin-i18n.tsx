@@ -1,4 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
+import { createContext, useContext, useEffect, useMemo, type PropsWithChildren } from 'react';
+import { useAppDispatch, useAppSelector } from './store/hooks';
+import { localeActions } from './store/localeSlice';
 import { TWIN_EN } from './twin-translations';
 
 export type TwinLanguage = 'zh' | 'en';
@@ -34,11 +36,8 @@ const TwinLocale = createContext({ language: 'zh' as TwinLanguage, t: twinTransl
 export const useTwinLocale = () => useContext(TwinLocale);
 
 export function TwinLocaleProvider({ children }: PropsWithChildren) {
-  const [language, setLanguage] = useState<TwinLanguage>(() => {
-    if (typeof window === 'undefined') return 'zh';
-    try { return readTwinLanguage(localStorage, location.search, navigator.language); }
-    catch { return navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'; }
-  });
+  const dispatch = useAppDispatch();
+  const language = useAppSelector((state) => state.locale.language);
   useEffect(() => {
     try { persistTwinLanguage(localStorage, language); } catch { /* Storage getter can also be denied. */ }
     document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
@@ -47,6 +46,6 @@ export function TwinLocaleProvider({ children }: PropsWithChildren) {
     url.searchParams.set('lang', language === 'zh' ? 'zh-CN' : 'en');
     history.replaceState({}, '', url);
   }, [language]);
-  const value = useMemo(() => ({ language, t: twinTranslator(language), toggleLanguage: () => setLanguage((current) => current === 'zh' ? 'en' : 'zh') }), [language]);
+  const value = useMemo(() => ({ language, t: twinTranslator(language), toggleLanguage: () => dispatch(localeActions.languageToggled()) }), [language, dispatch]);
   return <TwinLocale.Provider value={value}>{children}</TwinLocale.Provider>;
 }

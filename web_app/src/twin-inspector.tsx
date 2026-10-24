@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTwinLocale } from './twin-i18n';
+import { useAppDispatch, useAppSelector } from './store/hooks';
+import { twinPageActions } from './store/twinUiSlice';
 import { ORIGINAL_TWIN_UI, localizedEquipment, type TwinSelection } from './original-twin-data';
 import type { FabLayoutTool, FabToolState } from './fab-layout';
 import { OriginalElevation } from './twin-elevation';
-import { applyMesAction, buildTelemetry, computeSpc, createMesJob, type MesAction } from './process-control';
+import { applyMesAction, buildTelemetry, computeSpc, createMesJob, type MesAction, type MesJob } from './process-control';
 
 const CATEGORY: Record<string, FabLayoutTool['category']> = {
   litho:'lithography', etch:'dry_etch', depo:'thin_film_deposition', imp_therm:'ion_implantation',
@@ -37,7 +39,9 @@ export function OriginalInspector({selection,states,onClose,onManualKey,onSelect
   const tool = useMemo(()=>equipment?pseudoTool(equipment.id,equipment):undefined,[equipment]);
   const telemetry = useMemo(()=>tool?buildTelemetry(tool,0):undefined,[tool]);
   const spc = useMemo(()=>telemetry?computeSpc(telemetry.history,telemetry.sensors[0],(states[equipment?.id??'']??'running')==='down'):undefined,[telemetry,states,equipment?.id]);
-  const [mes,setMes]=useState(()=>tool?createMesJob(tool,0):undefined);
+  const dispatch=useAppDispatch();
+  const mes=useAppSelector(state=>equipment ? state.twinPage.inspectorMes[equipment.id] : undefined) ?? (tool?createMesJob(tool,0):undefined);
+  const setMes=(update:(current:MesJob|undefined)=>MesJob|undefined)=>dispatch(twinPageActions.inspectorMesSet({id:equipment?.id??'unknown',job:update(mes)??mes??createMesJob(tool!,0)}));
   if(selection.kind==='layout')return null;
   if(selection.kind==='oem'&&oem) {
     return <aside className="twin-inspector original-inspector" aria-label={t('设备详情')}>

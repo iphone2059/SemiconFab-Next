@@ -35,7 +35,7 @@ export interface AmhsStats {
 }
 
 export interface SceneBackend {
-  mount(canvas: HTMLCanvasElement, fabs: readonly FabPlacement[], signal: AbortSignal, onStatus: (status: string) => void, onToolPick?: (tool: PickedTool | null) => void, onAmhsStats?: (stats: AmhsStats) => void, onToolHover?: (hover: HoveredTool | null) => void): Promise<void>;
+  mount(canvas: HTMLCanvasElement, fabs: readonly FabPlacement[], signal: AbortSignal, onStatus: (status: string) => void, onToolPick?: (tool: PickedTool | null) => void, onAmhsStats?: (stats: AmhsStats) => void, onToolHover?: (hover: HoveredTool | null) => void, getToolStates?: () => readonly FabToolState[]): Promise<void>;
   dispose(): void;
   setView?(preset: SceneViewPreset, fabId?: string): void;
   setCameraPose?(position: readonly [number, number, number], target: readonly [number, number, number], durationMs: number): void;
@@ -61,10 +61,10 @@ export interface SceneBackend {
 export class SceneFacade {
   private readonly controller = new AbortController();
   constructor(private readonly backend: SceneBackend) {}
-  async mount(canvas: HTMLCanvasElement, fabs: readonly FabPlacement[], onStatus: (status: string) => void, onToolPick?: (tool: PickedTool | null) => void, onAmhsStats?: (stats: AmhsStats) => void, onToolHover?: (hover: HoveredTool | null) => void): Promise<void> {
+  async mount(canvas: HTMLCanvasElement, fabs: readonly FabPlacement[], onStatus: (status: string) => void, onToolPick?: (tool: PickedTool | null) => void, onAmhsStats?: (stats: AmhsStats) => void, onToolHover?: (hover: HoveredTool | null) => void, getToolStates?: () => readonly FabToolState[]): Promise<void> {
     if (this.controller.signal.aborted) return;
     try {
-      await this.backend.mount(canvas, fabs, this.controller.signal, status => { if (!this.controller.signal.aborted) onStatus(status); }, tool => { if (!this.controller.signal.aborted) onToolPick?.(tool); }, stats => { if (!this.controller.signal.aborted) onAmhsStats?.(stats); }, hover => { if (!this.controller.signal.aborted) onToolHover?.(hover); });
+      await this.backend.mount(canvas, fabs, this.controller.signal, status => { if (!this.controller.signal.aborted) onStatus(status); }, tool => { if (!this.controller.signal.aborted) onToolPick?.(tool); }, stats => { if (!this.controller.signal.aborted) onAmhsStats?.(stats); }, hover => { if (!this.controller.signal.aborted) onToolHover?.(hover); }, getToolStates);
       if (this.controller.signal.aborted) this.backend.dispose();
     } catch (error: unknown) {
       this.backend.dispose();

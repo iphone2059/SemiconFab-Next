@@ -102,7 +102,7 @@ export function createWebGpuBackend(): SceneBackend {
   };
   const stopCameraTransition = () => { cameraTransition = undefined; };
   return {
-    async mount(canvas: HTMLCanvasElement, fabs: readonly FabPlacement[], signal: AbortSignal, onStatus: (status: string) => void, onToolPick?: (tool: PickedTool | null) => void, onAmhsStats?: (stats: AmhsStats) => void, onToolHover?: (hover: HoveredTool | null) => void): Promise<void> {
+    async mount(canvas: HTMLCanvasElement, fabs: readonly FabPlacement[], signal: AbortSignal, onStatus: (status: string) => void, onToolPick?: (tool: PickedTool | null) => void, onAmhsStats?: (stats: AmhsStats) => void, onToolHover?: (hover: HoveredTool | null) => void, getToolStates?: () => readonly FabToolState[]): Promise<void> {
       if (!window.isSecureContext || !navigator.gpu) throw new Error('此终端无法使用 WebGPU。请使用支持 WebGPU 的浏览器，并通过 HTTPS 或 localhost 访问。');
       const adapter = await navigator.gpu.requestAdapter();
       if (signal.aborted || disposed) return;
@@ -148,6 +148,21 @@ export function createWebGpuBackend(): SceneBackend {
       onStatus('正在加载原版设备模型…');
       legacyRuntime = await loadLegacyFab(scene, onAmhsStats);
       toolStates = [...FAB_TOOL_STATES];
+      // Frame loop reads the Redux snapshot through a callback instead of waiting
+      // for a React prop pass. Only lightweight state IDs/states cross the boundary.
+      if (getToolStates) {
+        scene.onBeforeRenderObservable.add(() => {
+          if (signal.aborted || !legacyRuntime) return;
+          const next = getToolStates();
+          for (let index = 0; index < next.length && index < toolStates.length; index += 1) {
+            const state = next[index];
+            if (state !== toolStates[index]) {
+              toolStates[index] = state;
+              legacyRuntime.setToolState(index, state);
+            }
+          }
+        });
+      }
       legacyRuntime.setLayer('ceiling', false);
       legacyRuntime.setLayer('subfab', false);
       if (signal.aborted || disposed) { disposal.dispose(); return; }
@@ -260,6 +275,7 @@ export function createWebGpuBackend(): SceneBackend {
         return hit?.hit ? { index: hit.pickedMesh!.metadata.toolIndex as number, x: screenX, y: screenY } : null;
       };
       let lastHoverIndex: number | null = null;
+      let lastHoverPickAt = 0;
       const onPointerUp = (event: PointerEvent) => {
         if (Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY) > 6) return;
         const hit = findToolAt(event.clientX, event.clientY);
@@ -268,6 +284,11 @@ export function createWebGpuBackend(): SceneBackend {
       };
       const onPointerMove = (event: PointerEvent) => {
         if (event.buttons !== 0) { canvas.style.cursor = ''; return; }
+        const now = performance.now();
+        // Hover raycasts are CPU-side and only drive a tooltip; 50 ms is visually
+        // indistinguishable and prevents pixel-by-pixel picking spikes while orbiting.
+        if (now - lastHoverPickAt < 50) return;
+        lastHoverPickAt = now;
         const hit = findToolAt(event.clientX, event.clientY);
         canvas.style.cursor = hit === null ? '' : 'pointer';
         const nextIndex = hit?.index ?? null;

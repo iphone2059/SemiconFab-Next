@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 import WorkbenchApp from '../src/workbench';
+import { Provider } from 'react-redux';
+import { store } from '../src/store/store';
 import { readCatalogRoute } from '../src/catalog-data';
 
 it('has a single standalone 3D route; old preview links resolve to Twin', () => {
@@ -10,7 +12,7 @@ it('has a single standalone 3D route; old preview links resolve to Twin', () => 
 });
 
 it('keeps the website entrance free of 3D preview rendering', () => {
-  const html = renderToStaticMarkup(<WorkbenchApp />);
+  const html = renderToStaticMarkup(<Provider store={store}><WorkbenchApp /></Provider>);
   expect(html).toContain('href="/twin"');
   expect(html).not.toContain('<canvas');
   expect(html).not.toContain('SITE DIGITAL VIEW');

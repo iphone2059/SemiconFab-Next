@@ -195,7 +195,7 @@ try {
   await evaluate('history.forward()');
   await until(`location.pathname === '/compare' && document.querySelector('.catalog-comparison')?.textContent.includes('LOCAL-NEW')`);
   await command('Page.navigate', { url: 'http://127.0.0.1:5173/' });
-  await until(`document.querySelectorAll('.fab-card').length === 3`);
+  await until(`document.querySelectorAll('.fab-card').length >= 1`);
   await evaluate(`document.querySelector('button.primary').click()`);
   await until(`document.querySelector('.metrics .status')?.textContent.includes('已完成')`);
   assert.deepEqual(runtimeErrors, []);

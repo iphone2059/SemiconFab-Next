@@ -1,129 +1,88 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ApiClient } from './api-client';
+import { useEffect, useMemo, useRef, type FormEvent } from 'react';
 import type { CreateRunRequest, RunResult, RunSummary, SiteDto } from './contracts';
 import { Panel, StatusPill } from './ui';
 import { Metric } from './widgets';
 import { CompletionBar } from './charting';
-import { ScopeGate, startPolling } from './state-sync';
+import { ScopeGate } from './state-sync';
 import { validateScenario } from './scenario';
-
-const api = new ApiClient();
-const message = (error: unknown) => (error instanceof Error ? error.message : '未知错误');
+import { useAppDispatch, useAppSelector } from './store/hooks';
+import { useCreateRunMutation, useGetRunQuery, useGetRunResultsQuery, useGetRunsQuery, useGetSitesQuery } from './store/api';
+import { workbenchActions } from './store/workbenchSlice';
+const message = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const value = error as { status?: unknown; data?: unknown; error?: unknown };
+    if (value.data && typeof value.data === 'object') {
+      const detail = (value.data as { detail?: unknown; title?: unknown }).detail ?? (value.data as { title?: unknown }).title;
+      if (typeof detail === 'string') return detail;
+    }
+    if (typeof value.data === 'string') return value.data.slice(0, 180);
+    if (typeof value.error === 'string') return value.error;
+    if (value.status !== undefined) return `HTTP ${String(value.status)}`;
+  }
+  return '未知错误';
+};
 const complete = (status: string) => status.toUpperCase() === 'COMPLETED';
 const count = (value: string) => BigInt(value).toLocaleString('zh-CN');
 
 function Workbench({ site }: { site: SiteDto }) {
-  const [runs, setRuns] = useState<RunSummary[]>([]);
-  const [runId, setRunId] = useState('');
-  const [run, setRun] = useState<RunSummary>();
-  const [result, setResult] = useState<RunResult>();
-  const [listError, setListError] = useState('');
-  const [runError, setRunError] = useState('');
-  const [submitError, setSubmitError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [lotCount, setLotCount] = useState('24');
-  const [processTimeUs, setProcessTimeUs] = useState('1000000');
-  const [durationUs, setDurationUs] = useState('60000000');
-  const [warmupUs, setWarmupUs] = useState('0');
-  const [masterSeed, setMasterSeed] = useState('42');
+  const dispatch = useAppDispatch();
+  const { runId, form, submitError } = useAppSelector((state) => state.workbench);
+  const { lotCount, processTimeUs, durationUs, warmupUs, masterSeed } = form;
   const fab = site.fabs[0];
   const submissionScope = useMemo(() => new ScopeGate(), []);
   const pendingSubmission = useRef<{ json: string; key: string } | undefined>(undefined);
+  const runsQuery = useGetRunsQuery(undefined, { pollingInterval: 1500 });
+  const scopedRuns = useMemo(() => (runsQuery.data ?? []).filter((value) => value.siteId === site.siteId), [runsQuery.data, site.siteId]);
+  const runs = scopedRuns;
+  const listError = runsQuery.error ? message(runsQuery.error) : '';
+  const runQuery = useGetRunQuery(runId, { skip: !runId, pollingInterval: 1500 });
+  const resultQuery = useGetRunResultsQuery(runId, { skip: !runId || !runQuery.data || !complete(runQuery.data.status) });
+  const run = runQuery.data;
+  const result = resultQuery.data;
+  const runError = runQuery.error ? message(runQuery.error) : resultQuery.error ? message(resultQuery.error) : '';
+  const [createRun, createRunState] = useCreateRunMutation();
+  const submitting = createRunState.isLoading;
   useEffect(() => () => submissionScope.dispose(), [submissionScope]);
-  useEffect(
-    () =>
-      startPolling(
-        (signal) => api.runs(signal),
-        (values) => {
-          const scoped = values.filter((value) => value.siteId === site.siteId);
-          setRuns(scoped);
-          setListError('');
-          setRunId((previous) => previous || scoped[0]?.runId || '');
-        },
-        (error) => setListError(message(error)),
-      ),
-    [site.siteId],
-  );
   useEffect(() => {
-    setRun(undefined);
-    setResult(undefined);
-    setRunError('');
-    if (!runId) return;
-    return startPolling(
-      async (signal) => {
-        const current = await api.run(runId, signal);
-        if (current.siteId !== site.siteId || current.runId !== runId)
-          throw new Error('API 返回了错误作用域的 Run');
-        const results = complete(current.status) ? await api.results(runId, signal) : undefined;
-        if (results && results.runId !== runId) throw new Error('API 返回了错误作用域的结果');
-        return { current, results };
-      },
-      (data) => {
-        setRun(data.current);
-        setResult(data.results);
-        setRunError('');
-      },
-      (error) => setRunError(message(error)),
-    );
-  }, [runId, site.siteId]);
+    if (scopedRuns.length === 0) return;
+    if (!scopedRuns.some((value) => value.runId === runId)) dispatch(workbenchActions.runIdSet(scopedRuns[0].runId));
+  }, [scopedRuns, runId, dispatch]);
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    setSubmitError('');
+    dispatch(workbenchActions.submitErrorSet(''));
     if (!fab) {
-      setSubmitError('当前站点没有可用的 FAB');
+      dispatch(workbenchActions.submitErrorSet('当前站点没有可用的 FAB'));
       return;
     }
-    const validationError = validateScenario({
-      lotCount,
-      processTimeUs,
-      durationUs,
-      warmupUs,
-      masterSeed,
-    });
+    const validationError = validateScenario({ lotCount, processTimeUs, durationUs, warmupUs, masterSeed });
     if (validationError) {
-      setSubmitError(validationError);
+      dispatch(workbenchActions.submitErrorSet(validationError));
       return;
     }
-    const lots = Number(lotCount);
     const request: CreateRunRequest = {
       scenario: {
-        contractVersion: 1,
-        siteId: site.siteId,
-        mode: 'INDEPENDENT',
-        masterSeed,
-        durationUs,
-        warmupUs,
-        fabs: [{
-          fabId: fab.fabId,
-          code: fab.code,
-          lotCount: lots,
-          processTimeUs,
-        }],
+        contractVersion: 1, siteId: site.siteId, mode: 'INDEPENDENT', masterSeed, durationUs, warmupUs,
+        fabs: [{ fabId: fab.fabId, code: fab.code, lotCount: Number(lotCount), processTimeUs }],
       },
     };
     const json = JSON.stringify(request);
-    if (pendingSubmission.current?.json !== json)
-      pendingSubmission.current = { json, key: crypto.randomUUID() };
+    if (pendingSubmission.current?.json !== json) pendingSubmission.current = { json, key: crypto.randomUUID() };
     const token = submissionScope.begin(site.siteId);
-    setSubmitting(true);
     try {
-      const created = await api.createRun(request, pendingSubmission.current.key, token.signal);
+      const created = await createRun({ request, idempotencyKey: pendingSubmission.current.key }).unwrap();
       if (submissionScope.accepts(token)) {
-        setRuns((previous) => [
-          created,
-          ...previous.filter((value) => value.runId !== created.runId),
-        ]);
-        setRunId(created.runId);
         pendingSubmission.current = undefined;
+        dispatch(workbenchActions.runIdSet(created.runId));
       }
     } catch (error: unknown) {
-      if (submissionScope.accepts(token)) setSubmitError(message(error));
-    } finally {
-      if (submissionScope.accepts(token)) setSubmitting(false);
+      if (submissionScope.accepts(token)) dispatch(workbenchActions.submitErrorSet(message(error)));
     }
   }
 
+
+  const setField = (field: 'lotCount' | 'processTimeUs' | 'durationUs' | 'warmupUs' | 'masterSeed', value: string) => dispatch(workbenchActions.formFieldSet({ field, value }));
   const displayedRun = run?.runId === runId ? run : undefined;
   const displayedResult = result?.runId === runId ? result : undefined;
   const completedLots = displayedResult?.fabs.reduce(
@@ -165,7 +124,7 @@ function Workbench({ site }: { site: SiteDto }) {
                 Lot 数
                 <input
                   value={lotCount}
-                  onChange={(event) => setLotCount(event.target.value)}
+                  onChange={(event) => setField('lotCount', event.target.value)}
                   inputMode="numeric"
                   required
                 />
@@ -174,7 +133,7 @@ function Workbench({ site }: { site: SiteDto }) {
                 单 Lot 加工 / μs
                 <input
                   value={processTimeUs}
-                  onChange={(event) => setProcessTimeUs(event.target.value)}
+                  onChange={(event) => setField('processTimeUs', event.target.value)}
                   inputMode="numeric"
                   required
                 />
@@ -183,7 +142,7 @@ function Workbench({ site }: { site: SiteDto }) {
                 仿真时域 / μs
                 <input
                   value={durationUs}
-                  onChange={(event) => setDurationUs(event.target.value)}
+                  onChange={(event) => setField('durationUs', event.target.value)}
                   inputMode="numeric"
                   required
                 />
@@ -192,7 +151,7 @@ function Workbench({ site }: { site: SiteDto }) {
                 预热时长 / μs
                 <input
                   value={warmupUs}
-                  onChange={(event) => setWarmupUs(event.target.value)}
+                  onChange={(event) => setField('warmupUs', event.target.value)}
                   inputMode="numeric"
                   required
                 />
@@ -202,7 +161,7 @@ function Workbench({ site }: { site: SiteDto }) {
               主随机种子
               <input
                 value={masterSeed}
-                onChange={(event) => setMasterSeed(event.target.value)}
+                onChange={(event) => setField('masterSeed', event.target.value)}
                 inputMode="numeric"
                 required
               />
@@ -304,7 +263,7 @@ function Workbench({ site }: { site: SiteDto }) {
                     <StatusPill status={value.status} />
                   </td>
                   <td>
-                    <button className="text-button" onClick={() => setRunId(value.runId)}>
+                    <button className="text-button" onClick={() => dispatch(workbenchActions.runIdSet(value.runId))}>
                       {runId === value.runId ? '当前运行' : '查看运行'} →
                     </button>
                   </td>
@@ -324,35 +283,16 @@ function Workbench({ site }: { site: SiteDto }) {
 }
 
 export default function WorkbenchApp() {
-  const [sites, setSites] = useState<SiteDto[]>([]);
-  const [siteId, setSiteId] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [reload, setReload] = useState(0);
+  const dispatch = useAppDispatch();
+  const siteId = useAppSelector((state) => state.workbench.siteId);
+  const sitesQuery = useGetSitesQuery();
+  const sites = sitesQuery.data ?? [];
+  const loading = sitesQuery.isLoading;
+  const error = sitesQuery.error ? message(sitesQuery.error) : '';
   useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError('');
-    void api
-      .sites(controller.signal)
-      .then((values) => {
-        if (!controller.signal.aborted) {
-          setSites(values);
-          setSiteId((previous) =>
-            values.some((value) => value.siteId === previous)
-              ? previous
-              : (values[0]?.siteId ?? ''),
-          );
-        }
-      })
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted) setError(message(reason));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [reload]);
+    if (sites.length === 0) return;
+    if (!sites.some((value) => value.siteId === siteId)) dispatch(workbenchActions.siteIdSet(sites[0].siteId));
+  }, [sites, siteId, dispatch]);
   const site = sites.find((value) => value.siteId === siteId);
   return (
     <div className="app-shell">
@@ -408,7 +348,7 @@ export default function WorkbenchApp() {
               当前基地
               <select
                 value={siteId}
-                onChange={(event) => setSiteId(event.target.value)}
+                onChange={(event) => dispatch(workbenchActions.siteIdSet(event.target.value))}
                 disabled={!sites.length}
               >
                 {!sites.length && <option>等待 API 数据</option>}
@@ -430,7 +370,7 @@ export default function WorkbenchApp() {
           {error && (
             <div className="error" role="alert">
               站点 API 错误：{error}。请检查 API、Worker 与服务器端开发密钥配置。
-              <button className="ghost" onClick={() => setReload((value) => value + 1)}>
+              <button className="ghost" onClick={() => void sitesQuery.refetch()}>
                 重试
               </button>
             </div>

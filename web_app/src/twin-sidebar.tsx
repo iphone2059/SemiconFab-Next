@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTwinLocale } from './twin-i18n';
+import { useAppDispatch, useAppSelector } from './store/hooks';
+import { twinPageActions } from './store/twinUiSlice';
 import { ORIGINAL_TWIN_UI, filterOriginalOem, filterReferenceEquipment, localizedEquipment, type TwinSelection } from './original-twin-data';
 import type { FabToolState } from './fab-layout';
 import { OriginalIcon } from './original-icons';
@@ -26,13 +28,17 @@ export function TwinSidebar({selection,states,badgeCount=67,onSelect,onArchitect
   onSelect:(selection:TwinSelection)=>void;onArchitecture:()=>void;onDatabase:()=>void;
 }) {
   const {language}=useTwinLocale(); const zh=language==='zh';
-  const [tab,setTab]=useState<'fab'|'oem'>('fab'); const [query,setQuery]=useState('');
-  const [category,setCategory]=useState('ALL'); const [segment,setSegment]=useState('ALL');
-  const [stateFilter,setStateFilter]=useState('ALL'); const [switched,setSwitched]=useState(false);
+  const dispatch=useAppDispatch();
+  const {tab,query,category,segment,stateFilter,switched}=useAppSelector(state=>state.twinPage.sidebar);
+  const setTab=(value:'fab'|'oem')=>dispatch(twinPageActions.sidebarTabSet(value));
+  const setQuery=(value:string)=>dispatch(twinPageActions.sidebarQuerySet(value));
+  const setCategory=(value:string)=>dispatch(twinPageActions.sidebarCategorySet(value));
+  const setSegment=(value:string)=>dispatch(twinPageActions.sidebarSegmentSet(value));
+  const setStateFilter=(value:string)=>dispatch(twinPageActions.sidebarStateFilterToggle(value));
   const equipment=useMemo(()=>filterReferenceEquipment({query,category,state:stateFilter,language,states}),[query,category,stateFilter,language,states]);
   const oem=useMemo(()=>filterOriginalOem(query,segment),[query,segment]);
   const counts=useMemo(()=>{const result={running:0,idle:0,down:0,maint:0};for(const row of ORIGINAL_TWIN_UI.equipment)result[states[row.id]??'running']++;return result},[states]);
-  const chooseTab=(value:'fab'|'oem')=>{setTab(value);setQuery('');setSegment('ALL');setSwitched(true)};
+  const chooseTab=(value:'fab'|'oem')=>setTab(value);
   return <aside id="left-sidebar" className="fixed top-12 left-2.5 bottom-2.5 glass-panel rounded-xl z-20 flex flex-col shadow-lg border border-slate-200/90 overflow-hidden" style={{width:315,top:48,bottom:10,height:'calc(100vh - 58px)',maxHeight:'calc(100vh - 58px)'}}>
     <div className="p-2 border-b border-slate-200/70 shrink-0 space-y-1.5">
       <div className="flex items-center bg-slate-100/90 p-0.5 rounded-lg border border-slate-200 text-[9px] font-semibold">
@@ -48,7 +54,7 @@ export function TwinSidebar({selection,states,badgeCount=67,onSelect,onArchitect
         {(tab==='fab'?CATEGORIES:SEGMENTS).map(([id,chinese,english])=><button key={id} type="button" data-category={tab==='fab'?id:undefined} data-segment={tab==='oem'?id:undefined} onClick={()=>tab==='fab'?setCategory(id):setSegment(id)} className={`${tab==='fab'?'cat-pill':'oem-cat-pill'} ${id===(tab==='fab'?category:segment)?`active ${tab==='fab'?'bg-slate-900 text-white border-slate-900':'bg-indigo-600 text-white border-indigo-600'} shadow-sm`:'text-slate-600 bg-white border-slate-200 hover:bg-slate-50'} px-2 py-0.5 rounded-md font-medium border shrink-0`}>{zh?chinese:english}</button>)}
       </div>
       <div id="sidebar-secondary-controls">{tab==='fab'?<div className="grid grid-cols-4 gap-1 mt-2 text-[9px] font-mono">
-        {(Object.keys(SOURCE_STATE_STYLE) as FabToolState[]).map(state=>{const cfg=SOURCE_STATE_STYLE[state];return <button key={state} id={`state-btn-${state.toUpperCase()}`} type="button" aria-pressed={stateFilter===state.toUpperCase()} onClick={()=>setStateFilter(value=>value===state.toUpperCase()?'ALL':state.toUpperCase())} className={`state-pill py-0.5 px-1 rounded ${cfg.bg} border font-semibold flex items-center justify-center gap-1 transition ${stateFilter===state.toUpperCase()?'ring-1 ring-slate-700':''}`}><span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${state==='down'?'animate-pulse':''}`}/><span id={`count-${state}`}>{counts[state]}</span><span>{state==='running'&&zh?'运行':zh?cfg.zh:cfg.en}</span></button>})}
+        {(Object.keys(SOURCE_STATE_STYLE) as FabToolState[]).map(state=>{const cfg=SOURCE_STATE_STYLE[state];return <button key={state} id={`state-btn-${state.toUpperCase()}`} type="button" aria-pressed={stateFilter===state.toUpperCase()} onClick={()=>setStateFilter(state.toUpperCase())} className={`state-pill py-0.5 px-1 rounded ${cfg.bg} border font-semibold flex items-center justify-center gap-1 transition ${stateFilter===state.toUpperCase()?'ring-1 ring-slate-700':''}`}><span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${state==='down'?'animate-pulse':''}`}/><span id={`count-${state}`}>{counts[state]}</span><span>{state==='running'&&zh?'运行':zh?cfg.zh:cfg.en}</span></button>})}
       </div>:<div className="flex items-center justify-between text-[9px] text-slate-500 font-mono mt-1.5 px-0.5"><span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500"/>{zh?'40 家全球标杆品牌':'40 Global OEMs'}</span><span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded font-semibold border border-indigo-200">116 SEMI-E72</span></div>}</div>
     </div>
     <div id="equipment-list" className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5 overscroll-contain" style={{overflowY:'auto',maxHeight:'100%'}}>

@@ -1,6 +1,6 @@
 # web_app
 
-唯一的 Web 前端项目：一个 Vite/React 单页站点，包含 API 客户端、契约类型、工作台 UI、状态同步与 Babylon WebGPU 视图。页面按原版产品边界只展示一个 FAB（FAB-01），没有多 FAB 选择器。没有内部子包，也没有 pnpm workspace。
+唯一的 Web 前端项目：一个 Vite/React 单页站点，包含 Redux Toolkit + RTK Query 状态层、契约类型、工作台 UI、目录 UI 与 Babylon WebGPU 视图。页面按原版产品边界只展示一个 FAB（FAB-01），没有多 FAB 选择器。没有内部子包，也没有 pnpm workspace。
 
 ## 文件
 
@@ -12,7 +12,8 @@ web_app/
    ├─ main.tsx                # 站点入口与工作台
    ├─ contracts.generated.ts  # 由 tools/generate_contracts.py 生成，勿手改
    ├─ contracts.ts            # 生成契约的再导出
-   ├─ api-client.ts           # REST 客户端（ETag / Idempotency / 取消）
+   ├─ store/                  # configureStore、slices、RTK Query endpoints 与 typed hooks
+   ├─ api-client.ts           # 保留的独立 REST 契约客户端（应用页面不再构造）
    ├─ state-sync.ts           # 作用域/序号与开发轮询
    ├─ fab-scene.ts            # 与引擎无关的场景 Port
    ├─ babylon-webgpu.ts       # 唯一 WebGPU 实现（含设备丢失恢复）
