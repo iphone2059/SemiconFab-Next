@@ -18,7 +18,7 @@ The new `/twin` route provides the first page-level shell without replacing the 
 - layer controls;
 - the existing `SiteScene` contract with its internal chrome hidden.
 
-Implemented in this shell: ISO/Top/Litho/Airlock camera presets, L1/B1/Explode, AMHS/FFU/Subfab/Heatmap/Airflow/X-Ray layers, equipment selection, Tour toggle, Visitor/Engineer/Research presentation (Research replay is explicitly marked not connected).
+Implemented in this shell: ISO/Top/Litho/Airlock camera presets, L1/B1/DUAL/Explode, continuous 0–100% explode slider, AMHS/FFU/Subfab/Heatmap/Airflow/X-Ray layers, equipment selection, Tour toggle, Visitor/Engineer/Research presentation (Research replay is explicitly marked not connected).
 
 ## Not yet parity
 

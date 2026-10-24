@@ -41,6 +41,7 @@ export function createWebGpuBackend(): SceneBackend {
   let toolStates: FabToolState[] = [...FAB_TOOL_STATES];
   let touring = false;
   let basementEnabled = false;
+  let dualEnabled = false;
   let lastFrameTime = performance.now();
   const fabTargets = new Map<string, Vector3>();
   let cleanup = () => {};
@@ -334,15 +335,33 @@ export function createWebGpuBackend(): SceneBackend {
       legacyRuntime?.setExploded(active);
       refreshSelection();
     },
+    setExplodeFactor(factor: number): void {
+      legacyRuntime?.setExplodeFactor(factor);
+      refreshSelection();
+    },
     setBasement(active: boolean): void {
       const changed = basementEnabled !== active;
       basementEnabled = active;
-      if (active) clearPicked();
+      if (active) { dualEnabled = false; clearPicked(); }
       legacyRuntime?.setBasement(active);
       if (camera && changed) {
         cameraTransition = {
           from: { alpha: camera.alpha, beta: camera.beta, radius: camera.radius, target: camera.target.clone() },
           to: { alpha: Math.PI / 2.2, beta: active ? 1.08 : Math.PI / 3.64, radius: active ? 76 : homeRadius, target: new Vector3(0, active ? -3.5 : 0, 0) },
+          startedAt: performance.now(),
+          duration: 520,
+        };
+      }
+    },
+    setDual(active: boolean): void {
+      const changed = dualEnabled !== active;
+      dualEnabled = active;
+      if (active) { basementEnabled = false; clearPicked(); }
+      legacyRuntime?.setDual(active);
+      if (camera && changed) {
+        cameraTransition = {
+          from: { alpha: camera.alpha, beta: camera.beta, radius: camera.radius, target: camera.target.clone() },
+          to: { alpha: Math.PI / 2.25, beta: active ? 1.18 : Math.PI / 3.64, radius: active ? 82 : homeRadius, target: new Vector3(0, active ? -2.2 : 0, 0) },
           startedAt: performance.now(),
           duration: 520,
         };

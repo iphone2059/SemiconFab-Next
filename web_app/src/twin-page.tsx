@@ -7,6 +7,7 @@ import type { AmhsStats, PickedTool, SceneLayer } from './fab-scene';
 import { FabRail, SiteScene, type SiteSceneHandle } from './site-preview';
 type EntryMode = 'visitor' | 'engineer' | 'research';
 type CameraView = 'iso' | 'top' | 'litho' | 'airshower';
+type FabLevel = 'L1' | 'B1' | 'DUAL' | 'EXPLODED';
 
 const CATEGORY_LABELS: Record<string, string> = {
   lithography: '光刻',
@@ -48,6 +49,8 @@ export function TwinPage() {
     xray: false,
   });
   const [view, setView] = useState<CameraView>('iso');
+  const [level, setLevel] = useState<FabLevel>('L1');
+  const [explodePercent, setExplodePercent] = useState(100);
   const [mode, setMode] = useState<EntryMode>('engineer');
   const [touring, setTouring] = useState(false);
   const [exploded, setExploded] = useState(false);
@@ -141,21 +144,52 @@ export function TwinPage() {
       return next;
     });
   }
+  function resetLevel(): void {
+    scene.current?.setDual(false);
+    if (basement) scene.current?.setBasement(false);
+    if (exploded) scene.current?.setExploded(false);
+    scene.current?.setExplodeFactor(0);
+    setBasement(false);
+    setExploded(false);
+    setLevel('L1');
+  }
   function setL1(): void {
-    if (basement) { scene.current?.setBasement(false); setBasement(false); }
-    if (exploded) { scene.current?.setExploded(false); setExploded(false); }
+    resetLevel();
   }
   function setB1(): void {
-    if (exploded) { scene.current?.setExploded(false); setExploded(false); }
-    const next = !basement;
-    scene.current?.setBasement(next);
-    setBasement(next);
+    if (level === 'B1') { resetLevel(); return; }
+    scene.current?.setDual(false);
+    if (exploded) scene.current?.setExploded(false);
+    scene.current?.setExplodeFactor(0);
+    scene.current?.setBasement(true);
+    setBasement(true);
+    setExploded(false);
+    setLevel('B1');
+  }
+  function setDual(): void {
+    if (level === 'DUAL') { resetLevel(); return; }
+    if (basement) scene.current?.setBasement(false);
+    if (exploded) scene.current?.setExploded(false);
+    scene.current?.setExplodeFactor(0);
+    scene.current?.setDual(true);
+    setBasement(false);
+    setExploded(false);
+    setLevel('DUAL');
   }
   function toggleExploded(): void {
-    if (basement) { scene.current?.setBasement(false); setBasement(false); }
-    const next = !exploded;
-    scene.current?.setExploded(next);
-    setExploded(next);
+    if (level === 'EXPLODED') { resetLevel(); return; }
+    scene.current?.setDual(false);
+    if (basement) scene.current?.setBasement(false);
+    scene.current?.setExplodeFactor(explodePercent / 100);
+    setBasement(false);
+    setExploded(true);
+    setLevel('EXPLODED');
+  }
+  function changeExplode(value: number): void {
+    setExplodePercent(value);
+    setExploded(true);
+    setLevel('EXPLODED');
+    scene.current?.setExplodeFactor(value / 100);
   }
   function toggleTour(): void {
     const next = !touring;
@@ -186,9 +220,10 @@ export function TwinPage() {
             </select>
           </label>
           <div className="twin-levels" role="group" aria-label="楼层">
-            <button type="button" className={!basement && !exploded ? 'active' : ''} onClick={setL1}>L1</button>
-            <button type="button" className={basement ? 'active' : ''} onClick={setB1}>B1</button>
-            <button type="button" className={exploded ? 'active' : ''} onClick={toggleExploded}>Explode</button>
+            <button type="button" className={level === 'L1' ? 'active' : ''} onClick={setL1}>L1</button>
+            <button type="button" className={level === 'B1' ? 'active' : ''} onClick={setB1}>B1</button>
+            <button type="button" className={level === 'DUAL' ? 'active' : ''} onClick={setDual}>Dual</button>
+            <button type="button" className={level === 'EXPLODED' ? 'active' : ''} onClick={toggleExploded}>Explode</button>
           </div>
           <div className="twin-cameras" role="group" aria-label="相机预设">
             <button type="button" className={view === 'iso' ? 'active' : ''} onClick={() => setCamera('iso')}>ISO</button>
@@ -211,6 +246,14 @@ export function TwinPage() {
         <span><b>{stateCounts.down}</b> ALARM</span>
       </div>
 
+      {level === 'EXPLODED' && (
+        <div className="twin-explode" role="group" aria-label="爆炸视图">
+          <span>EXPLODE</span>
+          <input type="range" min={0} max={100} step={1} value={explodePercent} onChange={(event) => changeExplode(Number(event.target.value))} aria-label="爆炸视图比例" />
+          <b>{explodePercent}%</b>
+        </div>
+      )}
+
       <div className="twin-stage">
         <SiteScene
           ref={scene}
@@ -227,8 +270,10 @@ export function TwinPage() {
           touring={touring}
           onToggleTour={toggleTour}
           exploded={exploded}
+          explodeFactor={level === 'EXPLODED' ? explodePercent / 100 : 0}
           onToggleExploded={toggleExploded}
           basement={basement}
+          dual={level === 'DUAL'}
           onToggleBasement={setB1}
         />
 

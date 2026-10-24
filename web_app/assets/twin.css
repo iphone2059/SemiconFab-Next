@@ -19,6 +19,8 @@
 .twin-feed i{width:5px;height:5px;border-radius:50%;background:#10b981}.twin-feed.is-stale{color:#a66a00;background:#fff8e8;border-color:#f0dfb4}.twin-feed.is-stale i{background:#f59e0b}
 .twin-kpis{position:absolute;z-index:9;top:55px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:7px;padding:3px 7px;border:1px solid #d4e3f1;border-radius:5px;background:#fffffff0;box-shadow:0 5px 18px #31588912;font:8px Consolas,monospace;color:#6b86a0;white-space:nowrap}
 .twin-kpis b{color:#173957;font-size:9px;margin-right:2px}.twin-kpis span+span{border-left:1px solid #dce8f3;padding-left:7px}
+.twin-explode{position:absolute;z-index:10;top:91px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:7px;padding:4px 8px;border:1px solid #cfe0ef;border-radius:5px;background:#fffffff2;box-shadow:0 5px 16px #173b6414;font:8px Consolas,monospace;color:#6b86a0;white-space:nowrap}
+.twin-explode input{width:120px;height:3px;padding:0;margin:0;accent-color:#2f6fd6}.twin-explode b{color:#245fb5;font-size:9px;min-width:29px;text-align:right}
 .twin-stage{position:relative;flex:1;min-height:0;overflow:hidden}
 .twin-stage>.scene{height:100%;min-height:0;border:0;border-radius:0;background:#eff6ff}
 .twin-page .scene-bare>.scene-top,.twin-page .scene-bare>.scene-toolbar,.twin-page .scene-bare>.scene-zone-legend,.twin-page .scene-bare>.scene-amhs-hud,.twin-page .scene-bare>.scene-caption,.twin-page .scene-bare>.scene-toolcard,.twin-page .scene-bare>.scene-hovercard{display:none}

@@ -98,8 +98,10 @@ export interface SiteSceneProps {
   touring: boolean;
   onToggleTour: () => void;
   exploded: boolean;
+  explodeFactor?: number;
   onToggleExploded: () => void;
   basement: boolean;
+  dual?: boolean;
   onToggleBasement: () => void;
   chrome?: boolean;
   onStatusChange?: (status: string) => void;
@@ -117,7 +119,9 @@ export interface SiteSceneHandle {
   setToolState(index: number, state: FabToolState): void;
   setTour(active: boolean): void;
   setExploded(active: boolean): void;
+  setExplodeFactor(factor: number): void;
   setBasement(active: boolean): void;
+  setDual(active: boolean): void;
 }
 
 const ZONE_LEGEND = [
@@ -166,7 +170,7 @@ function ToolCard({ tool, onClose, onFocus }: { tool: PickedTool; onClose: () =>
 }
 
 export const SiteScene = forwardRef<SiteSceneHandle, SiteSceneProps>(function SiteScene(
-  { site, fab, expanded, overlay, toolStates, onToolChange, layers, onToggleLayer, touring, onToggleTour, exploded, onToggleExploded, basement, onToggleBasement, chrome = true, onStatusChange, onAmhsStatsChange },
+  { site, fab, expanded, overlay, toolStates, onToolChange, layers, onToggleLayer, touring, onToggleTour, exploded, explodeFactor, onToggleExploded, basement, dual = false, onToggleBasement, chrome = true, onStatusChange, onAmhsStatsChange },
   ref,
 ) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -233,7 +237,9 @@ export const SiteScene = forwardRef<SiteSceneHandle, SiteSceneProps>(function Si
       setToolState: (index, state) => facade.current?.setToolState(index, state),
       setTour: (active) => facade.current?.setTour(active),
       setExploded: (active) => facade.current?.setExploded(active),
+      setExplodeFactor: (factor) => facade.current?.setExplodeFactor(factor),
       setBasement: (active) => facade.current?.setBasement(active),
+      setDual: (active) => facade.current?.setDual(active),
     }),
     [],
   );
@@ -259,8 +265,13 @@ export const SiteScene = forwardRef<SiteSceneHandle, SiteSceneProps>(function Si
     if (!ready) return;
     for (const [layer, visible] of Object.entries(layers)) facade.current?.setLayer(layer as SceneLayer, visible);
   }, [layers, ready]);
-  useEffect(() => { if (ready) facade.current?.setExploded(exploded); }, [exploded, ready]);
+  useEffect(() => {
+    if (!ready) return;
+    if (explodeFactor !== undefined) facade.current?.setExplodeFactor(explodeFactor);
+    else facade.current?.setExploded(exploded);
+  }, [exploded, explodeFactor, ready]);
   useEffect(() => { if (ready) facade.current?.setBasement(basement); }, [basement, ready]);
+  useEffect(() => { if (ready) facade.current?.setDual(dual); }, [dual, ready]);
   useEffect(() => { if (ready) facade.current?.setTour(touring); }, [touring, ready]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

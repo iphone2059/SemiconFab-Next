@@ -44,7 +44,9 @@ export interface SceneBackend {
   setToolState?(index: number, state: FabToolState): void;
   setTour?(active: boolean): void;
   setExploded?(active: boolean): void;
+  setExplodeFactor?(factor: number): void;
   setBasement?(active: boolean): void;
+  setDual?(active: boolean): void;
 }
 
 export class SceneFacade {
@@ -87,8 +89,14 @@ export class SceneFacade {
   setExploded(active: boolean): void {
     if (!this.controller.signal.aborted) this.backend.setExploded?.(active);
   }
+  setExplodeFactor(factor: number): void {
+    if (!this.controller.signal.aborted) this.backend.setExplodeFactor?.(factor);
+  }
   setBasement(active: boolean): void {
     if (!this.controller.signal.aborted) this.backend.setBasement?.(active);
+  }
+  setDual(active: boolean): void {
+    if (!this.controller.signal.aborted) this.backend.setDual?.(active);
   }
   dispose(): void { this.controller.abort(); this.backend.dispose(); }
 }

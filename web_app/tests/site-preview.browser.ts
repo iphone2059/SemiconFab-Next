@@ -261,7 +261,7 @@ try {
   await until(`!!document.querySelector('.twin-page')`);
   await until(`document.querySelector('.twin-status')?.textContent?.startsWith('WebGPU ·')`);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-left .scene-rail').length`), 1);
-  assert.equal(await evaluate(`document.querySelectorAll('.twin-levels button').length`), 3);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-levels button').length`), 4);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-cameras button').length`), 4);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-mode option').length`), 3);
   assert.ok((await evaluate(`document.querySelectorAll('.scene-tool-list-item').length`)) > 0);
@@ -273,6 +273,13 @@ try {
 
   await evaluate(`document.querySelectorAll('.twin-levels button')[1].click()`);
   await until(`document.querySelectorAll('.twin-levels button')[1].getAttribute('class')?.includes('active')`);
+  await evaluate(`document.querySelectorAll('.twin-levels button')[2].click()`);
+  await until(`document.querySelectorAll('.twin-levels button')[2].getAttribute('class')?.includes('active')`);
+  await evaluate(`document.querySelectorAll('.twin-levels button')[3].click()`);
+  await until(`document.querySelectorAll('.twin-levels button')[3].getAttribute('class')?.includes('active')`);
+  await until(`!!document.querySelector('.twin-explode input[type=range]')`);
+  await evaluate(`(() => { const slider = document.querySelector('.twin-explode input[type=range]'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(slider, '40'); slider.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await until(`document.querySelector('.twin-explode b')?.textContent === '40%'`);
   await evaluate(`document.querySelectorAll('.twin-levels button')[0].click()`);
   await until(`document.querySelectorAll('.twin-levels button')[0].getAttribute('class')?.includes('active')`);
 

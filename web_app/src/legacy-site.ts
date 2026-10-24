@@ -379,7 +379,9 @@ export interface LegacyRuntime {
   setLayer(layer: LegacyLayer, visible: boolean): void;
   setToolState(index: number, state: FabToolState): void;
   setExploded(active: boolean): void;
+  setExplodeFactor(factor: number): void;
   setBasement(active: boolean): void;
+  setDual(active: boolean): void;
 }
 
 interface StatusLightRuntime {
@@ -693,6 +695,30 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   scene.metadata = { ...scene.metadata, staticShadows: shadows };
   const layerVisibility = { ceiling: true, subfab: false, amhs: true, heatmap: false, airflow: false };
   let basementActive = false;
+  let dualActive = false;
+  let explodeFactor = 0;
+  const applyExplodeFactor = (factor: number) => {
+    explodeFactor = Math.max(0, Math.min(1, factor));
+    fab.equipment.position.y = 2.4 * explodeFactor;
+    shadows.invalidate('equipment-exploded');
+  };
+  const syncLevel = () => {
+    const cutaway = basementActive || dualActive;
+    fab.floor.setEnabled(!cutaway);
+    fab.shell.setEnabled(!basementActive);
+    fab.subfab.setEnabled(basementActive || dualActive || layerVisibility.subfab);
+    fab.equipment.setEnabled(!basementActive);
+    fab.personnel.setEnabled(!basementActive);
+    fab.ceiling.setEnabled(!basementActive && layerVisibility.ceiling);
+    amhsGroup.setEnabled(!basementActive && layerVisibility.amhs);
+    heatmap.group.setEnabled(!basementActive && layerVisibility.heatmap);
+    airflow.group.setEnabled(!basementActive && layerVisibility.airflow);
+    for (const mesh of scene.meshes) {
+      if (/^(procedural-slab|native-zone|native-zone-border|native-floor-grid|zone-label|perimeter-wall|perimeter-glass|perimeter-kick|perimeter-door|native-oht-shadow|operator-ground-shadow|procedural-shadow-ground)/.test(mesh.name)) {
+        mesh.setEnabled(!cutaway);
+      }
+    }
+  };
 
   return {
     setLayer(layer, visible) {
@@ -721,7 +747,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
       }
       const target = layer === 'ceiling' ? fab.ceiling : fab.subfab;
       layerVisibility[layer] = visible;
-      target.setEnabled(layer === 'ceiling' ? visible && !basementActive : visible || basementActive);
+      target.setEnabled(layer === 'ceiling' ? visible && !basementActive : visible || basementActive || dualActive);
       shadows.invalidate('layer-visibility');
     },
     setToolState(index, state) {
@@ -729,26 +755,22 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
       heatmap.setState(index, state);
     },
     setExploded(active) {
-      fab.equipment.position.y = active ? 2.4 : 0;
-      shadows.invalidate('equipment-exploded');
+      applyExplodeFactor(active ? 1 : 0);
+    },
+    setExplodeFactor(factor) {
+      applyExplodeFactor(factor);
     },
     setBasement(active) {
       basementActive = active;
+      if (active) dualActive = false;
+      syncLevel();
       shadows.invalidate('basement-visibility');
-      fab.shell.setEnabled(!active);
-      fab.floor.setEnabled(!active);
-      fab.subfab.setEnabled(active || layerVisibility.subfab);
-      fab.equipment.setEnabled(!active);
-      fab.personnel.setEnabled(!active);
-      fab.ceiling.setEnabled(!active && layerVisibility.ceiling);
-      amhsGroup.setEnabled(!active && layerVisibility.amhs);
-      heatmap.group.setEnabled(!active && layerVisibility.heatmap);
-      airflow.group.setEnabled(!active && layerVisibility.airflow);
-      for (const mesh of scene.meshes) {
-        if (/^(procedural-slab|native-zone|native-zone-border|native-floor-grid|zone-label|perimeter-wall|perimeter-glass|perimeter-kick|perimeter-door)/.test(mesh.name)) {
-          mesh.setEnabled(!active);
-        }
-      }
+    },
+    setDual(active) {
+      dualActive = active;
+      if (active) basementActive = false;
+      syncLevel();
+      shadows.invalidate('dual-visibility');
     },
   };
 }
