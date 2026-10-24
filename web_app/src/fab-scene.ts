@@ -3,7 +3,7 @@ import type { FabToolState } from './fab-layout';
 export interface FabPlacement { readonly fabId: string; readonly code: string; readonly position: readonly [number, number, number] }
 
 export type SceneViewPreset = 'iso' | 'top' | 'reset' | 'focus' | 'litho' | 'airshower' | 'etch' | 'oht';
-export type SceneLayer = 'amhs' | 'ceiling' | 'subfab' | 'heatmap' | 'airflow' | 'xray';
+export type SceneLayer = 'amhs' | 'ceiling' | 'roof' | 'subfab' | 'heatmap' | 'airflow' | 'xray';
 export type CutAxis = 'X' | 'Y' | 'Z';
 export type XRayFilter = 'all' | 'upw' | 'gas' | 'vac' | 'exhaust' | 'amhs';
 
@@ -55,6 +55,7 @@ export interface SceneBackend {
   setWaferPoint?(x: number, y: number, z: number, visible: boolean, focus: boolean): void;
   setWaferTrail?(points: readonly (readonly [number, number, number])[]): void;
   focusPatrol?(): void;
+  setLanguage?(language: 'zh' | 'en'): void;
 }
 
 export class SceneFacade {
@@ -123,6 +124,9 @@ export class SceneFacade {
   }
   focusPatrol(): void {
     if (!this.controller.signal.aborted) this.backend.focusPatrol?.();
+  }
+  setLanguage(language: 'zh' | 'en'): void {
+    if (!this.controller.signal.aborted) this.backend.setLanguage?.(language);
   }
   dispose(): void { this.controller.abort(); this.backend.dispose(); }
 }

@@ -1,5 +1,6 @@
 import { Scene } from '@babylonjs/core/scene';
 import { buildProceduralFab } from './procedural-fab';
+import { buildOriginalRoofHvac } from './original-roof-hvac';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
@@ -373,7 +374,7 @@ function addAnimatedAmhs(scene: Scene, onStats?: (stats: AmhsStats) => void): Tr
   return group;
 }
 
-export type LegacyLayer = 'amhs' | 'ceiling' | 'subfab' | 'heatmap' | 'airflow' | 'xray';
+export type LegacyLayer = 'amhs' | 'ceiling' | 'roof' | 'subfab' | 'heatmap' | 'airflow' | 'xray';
 
 export interface LegacyRuntime {
   setLayer(layer: LegacyLayer, visible: boolean): void;
@@ -383,6 +384,7 @@ export interface LegacyRuntime {
   setBasement(active: boolean): void;
   setDual(active: boolean): void;
   setXRayFilter(filter: XRayFilter | null): void;
+  setLanguage?(language: 'zh' | 'en'): void;
 }
 
 interface StatusLightRuntime {
@@ -440,6 +442,9 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   scene.environmentIntensity = 0;
 
   const fab = buildProceduralFab(scene);
+  const roofParent = new TransformNode('roof-hvac-parent', scene);
+  const roofHvac = buildOriginalRoofHvac(scene, roofParent);
+  scene.onBeforeRenderObservable.add(() => roofHvac.update(performance.now()));
   // Original PBR surfaces already receive scene.ambientColor. A hemispheric
   // light here would add a second ambient term (most obvious on floor/columns).
   ambient.excludedMeshes = scene.meshes.filter(mesh => mesh.material instanceof PBRMaterial);
@@ -467,13 +472,13 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   const amhsGroup = addAnimatedAmhs(scene, onAmhsStats);
   // These static meshes are created once; keep the caster list stable to avoid
   // allocating flatMap/filter arrays on every animation frame.
-  const staticCasters = [fab.equipment, fab.shell, fab.ceiling, fab.subfab]
+  const staticCasters = [fab.equipment, fab.shell, fab.ceiling, fab.subfab, roofHvac.group]
     .flatMap(root => root.getChildMeshes())
     .filter(mesh => mesh !== fab.floor && !mesh.name.startsWith('procedural-slab') && !mesh.name.startsWith('status-') && mesh.metadata?.staticShadowCaster !== false);
   const shadows = createNativeStaticShadows(scene, scene.getEngine() as WebGPUEngine, keyLight,
     () => staticCasters);
   scene.metadata = { ...scene.metadata, staticShadows: shadows };
-  const layerVisibility = { ceiling: true, subfab: false, amhs: true, heatmap: false, airflow: false };
+  const layerVisibility = { ceiling: true, roof: false, subfab: false, amhs: true, heatmap: false, airflow: false };
   let basementActive = false;
   let dualActive = false;
   let explodeFactor = 0;
@@ -535,7 +540,8 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     fab.subfab.setEnabled(basementActive || dualActive || layerVisibility.subfab);
     fab.equipment.setEnabled(!basementActive);
     fab.personnel.setEnabled(!basementActive);
-    fab.ceiling.setEnabled(!basementActive && layerVisibility.ceiling);
+    fab.ceiling.setEnabled(!basementActive && !dualActive && layerVisibility.ceiling);
+    roofHvac.setVisible(layerVisibility.roof && !basementActive && !dualActive);
     amhsGroup.setEnabled(!basementActive && layerVisibility.amhs);
     heatmap.group.setEnabled(!basementActive && layerVisibility.heatmap);
     airflow.group.setEnabled(!basementActive && layerVisibility.airflow);
@@ -567,6 +573,12 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
         applyXRay(visible ? (xrayFilter ?? 'all') : null);
         return;
       }
+      if (layer === 'roof') {
+        layerVisibility.roof = visible;
+        roofHvac.setVisible(visible && !basementActive && !dualActive);
+        shadows.invalidate('roof-visibility');
+        return;
+      }
       const target = layer === 'ceiling' ? fab.ceiling : fab.subfab;
       layerVisibility[layer] = visible;
       target.setEnabled(layer === 'ceiling' ? visible && !basementActive : visible || basementActive || dualActive);
@@ -595,6 +607,9 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     },
     setXRayFilter(filter) {
       applyXRay(filter);
+    },
+    setLanguage(language) {
+      roofHvac.setLanguage(language);
     },
   };
 }

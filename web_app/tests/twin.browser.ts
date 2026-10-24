@@ -42,6 +42,10 @@ async function pressEscape() {
   assert.equal(await evaluate(`document.querySelectorAll('#btn-focus-patrol').length`), 1);
   assert.equal(await evaluate(`document.querySelector('#header-yield-val')?.textContent?.includes('%')`), true);
   assert.ok((await evaluate(`document.querySelector('#header-wpm-val')?.textContent?.length`)) > 0);
+  await evaluate(`document.querySelector('#btn-toggle-roof').click()`);
+  await until(`document.querySelector('#btn-toggle-roof').getAttribute('aria-pressed') === 'true'`);
+  await evaluate(`document.querySelector('#btn-toggle-roof').click()`);
+  await until(`document.querySelector('#btn-toggle-roof').getAttribute('aria-pressed') === 'false'`);
   assert.equal(await evaluate(`document.querySelectorAll('#equipment-list [data-equipment-id]').length`), 18);
 
   await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'visitor'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);

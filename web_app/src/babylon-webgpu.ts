@@ -476,6 +476,9 @@ export function createWebGpuBackend(): SceneBackend {
       }, scene);
       waferTrail.isPickable = false;
     },
+    setLanguage(language: 'zh' | 'en'): void {
+      legacyRuntime?.setLanguage?.(language);
+    },
     focusPatrol(): void {
       const patrol = scene?.getTransformNodeByName('operator-5');
       if (!patrol || !camera) return;

@@ -45,6 +45,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 const LAYER_LABELS: { layer: SceneLayer; label: string }[] = [
   { layer: 'amhs', label: 'AMHS' },
   { layer: 'ceiling', label: 'FFU' },
+  { layer: 'roof', label: 'Roof/HVAC' },
   { layer: 'subfab', label: 'Subfab' },
   { layer: 'heatmap', label: 'Heatmap' },
   { layer: 'airflow', label: 'Airflow' },
@@ -101,6 +102,7 @@ function TwinContent() {
   const [layerPreferences, setLayers] = useState<Record<SceneLayer, boolean>>({
     amhs: true,
     ceiling: false,
+    roof: false,
     subfab: false,
     heatmap: false,
     airflow: false,
@@ -141,6 +143,8 @@ function TwinContent() {
   const waferProgressRef = useRef(0);
   const waferTrailRef = useRef<[number, number, number][]>([]);
   const suppressToolSelectionRef = useRef(false);
+
+  useEffect(() => { scene.current?.setLanguage(language); }, [language, status]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -382,7 +386,9 @@ function TwinContent() {
         dispatch({ type: 'escape' });
         scene.current?.clearSelection();
         setSelected(undefined);
+        setSelection(undefined);
         setYmsOpen(false);
+        setInfoDialog(null);
         return;
       }
       if (target && /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return;
@@ -570,7 +576,7 @@ function TwinContent() {
           <button id="btn-cinematic-tour" type="button" className={`twin-tour${tourStep !== undefined ? ' active' : ''}`} aria-pressed={tourStep !== undefined} onClick={() => { if (tourStep === undefined) startTour(); else endTour(); }}><OriginalIcon name="tour" />{tourStep === undefined ? 'Tour' : 'Stop'}</button>
           <div className="twin-layers" aria-label={t("图层")}>
             {LAYER_LABELS.filter(({ layer }) => layer !== 'airflow').map(({ layer, label }) => (
-              <button id={layer === 'amhs' ? 'btn-toggle-oht' : layer === 'ceiling' ? 'btn-toggle-ceiling' : layer === 'heatmap' ? 'btn-toggle-heatmap' : 'btn-toggle-piping'} type="button" key={layer} className={layers[layer] ? 'active' : ''} aria-pressed={!!layers[layer]} onClick={() => toggleLayer(layer)}><OriginalIcon name={layer === 'amhs' ? 'amhs' : layer === 'ceiling' ? 'ffu' : 'heatmap'} />{layer === 'heatmap' ? t("气流热力图") : label}</button>
+              <button id={layer === 'amhs' ? 'btn-toggle-oht' : layer === 'ceiling' ? 'btn-toggle-ceiling' : layer === 'roof' ? 'btn-toggle-roof' : layer === 'heatmap' ? 'btn-toggle-heatmap' : 'btn-toggle-piping'} type="button" key={layer} className={layers[layer] ? 'active' : ''} aria-pressed={!!layers[layer]} onClick={() => toggleLayer(layer)}><OriginalIcon name={layer === 'amhs' ? 'amhs' : layer === 'ceiling' || layer === 'roof' ? 'ffu' : 'heatmap'} />{layer === 'heatmap' ? t("气流热力图") : label}</button>
             ))}
             <button id="btn-toggle-laminar" type="button" className={ui.spatialMode === 'aerodynamics' ? 'active' : ''} aria-pressed={ui.spatialMode === 'aerodynamics'} onClick={() => dispatch({ type: 'spatial/toggle', mode: 'aerodynamics' })}><OriginalIcon name="airflow" /> Airflow</button>
             <button id="btn-toggle-xray" type="button" className={xrayFilter ? 'active' : ''} aria-pressed={!!xrayFilter} onClick={() => applyXRayFilter(xrayFilter ? null : 'all')}><OriginalIcon name="xray" />{t("全息透视")}</button>
@@ -817,7 +823,7 @@ function TwinContent() {
 
         {ymsOpen && (
           <div className="twin-yms-backdrop" onClick={() => setYmsOpen(false)}>
-            <section className="twin-yms" onClick={(event) => event.stopPropagation()} aria-label="YMS yield management">
+            <section className="twin-yms" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="YMS yield management">
               <header className="twin-yms-head">
                 <div><strong>YMS · YIELD MANAGEMENT</strong><span>WM-811K SPATIAL CLASSIFIER · 8-STAGE CASCADING YIELD</span></div>
                 <nav>
@@ -950,7 +956,7 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
 
         {infoDialog && (
           <div className="twin-yms-backdrop" onClick={() => setInfoDialog(null)}>
-            <section className="twin-yms" onClick={(event) => event.stopPropagation()} aria-label={infoDialog}>
+            <section className="twin-yms" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={infoDialog}>
               <header className="twin-yms-head"><div><strong>{infoDialog === 'architecture' ? 'OPEN SOFTWARE ARCHITECTURE' : 'OEM DATABASE'}</strong><span>{infoDialog === 'architecture' ? 'React + TypeScript + Babylon.js WebGPU' : '116 SEMI-E72 records'}</span></div><button type="button" className="twin-yms-close" onClick={() => setInfoDialog(null)}>×</button></header>
               <div className="twin-info-dialog">{infoDialog === 'architecture' ? <><p>Single-FAB procedural WebGPU runtime. React owns the page and typed HUD state; Babylon owns the WebGPU scene, native static shadows and cut plane.</p><p>No Three.js, WebGL fallback, iframe original page or glTF loaders are used in the production runtime.</p></> : <><p>The OEM tab contains all 116 source catalog rows. Selecting a row keeps the page in <code>/twin</code> and opens its source/spec record in the inspector.</p><p>Draft layout instances remain selectable in the 3D scene and are intentionally not treated as 121 directory cards.</p></>}</div>
             </section>

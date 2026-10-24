@@ -38,6 +38,7 @@ export interface FabViewportHandle {
   setWaferPoint(x: number, y: number, z: number, visible: boolean, focus: boolean): void;
   setWaferTrail(points: readonly (readonly [number, number, number])[]): void;
   focusPatrol(): void;
+  setLanguage(language: 'zh' | 'en'): void;
 }
 
 const TOOL_CATEGORY_LABELS: Record<string, string> = {
@@ -140,6 +141,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
       setWaferPoint: (x, y, z, visible, focus) => facade.current?.setWaferPoint(x, y, z, visible, focus),
       setWaferTrail: (points) => facade.current?.setWaferTrail(points),
       focusPatrol: () => facade.current?.focusPatrol(),
+      setLanguage: (language) => facade.current?.setLanguage(language),
     }),
     [],
   );
