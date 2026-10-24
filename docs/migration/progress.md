@@ -2,6 +2,23 @@
 
 日期：2026-10-24。首批实现分支为 `feat/main-to-next-migration`；GitHub 同步状态以远程 Git 记录为准，尚未部署生产版本。规划见 [迁移工作包](../superpowers/plans/2026-10-24-main-to-next-refactor.md)，逐功能状态见 [feature-map.csv](feature-map.csv)。
 
+## Twin 最新增量（2026-10-25）
+
+以下旧轮次记录保留为历史；当前页面边界、验收结果和未完成项以本节及 [Twin baseline](twin-parity/baseline.md) 为准。状态仍为 **IMPLEMENTING / NOT PARITY_VERIFIED**。
+
+- 按用户确认，以 `SemiconFab/twin.html` 最终加载的 117 台模板机台 + 4 台目录模型为唯一机台构造参照。全部 121 台实际 WebGPU 场景边界复核通过，最大差异 `8.52346417445915e-7 m`；这不是厂家实测 CAD 认证。
+- 删除独立 Preview 页面/组件和首页空间画布；网站入口只保留普通 3D FAB 新标签链接，旧 `/preview` 兼容地址规范化为 `/twin`。产品保持一个纯 WebGPU 3D 实现。
+- 统一 Spatial/Tour/Wafer/Research/Onboarding 状态机、Esc 退出导览、B01 本地 DEMO 场景/1600ms tick/手动状态、精确原版别名回放。原始 217 台仿真设备仅 94 个别名有布局目标，碰撞按原版插入顺序最后写入生效；未映射机台保留当前会话快照。修复 Research 重入旧快照和英文工艺搜索。
+- 原版 24 根立柱、55 块常显琥珀 FFU、地坪纹理/分区和软帘已移植；修正重复环境光、源衰减、LinearEncoding 输出与 fog。新增原版压差场及 1500 个层流粒子。完整一般 FFU/HVAC/屋顶和 B1 工业设施仍未完全对齐。
+- 字体恢复原版 12px 微文本归一化规则；增加共享中英切换、原 storage 键、URL/刷新持久化和原版 SVG 控件。完整 HUD/边栏/检查器/弹窗/主题仍需继续。
+- 真实深度阴影验收：783 caster / 12,454 三角形；78,917 个可见变暗像素、ambient 改变像素 0、GPU errors 0。Cut 下 25,301 个可见阴影像素；关闭 Cut 后深度覆盖精确恢复。
+- 严格 device-loss 验收推翻了旧“等待首帧完成”误判：新增明确完成态和 validation scope，补齐 Babylon 9.32 WebGPU 恢复遗漏的场景几何重建。普通场景及 1500 粒子场景均通过实际 GPUDevice.destroy 恢复，错误 0、手动视角偏差 0。尚未做仪表化 60 分钟/显存/跨浏览器验收。
+- 原版 263 个原始 ID 属性及 218 个命名函数已生成台账；11 组同视口候选 Golden PNG/DOM JSON 和 SSIM/diff 已保存。当前整页 SSIM 约 0.37–0.65，**不能当作视觉验收通过**。详见 [evidence](twin-parity/evidence/README.md)。
+
+本次全量校验：15/15 Python、67/67 .NET、81/81 Vitest、类型检查、三个后端 Release 构建及前端生产构建通过。`verify.ps1` 的 Windows 全局 pnpm shim 仍有路径问题，本次在当前进程内将其同版本 pnpm 调用转发到已安装的 `pnpm.mjs`；未修改全局设置。生产 GPU 分块约 2.51 MB / gzip 590 KB，仍有大分块提示。原版源码哈希保持不变，无模型加载请求/资源/loader 依赖。
+
+独立只读审查发现的回放快照、英文搜索、首次相机过渡被未启动导览取消的问题均已修复并复测；当前无 Critical/Important 源码问题遗留。完整视觉/性能发布门禁未被这次代码审查替代。
+
 ## 当前交付
 
 首批覆盖 MIG-01 的数据导入与目录查询，以及 MIG-02 的目录/详情/对比。两个工作包仍有待办，不能整体标记完成。

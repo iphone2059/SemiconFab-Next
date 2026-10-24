@@ -6,9 +6,29 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import reference from './fixtures/original-tool-reference.json';
 import { buildOriginalEquipment } from '../src/original-tool-geometry';
 import { FAB_LAYOUT } from '../src/fab-layout';
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
+
+// CPU geometry inspection only. Select the product's WGSL material language;
+// NullEngine does not compile shaders or count as GPU acceptance.
+function geometryEngine() {
+  const engine = new NullEngine();
+  Object.defineProperty(engine, 'isWebGPU', { value: true });
+  return engine;
+}
+
+it('uses the original legacy range falloff rather than inverse-square light falloff', () => {
+  const engine = geometryEngine(); const scene = new Scene(engine);
+  try {
+    buildOriginalEquipment(scene, new TransformNode('equipment', scene));
+    for (const material of scene.materials) if (material instanceof PBRMaterial) {
+      expect(material.usePhysicalLightFalloff, material.name).toBe(false);
+      expect(material.pluginManager?.getPlugin('OriginalLegacyLightFalloff')).toBeDefined();
+    }
+  } finally { scene.dispose(); engine.dispose(); }
+});
 
 it('matches all 121 original machine identities, positions, rotations and rendered bounds', () => {
-  const engine = new NullEngine(); const scene = new Scene(engine);
+  const engine = geometryEngine(); const scene = new Scene(engine);
   try {
     const root = new TransformNode('equipment', scene);
     const groups = buildOriginalEquipment(scene, root);
@@ -29,7 +49,7 @@ it('matches all 121 original machine identities, positions, rotations and render
 });
 
 it('reproduces the original eight family vertex clouds and per-part colors, without invented attachments', () => {
-  const engine = new NullEngine(); const scene = new Scene(engine);
+  const engine = geometryEngine(); const scene = new Scene(engine);
   const key = (point: readonly number[]) => point.map(value => Math.round(value * 10000)).join(',');
   try {
     const groups = buildOriginalEquipment(scene, new TransformNode('equipment', scene));
@@ -54,7 +74,7 @@ it('reproduces the original eight family vertex clouds and per-part colors, with
 });
 
 it('matches every catalog part geometry, position, color, opacity, metallic and roughness', () => {
-  const engine = new NullEngine(); const scene = new Scene(engine);
+  const engine = geometryEngine(); const scene = new Scene(engine);
   const key = (point: readonly number[]) => point.map(value => Math.round(value * 10000)).join(',');
   try {
     const groups = buildOriginalEquipment(scene, new TransformNode('equipment', scene));

@@ -405,7 +405,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
   useEffect(() => {
     const restore = () => {
       const route = readCatalogRoute(new URL(location.href));
-      if (route.view === 'workbench' || route.view === 'preview' || route.view === 'twin') {
+      if (route.view === 'workbench' || route.view === 'twin') {
         location.reload();
         return;
       }

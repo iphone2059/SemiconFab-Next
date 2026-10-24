@@ -18,8 +18,9 @@ describe('cascading fab yield', () => {
     expect(YIELD_SCENARIOS).toHaveLength(6);
     const etch = YIELD_SCENARIOS.find((scenario) => scenario.id === 'etch_down')!;
     const states = scenarioStates(etch);
-    expect(states.filter((state) => state === 'down')).toHaveLength(1);
-    expect(computeFabYield(states, etch).modules.find((module) => module.module.id === 'etch')?.downCount).toBe(1);
+    // Original fe.* IDs are absent from the custom 121-tool UUID layout.
+    expect(states.filter((state) => state === 'down')).toHaveLength(0);
+    expect(computeFabYield(states, etch).modules.find((module) => module.module.id === 'etch')?.downCount).toBe(0);
     const apc = YIELD_SCENARIOS.find((scenario) => scenario.id === 'apc_upgrade')!;
     expect(computeFabYield(scenarioStates(apc), apc).totalYield).toBeGreaterThan(computeFabYield(states, etch).totalYield);
   });

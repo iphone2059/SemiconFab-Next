@@ -6,6 +6,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { buildOriginalEquipment } from './original-tool-geometry';
 import { buildSubfabUtilities } from './subfab-utilities';
+import { buildOriginalEnvironment } from './original-environment';
 
 export interface ProceduralFab {
   shell: TransformNode;
@@ -160,21 +161,7 @@ export function buildProceduralFab(scene: Scene): ProceduralFab {
   const ceiling = new TransformNode('procedural-ceiling', scene);
   const subfab = new TransformNode('procedural-subfab', scene);
   const personnel = new TransformNode('procedural-personnel', scene);
-  const floor = MeshBuilder.CreateGround('procedural-floor', { width: 114, height: 84 }, scene);
-  floor.position.y = 0;
-  floor.isPickable = false;
-  const floorMaterial = new StandardMaterial('procedural-floor-material', scene);
-  floorMaterial.diffuseColor = hex('#dde9f4');
-  floorMaterial.specularColor = Color3.Black();
-  floorMaterial.emissiveColor = hex('#dde9f4').scale(0.08);
-  floor.material = floorMaterial;
-
-  const slabMaterial = new StandardMaterial('procedural-slab-material', scene);
-  slabMaterial.diffuseColor = hex('#b9c9da');
-  slabMaterial.specularColor = Color3.Black();
-  const slab = box(scene, 'procedural-slab', 114, 0.5, 84, { x: 0, y: -0.28, z: 0 }, slabMaterial);
-  slab.parent = shell;
-  slab.isPickable = false;
+  const floor = buildOriginalEnvironment(scene, shell);
 
   buildOriginalEquipment(scene, equipment);
   const dark = new StandardMaterial('procedural-shell-dark', scene);
@@ -183,15 +170,6 @@ export function buildProceduralFab(scene: Scene): ProceduralFab {
   const metal = new StandardMaterial('procedural-shell-metal', scene);
   metal.diffuseColor = hex('#8fa3b6');
   metal.specularColor = new Color3(0.4, 0.44, 0.48);
-
-  const columnMaterial = new StandardMaterial('procedural-column-material', scene);
-  columnMaterial.diffuseColor = hex('#aebdcd');
-  columnMaterial.specularColor = new Color3(0.2, 0.22, 0.24);
-  for (let index = 0; index < 10; index += 1) {
-    const side = index < 5 ? -44 : 44;
-    const z = -34 + (index % 5) * 17;
-    box(scene, `procedural-column-${index}`, 0.34, 5.3, 0.34, Vector3(side, 2.65, z), columnMaterial, shell);
-  }
 
   const wallMaterial = new StandardMaterial('procedural-perimeter-wall', scene);
   wallMaterial.diffuseColor = hex('#e6eef7');

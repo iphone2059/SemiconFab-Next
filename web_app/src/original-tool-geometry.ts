@@ -5,6 +5,7 @@ import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Scene } from '@babylonjs/core/scene';
 import { FAB_LAYOUT, type FabLayoutTool } from './fab-layout';
+import { OriginalLegacyLightFalloff } from './original-lighting';
 
 type Triple = readonly [number, number, number];
 interface Part { shape: 'box' | 'cylinder'; size: Triple; at: Triple; color: Triple; segments?: number; alpha?: number; metallic?: number; roughness?: number; status?: boolean }
@@ -81,6 +82,7 @@ export function buildOriginalEquipment(scene: Scene, parent: TransformNode): Tra
       material.environmentIntensity = 0;
       material.ambientColor = Color3.White();
       material.maxSimultaneousLights = 8;
+      new OriginalLegacyLightFalloff(material);
       if (part.status) material.emissiveColor = new Color3(...part.color).scale(0.9);
       if (material.alpha < 1) material.disableDepthWrite = true;
       materials.set(key, material);

@@ -5,7 +5,6 @@ import { Panel, StatusPill } from './ui';
 import { Metric } from './widgets';
 import { CompletionBar } from './charting';
 import { ScopeGate, startPolling } from './state-sync';
-import { SitePreview } from './site-preview';
 import { validateScenario } from './scenario';
 
 const api = new ApiClient();
@@ -153,8 +152,7 @@ function Workbench({ site }: { site: SiteDto }) {
         />
         <Metric label="运行模式" value="独立仿真" hint="INDEPENDENT · 合成 FIFO 模型" />
       </div>
-      <div className="primary-grid">
-        <SitePreview site={site} />
+      <div className="workbench-run-form">
         <Panel title="新建仿真" subtitle="单 FAB 清洁室，独立执行域。">
           <form
             onSubmit={(event) => {
@@ -377,6 +375,7 @@ export default function WorkbenchApp() {
         <a className="nav-link" href="/catalog">
           <span>▤</span>设备目录
         </a>
+        <a className="nav-link" href="/twin" target="_blank" rel="noopener noreferrer"><span>◇</span>3D FAB</a>
         <div className="sidebar-note">
           <span className="technical">DEVELOPMENT SLICE</span>
           <p>
@@ -424,8 +423,7 @@ export default function WorkbenchApp() {
           <div className="info-banner">
             <span>ⓘ</span>
             <p>
-              <strong>开发切片</strong> 合成 FIFO 加工模型 · 数据来自本地 API / Worker · 3D
-              为估算占位几何。
+              <strong>开发切片</strong> 合成 FIFO 加工模型 · 数据来自本地 API / Worker。
             </p>
             <span className="technical">v0.1</span>
           </div>

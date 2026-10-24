@@ -1,0 +1,175 @@
+// @ts-nocheck — real single-page UI regression with a connected-tab transport.
+import assert from 'node:assert/strict';
+export async function runTwinUiAcceptance(command, baseUrl = 'http://127.0.0.1:5173') {
+async function evaluate(expression) {
+  const result = await command('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  if (result.exceptionDetails)
+    throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
+  return result.result.value;
+}
+async function until(expression) {
+  const end = Date.now() + 20000;
+  while (Date.now() < end) {
+    if (await evaluate(expression)) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Browser condition timed out: ${expression}`);
+}
+async function pressEscape() {
+  await command('Input.dispatchKeyEvent', {
+    type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27,
+  });
+  await command('Input.dispatchKeyEvent', {
+    type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27,
+  });
+}
+
+  await command('Page.navigate', { url: baseUrl + '/' });
+  await until(`!!document.querySelector('a[href="/twin"]')`);
+  assert.equal(await evaluate(`!!document.querySelector('canvas')`), false, 'the website entrance must not render a preview');
+  assert.equal(await evaluate(`!!document.querySelector('a[href="/preview"]')`), false);
+  await command('Page.navigate', { url: baseUrl + '/twin?lang=zh-CN' });
+  await until(`!!document.querySelector('.twin-page')`);
+  await until(`document.querySelector('.twin-status')?.getAttribute('title')?.startsWith('WebGPU ·')`);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-left .scene-rail').length`), 1);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-levels button').length`), 4);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-cameras button').length`), 4);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-mode option').length`), 3);
+  assert.ok((await evaluate(`document.querySelectorAll('.scene-tool-list-item').length`)) > 0);
+
+  await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'visitor'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await until(`!document.querySelector('.twin-left')`);
+  await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'engineer'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await until(`!!document.querySelector('.twin-left')`);
+
+  await evaluate(`document.querySelectorAll('.twin-levels button')[1].click()`);
+  await until(`document.querySelectorAll('.twin-levels button')[1].getAttribute('class')?.includes('active')`);
+  await evaluate(`document.querySelectorAll('.twin-levels button')[2].click()`);
+  await until(`document.querySelectorAll('.twin-levels button')[2].getAttribute('class')?.includes('active')`);
+  await evaluate(`document.querySelectorAll('.twin-levels button')[3].click()`);
+  await until(`document.querySelectorAll('.twin-levels button')[3].getAttribute('class')?.includes('active')`);
+  await until(`!!document.querySelector('.twin-explode input[type=range]')`);
+  await evaluate(`(() => { const slider = document.querySelector('.twin-explode input[type=range]'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(slider, '40'); slider.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await until(`document.querySelector('.twin-explode b')?.textContent === '40%'`);
+  await evaluate(`document.querySelectorAll('.twin-levels button')[0].click()`);
+  await until(`document.querySelectorAll('.twin-levels button')[0].getAttribute('class')?.includes('active')`);
+
+  await evaluate(`document.querySelector('.scene-tool-list-item').click()`);
+  await until(`!!document.querySelector('.twin-inspector')`);
+  assert.match(await evaluate(`document.querySelector('.twin-inspector').innerText`), /FAB-01/);
+  await until(`!!document.querySelector('.twin-mes') && !!document.querySelector('.twin-spc')`);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-spc-sensors > div').length`), 4);
+  assert.match(await evaluate(`document.querySelector('.twin-spc-grid').innerText`), /Cp[\s\S]*Cpk[\s\S]*SIGMA/);
+  await evaluate(`Array.from(document.querySelectorAll('.twin-mes-actions button')).find((button) => button.textContent === 'Track-Out').click()`);
+  await until(`document.querySelector('.twin-mes-state')?.textContent === 'TRACKED_OUT'`);
+  await evaluate(`Array.from(document.querySelectorAll('.twin-mes-actions button')).find((button) => button.textContent === 'Hold').click()`);
+  await until(`document.querySelector('.twin-mes-state')?.textContent === 'HOLD_MRB'`);
+  await evaluate(`document.querySelector('.twin-inspector .twin-panel-title button[aria-label="关闭设备详情"]').click()`);
+  await until(`!document.querySelector('.twin-inspector')`);
+
+  await evaluate(`document.querySelector('.twin-yms-toggle').click()`);
+  await until(`!!document.querySelector('.twin-yms')`);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-patterns button').length`), 8);
+  assert.ok((await evaluate(`document.querySelectorAll('.twin-wafer-stage rect').length`)) > 400);
+  assert.match(await evaluate(`document.querySelector('.twin-yms-yield-row').innerText`), /GROSS YIELD/);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-model-grid > div').length`), 3);
+  await evaluate(`Array.from(document.querySelectorAll('.twin-yms-head nav button')).find((button) => button.textContent === 'Yield Waterfall').click()`);
+  await until(`!!document.querySelector('.twin-yield-view')`);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-yield-bars > div').length`), 8);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-yield-scenarios button').length`), 7);
+  await evaluate(`Array.from(document.querySelectorAll('.twin-yield-scenarios button')).find((button) => button.textContent === 'Etch Chamber RF Alarm').click()`);
+  await until(`document.querySelector('.twin-yield-scenarios button.active')?.textContent === 'Etch Chamber RF Alarm'`);
+  assert.match(await evaluate(`document.querySelector('.twin-yield-summary').innerText`), /OVERALL FAB YIELD/);
+  await evaluate(`document.querySelector('.twin-yms-close').click()`);
+  await until(`!document.querySelector('.twin-yms')`);
+
+  if (await evaluate(`!!document.querySelector('.twin-onboarding')`)) {
+    await evaluate(`document.querySelector('.twin-onboarding-head button').click()`);
+    await until(`!document.querySelector('.twin-onboarding')`);
+  }
+
+  await evaluate(`document.querySelector('.twin-cut-toggle').click()`);
+  await until(`!!document.querySelector('.twin-cut')`);
+  await evaluate(`(() => { const slider = document.querySelector('.twin-cut input[type=range]'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(slider, '12'); slider.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await until(`document.querySelector('.twin-cut b')?.textContent === '12 m'`);
+  await evaluate(`document.querySelector('.twin-cut select').value = 'Z'; document.querySelector('.twin-cut select').dispatchEvent(new Event('change', { bubbles: true }))`);
+  await evaluate(`document.querySelector('.twin-cut-toggle').click()`);
+  await until(`!document.querySelector('.twin-cut')`);
+
+  await evaluate(`document.querySelector('#btn-toggle-xray').click()`);
+  await until(`!!document.querySelector('.twin-xray')`);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-xray button').length`), 7);
+  await evaluate(`Array.from(document.querySelectorAll('.twin-xray button')).find((button) => button.textContent === 'UPW').click()`);
+  await until(`document.querySelectorAll('.twin-levels button')[0].getAttribute('class')?.includes('active')`);
+  await evaluate(`Array.from(document.querySelectorAll('.twin-xray button')).find((button) => button.textContent === '×').click()`);
+  await until(`!document.querySelector('.twin-xray')`);
+
+  await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'research'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await until(`!!document.querySelector('.twin-research-hud')`);
+  await until(`document.querySelector('.twin-research-head')?.innerText?.includes('27,263')`);
+  await evaluate(`(() => { const slider = document.querySelector('.twin-research-scrubber'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(slider, '1000000'); slider.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await until(`document.querySelectorAll('.twin-research-stats strong')[1]?.textContent === '84'`);
+  assert.match(await evaluate(`document.querySelector('.twin-research-clock').innerText`), /Day 12/);
+  assert.match(await evaluate(`document.querySelector('.twin-feed').innerText`), /REPLAY/);
+  assert.equal(await evaluate(`!!document.querySelector('.twin-left')`), false);
+  await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'engineer'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await until(`!!document.querySelector('.twin-left')`);
+
+  // This instance loses its original replay alias to packaging. A new replay
+  // session must freeze the latest DEMO state, even at an unchanged replay time.
+  await evaluate(`document.querySelectorAll('.scene-tool-list-item')[2].click()`);
+  await until(`!!document.querySelector('.twin-manual-state')`);
+  await evaluate(`[...document.querySelectorAll('.twin-manual-state button')].find(b=>b.textContent==='MAINT').click()`);
+  await until(`document.querySelector('.twin-manual-state button[aria-pressed="true"]')?.textContent==='MAINT'`);
+  await evaluate(`(() => { const select=document.querySelector('#mode-select');select.value='research';select.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await until(`!!document.querySelector('.twin-research-hud')`);
+  assert.equal(await evaluate(`document.querySelector('.twin-manual-state button[aria-pressed="true"]')?.textContent`), 'MAINT');
+  await evaluate(`(() => { const select=document.querySelector('#mode-select');select.value='engineer';select.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await until(`!!document.querySelector('.twin-left')`);
+
+  await evaluate(`document.querySelector('.twin-wafer-toggle').click()`);
+  await until(`document.querySelector('.twin-wafer-row b')?.textContent?.includes('001 / 120')`);
+  await evaluate(`document.querySelector('.twin-wafer-actions button').click()`);
+  await new Promise((resolve) => setTimeout(resolve, 2300));
+  await until(`document.querySelector('.twin-wafer-row b')?.textContent?.includes('002 / 120')`);
+  await evaluate(`(() => { const select = document.querySelector('.twin-wafer-row select'); const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, 'C'); select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await until(`document.querySelector('.twin-wafer-row b')?.textContent?.includes('/ 092')`);
+  await evaluate(`document.querySelector('.twin-wafer-head button').click()`);
+  await until(`!document.querySelector('.twin-wafer')`);
+
+  await evaluate(`document.querySelector('.twin-tour').click()`);
+  await until(`!!document.querySelector('.twin-tour-card')`);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-tour-dots button').length`), 5);
+  await evaluate(`document.querySelectorAll('.twin-tour-dots button')[2].click()`);
+  await until(`document.querySelector('.twin-tour-head span')?.textContent === 'TOUR 3/5'`);
+  await evaluate(`document.querySelector('.twin-tour-head button').click()`);
+  await until(`!document.querySelector('.twin-tour-card')`);
+
+  await evaluate(`document.querySelector('#btn-toggle-laminar').click()`);
+  await until(`document.querySelector('.twin-page').dataset.spatialMode === 'aerodynamics'`);
+  await evaluate(`document.querySelector('#level-btn-exploded').click()`);
+  await until(`!document.querySelector('.twin-aero-hud') && !!document.querySelector('.twin-explode')`);
+  await evaluate(`document.querySelector('#btn-toggle-cut').click()`);
+  await until(`!document.querySelector('.twin-explode') && !!document.querySelector('.twin-cut')`);
+  await evaluate(`document.querySelector('#level-btn-l1').click()`);
+  await until(`document.querySelector('.twin-page').dataset.spatialMode === 'none'`);
+  await evaluate(`document.querySelector('#btn-cinematic-tour').click(); document.querySelector('#mode-select').focus()`);
+  await pressEscape();
+  await until(`!document.querySelector('.twin-tour-card')`);
+
+  await evaluate(`document.querySelector('#lang-toggle-btn').click()`);
+  await until(`document.documentElement.lang === 'en' && document.querySelector('.twin-brand').textContent.includes('Semiconductor')`);
+  assert.equal(await evaluate(`localStorage.getItem('semiconfab_lang')`), 'en');
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('#lang-toggle-btn')).fontSize`), '12px');
+  assert.equal(await evaluate(`!![...document.querySelectorAll('button,label,option,dt,small')].find(e=>e.getClientRects().length && /[\\u3400-\\u9fff]/.test(e.textContent))`), false);
+  await command('Page.navigate', { url: baseUrl + '/twin?mode=engineer' });
+  await until(`document.documentElement.lang === 'en' && document.querySelector('#lang-toggle-btn')?.textContent === 'English'`);
+  await until(`document.querySelector('.twin-status')?.getAttribute('title')?.startsWith('WebGPU ·')`);
+  await evaluate(`(()=>{const input=document.querySelector('.scene-rail-search');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Lithography');input.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+  await until(`document.querySelectorAll('.scene-tool-list-item').length===8`);
+  return { controls: true, exclusiveModes: true, escapeWithFocusedControl: true, language: true, fontFloorPx: 12, singlePage: true };
+}

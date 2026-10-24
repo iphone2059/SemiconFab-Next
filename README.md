@@ -53,6 +53,8 @@ npx --yes pnpm@12.15.0 test
 npx --yes pnpm@12.15.0 build
 ```
 
+3D FAB 仅使用 `/twin` 页面（兼容 `/twin.html`）；首页不嵌入独立预览。旧 `/preview` 地址会规范化到同一页面。当前仍在对齐原版，尚未通过整页视觉 parity；[基线、差分与剩余门槛](docs/migration/twin-parity/baseline.md)。
+
 ## 文档
 
 - 当前编码进度与验证：[迁移实施记录](docs/migration/progress.md)。首批设备目录位于 `/catalog`，对比位于 `/compare`；兼容 `/catalog-demo.html`、`/compare.html`。

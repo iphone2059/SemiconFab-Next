@@ -1,0 +1,1429 @@
+[
+  {
+    "layout_index": 0,
+    "instance_id": "FAB-01/tool-001",
+    "record_id": "c327b57f-9e72-50d5-87a3-0986242ffb86",
+    "bay": "lithography",
+    "category": "lithography",
+    "machine_id": "TG01_LITHO_01",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      0,
+      98
+    ]
+  },
+  {
+    "layout_index": 1,
+    "instance_id": "FAB-01/tool-002",
+    "record_id": "80de0311-3bee-589e-be9e-c6e58527668c",
+    "bay": "lithography",
+    "category": "lithography",
+    "machine_id": "TG01_LITHO_02",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      1,
+      99
+    ]
+  },
+  {
+    "layout_index": 2,
+    "instance_id": "FAB-01/tool-003",
+    "record_id": "a46a0eaf-8fac-578a-b4d0-3496f2cb94f2",
+    "bay": "lithography",
+    "category": "lithography",
+    "machine_id": "TG01_LITHO_03",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      2,
+      100
+    ]
+  },
+  {
+    "layout_index": 3,
+    "instance_id": "FAB-01/tool-004",
+    "record_id": "640e01d7-420a-5ada-b39c-0e363ec47f11",
+    "bay": "lithography",
+    "category": "lithography",
+    "machine_id": "TG01_LITHO_04",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      3,
+      101
+    ]
+  },
+  {
+    "layout_index": 4,
+    "instance_id": "FAB-01/tool-005",
+    "record_id": "cde65e61-a3f5-5b18-a11f-7c2a9a220442",
+    "bay": "lithography",
+    "category": "lithography",
+    "machine_id": "TG01_LITHO_05",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      4,
+      102
+    ]
+  },
+  {
+    "layout_index": 5,
+    "instance_id": "FAB-01/tool-006",
+    "record_id": "bc44c286-8316-5bcf-867e-6990181bc9c4",
+    "bay": "lithography",
+    "category": "lithography",
+    "machine_id": "TG01_LITHO_06",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      5,
+      103
+    ]
+  },
+  {
+    "layout_index": 6,
+    "instance_id": "FAB-01/tool-007",
+    "record_id": "752bb9b8-00dc-594d-9003-4e49aaf84d94",
+    "bay": "lithography",
+    "category": "lithography",
+    "machine_id": "TG01_LITHO_07",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      6,
+      104
+    ]
+  },
+  {
+    "layout_index": 7,
+    "instance_id": "FAB-01/tool-008",
+    "record_id": "c20129c0-b029-5da5-8576-fdabf3f96753",
+    "bay": "lithography",
+    "category": "lithography",
+    "machine_id": "TG01_LITHO_08",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      7,
+      105
+    ]
+  },
+  {
+    "layout_index": 8,
+    "instance_id": "FAB-01/tool-009",
+    "record_id": "5b0a3bb2-da3e-5981-9431-99e04edda4c0",
+    "bay": "resist_track",
+    "category": "resist_track",
+    "machine_id": "TG02_TRACK_01",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 9,
+    "instance_id": "FAB-01/tool-010",
+    "record_id": "b8574715-05b3-5bd4-9449-3c34dd00ed02",
+    "bay": "resist_track",
+    "category": "resist_track",
+    "machine_id": "TG02_TRACK_02",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 10,
+    "instance_id": "FAB-01/tool-011",
+    "record_id": "5b0a3bb2-da3e-5981-9431-99e04edda4c0",
+    "bay": "resist_track",
+    "category": "resist_track",
+    "machine_id": "TG02_TRACK_03",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 11,
+    "instance_id": "FAB-01/tool-012",
+    "record_id": "b8574715-05b3-5bd4-9449-3c34dd00ed02",
+    "bay": "resist_track",
+    "category": "resist_track",
+    "machine_id": "TG02_TRACK_04",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 12,
+    "instance_id": "FAB-01/tool-013",
+    "record_id": "5b0a3bb2-da3e-5981-9431-99e04edda4c0",
+    "bay": "resist_track",
+    "category": "resist_track",
+    "machine_id": "TG02_TRACK_05",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 13,
+    "instance_id": "FAB-01/tool-014",
+    "record_id": "b8574715-05b3-5bd4-9449-3c34dd00ed02",
+    "bay": "resist_track",
+    "category": "resist_track",
+    "machine_id": "TG02_TRACK_06",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 14,
+    "instance_id": "FAB-01/tool-015",
+    "record_id": "5b0a3bb2-da3e-5981-9431-99e04edda4c0",
+    "bay": "resist_track",
+    "category": "resist_track",
+    "machine_id": "TG02_TRACK_07",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 15,
+    "instance_id": "FAB-01/tool-016",
+    "record_id": "b8574715-05b3-5bd4-9449-3c34dd00ed02",
+    "bay": "resist_track",
+    "category": "resist_track",
+    "machine_id": "TG02_TRACK_08",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 16,
+    "instance_id": "FAB-01/tool-017",
+    "record_id": "c88c9684-f141-5d2f-9c83-2ec670767089",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_01",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 17,
+    "instance_id": "FAB-01/tool-018",
+    "record_id": "dbaa6c67-67ba-52e5-8406-f0358e5eda94",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_02",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 18,
+    "instance_id": "FAB-01/tool-019",
+    "record_id": "2ce14b1f-68b3-5111-a9c4-1e1191ca6272",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_03",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 19,
+    "instance_id": "FAB-01/tool-020",
+    "record_id": "7ae544a6-85c8-56e6-b84d-a942fffd85af",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_04",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 20,
+    "instance_id": "FAB-01/tool-021",
+    "record_id": "e75be56f-ac9d-5f9c-97d8-dc8788185d22",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_05",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 21,
+    "instance_id": "FAB-01/tool-022",
+    "record_id": "a5dc900e-762e-57ab-aa7c-9fea763e60b9",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_06",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 22,
+    "instance_id": "FAB-01/tool-023",
+    "record_id": "f5e193da-325c-51c6-b39e-b79a5c34f4bd",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_07",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 23,
+    "instance_id": "FAB-01/tool-024",
+    "record_id": "0fa9f3d2-9283-50cc-b179-5ce3eea7715f",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_08",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 24,
+    "instance_id": "FAB-01/tool-025",
+    "record_id": "ca805c75-37f2-590e-96c0-d10090990e6c",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_09",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 25,
+    "instance_id": "FAB-01/tool-026",
+    "record_id": "15a7fae3-29b8-5be4-90e6-d2124bff4b0c",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_10",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 26,
+    "instance_id": "FAB-01/tool-027",
+    "record_id": "8e4c6025-2b2d-5f90-adc5-89a7cc5c787e",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_11",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 27,
+    "instance_id": "FAB-01/tool-028",
+    "record_id": "8e8831fb-1f58-5bdc-9d46-160abc86c1fe",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_12",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 28,
+    "instance_id": "FAB-01/tool-029",
+    "record_id": "830aae95-3738-5796-9f9a-ab6737647d28",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_13",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 29,
+    "instance_id": "FAB-01/tool-030",
+    "record_id": "556a9772-9972-5c70-b0bd-8ca790b4156e",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_14",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 30,
+    "instance_id": "FAB-01/tool-031",
+    "record_id": "26f68b6d-99a8-510a-9319-ae7c6ba9225e",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_15",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 31,
+    "instance_id": "FAB-01/tool-032",
+    "record_id": "c88c9684-f141-5d2f-9c83-2ec670767089",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_16",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 32,
+    "instance_id": "FAB-01/tool-033",
+    "record_id": "dbaa6c67-67ba-52e5-8406-f0358e5eda94",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_17",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 33,
+    "instance_id": "FAB-01/tool-034",
+    "record_id": "2ce14b1f-68b3-5111-a9c4-1e1191ca6272",
+    "bay": "dry_etch",
+    "category": "dry_etch",
+    "machine_id": "TG03_ETCH_18",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 34,
+    "instance_id": "FAB-01/tool-035",
+    "record_id": "e6a771bf-392c-51f8-a79b-95bdf6e51980",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_01",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 35,
+    "instance_id": "FAB-01/tool-036",
+    "record_id": "d32faad5-0b46-5364-a423-d7d6ccd06d19",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_02",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 36,
+    "instance_id": "FAB-01/tool-037",
+    "record_id": "7bfdc673-da69-5c8e-ad61-15a64b78dac9",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_03",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 37,
+    "instance_id": "FAB-01/tool-038",
+    "record_id": "6b2814d7-78f4-57be-a738-3a4b64501406",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_04",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 38,
+    "instance_id": "FAB-01/tool-039",
+    "record_id": "d789e8ed-c89d-577b-ac0a-001f076565df",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_05",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 39,
+    "instance_id": "FAB-01/tool-040",
+    "record_id": "46eb2c49-e770-5b66-adcf-5efc55366f3c",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_06",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 40,
+    "instance_id": "FAB-01/tool-041",
+    "record_id": "9a91170f-bca1-56b6-b6d9-c57b16e696a2",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_07",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 41,
+    "instance_id": "FAB-01/tool-042",
+    "record_id": "86c91512-c56a-5b1a-a573-67ed75449aec",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_08",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 42,
+    "instance_id": "FAB-01/tool-043",
+    "record_id": "c519ba08-2236-5b8a-9059-bcb6279fae8b",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_09",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 43,
+    "instance_id": "FAB-01/tool-044",
+    "record_id": "97fd4069-802a-5f8c-9835-06c29603480e",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_10",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 44,
+    "instance_id": "FAB-01/tool-045",
+    "record_id": "6828d3b2-1285-5ed5-8125-64f9ee5f5130",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_11",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 45,
+    "instance_id": "FAB-01/tool-046",
+    "record_id": "4566b1a5-caae-5be9-a767-09a2ee8b84db",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_12",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 46,
+    "instance_id": "FAB-01/tool-047",
+    "record_id": "e6a771bf-392c-51f8-a79b-95bdf6e51980",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_13",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 47,
+    "instance_id": "FAB-01/tool-048",
+    "record_id": "d32faad5-0b46-5364-a423-d7d6ccd06d19",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_14",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 48,
+    "instance_id": "FAB-01/tool-049",
+    "record_id": "7bfdc673-da69-5c8e-ad61-15a64b78dac9",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_15",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 49,
+    "instance_id": "FAB-01/tool-050",
+    "record_id": "6b2814d7-78f4-57be-a738-3a4b64501406",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_16",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 50,
+    "instance_id": "FAB-01/tool-051",
+    "record_id": "d789e8ed-c89d-577b-ac0a-001f076565df",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_17",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 51,
+    "instance_id": "FAB-01/tool-052",
+    "record_id": "46eb2c49-e770-5b66-adcf-5efc55366f3c",
+    "bay": "thin_film_deposition",
+    "category": "thin_film_deposition",
+    "machine_id": "TG05_CVD_18",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 52,
+    "instance_id": "FAB-01/tool-053",
+    "record_id": "2c8ee49e-b417-50be-a642-6fe000760c2a",
+    "bay": "cmp",
+    "category": "cmp",
+    "machine_id": "TG11_CMP_OX_01",
+    "original_kind": "catalog",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 53,
+    "instance_id": "FAB-01/tool-054",
+    "record_id": "1cf7aafa-36a9-57c7-bbab-b18ce6f8535d",
+    "bay": "cmp",
+    "category": "cmp",
+    "machine_id": "TG11_CMP_OX_02",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 54,
+    "instance_id": "FAB-01/tool-055",
+    "record_id": "746eba13-baf5-5ec1-959c-ad66fd799932",
+    "bay": "cmp",
+    "category": "cmp",
+    "machine_id": "TG11_CMP_OX_03",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 55,
+    "instance_id": "FAB-01/tool-056",
+    "record_id": "0274d687-f89d-5c0c-bd5d-61b502a60c15",
+    "bay": "cmp",
+    "category": "cmp",
+    "machine_id": "TG11_CMP_OX_04",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 56,
+    "instance_id": "FAB-01/tool-057",
+    "record_id": "c5ce9e6e-a036-55d6-8527-e01bff1f68f9",
+    "bay": "cmp",
+    "category": "cmp",
+    "machine_id": "TG11_CMP_OX_05",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 57,
+    "instance_id": "FAB-01/tool-058",
+    "record_id": "26b49060-218b-545a-ad86-eaa342c47fc5",
+    "bay": "cmp",
+    "category": "cmp",
+    "machine_id": "TG11_CMP_OX_06",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 58,
+    "instance_id": "FAB-01/tool-059",
+    "record_id": "6d356eb0-506f-5d19-9bf1-6c3068bb0699",
+    "bay": "cmp",
+    "category": "cmp",
+    "machine_id": "TG11_CMP_OX_07",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 59,
+    "instance_id": "FAB-01/tool-060",
+    "record_id": "e87575b6-6ce2-50c7-bd7b-cf8c1ca4e97b",
+    "bay": "cmp",
+    "category": "cmp",
+    "machine_id": "TG11_CMP_OX_08",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 60,
+    "instance_id": "FAB-01/tool-061",
+    "record_id": "5e19f35a-ac9d-50ee-b8c2-a836b6ee861f",
+    "bay": "wet_clean",
+    "category": "wet_clean",
+    "machine_id": "TG13_WET_BENCH_01",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 61,
+    "instance_id": "FAB-01/tool-062",
+    "record_id": "b5300e1d-9189-5962-81e2-64c1d3524339",
+    "bay": "wet_clean",
+    "category": "wet_clean",
+    "machine_id": "TG13_WET_BENCH_02",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 62,
+    "instance_id": "FAB-01/tool-063",
+    "record_id": "48494344-f8b9-5f1a-9995-80ad51cd7a01",
+    "bay": "wet_clean",
+    "category": "wet_clean",
+    "machine_id": "TG13_WET_BENCH_03",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 63,
+    "instance_id": "FAB-01/tool-064",
+    "record_id": "e83fa592-c53f-548a-9c30-3dcd2b7c9fd7",
+    "bay": "wet_clean",
+    "category": "wet_clean",
+    "machine_id": "TG13_WET_BENCH_04",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 64,
+    "instance_id": "FAB-01/tool-065",
+    "record_id": "ffb7c3a3-7f53-5cbf-8337-ca7eb5b96638",
+    "bay": "wet_clean",
+    "category": "wet_clean",
+    "machine_id": "TG13_WET_BENCH_05",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 65,
+    "instance_id": "FAB-01/tool-066",
+    "record_id": "663778ae-ca7e-5e09-bb9c-a03c7a2d1cec",
+    "bay": "wet_clean",
+    "category": "wet_clean",
+    "machine_id": "TG13_WET_BENCH_06",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 66,
+    "instance_id": "FAB-01/tool-067",
+    "record_id": "57218784-3aaf-5203-80b1-3485be695b5e",
+    "bay": "wet_clean",
+    "category": "wet_clean",
+    "machine_id": "TG13_WET_BENCH_07",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 67,
+    "instance_id": "FAB-01/tool-068",
+    "record_id": "0692771c-1149-5fc9-be7d-98d849256bc8",
+    "bay": "wet_clean",
+    "category": "wet_clean",
+    "machine_id": "TG13_WET_BENCH_08",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 68,
+    "instance_id": "FAB-01/tool-069",
+    "record_id": "81497b52-7ff7-527f-8f82-a7ad2aa9e498",
+    "bay": "wet_clean",
+    "category": "wet_clean",
+    "machine_id": "TG13_WET_BENCH_09",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 69,
+    "instance_id": "FAB-01/tool-070",
+    "record_id": "5e19f35a-ac9d-50ee-b8c2-a836b6ee861f",
+    "bay": "wet_clean",
+    "category": "wet_clean",
+    "machine_id": "TG13_WET_BENCH_10",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 70,
+    "instance_id": "FAB-01/tool-071",
+    "record_id": "7f4f54a9-d416-5a3c-a522-2064c07790d7",
+    "bay": "ion_implantation",
+    "category": "ion_implantation",
+    "machine_id": "TG09_IMPL_MED_01",
+    "original_kind": "catalog",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 71,
+    "instance_id": "FAB-01/tool-072",
+    "record_id": "4876fdc8-11e8-5d2b-8fe9-5ad9ff8cda4e",
+    "bay": "ion_implantation",
+    "category": "ion_implantation",
+    "machine_id": "TG09_IMPL_MED_02",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 72,
+    "instance_id": "FAB-01/tool-073",
+    "record_id": "fc9fa2bd-fe5a-5c9a-b679-aa8d7c727997",
+    "bay": "ion_implantation",
+    "category": "ion_implantation",
+    "machine_id": "TG09_IMPL_MED_03",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 73,
+    "instance_id": "FAB-01/tool-074",
+    "record_id": "8f81cb70-a28d-5804-b1fb-a76a4eab063c",
+    "bay": "ion_implantation",
+    "category": "ion_implantation",
+    "machine_id": "TG09_IMPL_MED_04",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 74,
+    "instance_id": "FAB-01/tool-075",
+    "record_id": "e5a97846-cf6d-5034-b7a2-13b30cdba992",
+    "bay": "ion_implantation",
+    "category": "ion_implantation",
+    "machine_id": "TG09_IMPL_MED_05",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 75,
+    "instance_id": "FAB-01/tool-076",
+    "record_id": "91cd500b-46ac-5a34-afd7-8cfba43a23ef",
+    "bay": "ion_implantation",
+    "category": "ion_implantation",
+    "machine_id": "TG09_IMPL_MED_06",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 76,
+    "instance_id": "FAB-01/tool-077",
+    "record_id": "836a5356-bd8f-563c-ae4f-b5a91235e1f6",
+    "bay": "ion_implantation",
+    "category": "ion_implantation",
+    "machine_id": "TG09_IMPL_MED_07",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 77,
+    "instance_id": "FAB-01/tool-078",
+    "record_id": "841a47b6-428b-5c29-9ab9-5109afd9dc1e",
+    "bay": "ion_implantation",
+    "category": "ion_implantation",
+    "machine_id": "TG09_IMPL_MED_08",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 78,
+    "instance_id": "FAB-01/tool-079",
+    "record_id": "84ec4cb1-7fc7-5cf5-bbd0-9be5db89a817",
+    "bay": "thermal_processing",
+    "category": "thermal_processing",
+    "machine_id": "TG07_FURN_DIFF_01",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 79,
+    "instance_id": "FAB-01/tool-080",
+    "record_id": "6964f52b-7e71-5a46-a03f-e1610a0374e8",
+    "bay": "thermal_processing",
+    "category": "thermal_processing",
+    "machine_id": "TG07_FURN_DIFF_02",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 80,
+    "instance_id": "FAB-01/tool-081",
+    "record_id": "41c16e65-cc7c-5907-b2e2-98af1095dcd5",
+    "bay": "thermal_processing",
+    "category": "thermal_processing",
+    "machine_id": "TG07_FURN_DIFF_03",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 81,
+    "instance_id": "FAB-01/tool-082",
+    "record_id": "47121709-93b4-5896-931e-1c6fe6290821",
+    "bay": "thermal_processing",
+    "category": "thermal_processing",
+    "machine_id": "TG07_FURN_DIFF_04",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 82,
+    "instance_id": "FAB-01/tool-083",
+    "record_id": "0fcf58f8-4126-540b-8a8b-2fd77d23e18a",
+    "bay": "thermal_processing",
+    "category": "thermal_processing",
+    "machine_id": "TG07_FURN_DIFF_05",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 83,
+    "instance_id": "FAB-01/tool-084",
+    "record_id": "7ceaf1c8-7910-5bc9-bd68-adbd81367034",
+    "bay": "thermal_processing",
+    "category": "thermal_processing",
+    "machine_id": "TG07_FURN_DIFF_06",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 84,
+    "instance_id": "FAB-01/tool-085",
+    "record_id": "e08bdd1a-8dda-517c-8506-32bd3f3b5110",
+    "bay": "thermal_processing",
+    "category": "thermal_processing",
+    "machine_id": "TG07_FURN_DIFF_07",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 85,
+    "instance_id": "FAB-01/tool-086",
+    "record_id": "4b5ef9ed-188c-5b4e-9d2e-d5fe27d2cd99",
+    "bay": "thermal_processing",
+    "category": "thermal_processing",
+    "machine_id": "TG07_FURN_DIFF_08",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 86,
+    "instance_id": "FAB-01/tool-087",
+    "record_id": "042c350c-d1a0-51f2-ba11-ef22e2507f73",
+    "bay": "metrology",
+    "category": "metrology",
+    "machine_id": "TG16_MET_CD_01",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      86,
+      110
+    ]
+  },
+  {
+    "layout_index": 87,
+    "instance_id": "FAB-01/tool-088",
+    "record_id": "3a03fd80-7476-588a-919d-cf605f154958",
+    "bay": "metrology",
+    "category": "metrology",
+    "machine_id": "TG16_MET_CD_02",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      87,
+      111
+    ]
+  },
+  {
+    "layout_index": 88,
+    "instance_id": "FAB-01/tool-089",
+    "record_id": "5f374ae5-af0d-5f2b-88a7-ce1863356bc5",
+    "bay": "metrology",
+    "category": "metrology",
+    "machine_id": "TG16_MET_CD_03",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      88,
+      112
+    ]
+  },
+  {
+    "layout_index": 89,
+    "instance_id": "FAB-01/tool-090",
+    "record_id": "09b4a776-277f-5203-8f72-80361b049f10",
+    "bay": "metrology",
+    "category": "inspection",
+    "machine_id": "TG16_MET_CD_04",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      89,
+      113
+    ]
+  },
+  {
+    "layout_index": 90,
+    "instance_id": "FAB-01/tool-091",
+    "record_id": "bdd36ff2-ada4-5655-8230-ccd30e4919a6",
+    "bay": "metrology",
+    "category": "inspection",
+    "machine_id": "TG16_MET_CD_05",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      90,
+      114
+    ]
+  },
+  {
+    "layout_index": 91,
+    "instance_id": "FAB-01/tool-092",
+    "record_id": "5adab9b7-42f7-5df0-be24-4e9f9a7e9fca",
+    "bay": "metrology",
+    "category": "inspection",
+    "machine_id": "TG16_MET_CD_06",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      91,
+      115
+    ]
+  },
+  {
+    "layout_index": 92,
+    "instance_id": "FAB-01/tool-093",
+    "record_id": "65a9c409-0449-5ea6-a5df-089ae1bfb174",
+    "bay": "metrology",
+    "category": "metrology",
+    "machine_id": "TG16_MET_CD_07",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      92,
+      116
+    ]
+  },
+  {
+    "layout_index": 93,
+    "instance_id": "FAB-01/tool-094",
+    "record_id": "03719f6a-8748-5223-b1d1-88769f43b79d",
+    "bay": "metrology",
+    "category": "metrology",
+    "machine_id": "TG16_MET_CD_08",
+    "original_kind": "draft",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      93,
+      117
+    ]
+  },
+  {
+    "layout_index": 94,
+    "instance_id": "FAB-01/tool-095",
+    "record_id": "1618a1eb-086d-5dbc-9635-1d7577b0602c",
+    "bay": "inspection",
+    "category": "inspection",
+    "machine_id": "TG18_INSPECT_01",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 95,
+    "instance_id": "FAB-01/tool-096",
+    "record_id": "ac5b0753-0843-5980-a016-cc5297bb0438",
+    "bay": "inspection",
+    "category": "inspection",
+    "machine_id": "TG18_INSPECT_02",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 96,
+    "instance_id": "FAB-01/tool-097",
+    "record_id": "1618a1eb-086d-5dbc-9635-1d7577b0602c",
+    "bay": "inspection",
+    "category": "inspection",
+    "machine_id": "TG18_INSPECT_03",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 97,
+    "instance_id": "FAB-01/tool-098",
+    "record_id": "ac5b0753-0843-5980-a016-cc5297bb0438",
+    "bay": "inspection",
+    "category": "inspection",
+    "machine_id": "TG18_INSPECT_04",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 98,
+    "instance_id": "FAB-01/tool-099",
+    "record_id": "3e5137b6-78c4-5ac8-a6ef-912562fb9311",
+    "bay": "packaging",
+    "category": "packaging",
+    "machine_id": "TG01_LITHO_01",
+    "original_kind": "catalog",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      0,
+      98
+    ]
+  },
+  {
+    "layout_index": 99,
+    "instance_id": "FAB-01/tool-100",
+    "record_id": "cb1548a3-cdb0-5c6b-9798-f86b99ae10ad",
+    "bay": "packaging",
+    "category": "packaging",
+    "machine_id": "TG01_LITHO_02",
+    "original_kind": "catalog",
+    "original_replay_target": false,
+    "alias_collision_indices": [
+      1,
+      99
+    ]
+  },
+  {
+    "layout_index": 100,
+    "instance_id": "FAB-01/tool-101",
+    "record_id": "1fdd1137-9952-5584-8236-48bd6f119cb6",
+    "bay": "packaging",
+    "category": "packaging",
+    "machine_id": "TG01_LITHO_03",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      2,
+      100
+    ]
+  },
+  {
+    "layout_index": 101,
+    "instance_id": "FAB-01/tool-102",
+    "record_id": "de700138-a965-51b6-b2c3-ec6e39d03c6f",
+    "bay": "packaging",
+    "category": "packaging",
+    "machine_id": "TG01_LITHO_04",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      3,
+      101
+    ]
+  },
+  {
+    "layout_index": 102,
+    "instance_id": "FAB-01/tool-103",
+    "record_id": "4d551549-f6fb-514f-9fac-51c9f2eca182",
+    "bay": "packaging",
+    "category": "packaging",
+    "machine_id": "TG01_LITHO_05",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      4,
+      102
+    ]
+  },
+  {
+    "layout_index": 103,
+    "instance_id": "FAB-01/tool-104",
+    "record_id": "3f391e71-feb9-5bb8-8c26-271898119fca",
+    "bay": "packaging",
+    "category": "packaging",
+    "machine_id": "TG01_LITHO_06",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      5,
+      103
+    ]
+  },
+  {
+    "layout_index": 104,
+    "instance_id": "FAB-01/tool-105",
+    "record_id": "333f4c12-f6d3-5e59-86ad-f34a93da85a1",
+    "bay": "packaging",
+    "category": "packaging",
+    "machine_id": "TG01_LITHO_07",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      6,
+      104
+    ]
+  },
+  {
+    "layout_index": 105,
+    "instance_id": "FAB-01/tool-106",
+    "record_id": "ea7acafa-f623-5b53-9820-cff153396595",
+    "bay": "packaging",
+    "category": "packaging",
+    "machine_id": "TG01_LITHO_08",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      7,
+      105
+    ]
+  },
+  {
+    "layout_index": 106,
+    "instance_id": "FAB-01/tool-107",
+    "record_id": "0e08ee0e-204e-5c35-93ee-9d4449bd50de",
+    "bay": "packaging",
+    "category": "packaging",
+    "machine_id": "TG01_LITHO_09",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 107,
+    "instance_id": "FAB-01/tool-108",
+    "record_id": "b7dd05c1-c14a-5a5b-8c2c-237c1828de31",
+    "bay": "packaging",
+    "category": "packaging",
+    "machine_id": "TG01_LITHO_10",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 108,
+    "instance_id": "FAB-01/tool-109",
+    "record_id": "178aac84-6158-559f-a04e-1d86d6b5ad09",
+    "bay": "packaging",
+    "category": "packaging",
+    "machine_id": "TG01_LITHO_11",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 109,
+    "instance_id": "FAB-01/tool-110",
+    "record_id": "4dec86af-c292-57a5-95ef-535c36c929f4",
+    "bay": "packaging",
+    "category": "packaging",
+    "machine_id": "TG01_LITHO_12",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 110,
+    "instance_id": "FAB-01/tool-111",
+    "record_id": "dd6715e4-f628-5687-9e2a-8ede1b0d6071",
+    "bay": "test",
+    "category": "test",
+    "machine_id": "TG16_MET_CD_01",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      86,
+      110
+    ]
+  },
+  {
+    "layout_index": 111,
+    "instance_id": "FAB-01/tool-112",
+    "record_id": "640c395b-69d8-5a73-890f-6d72ef905241",
+    "bay": "test",
+    "category": "test",
+    "machine_id": "TG16_MET_CD_02",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      87,
+      111
+    ]
+  },
+  {
+    "layout_index": 112,
+    "instance_id": "FAB-01/tool-113",
+    "record_id": "1bf9bd68-eaa2-5a6a-a0d6-81341e6b83de",
+    "bay": "test",
+    "category": "test",
+    "machine_id": "TG16_MET_CD_03",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      88,
+      112
+    ]
+  },
+  {
+    "layout_index": 113,
+    "instance_id": "FAB-01/tool-114",
+    "record_id": "21a38ffd-f475-5a84-a4de-518a96be045f",
+    "bay": "test",
+    "category": "test",
+    "machine_id": "TG16_MET_CD_04",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      89,
+      113
+    ]
+  },
+  {
+    "layout_index": 114,
+    "instance_id": "FAB-01/tool-115",
+    "record_id": "e7bff566-aa87-59c9-be15-c628195812e0",
+    "bay": "test",
+    "category": "test",
+    "machine_id": "TG16_MET_CD_05",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      90,
+      114
+    ]
+  },
+  {
+    "layout_index": 115,
+    "instance_id": "FAB-01/tool-116",
+    "record_id": "0b9c07fe-924b-59c0-8922-bf120d0d5bf1",
+    "bay": "test",
+    "category": "test",
+    "machine_id": "TG16_MET_CD_06",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      91,
+      115
+    ]
+  },
+  {
+    "layout_index": 116,
+    "instance_id": "FAB-01/tool-117",
+    "record_id": "edbdcab9-5356-5e8d-81f5-edb3843f21f5",
+    "bay": "test",
+    "category": "test",
+    "machine_id": "TG16_MET_CD_07",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      92,
+      116
+    ]
+  },
+  {
+    "layout_index": 117,
+    "instance_id": "FAB-01/tool-118",
+    "record_id": "b53c0b48-f9a7-5b68-9f78-981de60654e4",
+    "bay": "test",
+    "category": "test",
+    "machine_id": "TG16_MET_CD_08",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": [
+      93,
+      117
+    ]
+  },
+  {
+    "layout_index": 118,
+    "instance_id": "FAB-01/tool-119",
+    "record_id": "888d0ee7-2fb8-52f1-909b-b36ac0f9509e",
+    "bay": "test",
+    "category": "test",
+    "machine_id": "TG16_MET_CD_09",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 119,
+    "instance_id": "FAB-01/tool-120",
+    "record_id": "400f5451-48aa-51d9-b987-cf98fa5a5566",
+    "bay": "test",
+    "category": "test",
+    "machine_id": "TG16_MET_CD_10",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  },
+  {
+    "layout_index": 120,
+    "instance_id": "FAB-01/tool-121",
+    "record_id": "f0bb0ec9-b4d6-5086-a98d-fef8ae9ccd29",
+    "bay": "other",
+    "category": "other",
+    "machine_id": "TG14_WET_SINGLE_01",
+    "original_kind": "draft",
+    "original_replay_target": true,
+    "alias_collision_indices": []
+  }
+]

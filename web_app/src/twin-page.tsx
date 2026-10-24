@@ -1,32 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { OriginalIcon } from './original-icons';
+import { useTwinLocale, TwinLocaleProvider } from './twin-i18n';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { ApiClient } from './api-client';
 import type { SiteDto } from './contracts';
 import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus } from './equipment-status';
 import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
 import type { AmhsStats, CutAxis, PickedTool, SceneLayer, XRayFilter } from './fab-scene';
-import { FabRail, SiteScene, type SiteSceneHandle } from './site-preview';
+import { FabRail, FabViewport, type FabViewportHandle } from './fab-viewer';
 import { ResearchReplay, researchClock } from './research-replay';
 import { buildWaferWaypoints, parseWaferRoutes, waferTransitPoint, type WaferProduct, type WaferRouteStep } from './wafer-route';
 import { applyMesAction, buildTelemetry, computeSpc, createMesJob, type MesAction, type MesJob } from './process-control';
 import { BIN_COLORS, BIN_LABELS, WM811K_DEFECT_METADATA, generateWaferMap, stdfSummary, theoreticalYieldModels, waferMetrics, type BinCode, type DefectPattern } from './wafer-map';
 import { computeFabYield, DEFAULT_YIELD_INPUT, scenarioStates, YIELD_SCENARIOS } from './fab-yield';
-type EntryMode = 'visitor' | 'engineer' | 'research';
-type CameraView = 'iso' | 'top' | 'litho' | 'airshower' | 'etch' | 'oht';
-type FabLevel = 'L1' | 'B1' | 'DUAL' | 'EXPLODED';
-type TourStop = {
-  title: string;
-  subtitle: string;
-  preset?: CameraView;
-  level?: 'L1' | 'B1';
-};
-
-const TOUR_STOPS: TourStop[] = [
-  { title: '宏观 FAB', subtitle: '121 台设备 · 单 FAB 洁净室', preset: 'iso' },
-  { title: '光刻与风淋', subtitle: 'EUV / 高 NA · 人员气闸', preset: 'litho' },
-  { title: '刻蚀与沉积', subtitle: '多腔体集群与厂务管线', preset: 'etch' },
-  { title: 'AMHS 双环', subtitle: '24 台 OHT · 空中运输', preset: 'oht' },
-  { title: 'Subfab 地下层', subtitle: 'UPW / PCW / 气体 / 真空', level: 'B1' },
-];
+import { createTwinUiState, projectTwinSceneState, twinUiReducer, type EntryMode, type TwinView as CameraView } from './twin-state';
+import { createDemoState, DEMO_TICK_MS, demoReducer, projectReplayStates, resolveScenario, TWIN_LAYOUT_IDENTITIES } from './twin-equipment';
+import { cleanroomPressureField } from './cleanroom-pressure';
+import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from './original-tour';
 const ONBOARDING_KEY = 'semicon_twin_onboarding_dismissed';
 const ONBOARDING_STEPS = [
   { title: '一个单 FAB 洁净室', body: '121 台设备、双环 OHT、天花板 FFU 与 Subfab 都在同一场景中。' },
@@ -66,13 +55,47 @@ const XRAY_FILTERS: { filter: XRayFilter; label: string }[] = [
   { filter: 'amhs', label: 'AMHS' },
 ];
 
-export function TwinPage() {
-  const scene = useRef<SiteSceneHandle>(null);
+function TwinContent() {
+  const { t, language, toggleLanguage } = useTwinLocale();
+  const scene = useRef<FabViewportHandle>(null);
+  const [ui, dispatch] = useReducer(twinUiReducer, undefined, () => {
+    const requested = typeof location === 'undefined' ? null : new URL(location.href).searchParams.get('mode');
+    return createTwinUiState(requested === 'visitor' || requested === 'research' ? requested : 'engineer');
+  });
+  const mode = ui.entryMode;
+  const view = ui.view;
+  const level = ui.level;
+  const explodePercent = ui.explodePercent;
+  const cutActive = ui.spatialMode === 'cut';
+  const { axis: cutAxis, positionM: cutPosition, invert: cutInvert } = ui.cut;
+  const xrayFilter = ui.spatialMode === 'xray' ? ui.xray : null;
+  const tourStep = ui.tour.active ? ui.tour.waypoint : undefined;
+  const onboarding = ui.onboarding.open;
+  const onboardingStep = ui.onboarding.step;
+  const exploded = ui.spatialMode === 'exploded';
+  const basement = ui.level === 'B1';
+  const waferActive = ui.wafer.active;
+  const waferPlaying = ui.wafer.playing;
+  const waferSpeed = ui.wafer.speed;
+  const researchTime = ui.research.timeSec;
+  const researchPlaying = ui.research.playing;
+  const researchSpeed = ui.research.speed;
+  const [replayBase, setReplayBase] = useState<readonly FabToolState[]>(() => [...FAB_TOOL_STATES]);
+  const setMode = (value: EntryMode) => {
+    if (value === 'research' && mode !== 'research') setReplayBase([...toolStates]);
+    dispatch({ type: 'mode/set', mode: value });
+  };
+  const setWaferPlaying = (playing: boolean) => dispatch({ type: 'wafer/play', playing });
+  const setWaferSpeed = (speed: 1 | 4 | 16) => dispatch({ type: 'wafer/speed', speed });
+  const setResearchPlaying = (playing: boolean) => dispatch({ type: 'research/play', playing });
+  const setResearchTime = (timeSec: number) => dispatch({ type: 'research/seek', timeSec });
+  const setResearchSpeed = (speed: 1 | 10 | 100 | 500) => dispatch({ type: 'research/speed', speed });
   const [site, setSite] = useState<SiteDto>();
   const [error, setError] = useState<string>();
-  const [toolStates, setToolStates] = useState<FabToolState[]>(() => [...FAB_TOOL_STATES]);
+  const [liveToolStates, setLiveToolStates] = useState<FabToolState[]>(() => [...FAB_TOOL_STATES]);
+  const [demo, dispatchDemo] = useReducer(demoReducer, undefined, () => demoReducer(createDemoState(42), { type: 'scenario', scenario: YIELD_SCENARIOS[0] }));
   const [statusFeed, setStatusFeed] = useState<{ updatedAt: string; stale: boolean }>();
-  const [layers, setLayers] = useState<Record<SceneLayer, boolean>>({
+  const [layerPreferences, setLayers] = useState<Record<SceneLayer, boolean>>({
     amhs: true,
     ceiling: false,
     subfab: false,
@@ -80,20 +103,9 @@ export function TwinPage() {
     airflow: false,
     xray: false,
   });
-  const [view, setView] = useState<CameraView>('iso');
-  const [level, setLevel] = useState<FabLevel>('L1');
-  const [explodePercent, setExplodePercent] = useState(100);
-  const [cutActive, setCutActive] = useState(false);
-  const [cutAxis, setCutAxis] = useState<CutAxis>('X');
-  const [cutPosition, setCutPosition] = useState(0);
-  const [cutInvert, setCutInvert] = useState(false);
-  const [xrayFilter, setXRayFilter] = useState<XRayFilter | null>(null);
-  const [mode, setMode] = useState<EntryMode>('engineer');
-  const [tourStep, setTourStep] = useState<number>();
-  const [onboarding, setOnboarding] = useState(false);
-  const [onboardingStep, setOnboardingStep] = useState(0);
-  const [exploded, setExploded] = useState(false);
-  const [basement, setBasement] = useState(false);
+  const projected = projectTwinSceneState(ui);
+  const layers = useMemo(() => ({ ...layerPreferences, airflow: projected.airflow, heatmap: projected.heatmap, xray: projected.xray !== null }),
+    [layerPreferences, projected.airflow, projected.heatmap, projected.xray]);
   const [selected, setSelected] = useState<PickedTool>();
   const [mesJobs, setMesJobs] = useState<Record<number, MesJob>>({});
   const [ymsOpen, setYmsOpen] = useState(false);
@@ -107,27 +119,21 @@ export function TwinPage() {
   const [yieldInput, setYieldInput] = useState(DEFAULT_YIELD_INPUT);
   const [yieldScenario, setYieldScenario] = useState('live');
   const [stdfCopied, setStdfCopied] = useState(false);
-  const [status, setStatus] = useState('准备 WebGPU 视图…');
+  const [status, setStatus] = useState(t("准备 WebGPU 视图…"));
+  const appliedCameraView = useRef<CameraView | undefined>(undefined);
   const [amhs, setAmhs] = useState<AmhsStats>();
   const [railOpen, setRailOpen] = useState(true);
   const [research, setResearch] = useState<ResearchReplay>();
   const [researchLoading, setResearchLoading] = useState(false);
   const [researchError, setResearchError] = useState('');
-  const [researchTime, setResearchTime] = useState(0);
-  const [researchPlaying, setResearchPlaying] = useState(false);
-  const [researchSpeed, setResearchSpeed] = useState<1 | 10 | 100 | 500>(10);
-  const [waferActive, setWaferActive] = useState(false);
   const [waferProduct, setWaferProduct] = useState<WaferProduct>('A');
   const [waferRoutes, setWaferRoutes] = useState<Record<WaferProduct, WaferRouteStep[]>>();
   const [waferIndex, setWaferIndex] = useState(0);
-  const [waferPlaying, setWaferPlaying] = useState(false);
-  const [waferSpeed, setWaferSpeed] = useState<1 | 4 | 16>(1);
   const [waferFollow, setWaferFollow] = useState(true);
   const [waferError, setWaferError] = useState('');
   const waferIndexRef = useRef(0);
   const waferProgressRef = useRef(0);
   const waferTrailRef = useRef<[number, number, number][]>([]);
-  const modeRef = useRef<EntryMode>('engineer');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -136,12 +142,12 @@ export function TwinPage() {
         if (controller.signal.aborted) return;
         const wanted = new URL(location.href).searchParams.get('siteId');
         const next = wanted ? sites.find((value) => value.siteId === wanted) : sites[0];
-        if (!next) throw new Error(wanted ? `指定的 FAB 站点不存在：${wanted}` : '没有可用的 FAB 站点');
-        if (next.fabs.length !== 1) throw new Error('当前产品必须只有一个 FAB');
+        if (!next) throw new Error(wanted ? t("指定的 FAB 站点不存在：{0}", [wanted]) : t("没有可用的 FAB 站点"));
+        if (next.fabs.length !== 1) throw new Error(t("当前产品必须只有一个 FAB"));
         setSite(next);
       })
       .catch((reason: unknown) => {
-        if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'FAB 数据加载失败');
+        if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : t("FAB 数据加载失败"));
       });
     return () => controller.abort();
   }, []);
@@ -159,10 +165,8 @@ export function TwinPage() {
           return value === 'running' || value === 'idle' || value === 'down' || value === 'maint' ? value : 'idle';
         });
         setStatusFeed({ updatedAt: snapshot.generatedAt, stale: false });
-        if (modeRef.current !== 'research') {
-          setToolStates(next);
-          next.forEach((state, index) => scene.current?.setToolState(index, state));
-        }
+        // SSE only updates its own cache. The selected authority derives rendered states.
+        setLiveToolStates(next);
       },
       () => setStatusFeed((current) => current ? { ...current, stale: true } : current),
     );
@@ -178,13 +182,47 @@ export function TwinPage() {
   }, [site]);
 
   useEffect(() => {
+    if (ui.statusSource !== 'demo' || !demo.playing) return;
+    const timer = window.setInterval(() => dispatchDemo({ type: 'tick' }), DEMO_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, [ui.statusSource, demo.playing]);
+
+  useEffect(() => {
     if (site) document.title = `${site.code} / FAB-01 · 3D FAB`;
   }, [site]);
 
   useEffect(() => {
-    modeRef.current = mode;
-    if (mode !== 'research') setResearchPlaying(false);
+    const url = new URL(location.href);
+    url.searchParams.set('mode', mode);
+    history.replaceState({}, '', url);
   }, [mode]);
+
+  useEffect(() => {
+    if (!status.startsWith('WebGPU')) return;
+    // Restore material state before changing levels, then apply the single active mode.
+    scene.current?.setXRayFilter(null);
+    scene.current?.setBasement(basement);
+    scene.current?.setDual(level === 'DUAL');
+    scene.current?.setExplodeFactor(exploded ? explodePercent / 100 : 0);
+    scene.current?.setCutPlane(cutActive, cutAxis, cutPosition, cutInvert);
+    scene.current?.setXRayFilter(xrayFilter);
+  }, [status, basement, level, exploded, explodePercent, cutActive, cutAxis, cutPosition, cutInvert, xrayFilter]);
+
+  useEffect(() => {
+    if (!status.startsWith('WebGPU')) return;
+    // A rebuilt GPU retains the camera object and its user pose. Fresh mounts
+    // still apply the requested preset; explicit preset changes always apply.
+    if (status.startsWith('WebGPU ·') || appliedCameraView.current !== view) scene.current?.setView(view);
+    appliedCameraView.current = view;
+  }, [status, view]);
+
+  useEffect(() => {
+    if (!status.startsWith('WebGPU')) return;
+    if (!ui.tour.active) { scene.current?.setTour(false); return; }
+    scene.current?.setTour(true);
+    const stop = TOUR_STOPS[ui.tour.waypoint];
+    scene.current?.setCameraPose(stop.position, stop.target, stop.durationMs);
+  }, [status, ui.tour.active, ui.tour.waypoint]);
 
   useEffect(() => {
     if (mode !== 'research' || research) return;
@@ -200,7 +238,7 @@ export function TwinPage() {
         setResearchTime(Math.min(3600, replay.durationSec));
       })
       .catch((reason: unknown) => {
-        if (!controller.signal.aborted) setResearchError(reason instanceof Error ? reason.message : '回放数据加载失败');
+        if (!controller.signal.aborted) setResearchError(reason instanceof Error ? reason.message : t("回放数据加载失败"));
       })
       .finally(() => { if (!controller.signal.aborted) setResearchLoading(false); });
     return () => controller.abort();
@@ -213,16 +251,15 @@ export function TwinPage() {
       const now = performance.now();
       const elapsed = ((now - last) / 1000) * researchSpeed;
       last = now;
-      setResearchTime((current) => {
-        const next = Math.min(research.durationSec, current + elapsed);
-        if (next >= research.durationSec) setResearchPlaying(false);
-        return next;
-      });
+      dispatch({ type: 'research/advance', deltaSec: elapsed, durationSec: research.durationSec });
     }, 100);
     return () => window.clearInterval(timer);
   }, [researchPlaying, research, researchSpeed]);
 
   const researchSnapshot = useMemo(() => research?.snapshot(researchTime), [research, researchTime]);
+  const replayProjection = useMemo(() => researchSnapshot ? projectReplayStates(researchSnapshot, replayBase) : undefined, [researchSnapshot, replayBase]);
+  const toolStates = ui.statusSource === 'research-replay' ? replayProjection?.states ?? replayBase
+    : ui.statusSource === 'demo' ? demo.states : liveToolStates;
 
   useEffect(() => {
     if (!waferActive || waferRoutes) return;
@@ -231,7 +268,7 @@ export function TwinPage() {
     void fetch('/twin/routes.json', { signal: controller.signal })
       .then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json() as Promise<unknown>; })
       .then((value) => { if (!controller.signal.aborted) setWaferRoutes(parseWaferRoutes(value)); })
-      .catch((reason: unknown) => { if (!controller.signal.aborted) setWaferError(reason instanceof Error ? reason.message : '路线加载失败'); });
+      .catch((reason: unknown) => { if (!controller.signal.aborted) setWaferError(reason instanceof Error ? reason.message : t("路线加载失败")); });
     return () => controller.abort();
   }, [waferActive, waferRoutes]);
 
@@ -249,6 +286,10 @@ export function TwinPage() {
     const scenario = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
     return scenario ? scenarioStates(scenario) : toolStates;
   }, [toolStates, yieldScenario]);
+  const yieldUnresolved = useMemo(() => {
+    const scenario = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
+    return scenario ? resolveScenario(scenario).unresolvedIds : [];
+  }, [yieldScenario]);
   const fabYield = useMemo(() => computeFabYield(yieldStates, yieldInput), [yieldStates, yieldInput]);
   const spcPlot = selectedTelemetry ? (() => {
     const values = selectedTelemetry.history;
@@ -267,7 +308,10 @@ export function TwinPage() {
 
   useEffect(() => {
     if (!waferActive || !waferPoint || waferPlaying) {
-      if (!waferActive) scene.current?.setWaferPoint(0, 0, 0, false, false);
+      if (!waferActive) {
+        scene.current?.setWaferPoint(0, 0, 0, false, false);
+        scene.current?.setWaferTrail([]);
+      }
       return;
     }
     scene.current?.setWaferPoint(waferPoint.x, waferPoint.y, waferPoint.z, true, waferFollow);
@@ -311,7 +355,7 @@ export function TwinPage() {
 
   useEffect(() => {
     try {
-      if (localStorage.getItem(ONBOARDING_KEY) !== '1') setOnboarding(true);
+      if (localStorage.getItem(ONBOARDING_KEY) !== '1') dispatch({ type: 'onboarding/open' });
     } catch {
       // Storage may be blocked; the page still works without onboarding memory.
     }
@@ -319,20 +363,24 @@ export function TwinPage() {
 
   useEffect(() => {
     if (tourStep === undefined) return;
-    const timer = window.setTimeout(() => advanceTour(), 9000);
+    const stop = TOUR_STOPS[tourStep];
+    const timer = window.setTimeout(() => advanceTour(), stop.durationMs + stop.holdMs);
     return () => window.clearTimeout(timer);
   }, [tourStep]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
+      if (event.key === 'Escape') {
+        dispatch({ type: 'escape' });
+        scene.current?.clearSelection();
+        setSelected(undefined);
+        setYmsOpen(false);
+        return;
+      }
       if (target && /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return;
       if (event.key === '1') setCamera('iso');
       if (event.key === '2') setCamera('top');
-      if (event.key === 'Escape') {
-        scene.current?.clearSelection();
-        setSelected(undefined);
-      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -345,110 +393,32 @@ export function TwinPage() {
     return counts;
   }, [toolStates]);
   const utilization = (stateCounts.running / FAB_LAYOUT.length) * 100;
+  const pressure = cleanroomPressureField(selected?.x ?? 0, selected?.z ?? 0);
 
   function setCamera(next: CameraView): void {
-    setView(next);
-    scene.current?.setView(next);
+    dispatch({ type: 'view/set', view: next });
+    // Repeating the active preset still re-centres a manually moved camera.
+    if (next === view) scene.current?.setView(next);
   }
   function toggleLayer(layer: SceneLayer): void {
-    setLayers((current) => {
-      const next = { ...current, [layer]: !current[layer] };
-      scene.current?.setLayer(layer, next[layer]);
-      return next;
-    });
+    if (layer === 'airflow') { dispatch({ type: 'spatial/toggle', mode: 'aerodynamics' }); return; }
+    if (layer === 'heatmap') { dispatch({ type: 'aero/heatmap' }); return; }
+    if (layer === 'xray') { dispatch({ type: 'spatial/toggle', mode: 'xray' }); return; }
+    setLayers((current) => ({ ...current, [layer]: !current[layer] }));
   }
-  function disableCut(): void {
-    if (cutActive) scene.current?.setCutPlane(false, cutAxis, cutPosition, cutInvert);
-    setCutActive(false);
-  }
-  function applyXRayFilter(filter: XRayFilter | null): void {
-    setXRayFilter(filter);
-    setLayers((current) => ({ ...current, xray: filter !== null }));
-    if (filter && filter !== 'all' && filter !== 'amhs') {
-      scene.current?.setBasement(false);
-      scene.current?.setDual(true);
-      setBasement(false);
-      setExploded(false);
-      setLevel('DUAL');
-    }
-    scene.current?.setXRayFilter(filter);
-  }
-  function resetLevel(): void {
-    disableCut();
-    scene.current?.setDual(false);
-    if (basement) scene.current?.setBasement(false);
-    if (exploded) scene.current?.setExploded(false);
-    scene.current?.setExplodeFactor(0);
-    setBasement(false);
-    setExploded(false);
-    setLevel('L1');
-  }
-  function toggleCut(): void {
-    if (cutActive) { disableCut(); return; }
-    resetLevel();
-    scene.current?.setCutPlane(true, cutAxis, cutPosition, cutInvert);
-    setCutActive(true);
-  }
+  function applyXRayFilter(filter: XRayFilter | null): void { dispatch({ type: 'xray/set', filter }); }
+  function toggleCut(): void { dispatch({ type: 'spatial/toggle', mode: 'cut' }); }
   function updateCut(axis: CutAxis, position: number, invert: boolean): void {
-    setCutAxis(axis);
-    setCutPosition(position);
-    setCutInvert(invert);
-    if (cutActive) scene.current?.setCutPlane(true, axis, position, invert);
+    dispatch({ type: 'cut/set', axis, positionM: position, invert });
   }
-  function setL1(): void {
-    resetLevel();
-  }
-  function setB1(): void {
-    if (level === 'B1') { resetLevel(); return; }
-    disableCut();
-    scene.current?.setDual(false);
-    if (exploded) scene.current?.setExploded(false);
-    scene.current?.setExplodeFactor(0);
-    scene.current?.setBasement(true);
-    setBasement(true);
-    setExploded(false);
-    setLevel('B1');
-  }
-  function setDual(): void {
-    if (level === 'DUAL') { resetLevel(); return; }
-    disableCut();
-    if (basement) scene.current?.setBasement(false);
-    if (exploded) scene.current?.setExploded(false);
-    scene.current?.setExplodeFactor(0);
-    scene.current?.setDual(true);
-    setBasement(false);
-    setExploded(false);
-    setLevel('DUAL');
-  }
-  function toggleExploded(): void {
-    if (level === 'EXPLODED') { resetLevel(); return; }
-    disableCut();
-    scene.current?.setDual(false);
-    if (basement) scene.current?.setBasement(false);
-    scene.current?.setExplodeFactor(explodePercent / 100);
-    setBasement(false);
-    setExploded(true);
-    setLevel('EXPLODED');
-  }
-  function changeExplode(value: number): void {
-    setExplodePercent(value);
-    setExploded(true);
-    setLevel('EXPLODED');
-    scene.current?.setExplodeFactor(value / 100);
-  }
+  function setL1(): void { dispatch({ type: 'level/set', level: 'L1' }); }
+  function setB1(): void { dispatch({ type: 'level/set', level: level === 'B1' ? 'L1' : 'B1' }); }
+  function setDual(): void { dispatch({ type: 'level/set', level: level === 'DUAL' ? 'L1' : 'DUAL' }); }
+  function toggleExploded(): void { dispatch({ type: 'spatial/toggle', mode: 'exploded' }); }
+  function changeExplode(percent: number): void { dispatch({ type: 'explode/set', percent }); }
   function applyTourStep(index: number): void {
     const stop = TOUR_STOPS[index];
-    if (!stop) return;
-    setTourStep(index);
-    setOnboarding(false);
-    resetLevel();
-    if (stop.level === 'B1') {
-      scene.current?.setBasement(true);
-      setBasement(true);
-      setLevel('B1');
-    } else {
-      setCamera(stop.preset ?? 'iso');
-    }
+    if (stop) dispatch({ type: 'tour/step', waypoint: index, level: stop.level, view: 'iso' });
   }
   function chooseYieldScenario(id: string): void {
     setYieldScenario(id);
@@ -463,6 +433,14 @@ export function TwinPage() {
       [index]: applyMesAction(current[index] ?? createMesJob(FAB_LAYOUT[index], index), action),
     }));
   }
+  function chooseDemoScenario(id: string): void {
+    const scenario = YIELD_SCENARIOS.find((entry) => entry.id === id);
+    if (!scenario) return;
+    dispatch({ type: 'source/set', source: 'demo' });
+    dispatchDemo({ type: 'scenario', scenario });
+    setYieldScenario('live');
+    setYieldInput({ purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime });
+  }
   function clearWaferTrail(): void {
     waferIndexRef.current = 0;
     waferProgressRef.current = 0;
@@ -470,14 +448,14 @@ export function TwinPage() {
     scene.current?.setWaferTrail([]);
   }
   function startWafer(): void {
-    setWaferActive(true);
+    dispatch({ type: 'wafer/open' });
     setWaferIndex(0);
     setWaferPlaying(false);
     setWaferProduct('A');
     clearWaferTrail();
   }
   function closeWafer(): void {
-    setWaferActive(false);
+    dispatch({ type: 'wafer/close' });
     setWaferPlaying(false);
     scene.current?.setWaferPoint(0, 0, 0, false, false);
     scene.current?.setWaferTrail([]);
@@ -504,9 +482,7 @@ export function TwinPage() {
     applyTourStep(0);
   }
   function endTour(): void {
-    setTourStep(undefined);
-    resetLevel();
-    setCamera('iso');
+    dispatch({ type: 'tour/stop' });
   }
   function advanceTour(): void {
     if (tourStep === undefined) return;
@@ -518,7 +494,7 @@ export function TwinPage() {
     applyTourStep(Math.max(0, tourStep - 1));
   }
   function dismissOnboarding(): void {
-    setOnboarding(false);
+    dispatch({ type: 'onboarding/close' });
     try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch { /* ignore storage denial */ }
   }
   function finishOnboarding(): void {
@@ -527,137 +503,146 @@ export function TwinPage() {
   }
 
   if (error) {
-    return <main className="twin-page twin-error"><h1>无法加载 FAB</h1><p>{error}</p><a href="/">返回工作台</a></main>;
+    return <main className="twin-page twin-error"><h1>{t("无法加载 FAB")}</h1><p>{error}</p><a href="/">{t("返回工作台")}</a></main>;
   }
   if (!site || !fab) {
-    return <main className="twin-page twin-loading"><span>正在加载 FAB…</span></main>;
+    return <main className="twin-page twin-loading"><span>{t("正在加载 FAB…")}</span></main>;
   }
 
   return (
-    <main className="twin-page">
+    <main className="twin-page" data-spatial-mode={ui.spatialMode ?? 'none'}>
       <header className="twin-topbar">
-        <div className="twin-brand">
-          <span className="twin-brand-mark">F</span>
-          <div><strong>300mm 晶圆制造厂 (Fab)</strong><small>先进试验线 · FAB-01</small></div>
-        </div>
+        <a className="twin-brand" href="/" aria-label={t("首页")}>
+          <span className="twin-brand-mark"><OriginalIcon name="home" size={18} /></span>
+          <div><strong>{t("300mm晶圆制造厂 (Fab)")}</strong><small>{t("先进试验线")}</small></div>
+        </a>
         <div className="twin-topgroup">
-          <label className="twin-mode">模式
-            <select value={mode} onChange={(event) => setMode(event.target.value as EntryMode)}>
-              <option value="visitor">Visitor 访客</option>
-              <option value="engineer">Engineer 工程师</option>
-              <option value="research">Research 研究</option>
+          <label className="twin-mode">{t("模式:")}<select id="mode-select" value={mode} onChange={(event) => setMode(event.target.value as EntryMode)}>
+              <option value="visitor">{t("Visitor 导览")}</option><option value="engineer">{t("Engineer 工程师")}</option><option value="research">{t("Research 科研")}</option>
             </select>
           </label>
-          <div className="twin-levels" role="group" aria-label="楼层">
-            <button type="button" className={level === 'L1' ? 'active' : ''} onClick={setL1}>L1</button>
-            <button type="button" className={level === 'B1' ? 'active' : ''} onClick={setB1}>B1</button>
-            <button type="button" className={level === 'DUAL' ? 'active' : ''} onClick={setDual}>Dual</button>
-            <button type="button" className={level === 'EXPLODED' ? 'active' : ''} onClick={toggleExploded}>Explode</button>
+          <div className="twin-levels" role="group" aria-label={t("楼层")}>
+            <button id="level-btn-l1" type="button" className={level === 'L1' ? 'active' : ''} onClick={setL1}><OriginalIcon name="l1" /> L1</button>
+            <button id="level-btn-b1" type="button" className={level === 'B1' ? 'active' : ''} onClick={setB1}><OriginalIcon name="b1" /> B1</button>
+            <button id="level-btn-dual" type="button" className={level === 'DUAL' ? 'active' : ''} onClick={setDual}><OriginalIcon name="dual" /> Dual</button>
+            <button id="level-btn-exploded" type="button" className={level === 'EXPLODED' ? 'active' : ''} onClick={toggleExploded}><OriginalIcon name="exploded" />{t("爆炸解构")}</button>
           </div>
-          <button type="button" className={`twin-cut-toggle${cutActive ? ' active' : ''}`} aria-pressed={cutActive} onClick={toggleCut}>Cut</button>
-          <div className="twin-cameras" role="group" aria-label="相机预设">
-            <button type="button" className={view === 'iso' ? 'active' : ''} onClick={() => setCamera('iso')}>ISO</button>
-            <button type="button" className={view === 'top' ? 'active' : ''} onClick={() => setCamera('top')}>Top</button>
-            <button type="button" onClick={() => setCamera('litho')}>Litho</button>
-            <button type="button" onClick={() => setCamera('airshower')}>Airlock</button>
-          </div>
-          <button type="button" className={`twin-tour${tourStep !== undefined ? ' active' : ''}`} aria-pressed={tourStep !== undefined} onClick={() => { if (tourStep === undefined) startTour(); else endTour(); }}>▶ Tour</button>
-          <button type="button" className={`twin-wafer-toggle${waferActive ? ' active' : ''}`} aria-pressed={waferActive} onClick={() => { if (waferActive) closeWafer(); else startWafer(); }}>Wafer</button>
-          <button type="button" className={`twin-yms-toggle${ymsOpen ? ' active' : ''}`} aria-pressed={ymsOpen} onClick={() => setYmsOpen((open) => !open)}>YMS</button>
         </div>
         <div className="twin-topright">
-          <span className={`twin-feed${mode === 'research' ? ' is-replay' : statusFeed?.stale ? ' is-stale' : ''}`}><i />{mode === 'research' ? 'REPLAY' : statusFeed?.stale ? 'CACHE' : 'LIVE'}</span>
-          <a href="/">工作台</a>
+          <div className="twin-cameras" id="camera-presets-group" role="group" aria-label={t("相机预设")}>
+            <button type="button" aria-label="ISO" title="Isometric View" onClick={() => setCamera('iso')}><OriginalIcon name="iso" /></button>
+            <button type="button" aria-label="Top" title="Top Down Plan View" onClick={() => setCamera('top')}><OriginalIcon name="top" /></button>
+            <button type="button" aria-label="Litho" title="Focus Litho Amber Core" onClick={() => setCamera('litho')}><OriginalIcon name="litho" /></button>
+            <button type="button" aria-label="Airlock" title="Focus Cleanroom Air Shower" onClick={() => setCamera('airshower')}><OriginalIcon name="airlock" /></button>
+          </div>
+          <button id="btn-cinematic-tour" type="button" className={`twin-tour${tourStep !== undefined ? ' active' : ''}`} aria-pressed={tourStep !== undefined} onClick={() => { if (tourStep === undefined) startTour(); else endTour(); }}><OriginalIcon name="tour" />{tourStep === undefined ? 'Tour' : 'Stop'}</button>
+          <div className="twin-layers" aria-label={t("图层")}>
+            {LAYER_LABELS.filter(({ layer }) => layer !== 'airflow').map(({ layer, label }) => (
+              <button id={layer === 'amhs' ? 'btn-toggle-oht' : layer === 'ceiling' ? 'btn-toggle-ceiling' : layer === 'heatmap' ? 'btn-toggle-heatmap' : 'btn-toggle-piping'} type="button" key={layer} className={layers[layer] ? 'active' : ''} aria-pressed={!!layers[layer]} onClick={() => toggleLayer(layer)}><OriginalIcon name={layer === 'amhs' ? 'amhs' : layer === 'ceiling' ? 'ffu' : 'heatmap'} />{layer === 'heatmap' ? t("气流热力图") : label}</button>
+            ))}
+            <button id="btn-toggle-laminar" type="button" className={ui.spatialMode === 'aerodynamics' ? 'active' : ''} aria-pressed={ui.spatialMode === 'aerodynamics'} onClick={() => dispatch({ type: 'spatial/toggle', mode: 'aerodynamics' })}><OriginalIcon name="airflow" /> Airflow</button>
+            <button id="btn-toggle-xray" type="button" className={xrayFilter ? 'active' : ''} aria-pressed={!!xrayFilter} onClick={() => applyXRayFilter(xrayFilter ? null : 'all')}><OriginalIcon name="xray" />{t("全息透视")}</button>
+          </div>
+          <button id="lang-toggle-btn" className="twin-language-toggle" type="button" title={language === 'zh' ? 'Switch to English' : '切换为中文'} onClick={toggleLanguage}>{language === 'zh' ? '中文' : 'English'}</button>
         </div>
       </header>
 
-      <div className="twin-kpis">
-        {mode === 'research' && researchSnapshot ? (
-          <>
-            <span><b>{researchSnapshot.wip}</b> WIP</span>
-            <span><b>{researchSnapshot.activeTools}</b> ACTIVE</span>
-            <span>DAY <b>{researchClock(researchTime).split(' ')[1]}</b></span>
-          </>
-        ) : (
-          <>
-            <span><b>{utilization.toFixed(1)}%</b> UTIL</span>
-            <span><b>{FAB_LAYOUT.length}</b> TOOLS</span>
-            <span><b>{String(amhs?.active ?? 0).padStart(2, '0')}/{amhs?.total ?? 24}</b> OHT</span>
-            <span><b>{stateCounts.down}</b> ALARM</span>
-          </>
-        )}
+      <div className="twin-subbar" id="tour-status-subbar">
+        <button className="twin-yield-pill" type="button" title="Cascading Yield Model" onClick={() => { setYmsOpen(true); setYmsTab('yield'); }}>{(fabYield.totalYield * 100).toFixed(2)}%⌄</button>
+        <span className="twin-throughput">{fabYield.wpm.toLocaleString('en-US')}<small>{t("片/月")}</small></span>
+        <section className="twin-simulation" aria-label={t("B01 场景控制")}>
+          <button id="btn-sim-play" type="button" disabled={ui.statusSource !== 'demo'} title={ui.statusSource !== 'demo' ? t("请选择本地 DEMO 状态来源") : 'Toggle Sim Clock · 1600 ms'} onClick={() => dispatchDemo({ type: 'play', playing: !demo.playing })} aria-pressed={ui.statusSource === 'demo' && demo.playing}>{demo.playing ? 'Ⅱ' : '▶'} <span id="lbl-sim-cycle">#{demo.cycle}</span></button>
+          <select id="dt-scenario-select" aria-label="Scenario" value={demo.scenarioId} disabled={ui.statusSource !== 'demo'} onChange={(event) => chooseDemoScenario(event.target.value)}>
+            {YIELD_SCENARIOS.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
+          </select>
+        </section>
+        <button type="button" className={`twin-yms-toggle${ymsOpen ? ' active' : ''}`} aria-pressed={ymsOpen} onClick={() => { setYmsTab('map'); setYmsOpen((open) => !open); }}><OriginalIcon name="wafer" />{t("YMS 晶圆图谱")}</button>
+        <button id="btn-toggle-cut" type="button" className={`twin-cut-toggle${cutActive ? ' active' : ''}`} aria-pressed={cutActive} onClick={toggleCut}><OriginalIcon name="cut" />{t("动态剖切")}</button>
+        <button id="btn-follow-wafer" type="button" className={`twin-wafer-toggle${waferActive ? ' active' : ''}`} aria-pressed={waferActive} onClick={() => { if (waferActive) closeWafer(); else startWafer(); }}><OriginalIcon name="wafer" />{t("跟随晶圆")}</button>
+        <label className="twin-source"><select aria-label={t("状态来源")} value={ui.preferredStatusSource} disabled={mode === 'research'} onChange={(event) => dispatch({ type: 'source/set', source: event.target.value as 'demo' | 'sse-live' })}>
+          <option value="sse-live">SSE</option><option value="demo">DEMO</option>
+        </select></label>
+        <span className={`twin-feed${mode === 'research' ? ' is-replay' : statusFeed?.stale ? ' is-stale' : ''}`}><i />{mode === 'research' ? 'REPLAY' : ui.statusSource === 'demo' ? 'DEMO' : !statusFeed ? 'CONNECTING' : statusFeed.stale ? 'CACHE' : 'LIVE'}</span>
       </div>
 
       {level === 'EXPLODED' && (
-        <div className="twin-explode" role="group" aria-label="爆炸视图">
+        <div className="twin-explode" role="group" aria-label={t("爆炸视图")}>
           <span>EXPLODE</span>
-          <input type="range" min={0} max={100} step={1} value={explodePercent} onChange={(event) => changeExplode(Number(event.target.value))} aria-label="爆炸视图比例" />
+          <input type="range" min={0} max={100} step={1} value={explodePercent} onChange={(event) => changeExplode(Number(event.target.value))} aria-label={t("爆炸视图比例")} />
           <b>{explodePercent}%</b>
         </div>
       )}
 
       {cutActive && (
-        <div className="twin-cut" role="group" aria-label="剖切平面">
+        <div className="twin-cut" role="group" aria-label={t("剖切平面")}>
           <span>CUT</span>
-          <select value={cutAxis} onChange={(event) => updateCut(event.target.value as CutAxis, cutPosition, cutInvert)} aria-label="剖切轴">
+          <select value={cutAxis} onChange={(event) => updateCut(event.target.value as CutAxis, cutPosition, cutInvert)} aria-label={t("剖切轴")}>
             <option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option>
           </select>
-          <input type="range" min={-55} max={55} step={1} value={cutPosition} onChange={(event) => updateCut(cutAxis, Number(event.target.value), cutInvert)} aria-label="剖切位置" />
+          <input type="range" min={-55} max={55} step={1} value={cutPosition} onChange={(event) => updateCut(cutAxis, Number(event.target.value), cutInvert)} aria-label={t("剖切位置")} />
           <b>{cutPosition.toFixed(0)} m</b>
           <label><input type="checkbox" checked={cutInvert} onChange={(event) => updateCut(cutAxis, cutPosition, event.target.checked)} /> Invert</label>
         </div>
       )}
 
-      <div className="twin-stage">
-        <SiteScene
+      {ui.spatialMode === 'aerodynamics' && (
+        <section className="twin-aero-hud" aria-label="Aerodynamics">
+          <strong>{t("AERODYNAMICS · 层流与压差")}</strong>
+          <span>{t("黄光区 +30 Pa → 主工艺区 +15 Pa → 灰区 0 Pa")}</span>
+          <span>{selected ? `#${selected.index + 1}` : t("主工艺区")} · {pressure.pressure.toFixed(2)} Pa · ∂P/∂z {pressure.gradZ.toFixed(2)} Pa/m</span>
+          <button type="button" aria-pressed={ui.aeroHeatmap} onClick={() => dispatch({ type: 'aero/heatmap' })}>{t("压差热力图")}</button>
+          <small>{level === 'B1' ? t("B1 隐藏洁净室粒子") : t("1500 层流粒子 · 原版示意压差场")}{t("；非实测 CFD")}</small>
+        </section>
+      )}
+
+      <div className="twin-stage" id="viewport-container">
+        <FabViewport
           ref={scene}
           site={site}
           fab={fab}
-          expanded={false}
-          chrome={false}
           toolStates={toolStates}
           onToolChange={setSelected}
           onStatusChange={setStatus}
           onAmhsStatsChange={setAmhs}
           layers={layers}
-          onToggleLayer={toggleLayer}
-          touring={false}
-          onToggleTour={() => undefined}
-          exploded={exploded}
           explodeFactor={level === 'EXPLODED' ? explodePercent / 100 : 0}
-          onToggleExploded={toggleExploded}
           basement={basement}
           dual={level === 'DUAL'}
-          onToggleBasement={setB1}
         />
 
         {railOpen && mode === 'engineer' && (
           <div className="twin-left">
-            <div className="twin-panel-title"><span>FAB EQUIPMENT</span><button type="button" onClick={() => setRailOpen(false)} aria-label="收起设备清单">×</button></div>
+            <div className="twin-panel-title"><span>FAB EQUIPMENT</span><button type="button" onClick={() => setRailOpen(false)} aria-label={t("收起设备清单")}>×</button></div>
             <FabRail
               selectedToolIndex={selected?.index}
               onSelectTool={(index) => scene.current?.selectTool(index, false)}
               toolStates={toolStates}
-              statusFeed={statusFeed}
+              statusFeed={ui.statusSource === 'sse-live' ? statusFeed : undefined}
             />
           </div>
         )}
-        {!railOpen && mode === 'engineer' && <button type="button" className="twin-rail-open" onClick={() => setRailOpen(true)}>设备清单 ›</button>}
+        {!railOpen && mode === 'engineer' && <button type="button" className="twin-rail-open" onClick={() => setRailOpen(true)}>{t("设备清单 ›")}</button>}
 
         {selected && mode !== 'visitor' && (
-          <aside className="twin-inspector" aria-label="设备详情">
-            <div className="twin-panel-title"><span>SELECTED TOOL · {String(selected.index + 1).padStart(3, '0')}</span><button type="button" aria-label="关闭设备详情" onClick={() => { scene.current?.clearSelection(); setSelected(undefined); }}>×</button></div>
+          <aside className="twin-inspector" aria-label={t("设备详情")}>
+            <div className="twin-panel-title"><span>SELECTED TOOL · {String(selected.index + 1).padStart(3, '0')}</span><button type="button" aria-label={t("关闭设备详情")} onClick={() => { scene.current?.clearSelection(); setSelected(undefined); }}>×</button></div>
             <h2>{selected.vendor}</h2>
             <h3>{selected.model}</h3>
-            <span className="twin-chip">{CATEGORY_LABELS[selected.category] ?? selected.category}</span>
-            <span className="twin-chip">{FAB_TOOL_STATE_META[toolStates[selected.index] ?? selected.state].label}</span>
+            <span className="twin-chip">{t(CATEGORY_LABELS[selected.category] ?? selected.category)}</span>
+            <span className="twin-chip">{t(FAB_TOOL_STATE_META[toolStates[selected.index] ?? selected.state].label)}</span>
             <dl>
-              <dt>FAB 实例</dt><dd>FAB-01 / #{String(selected.index + 1).padStart(3, '0')}</dd>
-              <dt>尺寸 (mm)</dt><dd>{(selected.width * 1000).toFixed(0)} × {(selected.depth * 1000).toFixed(0)} × {(selected.height * 1000).toFixed(0)}</dd>
-              <dt>位置 (m)</dt><dd>{selected.x.toFixed(2)}, {selected.z.toFixed(2)}</dd>
-              <dt>来源</dt><dd>本地布局 / OEM 目录</dd>
+              <dt>{t("FAB 实例")}</dt><dd>FAB-01 / #{String(selected.index + 1).padStart(3, '0')}</dd>
+              <dt>{t("实例标识")}</dt><dd>{TWIN_LAYOUT_IDENTITIES[selected.index]?.instanceId}</dd>
+              <dt>{t("回放别名")}</dt><dd>{TWIN_LAYOUT_IDENTITIES[selected.index]?.machineId}{!TWIN_LAYOUT_IDENTITIES[selected.index]?.replayTarget ? t(" · 原版别名被覆盖") : ''}</dd>
+              <dt>{t("尺寸 (mm)")}</dt><dd>{(selected.width * 1000).toFixed(0)} × {(selected.depth * 1000).toFixed(0)} × {(selected.height * 1000).toFixed(0)}</dd>
+              <dt>{t("位置 (m)")}</dt><dd>{selected.x.toFixed(2)}, {selected.z.toFixed(2)}</dd>
+              <dt>{t("来源")}</dt><dd>{t("本地布局 / OEM 目录")}</dd>
             </dl>
-            <button type="button" className="twin-primary" onClick={() => scene.current?.selectTool(selected.index, true)}>在场景中定位</button>
+            <button type="button" className="twin-primary" onClick={() => scene.current?.selectTool(selected.index, true)}>{t("在场景中定位")}</button>
+            <div className="twin-manual-state" role="group" aria-label={t("设备状态干预")}>
+              {(['running', 'idle', 'down', 'maint'] as const).map((state) => <button type="button" key={state} disabled={ui.statusSource !== 'demo'} aria-pressed={toolStates[selected.index] === state} onClick={() => dispatchDemo({ type: 'manual', index: selected.index, state })}>{state.toUpperCase()}</button>)}
+            </div>
+            <p className="twin-data-note">{t("状态干预限本地 DEMO；MES / SPC 为页面演示，不持久化、不发送后端制造命令。")}</p>
 
             {selectedMes && (
               <section className="twin-process twin-mes" aria-label="SEMI MES Job Execution">
@@ -704,13 +689,13 @@ export function TwinPage() {
         )}
 
         {mode === 'research' && (
-          <section className="twin-research-hud" aria-label="Research Replay">
+          <section id="research-hud" className="twin-research-hud" aria-label="Research Replay">
             <div className="twin-research-head">
               <span className="technical">RESEARCH REPLAY · JSONL</span>
               <span>{research ? `${research.eventCount.toLocaleString('en-US')} rows` : 'display projection'}</span>
             </div>
-            {researchLoading && <p className="twin-research-status">正在载入 27,263 行展示事件…</p>}
-            {researchError && <p className="twin-research-status error-text">回放加载失败：{researchError}</p>}
+            {researchLoading && <p className="twin-research-status">{t("正在载入 27,263 行展示事件…")}</p>}
+            {researchError && <p className="twin-research-status error-text">{t("回放加载失败：")}{researchError}</p>}
             {research && researchSnapshot && (
               <>
                 <div className="twin-research-clock">
@@ -725,10 +710,10 @@ export function TwinPage() {
                   step={1}
                   value={researchTime}
                   onChange={(event) => { setResearchPlaying(false); setResearchTime(Number(event.target.value)); }}
-                  aria-label="回放时间轴"
+                  aria-label={t("回放时间轴")}
                 />
                 <div className="twin-research-controls">
-                  <button type="button" onClick={() => { if (researchTime >= research.durationSec) setResearchTime(0); setResearchPlaying((playing) => !playing); }}>{researchPlaying ? '暂停' : '播放'}</button>
+                  <button type="button" onClick={() => { if (researchTime >= research.durationSec) setResearchTime(0); setResearchPlaying(!researchPlaying); }}>{researchPlaying ? t("暂停") : t("播放")}</button>
                   {([1, 10, 100, 500] as const).map((speed) => (
                     <button type="button" key={speed} className={researchSpeed === speed ? 'active' : ''} onClick={() => setResearchSpeed(speed)}>{speed}×</button>
                   ))}
@@ -747,22 +732,23 @@ export function TwinPage() {
                     </div>
                   ))}
                 </div>
-                <p className="twin-research-footnote">只读展示事件流，不是 Checkpoint/WAL；本阶段为 WIP / UTIL 聚合回放，设备逐台着色仍待映射。</p>
+                <div className="twin-research-amhs">AMHS SIMULATED · jobs {amhs?.completed ?? 0} · avg {amhs?.avgDelivery?.toFixed(1) ?? '—'} s · active {amhs?.active ?? 0}/24</div>
+                <p className="twin-research-footnote">{t("只读展示事件流，不是 Checkpoint/WAL。原版别名命中")}{replayProjection?.mappedCount ?? 0}{t("/121 台；未映射设备保留进入回放前的状态。217 台仿真设备与布局不是一一对应。AMHS 为独立动画时钟，JSONL 无运输事件。")}</p>
               </>
             )}
           </section>
         )}
 
         {waferActive && (
-          <section className="twin-wafer" aria-label="Wafer Follow">
-            <div className="twin-wafer-head"><span>WAFER FOLLOW</span><button type="button" onClick={closeWafer} aria-label="关闭晶圆跟随">×</button></div>
-            {waferError && <p className="twin-wafer-error">路线加载失败：{waferError}</p>}
-            {!waferRoutes && !waferError && <p className="twin-wafer-error">正在加载 A/B/C 路线…</p>}
+          <section id="wafer-follow-panel" className="twin-wafer" aria-label="Wafer Follow">
+            <div className="twin-wafer-head"><span>WAFER FOLLOW</span><button type="button" onClick={closeWafer} aria-label={t("关闭晶圆跟随")}>×</button></div>
+            {waferError && <p className="twin-wafer-error">{t("路线加载失败：")}{waferError}</p>}
+            {!waferRoutes && !waferError && <p className="twin-wafer-error">{t("正在加载 A/B/C 路线…")}</p>}
             {waferRoutes && (
               <>
                 <div className="twin-wafer-row">
                   <label>Product
-                    <select value={waferProduct} onChange={(event) => changeWaferProduct(event.target.value as WaferProduct)} aria-label="晶圆产品">
+                    <select value={waferProduct} onChange={(event) => changeWaferProduct(event.target.value as WaferProduct)} aria-label={t("晶圆产品")}>
                       <option value="A">A · 120 Steps</option>
                       <option value="B">B · 104 Steps</option>
                       <option value="C">C · 92 Steps</option>
@@ -775,12 +761,12 @@ export function TwinPage() {
                   <span>{waferPoint?.toolGroup ?? ''} · {waferPoint?.category ?? ''}</span>
                   <small>{waferPoint?.recipe ?? 'no recipe'}</small>
                 </div>
-                <input className="twin-wafer-scrubber" type="range" min={0} max={Math.max(0, waferWaypoints.length - 1)} step={1} value={waferIndex} onChange={(event) => seekWafer(Number(event.target.value))} aria-label="晶圆路线步骤" />
+                <input className="twin-wafer-scrubber" type="range" min={0} max={Math.max(0, waferWaypoints.length - 1)} step={1} value={waferIndex} onChange={(event) => seekWafer(Number(event.target.value))} aria-label={t("晶圆路线步骤")} />
                 <div className="twin-wafer-actions">
-                  <button type="button" onClick={() => setWaferPlaying((playing) => !playing)}>{waferPlaying ? '暂停' : '播放'}</button>
-                  <button type="button" onClick={replayWafer}>重播</button>
+                  <button type="button" onClick={() => setWaferPlaying(!waferPlaying)}>{waferPlaying ? t("暂停") : t("播放")}</button>
+                  <button type="button" onClick={replayWafer}>{t("重播")}</button>
                   {([1, 4, 16] as const).map((speed) => <button type="button" key={speed} className={waferSpeed === speed ? 'active' : ''} onClick={() => setWaferSpeed(speed)}>{speed}×</button>)}
-                  <label><input type="checkbox" checked={waferFollow} onChange={(event) => setWaferFollow(event.target.checked)} /> 跟随</label>
+                  <label><input type="checkbox" checked={waferFollow} onChange={(event) => setWaferFollow(event.target.checked)} />{t("跟随")}</label>
                 </div>
               </>
             )}
@@ -796,7 +782,7 @@ export function TwinPage() {
                   <button type="button" className={ymsTab === 'map' ? 'active' : ''} onClick={() => setYmsTab('map')}>Wafer Map</button>
                   <button type="button" className={ymsTab === 'yield' ? 'active' : ''} onClick={() => setYmsTab('yield')}>Yield Waterfall</button>
                 </nav>
-                <button type="button" className="twin-yms-close" aria-label="关闭 YMS" onClick={() => setYmsOpen(false)}>×</button>
+                <button type="button" className="twin-yms-close" aria-label={t("关闭 YMS")} onClick={() => setYmsOpen(false)}>×</button>
               </header>
 
               {ymsTab === 'map' ? (
@@ -809,7 +795,7 @@ export function TwinPage() {
                         <small>{WM811K_DEFECT_METADATA[pattern].confidence} confidence</small>
                       </button>
                     ))}
-                    <button type="button" className="twin-yms-random" onClick={() => { const patterns = Object.keys(WM811K_DEFECT_METADATA) as DefectPattern[]; setWaferPattern(patterns[Math.floor(Math.random() * patterns.length)]); setWaferSeed((seed) => seed + 1); }}>随机模式</button>
+                    <button type="button" className="twin-yms-random" onClick={() => { const patterns = Object.keys(WM811K_DEFECT_METADATA) as DefectPattern[]; setWaferPattern(patterns[Math.floor(Math.random() * patterns.length)]); setWaferSeed((seed) => seed + 1); }}>{t("随机模式")}</button>
                   </aside>
                   <div className="twin-wafer-stage">
                     <svg viewBox="0 0 320 320" role="img" aria-label="300mm wafer die map">
@@ -856,6 +842,7 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
                     <button type="button" className={yieldScenario === 'live' ? 'active' : ''} onClick={() => chooseYieldScenario('live')}>LIVE</button>
                     {YIELD_SCENARIOS.map((scenario) => <button type="button" key={scenario.id} className={yieldScenario === scenario.id ? 'active' : ''} onClick={() => chooseYieldScenario(scenario.id)}>{scenario.name}</button>)}
                   </div>
+                  {yieldUnresolved.length > 0 && <p className="twin-data-note">{t("此原版场景的旧设备 ID 不在当前布局中，未施加类别级 DOWN：")}{yieldUnresolved.join(', ')}</p>}
                   <div className="twin-yield-bars">
                     {fabYield.modules.map((entry) => (
                       <div key={entry.module.id} className={entry.bottleneck ? 'bottleneck' : ''}>
@@ -880,59 +867,53 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
         )}
 
         <div className="twin-bottom">
-          <span className="twin-status"><i className={status.startsWith('WebGPU') ? 'ok' : ''} />{status}</span>
-          <span>FAB-01 · 单 FAB</span>
+          <span className="twin-status" title={status}><i className={status.startsWith('WebGPU') ? 'ok' : ''} />{status.startsWith('WebGPU') ? 'WebGPU' : status}</span>
+          <span>{t("FAB-01 · 单 FAB")}</span>
           <span>{mode === 'research' ? 'JSONL display only' : `AMHS OHT ${String(amhs?.active ?? 0).padStart(2, '0')}/${amhs?.total ?? 24}`}</span>
           <span>{mode === 'research' ? `REPLAY · WIP ${researchSnapshot?.wip ?? 0} · ACTIVE ${researchSnapshot?.activeTools ?? 0}` : `${stateCounts.running} RUN · ${stateCounts.idle} IDLE · ${stateCounts.down} DOWN · ${stateCounts.maint} MAINT`}</span>
         </div>
 
-        <div className="twin-layers" aria-label="图层">
-          {LAYER_LABELS.map(({ layer, label }) => (
-            <button type="button" key={layer} className={layers[layer] ? 'active' : ''} aria-pressed={!!layers[layer]} onClick={() => toggleLayer(layer)}>{label}</button>
-          ))}
-          <button type="button" className={xrayFilter ? 'active' : ''} aria-pressed={!!xrayFilter} onClick={() => applyXRayFilter(xrayFilter ? null : 'all')}>X-Ray</button>
-        </div>
 
         {xrayFilter && (
-          <div className="twin-xray" role="group" aria-label="X-Ray 过滤">
+          <div className="twin-xray" role="group" aria-label={t("X-Ray 过滤")}>
             <span>X-RAY</span>
             {XRAY_FILTERS.map(({ filter, label }) => (
               <button type="button" key={filter} className={xrayFilter === filter ? 'active' : ''} onClick={() => applyXRayFilter(filter)}>{label}</button>
             ))}
-            <button type="button" className="close" onClick={() => applyXRayFilter(null)} aria-label="关闭 X-Ray">×</button>
+            <button type="button" className="close" onClick={() => applyXRayFilter(null)} aria-label={t("关闭 X-Ray")}>×</button>
           </div>
         )}
 
         {tourStep !== undefined && TOUR_STOPS[tourStep] && (
-          <section className="twin-tour-card" aria-label="Cinematic Tour">
+          <section id="cinematic-hud" className="twin-tour-card" aria-label="Cinematic Tour">
             <div className="twin-tour-head">
               <span>TOUR {tourStep + 1}/{TOUR_STOPS.length}</span>
-              <button type="button" onClick={endTour} aria-label="关闭导览">跳过</button>
+              <button type="button" onClick={endTour} aria-label={t("关闭导览")}>{t("跳过")}</button>
             </div>
-            <h3>{TOUR_STOPS[tourStep].title}</h3>
-            <p>{TOUR_STOPS[tourStep].subtitle}</p>
-            <div className="twin-tour-dots" role="tablist" aria-label="导览站点">
+            <h3>{language === 'zh' ? TOUR_STOPS[tourStep].title : TOUR_STOPS[tourStep].titleEn}</h3>
+            <p>{language === 'zh' ? TOUR_STOPS[tourStep].subtitle : TOUR_STOPS[tourStep].subtitleEn}</p>
+            <div className="twin-tour-dots" role="tablist" aria-label={t("导览站点")}>
               {TOUR_STOPS.map((stop, index) => (
-                <button type="button" role="tab" aria-selected={index === tourStep} key={stop.title} className={index === tourStep ? 'active' : ''} onClick={() => applyTourStep(index)} aria-label={stop.title} />
+                <button type="button" role="tab" aria-selected={index === tourStep} key={stop.title} className={index === tourStep ? 'active' : ''} onClick={() => applyTourStep(index)} aria-label={language === 'zh' ? stop.title : stop.titleEn} />
               ))}
             </div>
             <div className="twin-tour-actions">
-              <button type="button" onClick={previousTour} disabled={tourStep === 0}>上一步</button>
-              <button type="button" className="primary" onClick={advanceTour}>{tourStep === TOUR_STOPS.length - 1 ? '完成' : '下一站'}</button>
+              <button type="button" onClick={previousTour} disabled={tourStep === 0}>{t("上一步")}</button>
+              <button type="button" className="primary" onClick={advanceTour}>{tourStep === TOUR_STOPS.length - 1 ? t("完成") : t("下一站")}</button>
             </div>
           </section>
         )}
 
         {onboarding && (
-          <div className="twin-onboarding" role="dialog" aria-modal="false" aria-label="首次引导">
+          <div className="twin-onboarding" role="dialog" aria-modal="false" aria-label={t("首次引导")}>
             <div className="twin-onboarding-card">
-              <div className="twin-onboarding-head"><span>首次进入 · {onboardingStep + 1}/{ONBOARDING_STEPS.length}</span><button type="button" onClick={dismissOnboarding} aria-label="跳过引导">×</button></div>
-              <h3>{ONBOARDING_STEPS[onboardingStep].title}</h3>
-              <p>{ONBOARDING_STEPS[onboardingStep].body}</p>
+              <div className="twin-onboarding-head"><span>{t("首次进入 ·")}{onboardingStep + 1}/{ONBOARDING_STEPS.length}</span><button type="button" onClick={dismissOnboarding} aria-label={t("跳过引导")}>×</button></div>
+              <h3>{t(ONBOARDING_STEPS[onboardingStep].title)}</h3>
+              <p>{t(ONBOARDING_STEPS[onboardingStep].body)}</p>
               <div className="twin-onboarding-actions">
-                <button type="button" onClick={dismissOnboarding}>跳过</button>
-                <button type="button" onClick={() => setOnboardingStep((step) => Math.max(0, step - 1))} disabled={onboardingStep === 0}>上一步</button>
-                <button type="button" className="primary" onClick={() => { if (onboardingStep === ONBOARDING_STEPS.length - 1) finishOnboarding(); else setOnboardingStep((step) => step + 1); }}>{onboardingStep === ONBOARDING_STEPS.length - 1 ? '开始导览' : '下一步'}</button>
+                <button type="button" onClick={dismissOnboarding}>{t("跳过")}</button>
+                <button type="button" onClick={() => dispatch({ type: 'onboarding/step', step: onboardingStep - 1 })} disabled={onboardingStep === 0}>{t("上一步")}</button>
+                <button type="button" className="primary" onClick={() => { if (onboardingStep === ONBOARDING_STEPS.length - 1) finishOnboarding(); else dispatch({ type: 'onboarding/step', step: onboardingStep + 1 }); }}>{onboardingStep === ONBOARDING_STEPS.length - 1 ? t("开始导览") : t("下一步")}</button>
               </div>
             </div>
           </div>
@@ -941,3 +922,5 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
     </main>
   );
 }
+
+export function TwinPage() { return <TwinLocaleProvider><TwinContent /></TwinLocaleProvider>; }

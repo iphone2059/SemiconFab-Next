@@ -12,6 +12,7 @@ import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine';
 import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import type { Scene } from '@babylonjs/core/scene';
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode';
+import type { Plane } from '@babylonjs/core/Maths/math.plane';
 
 const SIZE = 2048;
 
@@ -70,11 +71,22 @@ export function createShadowMatrix(direction: Vector3): Matrix {
   return view.multiply(Matrix.OrthoOffCenterRH(-78, 78, -72, 72, 1, 300, true));
 }
 
+export function shadowClipParameters(plane: Plane | null): number[] {
+  return plane ? [plane.normal.x, plane.normal.y, plane.normal.z, plane.d] : [0, 0, 0, 0];
+}
+
 const depthShader = `
-struct Light { vp: mat4x4f }
+struct Light { vp: mat4x4f, clipPlane: vec4f }
+struct Vertex { @builtin(position) position: vec4f, @location(0) world: vec3f }
 @group(0) @binding(0) var<uniform> light: Light;
-@vertex fn main(@location(0) position: vec3f) -> @builtin(position) vec4f {
-  return light.vp * vec4f(position, 1.0);
+@vertex fn main(@location(0) position: vec3f) -> Vertex {
+  var vertex: Vertex;
+  vertex.position = light.vp * vec4f(position, 1.0);
+  vertex.world = position;
+  return vertex;
+}
+@fragment fn clippedDepth(vertex: Vertex) {
+  if (dot(vec4f(vertex.world, 1.0), light.clipPlane) > 0.0) { discard; }
 }`;
 
 /** Native depth pass; Babylon only binds its texture for the main-pass WGSL receiver. */
@@ -108,6 +120,7 @@ export function createNativeStaticShadows(scene: Scene, engine: WebGPUEngine, li
   let triangleCount = 0;
   let lastReason = 'initialization';
   let lightKey = '';
+  let clipKey = '';
   const hookedGeometries = new Set<Geometry>();
   const hookGeometry = (mesh: AbstractMesh): void => {
     const geometry = mesh.geometry;
@@ -148,10 +161,12 @@ export function createNativeStaticShadows(scene: Scene, engine: WebGPUEngine, li
     texture.name = 'FAB native shadow depth';
     texture.wrapU = texture.wrapV = Constants.TEXTURE_CLAMP_ADDRESSMODE;
     binding.texture = texture;
-    uniform = device.createBuffer({ label: 'FAB light VP', size: 64, usage: BufferUsage.Uniform | BufferUsage.CopyDst });
+    uniform = device.createBuffer({ label: 'FAB light VP and world clip plane', size: 80, usage: BufferUsage.Uniform | BufferUsage.CopyDst });
+    const module = device.createShaderModule({ code: depthShader });
     pipeline = device.createRenderPipeline({ label: 'FAB static depth-only', layout: 'auto',
-      vertex: { module: device.createShaderModule({ code: depthShader }), entryPoint: 'main',
+      vertex: { module, entryPoint: 'main',
         buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] }] },
+      fragment: { module, entryPoint: 'clippedDepth', targets: [] },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less', depthBias: 1, depthBiasSlopeScale: 1 } });
     bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uniform } }] });
@@ -165,12 +180,14 @@ export function createNativeStaticShadows(scene: Scene, engine: WebGPUEngine, li
     for (const mesh of casters) hookGeometry(mesh);
     const nextKey = shadowGeometryKey(casters);
     const nextLightKey = light.direction.asArray().join(',');
-    if (!dirty && key === nextKey && lightKey === nextLightKey) return;
-    if (!dirty) lastReason = key !== nextKey ? 'geometry-or-visibility' : 'light-direction';
+    const clipPlane = shadowClipParameters(scene.clipPlane);
+    const nextClipKey = clipPlane.join(',');
+    if (!dirty && key === nextKey && lightKey === nextLightKey && clipKey === nextClipKey) return;
+    if (!dirty) lastReason = key !== nextKey ? 'geometry-or-visibility' : clipKey !== nextClipKey ? 'clip-plane' : 'light-direction';
     const geometry = collectShadowGeometry(casters);
     const lightVP = createShadowMatrix(light.direction);
     binding.matrix = lightVP;
-    device.queue.writeBuffer(uniform, 0, new Float32Array(lightVP.asArray()));
+    device.queue.writeBuffer(uniform, 0, new Float32Array([...lightVP.asArray(), ...clipPlane]));
     // Grow geometrical buffers geometrically and reuse them across cache rebuilds.
     const vertexNeeded = Math.max(4, geometry.positions.byteLength);
     const indexNeeded = Math.max(4, geometry.indices.byteLength);
@@ -198,13 +215,14 @@ export function createNativeStaticShadows(scene: Scene, engine: WebGPUEngine, li
     }
     pass.end(); device.queue.submit([encoder.finish()]);
     casterCount = geometry.meshCount; triangleCount = geometry.indices.length / 3; passes++;
-    key = shadowGeometryKey(casters); lightKey = nextLightKey; dirty = false;
+    key = shadowGeometryKey(casters); lightKey = nextLightKey; clipKey = nextClipKey; dirty = false;
   };
   const before = scene.onBeforeRenderObservable.add(update);
   const controller = {
+    get readyForCurrentDevice() { return !disposed && device === engine._device && !dirty; },
     get enabled() { return binding.enabled; },
     set enabled(value: boolean) { binding.enabled = value; },
-    get stats() { return { passes, casterCount, triangleCount, lastReason, size: SIZE, format: 'depth32float' }; },
+    get stats() { return { passes, casterCount, triangleCount, lastReason, size: SIZE, format: 'depth32float', clipPlane: shadowClipParameters(scene.clipPlane) }; },
     invalidate(reason: string) { dirty = true; lastReason = reason; },
     dispose() {
       if (disposed) return;

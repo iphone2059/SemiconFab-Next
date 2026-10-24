@@ -27,6 +27,7 @@ export interface ResearchSnapshot {
   wip: number;
   activeTools: number;
   utilization: ResearchUtilization[];
+  machineStates: ReadonlyMap<string, string>;
 }
 
 const PRODUCTIVE_STATE = 'PR_productive';
@@ -101,9 +102,11 @@ export class ResearchReplay {
     const time = Math.max(0, Math.min(this.durationSec, timeSec));
     const wip = lastAtOrBefore(this.wipSamples, time)?.wip ?? 0;
     const busyByGroup = new Map<string, number>();
+    const machineStates = new Map<string, string>();
     let activeTools = 0;
-    for (const history of this.machines.values()) {
+    for (const [machineId, history] of this.machines) {
       const latest = lastAtOrBefore(history, time);
+      machineStates.set(machineId, latest?.state ?? 'SBY_standby');
       if (!latest) continue;
       if (latest.state === PRODUCTIVE_STATE) {
         activeTools++;
@@ -115,7 +118,7 @@ export class ResearchReplay {
       const busy = busyByGroup.get(toolGroup) ?? 0;
       return { toolGroup, total, busy, utilization: total ? (busy / total) * 100 : 0 };
     }).sort((a, b) => b.utilization - a.utilization || a.toolGroup.localeCompare(b.toolGroup));
-    return { timeSec: time, wip, activeTools, utilization };
+    return { timeSec: time, wip, activeTools, utilization, machineStates };
   }
 }
 

@@ -4,9 +4,7 @@ import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { CubeTextureCreateFromImages } from '@babylonjs/core/Materials/Textures/cubeTexture';
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
-import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import '@babylonjs/core/Meshes/instancedMesh';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
@@ -19,6 +17,7 @@ import type { AmhsStats, XRayFilter } from './fab-scene';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine';
 import { createNativeStaticShadows } from './native-static-shadows';
+import { createAerodynamics } from './aerodynamics';
 
 const color = (hex: string) => Color3.FromHexString(hex);
 
@@ -390,83 +389,6 @@ interface StatusLightRuntime {
   setState(index: number, state: FabToolState): void;
 }
 
-interface ToolHeatmapRuntime {
-  group: TransformNode;
-  setState(index: number, state: FabToolState): void;
-}
-
-function addToolHeatmap(scene: Scene): ToolHeatmapRuntime {
-  const group = new TransformNode('native-tool-heatmap', scene);
-  const materials = Object.fromEntries(
-    (Object.keys(FAB_TOOL_STATE_META) as FabToolState[]).map((state) => {
-      const material = new StandardMaterial(`native-heatmap-${state}`, scene);
-      material.diffuseColor = color(FAB_TOOL_STATE_META[state].color);
-      material.emissiveColor = color(FAB_TOOL_STATE_META[state].color);
-      material.specularColor = Color3.Black();
-      material.disableLighting = true;
-      material.backFaceCulling = false;
-      material.alpha = 0.34;
-      material.zOffset = -2;
-      return [state, material];
-    }),
-  ) as Record<FabToolState, StandardMaterial>;
-  const discs: ReturnType<typeof MeshBuilder.CreateDisc>[] = [];
-  for (let index = 0; index < FAB_LAYOUT.length; index += 1) {
-    const tool = FAB_LAYOUT[index];
-    const radius = Math.max(1.2, Math.min(3.2, Math.max(tool.width, tool.depth) * 0.42));
-    const disc = MeshBuilder.CreateDisc(`heatmap-${index}`, { radius, tessellation: 28 }, scene);
-    disc.rotation.x = Math.PI / 2;
-    disc.position.set(tool.x, 0.056, tool.z);
-    disc.material = materials[FAB_TOOL_STATES[index] ?? 'idle'];
-    disc.isPickable = false;
-    disc.parent = group;
-    discs.push(disc);
-  }
-  group.setEnabled(false);
-  return {
-    group,
-    setState(index, state) {
-      const disc = discs[index];
-      if (disc) disc.material = materials[state];
-    },
-  };
-}
-
-function addAirflow(scene: Scene): { group: TransformNode } {
-  const group = new TransformNode('native-airflow', scene);
-  const material = new StandardMaterial('native-airflow-material', scene);
-  material.diffuseColor = color('#5fb7e8');
-  material.emissiveColor = color('#5fb7e8');
-  material.specularColor = Color3.Black();
-  material.disableLighting = true;
-  material.backFaceCulling = false;
-  material.alpha = 0.44;
-  const strands: ReturnType<typeof MeshBuilder.CreateCylinder>[] = [];
-  const speeds: number[] = [];
-  for (let index = 0; index < 54; index += 1) {
-    const x = -45 + ((index * 37) % 91);
-    const z = -34 + ((index * 61) % 68);
-    const strand = MeshBuilder.CreateCylinder(`airflow-${index}`, { height: 1.2 + (index % 4) * 0.32, diameter: 0.085, tessellation: 6 }, scene);
-    strand.position.set(x, 0.4 + ((index * 23) % 48) / 10, z);
-    strand.material = material;
-    strand.isPickable = false;
-    strand.parent = group;
-    strands.push(strand);
-    speeds.push(0.65 + (index % 5) * 0.12);
-  }
-  group.setEnabled(false);
-  scene.onBeforeRenderObservable.add(() => {
-    if (!group.isEnabled()) return;
-    const delta = Math.min(0.05, scene.getEngine().getDeltaTime() / 1000);
-    for (let index = 0; index < strands.length; index += 1) {
-      const strand = strands[index];
-      strand.position.y -= speeds[index] * delta;
-      if (strand.position.y < 0.2) strand.position.y = 5.2;
-    }
-  });
-  return { group };
-}
-
 function addToolStatusLights(scene: Scene): StatusLightRuntime {
   const materials = new Map<string, PBRMaterial>();
   const materialFor = (index: number, state: FabToolState) => {
@@ -494,135 +416,6 @@ function addToolStatusLights(scene: Scene): StatusLightRuntime {
   return { setState(index, state) { const mesh = lights[index]; if (mesh) mesh.material = materialFor(index, state); } };
 }
 
-const FAB_ZONES = [
-  { x: -36, z: -27, width: 17, depth: 36, fill: '#e9f3fb', border: '#bfd4e5' },
-  { x: -12, z: -27, width: 17, depth: 28, fill: '#dce9f5', border: '#b3cade' },
-  { x: 12, z: -27, width: 8, depth: 28, fill: '#e9f3fb', border: '#bfd4e5' },
-  { x: 20.8, z: -27, width: 8.2, depth: 28, fill: '#dce9f5', border: '#b3cade' },
-  { x: 12, z: 3, width: 8, depth: 28, fill: '#dce9f5', border: '#b3cade' },
-  { x: 20.8, z: 3, width: 8.2, depth: 28, fill: '#e9f3fb', border: '#bfd4e5' },
-  { x: -12, z: 3, width: 17, depth: 28, fill: '#e9f3fb', border: '#bfd4e5' },
-  { x: -36, z: 10, width: 17, depth: 19, fill: '#dce9f5', border: '#b3cade' },
-  { x: 33, z: -27, width: 12, depth: 58, fill: '#e9f3fb', border: '#bfd4e5' },
-] as const;
-
-function addFabZoneOverlay(scene: Scene): void {
-  for (const zone of FAB_ZONES) {
-    const plane = MeshBuilder.CreateGround(
-      `native-zone-${zone.x}-${zone.z}`,
-      { width: zone.width, height: zone.depth },
-      scene,
-    );
-    plane.position.set(zone.x + zone.width / 2, 0.021, zone.z + zone.depth / 2);
-    plane.isPickable = false;
-    const material = new StandardMaterial(`native-zone-mat-${zone.x}-${zone.z}`, scene);
-    material.diffuseColor = color(zone.fill);
-    material.emissiveColor = color(zone.fill).scale(0.45);
-    material.disableLighting = true;
-    material.alpha = 0.24;
-    material.backFaceCulling = false;
-    plane.material = material;
-
-    const y = 0.026;
-    const x0 = zone.x;
-    const x1 = zone.x + zone.width;
-    const z0 = zone.z;
-    const z1 = zone.z + zone.depth;
-    const border = MeshBuilder.CreateLines(
-      `native-zone-border-${zone.x}-${zone.z}`,
-      { points: [new Vector3(x0, y, z0), new Vector3(x1, y, z0), new Vector3(x1, y, z1), new Vector3(x0, y, z1), new Vector3(x0, y, z0)] },
-      scene,
-    );
-    border.color = color(zone.border);
-    border.alpha = 0.35;
-    border.isPickable = false;
-  }
-}
-
-const ZONE_LABELS = [
-  { x: -27, z: -7, text: 'LITHO' },
-  { x: -3, z: -14, text: 'ETCH' },
-  { x: 15, z: -14, text: 'DEPO' },
-  { x: 25, z: 0, text: 'CU' },
-  { x: 15, z: 15, text: 'IMPLANT' },
-  { x: -3, z: 14, text: 'DIFFUSION' },
-  { x: -20, z: 16, text: 'CMP' },
-  { x: 33, z: 6, text: 'METRO' },
-] as const;
-
-function addZoneLabels(scene: Scene): void {
-  for (const label of ZONE_LABELS) {
-    const texture = new DynamicTexture(`zone-label-${label.text}`, { width: 512, height: 128 }, scene, true);
-    const context = texture.getContext() as unknown as CanvasRenderingContext2D;
-    context.clearRect(0, 0, 512, 128);
-    context.fillStyle = 'rgba(84, 116, 145, 0.72)';
-    context.font = '600 56px "Segoe UI", sans-serif';
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    context.fillText(label.text, 256, 68);
-    texture.update(false);
-    texture.hasAlpha = true;
-    const plane = MeshBuilder.CreatePlane(`zone-label-plane-${label.text}`, { width: 7, height: 1.75 }, scene);
-    plane.position.set(label.x, 0.075, label.z);
-    plane.rotation.x = Math.PI / 2;
-    plane.isPickable = false;
-    const material = new StandardMaterial(`zone-label-material-${label.text}`, scene);
-    material.diffuseColor = Color3.White();
-    material.emissiveColor = color('#9ab4cb');
-    material.opacityTexture = texture;
-    material.disableLighting = true;
-    material.backFaceCulling = false;
-    plane.material = material;
-  }
-}
-
-function addFloorGridOverlay(scene: Scene): void {
-  const texture = new DynamicTexture('native-floor-grid', { width: 512, height: 512 }, scene, true);
-  const context = texture.getContext() as unknown as CanvasRenderingContext2D;
-  context.clearRect(0, 0, 512, 512);
-  context.strokeStyle = 'rgba(138, 164, 187, 0.5)';
-  context.lineWidth = 1;
-  for (let position = 0; position <= 512; position += 64) {
-    context.beginPath();
-    context.moveTo(position + 0.5, 0);
-    context.lineTo(position + 0.5, 512);
-    context.stroke();
-    context.beginPath();
-    context.moveTo(0, position + 0.5);
-    context.lineTo(512, position + 0.5);
-    context.stroke();
-  }
-  context.strokeStyle = 'rgba(116, 145, 171, 0.55)';
-  context.lineWidth = 2;
-  for (let position = 0; position <= 512; position += 256) {
-    context.beginPath();
-    context.moveTo(position + 0.5, 0);
-    context.lineTo(position + 0.5, 512);
-    context.stroke();
-    context.beginPath();
-    context.moveTo(0, position + 0.5);
-    context.lineTo(512, position + 0.5);
-    context.stroke();
-  }
-  texture.update(false);
-  texture.hasAlpha = true;
-  texture.wrapU = Texture.WRAP_ADDRESSMODE;
-  texture.wrapV = Texture.WRAP_ADDRESSMODE;
-  texture.uScale = 14;
-  texture.vScale = 10;
-
-  const plane = MeshBuilder.CreateGround('native-floor-grid-plane', { width: 114, height: 84 }, scene);
-  plane.position.y = 0.03;
-  plane.isPickable = false;
-  const material = new StandardMaterial('native-floor-grid-material', scene);
-  material.diffuseColor = color('#8aa4bb');
-  material.emissiveColor = color('#8aa4bb').scale(0.35);
-  material.opacityTexture = texture;
-  material.disableLighting = true;
-  material.backFaceCulling = false;
-  plane.material = material;
-}
-
 /** Build the original single-FAB layout directly with Babylon geometry. */
 export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStats) => void): Promise<LegacyRuntime> {
   const ambient = new HemisphericLight('legacy-ambient', new Vector3(0, 1, 0), scene);
@@ -636,32 +429,20 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   fill.intensity = 0.32;
 
   scene.imageProcessingConfiguration.toneMappingEnabled = false;
-  scene.imageProcessingConfiguration.exposure = 1.1;
-  scene.imageProcessingConfiguration.contrast = 1.02;
+  // The original renderer outputs LinearEncoding with NoToneMapping.
+  scene.imageProcessingConfiguration.isEnabled = false;
+  scene.imageProcessingConfiguration.exposure = 1;
+  scene.imageProcessingConfiguration.contrast = 1;
 
-  // Neutral studio environment for the PBR materials exported from the original scene.
-  const faces = Array.from({ length: 6 }, (_, face) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
-    const context = canvas.getContext('2d');
-    if (context) {
-      const gradient = context.createLinearGradient(0, 0, 0, 64);
-      gradient.addColorStop(0, face === 2 ? '#f8fafc' : '#f1f5f9');
-      gradient.addColorStop(1, face === 3 ? '#cbd5e1' : '#dfe7ef');
-      context.fillStyle = gradient;
-      context.fillRect(0, 0, 64, 64);
-    }
-    return canvas.toDataURL('image/png');
-  });
-  const environment = CubeTextureCreateFromImages(faces, scene);
-  environment.gammaSpace = true;
-  environment.level = 0.85;
-  scene.environmentTexture = environment;
-  scene.environmentIntensity = 0.7;
+  // The original scene has no environment map. An invented studio cube also
+  // changes translucent curtain refraction even when surface IBL is disabled.
+  scene.environmentTexture = null;
+  scene.environmentIntensity = 0;
 
   const fab = buildProceduralFab(scene);
-  ambient.excludedMeshes = fab.equipment.getChildMeshes();
+  // Original PBR surfaces already receive scene.ambientColor. A hemispheric
+  // light here would add a second ambient term (most obvious on floor/columns).
+  ambient.excludedMeshes = scene.meshes.filter(mesh => mesh.material instanceof PBRMaterial);
   fab.ceiling.setEnabled(true);
   fab.subfab.setEnabled(false);
 
@@ -680,18 +461,15 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   const lithoSpot = new SpotLight('original-litho-spot', new Vector3(-27, 8.5, -9), Vector3.Down(), Math.PI * 4 / 9, 2, scene);
   lithoSpot.diffuse = color('#f59e0b'); lithoSpot.intensity = 3.2; lithoSpot.range = 24;
   lithoSpot.innerAngle = lithoSpot.angle * 0.55;
-  addFabZoneOverlay(scene);
-  addZoneLabels(scene);
-  addFloorGridOverlay(scene);
   const statusLights = addToolStatusLights(scene);
-  const heatmap = addToolHeatmap(scene);
-  const airflow = addAirflow(scene);
+  const airflow = createAerodynamics(scene);
+  const heatmap = airflow.heatmap;
   const amhsGroup = addAnimatedAmhs(scene, onAmhsStats);
   // These static meshes are created once; keep the caster list stable to avoid
   // allocating flatMap/filter arrays on every animation frame.
   const staticCasters = [fab.equipment, fab.shell, fab.ceiling, fab.subfab]
     .flatMap(root => root.getChildMeshes())
-    .filter(mesh => mesh !== fab.floor && !mesh.name.startsWith('procedural-slab') && !mesh.name.startsWith('status-'));
+    .filter(mesh => mesh !== fab.floor && !mesh.name.startsWith('procedural-slab') && !mesh.name.startsWith('status-') && mesh.metadata?.staticShadowCaster !== false);
   const shadows = createNativeStaticShadows(scene, scene.getEngine() as WebGPUEngine, keyLight,
     () => staticCasters);
   scene.metadata = { ...scene.metadata, staticShadows: shadows };
@@ -744,7 +522,9 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     }
   };
   const applyExplodeFactor = (factor: number) => {
-    explodeFactor = Math.max(0, Math.min(1, factor));
+    const next = Math.max(0, Math.min(1, factor));
+    if (next === explodeFactor) return;
+    explodeFactor = next;
     fab.equipment.position.y = 2.4 * explodeFactor;
     shadows.invalidate('equipment-exploded');
   };
@@ -794,7 +574,6 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     },
     setToolState(index, state) {
       statusLights.setState(index, state);
-      heatmap.setState(index, state);
     },
     setExploded(active) {
       applyExplodeFactor(active ? 1 : 0);

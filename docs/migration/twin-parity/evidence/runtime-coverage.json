@@ -1,0 +1,1645 @@
+{
+  "status": "PARTIAL_RUNTIME_INVENTORY",
+  "original_raw_occurrences": 265,
+  "original_unique_source_ids": 262,
+  "original_ids_visible_in_captures": 175,
+  "not_yet_visible": [
+    "arch-cards-container",
+    "arch-search-input",
+    "btn-hud-heatmap",
+    "btn-toggle-draft-labels",
+    "cinematic-hud",
+    "count-down",
+    "count-idle",
+    "count-maint",
+    "count-running",
+    "dt-health-val",
+    "dt-lag-val",
+    "dt-purity-val",
+    "exploded-factor-val",
+    "exploded-slider",
+    "hud-panel-aero",
+    "hud-panel-exploded",
+    "hud-press-bay",
+    "hud-press-diff",
+    "hud-press-litho",
+    "inspect-draft-banner",
+    "inspect-draft-banner-body",
+    "inspect-draft-banner-title",
+    "inspect-draft-cta-text",
+    "inspect-draft-prefill-cta",
+    "inspect-infab-btn",
+    "inspect-infab-container",
+    "inspect-replacement-container",
+    "inspect-specs",
+    "inspect-subfab-container",
+    "inspect-subfab-desc",
+    "inspect-subfab-links",
+    "inspect-subfab-tag",
+    "inspect-subfab-title",
+    "inspect-tier-dot",
+    "inspect-tier-text",
+    "lang-dropdown-panel",
+    "lang-selector-menu",
+    "modal-database-tbody",
+    "modal-matched-count",
+    "modal-search-input",
+    "modal-segment-select",
+    "modal-vendor-select",
+    "oem-database-modal",
+    "onboard-dot-1",
+    "onboard-dot-2",
+    "onboard-dot-3",
+    "onboarding-bubble",
+    "onboarding-desc",
+    "onboarding-dont-show",
+    "onboarding-dont-show-text",
+    "onboarding-next-btn",
+    "onboarding-prev-btn",
+    "onboarding-step-counter",
+    "onboarding-title",
+    "open-architecture-modal",
+    "opt-mode-engineer",
+    "opt-mode-research",
+    "opt-mode-visitor",
+    "research-utilization-overlay",
+    "roof-duct-tooltip",
+    "roof-schematic-badge",
+    "search-clear-btn",
+    "sidebar-secondary-controls",
+    "state-btn-DOWN",
+    "state-btn-IDLE",
+    "state-btn-MAINT",
+    "state-btn-RUNNING",
+    "tg-live-busy-${tg.id}",
+    "top-action-tooltip-text",
+    "tour-dot-0",
+    "tour-dot-1",
+    "tour-dot-2",
+    "tour-dot-3",
+    "tour-dot-4",
+    "tour-dots-container",
+    "tour-hud-desc",
+    "tour-hud-tag",
+    "tour-hud-timer",
+    "tour-hud-title",
+    "tour-progress-bar",
+    "tour-timer-text",
+    "twin-toast-container",
+    "utilization-bars-container",
+    "wafer-replay-btn",
+    "waterfall-bars-container",
+    "waterfall-total-yield",
+    "yield-waterfall-panel"
+  ],
+  "same_id_visible_in_next": [
+    "btn-cinematic-tour",
+    "btn-follow-wafer",
+    "btn-sim-play",
+    "btn-toggle-ceiling",
+    "btn-toggle-cut",
+    "btn-toggle-heatmap",
+    "btn-toggle-laminar",
+    "btn-toggle-oht",
+    "btn-toggle-xray",
+    "camera-presets-group",
+    "dt-scenario-select",
+    "lang-toggle-btn",
+    "lbl-sim-cycle",
+    "level-btn-b1",
+    "level-btn-dual",
+    "level-btn-exploded",
+    "level-btn-l1",
+    "mode-select",
+    "research-hud",
+    "tour-status-subbar",
+    "viewport-container",
+    "wafer-follow-panel"
+  ],
+  "visible_cases": {
+    "original": {
+      "viewport-container": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "three-canvas": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "custom-layout-banner": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "custom-layout-title": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "twin-materials-legend": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "bottom-center-hud-stack": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "amhs-hud-pill": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "amhs-hud-lbl-jobs": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "amhs-hud-jobs": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "amhs-hud-lbl-avg": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "amhs-hud-avg": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "amhs-hud-lbl-active": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "amhs-hud-active": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "mode-select": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "level-btn-l1": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "level-btn-b1": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "level-btn-dual": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "level-btn-exploded": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "camera-presets-group": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-focus-patrol": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-cinematic-tour": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-oht": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-ceiling": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-laminar": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-heatmap": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-xray": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "lang-toggle-btn": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "current-lang-code": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "lang-picker-btn": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "tour-status-subbar": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "header-yield-dot": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "header-yield-val": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "header-wpm-val": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-sim-play": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "sim-play-icon": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "lbl-sim-cycle": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "dt-scenario-select": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-cut": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-roof": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-follow-wafer": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "left-sidebar": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "sidebar-tab-fab": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "tab-count-fab": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "sidebar-tab-oem": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "tab-count-oem": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "search-input": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "category-pills-container": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "equipment-list": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "sidebar-item-subfab.chiller.rf.1": [
+        "b1",
+        "cut",
+        "iso",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "sidebar-item-subfab.upw.manifold.1": [
+        "b1",
+        "cut",
+        "iso",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "sidebar-item-fac.airshower.main.1": [
+        "b1",
+        "cut",
+        "iso",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "sidebar-item-fac.airshower.litho.1": [
+        "b1",
+        "cut",
+        "iso",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "sidebar-item-2c8ee49e-b417-50be-a642-6fe000760c2a": [
+        "b1",
+        "cut",
+        "iso",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "sidebar-item-7f4f54a9-d416-5a3c-a522-2064c07790d7": [
+        "b1",
+        "cut",
+        "iso",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "sidebar-item-3e5137b6-78c4-5ac8-a6ef-912562fb9311": [
+        "b1",
+        "cut",
+        "iso",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "sidebar-item-cb1548a3-cdb0-5c6b-9798-f86b99ae10ad": [
+        "b1",
+        "cut",
+        "iso",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "footer-tool-count": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "stat-count": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "hud-grid-badge": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "bottom-hud-footer": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-edit-layout": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "top-action-tooltip": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "top-action-tooltip-arrow": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "master-spatial-hud": [
+        "cut",
+        "xray"
+      ],
+      "hud-panel-cut": [
+        "cut"
+      ],
+      "cut-axis-x": [
+        "cut"
+      ],
+      "cut-axis-y": [
+        "cut"
+      ],
+      "cut-axis-z": [
+        "cut"
+      ],
+      "cut-pos-val": [
+        "cut"
+      ],
+      "cut-min-lbl": [
+        "cut"
+      ],
+      "cut-slider": [
+        "cut"
+      ],
+      "cut-max-lbl": [
+        "cut"
+      ],
+      "btn-cut-invert": [
+        "cut"
+      ],
+      "sidebar-item-subfab.litho.laser.1": [
+        "litho"
+      ],
+      "sidebar-item-subfab.litho.plinth.1": [
+        "litho"
+      ],
+      "sidebar-item-subfab.pump.euv.1": [
+        "litho"
+      ],
+      "sidebar-item-subfab.pump.euv.2": [
+        "litho"
+      ],
+      "sidebar-item-subfab.scrubber.etch.1": [
+        "litho"
+      ],
+      "sidebar-item-subfab.scrubber.etch.2": [
+        "litho"
+      ],
+      "sidebar-item-subfab.pump.etch.1": [
+        "litho"
+      ],
+      "sidebar-item-subfab.pump.etch.2": [
+        "litho"
+      ],
+      "inspector-panel": [
+        "litho",
+        "mes",
+        "spc"
+      ],
+      "inspect-category-badge": [
+        "litho"
+      ],
+      "inspect-brand-country": [
+        "litho"
+      ],
+      "inspect-name": [
+        "litho"
+      ],
+      "inspect-brand": [
+        "litho"
+      ],
+      "inspect-model": [
+        "litho"
+      ],
+      "inspect-node-badge": [
+        "litho"
+      ],
+      "inspect-wafer-size": [
+        "litho"
+      ],
+      "inspect-tier-badge": [
+        "litho"
+      ],
+      "inspect-catalog-link": [
+        "litho"
+      ],
+      "inspect-elevation-tag-bar": [
+        "litho"
+      ],
+      "inspect-elevation-label": [
+        "litho"
+      ],
+      "inspect-elevation-badge": [
+        "litho"
+      ],
+      "inspect-elevation-dot": [
+        "litho"
+      ],
+      "inspect-elevation-text": [
+        "litho"
+      ],
+      "line-art-svg-container": [
+        "litho"
+      ],
+      "inspect-dimensions": [
+        "litho"
+      ],
+      "inspect-weight": [
+        "litho"
+      ],
+      "telemetry-status-badge": [
+        "litho"
+      ],
+      "telemetry-sensors-grid": [
+        "litho",
+        "mes"
+      ],
+      "telemetry-sparkline-val": [
+        "litho",
+        "mes",
+        "spc"
+      ],
+      "telemetry-sparkline-container": [
+        "litho",
+        "mes",
+        "spc"
+      ],
+      "oee-avail-pct": [
+        "litho",
+        "mes",
+        "spc"
+      ],
+      "oee-bar-pr": [
+        "litho",
+        "mes",
+        "spc"
+      ],
+      "oee-bar-sb": [
+        "litho",
+        "mes",
+        "spc"
+      ],
+      "oee-bar-ud": [
+        "litho",
+        "mes",
+        "spc"
+      ],
+      "oee-bar-sd": [
+        "litho",
+        "mes",
+        "spc"
+      ],
+      "oee-lbl-pr": [
+        "litho",
+        "mes",
+        "spc"
+      ],
+      "oee-lbl-sb": [
+        "litho",
+        "mes",
+        "spc"
+      ],
+      "oee-lbl-ud": [
+        "litho",
+        "mes",
+        "spc"
+      ],
+      "oee-lbl-sd": [
+        "litho",
+        "mes",
+        "spc"
+      ],
+      "telemetry-soh": [
+        "mes",
+        "spc"
+      ],
+      "telemetry-lot-id": [
+        "mes",
+        "spc"
+      ],
+      "mes-job-state-badge": [
+        "mes",
+        "spc"
+      ],
+      "mes-carrier-id": [
+        "mes",
+        "spc"
+      ],
+      "mes-recipe-id": [
+        "mes",
+        "spc"
+      ],
+      "mes-step-name": [
+        "mes",
+        "spc"
+      ],
+      "btn-mes-trackin": [
+        "mes",
+        "spc"
+      ],
+      "btn-mes-trackout": [
+        "mes",
+        "spc"
+      ],
+      "btn-mes-hold": [
+        "mes",
+        "spc"
+      ],
+      "spc-status-badge": [
+        "mes",
+        "spc"
+      ],
+      "spc-cp-val": [
+        "mes",
+        "spc"
+      ],
+      "spc-cpk-val": [
+        "mes",
+        "spc"
+      ],
+      "spc-sigma-level": [
+        "mes",
+        "spc"
+      ],
+      "spc-nelson-rule": [
+        "mes",
+        "spc"
+      ],
+      "inspect-location-desc": [
+        "mes",
+        "spc"
+      ],
+      "inspect-desc": [
+        "mes",
+        "spc"
+      ],
+      "inspect-source-card": [
+        "mes",
+        "spc"
+      ],
+      "inspect-source-tier": [
+        "mes",
+        "spc"
+      ],
+      "inspect-notes": [
+        "mes",
+        "spc"
+      ],
+      "research-hud": [
+        "research"
+      ],
+      "research-amhs-badge": [
+        "research"
+      ],
+      "research-wip-val": [
+        "research"
+      ],
+      "research-play-btn": [
+        "research"
+      ],
+      "research-play-icon": [
+        "research"
+      ],
+      "research-scrubber": [
+        "research"
+      ],
+      "research-time-clock": [
+        "research"
+      ],
+      "btn-toggle-util-overlay": [
+        "research"
+      ],
+      "research-util-btn-text": [
+        "research"
+      ],
+      "inspect-source-link": [
+        "spc"
+      ],
+      "wafer-follow-panel": [
+        "wafer"
+      ],
+      "wafer-route-badge": [
+        "wafer"
+      ],
+      "wafer-product-select": [
+        "wafer"
+      ],
+      "wafer-play-btn": [
+        "wafer"
+      ],
+      "wafer-play-icon": [
+        "wafer"
+      ],
+      "wafer-speed-1": [
+        "wafer"
+      ],
+      "wafer-speed-4": [
+        "wafer"
+      ],
+      "wafer-speed-16": [
+        "wafer"
+      ],
+      "wafer-cam-toggle-btn": [
+        "wafer"
+      ],
+      "wafer-cam-text": [
+        "wafer"
+      ],
+      "wafer-step-readout": [
+        "wafer"
+      ],
+      "wafer-status-readout": [
+        "wafer"
+      ],
+      "wafer-progress-bar": [
+        "wafer"
+      ],
+      "wafer-tg-val": [
+        "wafer"
+      ],
+      "wafer-recipe-val": [
+        "wafer"
+      ],
+      "wafer-bay-val": [
+        "wafer"
+      ],
+      "hud-panel-xray": [
+        "xray"
+      ],
+      "xray-btn-all": [
+        "xray"
+      ],
+      "xray-btn-upw": [
+        "xray"
+      ],
+      "xray-btn-gas": [
+        "xray"
+      ],
+      "xray-btn-vac": [
+        "xray"
+      ],
+      "xray-btn-exhaust": [
+        "xray"
+      ],
+      "xray-btn-amhs": [
+        "xray"
+      ],
+      "yms-wafer-modal": [
+        "yms"
+      ],
+      "btn-copy-stdf": [
+        "yms"
+      ],
+      "wafer-svg-container": [
+        "yms"
+      ],
+      "wafer-dies-group": [
+        "yms"
+      ],
+      "wafer-die-tooltip": [
+        "yms"
+      ],
+      "pat-btn-clean": [
+        "yms"
+      ],
+      "pat-btn-center": [
+        "yms"
+      ],
+      "pat-btn-ring": [
+        "yms"
+      ],
+      "pat-btn-scratch": [
+        "yms"
+      ],
+      "pat-btn-donut": [
+        "yms"
+      ],
+      "pat-btn-random": [
+        "yms"
+      ],
+      "pat-btn-edge_local": [
+        "yms"
+      ],
+      "adc-pattern-name": [
+        "yms"
+      ],
+      "adc-confidence": [
+        "yms"
+      ],
+      "adc-root-cause": [
+        "yms"
+      ],
+      "slider-val-area": [
+        "yms"
+      ],
+      "input-die-area": [
+        "yms"
+      ],
+      "slider-val-d0": [
+        "yms"
+      ],
+      "input-defect-d0": [
+        "yms"
+      ],
+      "slider-val-alpha": [
+        "yms"
+      ],
+      "input-cluster-alpha": [
+        "yms"
+      ],
+      "model-actual-yield": [
+        "yms"
+      ],
+      "model-poisson-yield": [
+        "yms"
+      ],
+      "model-murphy-yield": [
+        "yms"
+      ],
+      "model-seeds-yield": [
+        "yms"
+      ],
+      "stdf-lot-record": [
+        "yms"
+      ],
+      "stdf-preview-text": [
+        "yms"
+      ]
+    },
+    "next": {
+      "mode-select": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "level-btn-l1": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "level-btn-b1": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "level-btn-dual": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "level-btn-exploded": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "camera-presets-group": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-cinematic-tour": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-oht": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-ceiling": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-piping": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-heatmap": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-laminar": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-xray": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "lang-toggle-btn": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "tour-status-subbar": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-sim-play": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "lbl-sim-cycle": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "dt-scenario-select": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-toggle-cut": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "btn-follow-wafer": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "viewport-container": [
+        "b1",
+        "cut",
+        "iso",
+        "litho",
+        "mes",
+        "research",
+        "spc",
+        "top",
+        "wafer",
+        "xray",
+        "yms"
+      ],
+      "research-hud": [
+        "research"
+      ],
+      "wafer-follow-panel": [
+        "wafer"
+      ]
+    }
+  },
+  "limitation": "DOM rectangles only, not occlusion/tooltip/event/video acceptance. Template IDs still need dynamic binding. No parity claim."
+}

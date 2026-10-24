@@ -1,4 +1,5 @@
 import { FAB_LAYOUT } from './fab-layout';
+import { resolveScenario, type ScenarioOverrides } from './twin-equipment';
 
 export interface ProcessModule {
   id: string;
@@ -30,33 +31,88 @@ export interface YieldInput {
 
 export const DEFAULT_YIELD_INPUT: YieldInput = { purity: 5.5, health: 96.8, lagTime: 0.8 };
 
-export interface YieldScenario extends YieldInput {
+export interface YieldScenario extends YieldInput, ScenarioOverrides {
   id: string;
   name: string;
-  downCategories: Readonly<Record<string, number>>;
 }
 
 export const YIELD_SCENARIOS: readonly YieldScenario[] = [
-  { id: 'baseline', name: 'Nominal Baseline (HVM)', purity: 5.5, health: 96.8, lagTime: 0.8, downCategories: {} },
-  { id: 'litho_drift', name: 'Litho Overlay Drift', purity: 5.0, health: 90.5, lagTime: 1.8, downCategories: { lithography: 1 } },
-  { id: 'etch_down', name: 'Etch Chamber RF Alarm', purity: 5.0, health: 85.2, lagTime: 12, downCategories: { dry_etch: 1 } },
-  { id: 'pm_cycle', name: 'Cleanroom Preventive Maintenance', purity: 5.5, health: 94.6, lagTime: 3.5, downCategories: {} },
-  { id: 'multi_fail', name: 'Cascade Equipment Bottleneck', purity: 4.0, health: 72.8, lagTime: 18, downCategories: { lithography: 1, dry_etch: 1, cmp: 1 } },
-  { id: 'apc_upgrade', name: 'AI-APC Yield Optimization Sprint', purity: 6.0, health: 99.4, lagTime: 0.2, downCategories: {} },
+  {
+    "id": "baseline",
+    "name": "Nominal Baseline (HVM)",
+    "purity": 5.5,
+    "health": 96.8,
+    "lagTime": 0.8,
+    "overrides": {
+      "fe.litho.euv.1": "RUNNING",
+      "fe.litho.euv.2": "RUNNING",
+      "fe.etch.ccp.2": "RUNNING",
+      "fe.clean.batch.1": "IDLE",
+      "be.pkg.dicing.2": "MAINT"
+    }
+  },
+  {
+    "id": "litho_drift",
+    "name": "Litho Overlay Drift",
+    "purity": 5.0,
+    "health": 90.5,
+    "lagTime": 1.8,
+    "overrides": {
+      "fe.litho.euv.2": "DOWN",
+      "fe.litho.duv.arfi.1": "IDLE",
+      "fe.metro.overlay.1": "RUNNING"
+    }
+  },
+  {
+    "id": "etch_down",
+    "name": "Etch Chamber RF Alarm",
+    "purity": 5.0,
+    "health": 85.2,
+    "lagTime": 12.0,
+    "overrides": {
+      "fe.etch.ccp.2": "DOWN",
+      "fe.etch.icp.1": "IDLE",
+      "fe.clean.single.1": "IDLE"
+    }
+  },
+  {
+    "id": "pm_cycle",
+    "name": "Cleanroom Preventive Maintenance",
+    "purity": 5.5,
+    "health": 94.6,
+    "lagTime": 3.5,
+    "overrides": {
+      "fe.litho.euv.1": "MAINT",
+      "fe.cmp.1": "MAINT",
+      "fe.therm.furnace.1": "MAINT"
+    }
+  },
+  {
+    "id": "multi_fail",
+    "name": "Cascade Equipment Bottleneck",
+    "purity": 4.0,
+    "health": 72.8,
+    "lagTime": 18.0,
+    "overrides": {
+      "fe.litho.euv.2": "DOWN",
+      "fe.etch.icp.2": "DOWN",
+      "fe.cmp.2": "DOWN",
+      "fe.depo.cvd.1": "IDLE",
+      "fe.therm.furnace.2": "IDLE"
+    }
+  },
+  {
+    "id": "apc_upgrade",
+    "name": "AI-APC Yield Optimization Sprint",
+    "purity": 6.0,
+    "health": 99.4,
+    "lagTime": 0.2,
+    "overrides": {}
+  }
 ];
 
 export function scenarioStates(scenario: YieldScenario): string[] {
-  const states = FAB_LAYOUT.map(() => 'running');
-  for (const [category, count] of Object.entries(scenario.downCategories)) {
-    let remaining = count;
-    FAB_LAYOUT.forEach((tool, index) => {
-      if (remaining > 0 && tool.category === category) {
-        states[index] = 'down';
-        remaining--;
-      }
-    });
-  }
-  return states;
+  return resolveScenario(scenario).states;
 }
 
 export interface ModuleYield {

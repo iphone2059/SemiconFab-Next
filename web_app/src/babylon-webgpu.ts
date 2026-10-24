@@ -11,7 +11,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import type { AmhsStats, CutAxis, FabPlacement, HoveredTool, PickedTool, SceneBackend, SceneLayer, SceneViewPreset, XRayFilter } from './fab-scene';
-import { InitializationDisposal } from './babylon-lifecycle';
+import { InitializationDisposal, RecoveryFirstFrame } from './babylon-lifecycle';
 import { loadLegacyFab, type LegacyRuntime } from './legacy-site';
 import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
 
@@ -27,6 +27,15 @@ interface CameraTransition {
   to: CameraPose;
   startedAt: number;
   duration: number;
+}
+
+function poseAt(position: Vector3, target = Vector3.Zero()): CameraPose {
+  const offset = position.subtract(target);
+  return { alpha: Math.atan2(offset.z, offset.x), beta: Math.acos(offset.y / offset.length()), radius: offset.length(), target };
+}
+
+function positionOf(pose: CameraPose): Vector3 {
+  return new Vector3(Math.cos(pose.alpha) * Math.sin(pose.beta), Math.cos(pose.beta), Math.sin(pose.alpha) * Math.sin(pose.beta)).scale(pose.radius).add(pose.target);
 }
 
 /** Estimated geometry in metres, right handed, +Y up. No authoritative simulation state. */
@@ -53,7 +62,15 @@ export function createWebGpuBackend(): SceneBackend {
   let deviceLost = false;
   let initialized = false;
   let attachedCanvas: HTMLCanvasElement | undefined;
+  const recovery = new RecoveryFirstFrame();
+  let restoreValidationDevice: GPUDevice | undefined;
+  const abandonRestoreValidation = () => {
+    const pending = restoreValidationDevice; restoreValidationDevice = undefined;
+    if (pending) void pending.popErrorScope().catch(() => {});
+  };
   const disposal = new InitializationDisposal(() => {
+    recovery.dispose();
+    abandonRestoreValidation();
     cameraTransition = undefined;
     camera = undefined;
     clearPicked = () => {};
@@ -97,6 +114,8 @@ export function createWebGpuBackend(): SceneBackend {
         engine.onContextLostObservable.add(() => {
           if (signal.aborted || disposed) return;
           deviceLost = true; engine?.stopRenderLoop();
+          recovery.lost();
+          abandonRestoreValidation();
           onStatus('GPU 设备已丢失，正在重建设备和静态场景。若未恢复，请重新加载视图。');
         });
         onStatus('正在初始化 WebGPU…');
@@ -109,21 +128,22 @@ export function createWebGpuBackend(): SceneBackend {
       scene.clearColor = new Color4(0.945, 0.961, 0.976, 1);
       scene.fogMode = Scene.FOGMODE_EXP2;
       scene.fogColor = new Color3(0.945, 0.961, 0.976);
-      scene.fogDensity = 0.0008;
+      scene.fogDensity = 0.0055;
       const beta = Math.PI / 3.64;
-      homeRadius = 76;
-      camera = new ArcRotateCamera('site-camera', Math.PI / 2, beta, homeRadius, new Vector3(0, 0, 0), scene);
+      homeRadius = Math.hypot(58, 68);
+      camera = new ArcRotateCamera('site-camera', Math.PI / 2, Math.acos(58 / homeRadius), homeRadius, new Vector3(0, 0, 0), scene);
       camera.fov = Math.PI / 4;
+      camera.minZ = 0.5; camera.maxZ = 600;
       camera.lowerRadiusLimit = 4;
-      camera.upperRadiusLimit = 200;
-      camera.lowerBetaLimit = 0.08;
-      camera.upperBetaLimit = 1.5;
+      camera.upperRadiusLimit = 180;
+      camera.lowerBetaLimit = 0.001;
+      camera.upperBetaLimit = Math.PI / 2 - 0.03;
       camera.useNaturalPinchZoom = true;
       camera.panningSensibility = 45;
       camera.inertia = 0.62;
       // Do not let pinch / wheel gestures scroll or zoom the browser page.
       camera.attachControl(canvas, false);
-      // The preview owns wheel zoom so overlay gestures and the scene share one sensitivity.
+      // FabViewport owns wheel zoom so overlays and the canvas share one sensitivity.
       camera.inputs.removeByType('ArcRotateCameraMouseWheelInput');
       onStatus('正在加载原版设备模型…');
       legacyRuntime = await loadLegacyFab(scene, onAmhsStats);
@@ -294,29 +314,52 @@ export function createWebGpuBackend(): SceneBackend {
         const frameNow = performance.now();
         const frameDelta = Math.min(0.05, Math.max(0, (frameNow - lastFrameTime) / 1000));
         lastFrameTime = frameNow;
-        if (touring && camera && !cameraTransition) camera.alpha += frameDelta * 0.18;
         if (camera && cameraTransition) {
           const progress = Math.min(1, (performance.now() - cameraTransition.startedAt) / cameraTransition.duration);
-          const eased = 1 - Math.pow(1 - progress, 3);
-          camera.alpha = cameraTransition.from.alpha + (cameraTransition.to.alpha - cameraTransition.from.alpha) * eased;
-          camera.beta = cameraTransition.from.beta + (cameraTransition.to.beta - cameraTransition.from.beta) * eased;
-          camera.radius = cameraTransition.from.radius + (cameraTransition.to.radius - cameraTransition.from.radius) * eased;
+          const eased = 0.5 - Math.cos(progress * Math.PI) / 2;
+          const position = Vector3.Lerp(positionOf(cameraTransition.from), positionOf(cameraTransition.to), eased);
           camera.target.set(
             cameraTransition.from.target.x + (cameraTransition.to.target.x - cameraTransition.from.target.x) * eased,
             cameraTransition.from.target.y + (cameraTransition.to.target.y - cameraTransition.from.target.y) * eased,
             cameraTransition.from.target.z + (cameraTransition.to.target.z - cameraTransition.from.target.z) * eased,
           );
+          camera.setPosition(position);
           if (progress >= 1) cameraTransition = undefined;
+        }
+        if (recovery.waiting && !restoreValidationDevice && engine) {
+          restoreValidationDevice = engine._device;
+          restoreValidationDevice.pushErrorScope('validation');
         }
         scene?.render();
       };
       engine.onContextRestoredObservable.add(() => {
         if (signal.aborted || disposed) return;
+        // Babylon 9.32 WebGPUEngine derives from ThinWebGPUEngine: its buffer
+        // rebuild covers UBO/storage buffers but omits Scene geometry/sprites.
+        // Recreate those CPU-backed buffers on the new device before drawing.
+        scene?.resetCachedMaterial();
+        scene?._rebuildGeometries();
         deviceLost = false;
+        recovery.restored(scene?.getFrameId() ?? 0);
         lastFrameTime = performance.now();
         // Native static resources are re-created lazily on the next scene render.
-        onStatus('WebGPU 设备和清洁室视图已重建 · 估算几何');
+        onStatus('GPU 设备已重建，等待恢复首帧完成…');
         if (!document.hidden) engine?.runRenderLoop(render);
+      });
+      engine.onEndFrameObservable.add(() => {
+        if (!recovery.waiting || !scene?.isReady() || !engine || !restoreValidationDevice || scene.metadata?.staticShadows?.readyForCurrentDevice !== true) return;
+        const submittedDevice = restoreValidationDevice;
+        restoreValidationDevice = undefined;
+        const completion = Promise.all([submittedDevice.queue.onSubmittedWorkDone(), submittedDevice.popErrorScope()]).then(([, error]) => {
+          if (error) throw new Error(error.message);
+        });
+        recovery.submitted(scene.getFrameId(), true, completion, () => {
+          if (!signal.aborted && !disposed) onStatus('WebGPU 设备和清洁室视图已重建 · 首帧完成 · 估算几何');
+        }, () => {
+          deviceLost = true;
+          engine?.stopRenderLoop();
+          if (!signal.aborted && !disposed) onStatus('GPU 恢复首帧失败，请重新加载视图。');
+        });
       });
       const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(resize) : undefined;
       observer?.observe(canvas);
@@ -343,7 +386,8 @@ export function createWebGpuBackend(): SceneBackend {
       if (!camera || disposed) return;
       cameraTransition = undefined;
       const step = Math.max(-240, Math.min(240, deltaY));
-      camera.radius = Math.min(200, Math.max(6, camera.radius * Math.exp(step * 0.0028)));
+      camera.inertialRadiusOffset = 0;
+      camera.radius = Math.min(camera.upperRadiusLimit ?? 180, Math.max(camera.lowerRadiusLimit ?? 4, camera.radius * Math.exp(step * 0.0028)));
     },
     clearSelection(): void {
       clearPicked();
@@ -360,6 +404,7 @@ export function createWebGpuBackend(): SceneBackend {
       legacyRuntime?.setToolState(index, state);
     },
     setTour(active: boolean): void {
+      if (touring === active) return;
       touring = active;
       cameraTransition = undefined;
       lastFrameTime = performance.now();
@@ -380,9 +425,9 @@ export function createWebGpuBackend(): SceneBackend {
       if (camera && changed) {
         cameraTransition = {
           from: { alpha: camera.alpha, beta: camera.beta, radius: camera.radius, target: camera.target.clone() },
-          to: { alpha: Math.PI / 2.2, beta: active ? 1.08 : Math.PI / 3.64, radius: active ? 76 : homeRadius, target: new Vector3(0, active ? -3.5 : 0, 0) },
+          to: active ? poseAt(new Vector3(-15, -2, 34), new Vector3(-15, -6, -5)) : poseAt(new Vector3(0, 52, 64), new Vector3(0, 2, 0)),
           startedAt: performance.now(),
-          duration: 520,
+          duration: 850,
         };
       }
     },
@@ -394,9 +439,9 @@ export function createWebGpuBackend(): SceneBackend {
       if (camera && changed) {
         cameraTransition = {
           from: { alpha: camera.alpha, beta: camera.beta, radius: camera.radius, target: camera.target.clone() },
-          to: { alpha: Math.PI / 2.25, beta: active ? 1.18 : Math.PI / 3.64, radius: active ? 82 : homeRadius, target: new Vector3(0, active ? -2.2 : 0, 0) },
+          to: active ? poseAt(new Vector3(0, 38, 62), new Vector3(0, -3, 0)) : poseAt(new Vector3(0, 52, 64), new Vector3(0, 2, 0)),
           startedAt: performance.now(),
-          duration: 520,
+          duration: 850,
         };
       }
     },
@@ -435,8 +480,6 @@ export function createWebGpuBackend(): SceneBackend {
       if (!scene) return;
       if (!active) {
         scene.clipPlane = null;
-        const shadows = scene.metadata?.staticShadows as { enabled: boolean } | undefined;
-        if (shadows) shadows.enabled = true;
         return;
       }
       clearPicked();
@@ -447,8 +490,6 @@ export function createWebGpuBackend(): SceneBackend {
         : axis === 'Y'
           ? new Plane(0, flipped, 0, -flipped * p)
           : new Plane(0, 0, flipped, -flipped * p);
-      const shadows = scene.metadata?.staticShadows as { enabled: boolean } | undefined;
-      if (shadows) shadows.enabled = false;
     },
     setView(preset: SceneViewPreset, fabId?: string): void {
       if (!camera || disposed) return;
@@ -457,21 +498,21 @@ export function createWebGpuBackend(): SceneBackend {
       const beta = Math.PI / 3.64;
       let pose: CameraPose;
       if (preset === 'top') {
-        pose = { alpha: Math.PI / 2, beta: 0.08, radius: focusTarget ? 48 : 95, target: focusTarget?.clone() ?? centered };
+        pose = poseAt(new Vector3(0, 95, 0.1));
       } else if (preset === 'litho') {
-        pose = { alpha: Math.PI / 1.7, beta: 1.08, radius: 42, target: new Vector3(-18, 1.5, -10) };
+        pose = poseAt(new Vector3(-21, 3.6, -12.5), new Vector3(-30, 1.8, -22));
       } else if (preset === 'airshower') {
-        pose = { alpha: 1.35, beta: 1.2, radius: 22, target: new Vector3(-43, 1.2, -10) };
+        pose = poseAt(new Vector3(-12.5, 4.2, 7.5), new Vector3(-16.5, 1.5, 3));
       } else if (preset === 'etch') {
         pose = { alpha: 1.62, beta: 1.12, radius: 40, target: new Vector3(5, 1.4, -14) };
       } else if (preset === 'oht') {
         pose = { alpha: 1.8, beta: 1.24, radius: 72, target: new Vector3(0, 3.8, 0) };
       } else if (preset === 'reset') {
-        pose = { alpha: Math.PI / 2, beta, radius: homeRadius, target: centered };
+        pose = poseAt(new Vector3(0, 58, 68));
       } else if (preset === 'focus' && focusTarget) {
         pose = { alpha: Math.PI / 2.2, beta: Math.PI / 3.8, radius: 46, target: focusTarget.clone() };
       } else {
-        pose = { alpha: Math.PI / 2, beta, radius: focusTarget ? 52 : homeRadius, target: focusTarget?.clone() ?? centered };
+        pose = focusTarget ? { alpha: Math.PI / 2, beta, radius: 52, target: focusTarget.clone() } : poseAt(new Vector3(38, 48, 58));
       }
       cameraTransition = undefined;
       if (reduceMotion()) { applyPose(pose); return; }
@@ -479,7 +520,17 @@ export function createWebGpuBackend(): SceneBackend {
         from: { alpha: camera.alpha, beta: camera.beta, radius: camera.radius, target: camera.target.clone() },
         to: pose,
         startedAt: performance.now(),
-        duration: 520,
+        duration: 1000,
+      };
+    },
+    setCameraPose(position, target, durationMs): void {
+      if (!camera || disposed) return;
+      const pose = poseAt(Vector3.FromArray(position), Vector3.FromArray(target));
+      cameraTransition = undefined;
+      if (reduceMotion() || durationMs <= 0) { applyPose(pose); return; }
+      cameraTransition = {
+        from: { alpha: camera.alpha, beta: camera.beta, radius: camera.radius, target: camera.target.clone() },
+        to: pose, startedAt: performance.now(), duration: Math.max(1, durationMs),
       };
     },
     resize(): void {

@@ -1,0 +1,27 @@
+{
+  "original_repo": "jinjiefan2020/SemiconFab",
+  "original_commit": "b3666132e5d8cab2cebe4c4227fc04c52242eb28",
+  "next_commit_before": "060957d",
+  "source_sha256": {
+    "twin.html": "f7e013b1d01b53ba89984ee75280211a8b29db76b17bc5025eb30035e4a26687",
+    "catalog.json": "bdcefb1b18536efcfcac7544de46c21eddaa101e4954e47df990da0f7a538a21",
+    "twin/layout-default.json": "d5493e3f62aada5f41d47c6e732794004cb0c55e80e71f08f68dac35797868c7",
+    "twin/events-t1-fifo.jsonl": "407321d8f728b90a164416ed82ffb65a01c7a988e6ba2855dfb6bfb7c53f3a49",
+    "benchmark/routes.json": "40306c414d3b75c52fe315ceb09014c012c411e8fd1feb25bc99ee0da6a81d1f",
+    "js/i18n.js": "195551a502c0446b2735f513f4365899e93272fa709c60d150701243dddfceef",
+    "js/translations.js": "9583c939e0310bc37b556a6b4e5a0220e66d1030706d1adc2b71a51bd97ed46c",
+    "LICENSE": "08d7a463a8983644566b222c973b92bee1da3056b92f8a238a1c99b88988104b"
+  },
+  "raw_id_attributes": 263,
+  "unique_attribute_ids": 260,
+  "dom_property_ids": 2,
+  "named_functions": 218,
+  "layout_instances": 121,
+  "replay_rows": 27263,
+  "replay_machines": 217,
+  "replay_mapped_machines": 94,
+  "layout_alias_collisions": 32,
+  "runtime_inventory": "PENDING",
+  "golden_capture": "PENDING",
+  "status": "BASELINED"
+}

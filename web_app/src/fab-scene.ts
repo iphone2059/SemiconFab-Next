@@ -38,6 +38,7 @@ export interface SceneBackend {
   mount(canvas: HTMLCanvasElement, fabs: readonly FabPlacement[], signal: AbortSignal, onStatus: (status: string) => void, onToolPick?: (tool: PickedTool | null) => void, onAmhsStats?: (stats: AmhsStats) => void, onToolHover?: (hover: HoveredTool | null) => void): Promise<void>;
   dispose(): void;
   setView?(preset: SceneViewPreset, fabId?: string): void;
+  setCameraPose?(position: readonly [number, number, number], target: readonly [number, number, number], durationMs: number): void;
   zoom?(deltaY: number): void;
   resize?(): void;
   clearSelection?(): void;
@@ -70,6 +71,9 @@ export class SceneFacade {
   }
   setView(preset: SceneViewPreset, fabId?: string): void {
     if (!this.controller.signal.aborted) this.backend.setView?.(preset, fabId);
+  }
+  setCameraPose(position: readonly [number, number, number], target: readonly [number, number, number], durationMs: number): void {
+    if (!this.controller.signal.aborted) this.backend.setCameraPose?.(position, target, durationMs);
   }
   zoom(deltaY: number): void {
     if (!this.controller.signal.aborted) this.backend.zoom?.(deltaY);

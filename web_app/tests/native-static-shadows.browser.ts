@@ -161,12 +161,12 @@ export async function runNativeShadowAcceptance(command) {
   }
 }
 
-// Also runnable directly against a developer-owned isolated browser, like site-preview.browser.ts.
+// Also runnable directly against a developer-owned isolated browser.
 if (typeof process !== 'undefined' && process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = process.env.CDP_PORT ?? '9335';
   const tabs = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-  const tab = tabs.find(tab => tab.type === 'page' && /^http:\/\/(127\.0\.0\.1|localhost):5173\/preview/.test(tab.url));
-  assert.ok(tab, 'Open the local /preview page in the isolated CDP browser first');
+  const tab = tabs.find(tab => tab.type === 'page' && /^http:\/\/(127\.0\.0\.1|localhost):5173\/twin/.test(tab.url));
+  assert.ok(tab, 'Open the local /twin page in the isolated CDP browser first');
   const socket = new WebSocket(tab.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
     socket.addEventListener('open', resolve, { once: true });
