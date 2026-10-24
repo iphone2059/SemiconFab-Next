@@ -7,6 +7,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { NativeShadowMaterial, type NativeShadowBinding } from './native-shadow-material';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
+import type { Geometry } from '@babylonjs/core/Meshes/geometry';
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine';
 import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import type { Scene } from '@babylonjs/core/scene';
@@ -107,6 +108,25 @@ export function createNativeStaticShadows(scene: Scene, engine: WebGPUEngine, li
   let triangleCount = 0;
   let lastReason = 'initialization';
   let lightKey = '';
+  const hookedGeometries = new Set<Geometry>();
+  const hookGeometry = (mesh: AbstractMesh): void => {
+    const geometry = mesh.geometry;
+    if (!geometry || hookedGeometries.has(geometry)) return;
+    hookedGeometries.add(geometry);
+    const previous = geometry.onGeometryUpdated;
+    geometry.onGeometryUpdated = (updated, kind) => {
+      if (!disposed) {
+        for (const owner of updated.meshes) {
+          const metadata = owner.metadata && typeof owner.metadata === 'object' ? owner.metadata : {};
+          const revision = typeof metadata.staticShadowRevision === 'number' ? metadata.staticShadowRevision : 0;
+          owner.metadata = { ...metadata, staticShadowRevision: revision + 1 };
+        }
+        dirty = true;
+        lastReason = 'geometry-updated';
+      }
+      previous?.(updated, kind);
+    };
+  };
   const release = () => {
     vertex?.destroy(); index?.destroy(); uniform?.destroy();
     vertex = undefined; index = undefined;
@@ -142,6 +162,7 @@ export function createNativeStaticShadows(scene: Scene, engine: WebGPUEngine, li
     if (disposed) return;
     if (device !== engine._device) { release(); initialize(); lastReason = 'device-restored'; }
     const casters = getCasters();
+    for (const mesh of casters) hookGeometry(mesh);
     const nextKey = shadowGeometryKey(casters);
     const nextLightKey = light.direction.asArray().join(',');
     if (!dirty && key === nextKey && lightKey === nextLightKey) return;

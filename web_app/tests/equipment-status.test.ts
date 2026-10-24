@@ -53,3 +53,22 @@ it('accepts only scoped full snapshots in non-decreasing timestamp order', () =>
   expect(apply({ ...snapshot, generatedAt: '2026-10-24T02:00:01Z' })).toBe(true);
   expect(onSnapshot).toHaveBeenCalledTimes(3);
 });
+
+it('orders snapshots by the server sequence even when timestamps collide', () => {
+  const onSnapshot = vi.fn();
+  const apply = createOrderedEquipmentStatusConsumer('site-1', 2, onSnapshot);
+  const base = {
+    siteId: 'site-1',
+    generatedAt: '2026-10-24T02:00:00Z',
+    tools: [{ state: 'running' }, { state: 'idle' }],
+  };
+  expect(apply({ ...base, sequence: 1 })).toBe(true);
+  expect(apply({ ...base, sequence: 2 })).toBe(true);
+  expect(apply({ ...base, sequence: 1 })).toBe(false);
+  expect(apply({ ...base, sequence: 2 })).toBe(false);
+  expect(apply({ ...base, sequence: 3, generatedAt: '2026-10-24T01:59:59Z' })).toBe(true);
+  expect(apply({ ...base, sequence: 1, generatedAt: '2026-10-24T02:00:00Z' })).toBe(true);
+  expect(apply({ ...base, sequence: -1 })).toBe(false);
+  expect(apply({ ...base, sequence: 1.5 })).toBe(false);
+  expect(onSnapshot).toHaveBeenCalledTimes(4);
+});

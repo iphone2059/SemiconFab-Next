@@ -7,6 +7,8 @@ export interface EquipmentStatusItem {
 export interface EquipmentStatusSnapshot {
   readonly siteId: string;
   readonly generatedAt: string;
+  /** Monotonic per-site tick. Optional for backward compatibility with older servers. */
+  readonly sequence?: number;
   readonly tools: EquipmentStatusItem[];
 }
 
@@ -53,6 +55,7 @@ export function createOrderedEquipmentStatusConsumer(
   onInvalid?: () => void,
 ): (value: unknown) => boolean {
   let lastGeneratedAt = Number.NEGATIVE_INFINITY;
+  let lastSequence = -1;
   return (value: unknown): boolean => {
     if (typeof value !== 'object' || value === null) {
       onInvalid?.();
@@ -62,6 +65,11 @@ export function createOrderedEquipmentStatusConsumer(
     const timestamp = typeof snapshot.generatedAt === 'string'
       ? Date.parse(snapshot.generatedAt)
       : Number.NaN;
+    const hasSequence = snapshot.sequence !== undefined;
+    if (hasSequence && (!Number.isSafeInteger(snapshot.sequence) || snapshot.sequence! < 0)) {
+      onInvalid?.();
+      return false;
+    }
     if (snapshot.siteId !== siteId || !Number.isFinite(timestamp) ||
         !Array.isArray(snapshot.tools) || snapshot.tools.length !== expectedToolCount ||
         !snapshot.tools.every(tool =>
@@ -71,7 +79,19 @@ export function createOrderedEquipmentStatusConsumer(
       onInvalid?.();
       return false;
     }
-    if (timestamp < lastGeneratedAt) return false;
+    if (hasSequence) {
+      const sequence = snapshot.sequence!;
+      if (sequence < lastSequence) {
+        // A newer timestamp with a lower sequence indicates a server restart.
+        // Delayed frames from the previous server have older timestamps and are rejected.
+        if (timestamp <= lastGeneratedAt) return false;
+      } else if (sequence === lastSequence) {
+        return false;
+      }
+    } else if (timestamp < lastGeneratedAt) {
+      return false;
+    }
+    if (hasSequence) lastSequence = snapshot.sequence!;
     lastGeneratedAt = timestamp;
     onSnapshot(snapshot as EquipmentStatusSnapshot);
     return true;

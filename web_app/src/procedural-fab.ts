@@ -38,6 +38,14 @@ function addPersonnel(scene: Scene, parent: TransformNode): void {
   const screen = new StandardMaterial('procedural-tablet-screen', scene);
   screen.diffuseColor = hex('#38bdf8');
   screen.emissiveColor = hex('#0284c7').scale(0.8);
+  const operatorShadow = new StandardMaterial('procedural-operator-shadow', scene);
+  operatorShadow.diffuseColor = Color3.Black();
+  operatorShadow.emissiveColor = Color3.Black();
+  operatorShadow.specularColor = Color3.Black();
+  operatorShadow.alpha = 0.16;
+  operatorShadow.disableLighting = true;
+  operatorShadow.disableDepthWrite = true;
+  operatorShadow.backFaceCulling = false;
   const badgeMaterials = new Map<string, StandardMaterial>();
   const badgeMaterial = (color: string) => {
     let material = badgeMaterials.get(color);
@@ -74,6 +82,13 @@ function addPersonnel(scene: Scene, parent: TransformNode): void {
     group.parent = parent;
     group.position.set(config.x, 0, config.z);
     group.rotation.y = config.rotation;
+
+    const groundShadow = MeshBuilder.CreateDisc(`operator-ground-shadow-${index}`, { radius: 0.46, tessellation: 24 }, scene);
+    groundShadow.parent = group;
+    groundShadow.rotation.x = Math.PI / 2;
+    groundShadow.position.y = 0.06;
+    groundShadow.material = operatorShadow;
+    groundShadow.isPickable = false;
 
     const leftLegPivot = new TransformNode(`operator-leg-pivot-left-${index}`, scene);
     leftLegPivot.parent = group;

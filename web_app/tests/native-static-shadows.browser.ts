@@ -81,6 +81,24 @@ export async function runNativeShadowAcceptance(command) {
     assert.equal(light.restored, layer.restored + 2);
     assert.equal(light.firstLight, 'native-key');
 
+    const geometry = await evaluate(`(async () => {
+      const t = __fabShadowAcceptance;
+      const mesh = t.scene.meshes.find(m => m.name === 'original-tool-0-part-1');
+      if (!mesh || !mesh.geometry) throw new Error('geometry caster missing');
+      const positions = Float32Array.from(mesh.getVerticesData('position'));
+      const original = positions[0];
+      positions[0] = original + 0.002;
+      mesh.geometry.setVerticesData('position', positions, true);
+      await t.frames();
+      const changed = t.shadow.stats.passes;
+      positions[0] = original;
+      mesh.geometry.setVerticesData('position', positions, true);
+      await t.frames();
+      return { changed, restored: t.shadow.stats.passes };
+    })()`);
+    assert.equal(geometry.changed, light.restored + 1, 'geometry mutation must invalidate static depth');
+    assert.equal(geometry.restored, light.restored + 2);
+
     const pixels = await evaluate(`(async () => {
       const t = __fabShadowAcceptance;
       t.scene.activeCamera.alpha = t.cameraAlpha;
@@ -130,7 +148,7 @@ export async function runNativeShadowAcceptance(command) {
       }
     })()`);
     assert.ok(ambient.changedPixels < ambient.width * ambient.height * 0.0005, 'ambient/fill must not be shadowed (allow status-lamp updates)');
-    return { initial, moved, layer, light, pixels, ambient };
+    return { initial, moved, layer, light, geometry, pixels, ambient };
   } finally {
     await evaluate(`(() => {
       const t = window.__fabShadowAcceptance;
