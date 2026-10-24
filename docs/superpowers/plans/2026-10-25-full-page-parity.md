@@ -58,8 +58,8 @@
 
 **Files:** `tools/extract_twin_facilities.*`, generated facility recipes, `original-facilities.ts`, `procedural-fab.ts`, `legacy-site.ts`, scene facade/backend.
 
-- [ ] Extract parameterized Box/Cylinder/Torus/Tube/etc recipes and original world transforms/hierarchy/materials/layer/system IDs from the read-only reference; no baked model or renderer import.
-- [ ] Test recipe counts, transforms and bounds against independent reference; generate Babylon primitives/shared geometries and correct shadow caster flags.
+- [x] Extract parameterized Box/Cylinder/Torus/Tube/etc recipes and original world transforms/hierarchy/materials/layer/system IDs from the read-only reference; no baked model or renderer import.
+- [x] Test recipe counts, transforms and bounds against independent reference; generate Babylon primitives/shared geometries and correct shadow caster flags.
 - [ ] Replace approximated walls/airlocks/B1/general FFU/roof/HVAC with corresponding recipes; retain existing 121-machine geometry.
 - [ ] Verify L1/B1/Dual/Exploded/Roof/FFU/HVAC/Cut combinations and native shadow cache restoration in real WebGPU.
 

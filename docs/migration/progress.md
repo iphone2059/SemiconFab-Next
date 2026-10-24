@@ -40,8 +40,9 @@
 - 冻结原版最终目录为 **18 行**（12 个 B1 设施、2 个风淋、4 台目录机型），116 条 OEM 记录保持页内浏览；220 个原版信号键按源顺序和最后写入者规则投影到 121 台布局实例。
 - 左侧恢复双标签、横向类别、四态计数和原版设备卡片；右侧检查器按 reference/OEM/layout 三种选择恢复 CAD 立面、重量/尺寸/来源等级、规格、来源链接、FDC、MES、SPC 和联动设备。
 - 新增原版 `buildRoofHVACLayer` 的 Babylon 移植：85×60 m 屋面、4 段女儿墙、3 台 MAU、3 条送风主管、3 条支管、12 个下送风口、5 根排风烟囱与 70 个排风粒子；`Roof/HVAC` 独立开关并按语言刷新 3 张 MAU 标签。
+- 新增原版两座风淋/气闸、6 块粘尘垫与 1569 mesh FFU 天花网格，替换早期近似风淋和简化天花；FFU 独立图层、12 秒 purge 动画、双语告示板。
 - 新增巡检工程师相机跟随、Cut Invert、Research 利用率开关、页脚 ID 与 6m 网格/Subfab 深度徽标。
-- 最新验证：TypeScript、96/96 Vitest、生产构建和 `/twin` 浏览器验收通过。Roof 模块 9 个 NullEngine 测试通过；尚未完成原版整页逐控件视觉阈值。
+- 最新验证：TypeScript、105/105 Vitest、生产构建和 `/twin` 浏览器验收通过。Roof 模块 9 个 NullEngine 测试通过；尚未完成原版整页逐控件视觉阈值。
 
 ## 单 FAB 产品边界（2026-10-24）
 
@@ -75,7 +76,7 @@
 - 卡片增加原始 OEM 规格、工艺能力、来源、draft 标识和实时状态；定位框与鼠标拾取改为实际模型边界/三角形。修正滚动、Escape 关闭、FFU 初始状态、重载状态恢复及 B1 隐藏/恢复层的行为。
 - B1 增加原版四条 84m 主管（UPW/PCW/气体/化学品）、五组穿板前级管/PCW 支管、套管、波纹节、支架与泵站，地坪恢复到 -7m。完整 B1 工业设施仍未宣称像素一致。
 
-最新验证：**TypeScript、96/96 Vitest、67/67 .NET 测试、生产构建和完整预览浏览器回归通过**；新增 GPU 像素/缓存及 121 台实际场景边界验收通过。PBR GPU 分块约 2.47 MB（gzip 579 KB），仍有 Vite 大分块提示。没有 glTF/GLB 资源、加载代码或 loader 依赖；Babylon 核心内仍有通用 `FALLOFF_GLTF`/错误码等符号，不能把“无 glTF 加载”误报为构建文本不含任何 glTF 字符串。
+最新验证：**TypeScript、105/105 Vitest、67/67 .NET 测试、生产构建和完整预览浏览器回归通过**；新增 GPU 像素/缓存及 121 台实际场景边界验收通过。PBR GPU 分块约 2.47 MB（gzip 579 KB），仍有 Vite 大分块提示。没有 glTF/GLB 资源、加载代码或 loader 依赖；Babylon 核心内仍有通用 `FALLOFF_GLTF`/错误码等符号，不能把“无 glTF 加载”误报为构建文本不含任何 glTF 字符串。
 
 2026-10-24 再次合入 7 个修复：REST/SSE 快照按站点、数量和单调时间戳统一门禁；错误 `siteId` 不再静默回退；场景按 `siteId/fabId` 重挂载并阻断 Abort 后写入；原生静态阴影缓存增加 Alpha caster 筛选、索引/几何修订号缓存键和 GPU Buffer 容量复用；PCF texel 尺寸改为实际深度纹理尺寸；静态 caster 列表不再每帧分配；设备恢复后重置首帧时钟。新增快照门禁单测后为 54/54；`native-static-shadows.browser.ts` 实测 724 caster、11,756 三角形、96,918 个变暗像素、GPU validation 错误为 0；几何原地更新令缓存 pass 从 8 增至 9 并恢复至 10。
 
