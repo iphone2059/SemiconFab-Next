@@ -62,6 +62,7 @@
 .twin-primary{border:1px solid #2f6fd6;border-radius:5px;background:#2f6fd6;color:#fff;font-size:9px;padding:7px 9px;margin-top:auto}
 .twin-research-note{position:absolute;z-index:9;top:14px;left:50%;transform:translateX(-50%);width:min(360px,calc(100% - 32px));padding:9px 11px;border:1px solid #e7c98c;border-radius:6px;background:#fffaf0;color:#74520f;font-size:9px;display:flex;flex-direction:column;gap:3px;box-shadow:0 10px 25px -18px #47320a66}
 .twin-research-note strong{font-size:10px}.twin-research-note span{color:#8c713e;line-height:1.5}
+.twin-footer-legend{display:inline-flex;align-items:center;gap:3px}.twin-footer-legend i{width:5px;height:5px;border-radius:2px;display:block}
 .twin-grid-badge{position:absolute;z-index:9;right:10px;bottom:40px;display:flex;align-items:center;gap:4px;height:24px;padding:0 7px;border:1px solid #d1e2f1;border-radius:5px;background:#fffffff2;color:#55708b;font:8px Consolas,monospace;pointer-events:none}.twin-grid-badge svg{width:11px;height:11px}
 .twin-bottom{position:absolute;z-index:9;left:0;right:0;bottom:0;height:32px;display:flex;align-items:center;gap:14px;padding:0 14px;background:#fff;border-top:1px solid #d9e6f2;font:8px Consolas,monospace;color:#617b93;white-space:nowrap;overflow:hidden}
 .twin-status{display:inline-flex;align-items:center;gap:5px;color:#55708b}.twin-status i{width:5px;height:5px;border-radius:50%;background:#f59e0b}.twin-status i.ok{background:#10b981}

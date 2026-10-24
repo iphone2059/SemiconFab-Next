@@ -919,6 +919,7 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
         <footer id="bottom-hud-footer" className="twin-bottom">
           <span className="twin-status" title={status}><i className={status.startsWith('WebGPU') ? 'ok' : ''} />{status.startsWith('WebGPU') ? 'WebGPU' : status}</span>
           <span>{t("FAB-01 · 单 FAB")}</span>
+          <span className="twin-footer-legend" aria-label={t("工艺分区图例")}>{[['光刻','#d99e3d'],['刻蚀','#c26b6b'],['薄膜','#d68a4a'],['Cu','#a98467'],['注入','#8b7bb5'],['扩散','#5c9b78'],['CMP/清洗','#4f9b9b'],['量测','#5b82b5'],['封装','#b06c96'],['Subfab','#4f6fa8']].map(([name,color])=><i key={name} title={name} style={{background:color}} />)}</span>
           <span>{mode === 'research' ? 'JSONL display only' : `AMHS OHT ${String(amhs?.active ?? 0).padStart(2, '0')}/${amhs?.total ?? 24}`}</span>
           <span>{mode === 'research' ? `REPLAY · WIP ${researchSnapshot?.wip ?? 0} · ACTIVE ${researchSnapshot?.activeTools ?? 0}` : `${stateCounts.running} RUN · ${stateCounts.idle} IDLE · ${stateCounts.down} DOWN · ${stateCounts.maint} MAINT`}</span>
         </footer>

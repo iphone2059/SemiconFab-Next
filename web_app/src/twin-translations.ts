@@ -53,6 +53,7 @@ export const TWIN_EN: Readonly<Record<string, string>> = {
   "跟踪巡检工程师": "Track inspection engineer",
   "利用率热力图": "Utilization heatmap",
   "网格: 6m × 6m · Subfab: -7.0m": "Grid: 6m × 6m · Subfab: -7.0m",
+  "工艺分区图例": "Process zone legend",
   "先进试验线": "Advanced Pilot Line",
   "光刻": "Lithography",
   "光刻与风淋": "Lithography and air shower",
