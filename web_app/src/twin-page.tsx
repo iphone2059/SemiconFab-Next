@@ -719,6 +719,7 @@ function TwinContent() {
             states={demo.keys}
             onClose={() => { scene.current?.clearSelection(); setSelection(undefined); setSelected(undefined); }}
             onManualKey={handleManualKey}
+            onSelectReference={(id) => handleTwinSelection({ kind: 'reference', id })}
           />
         )}
 

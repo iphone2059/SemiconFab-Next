@@ -27,9 +27,9 @@ function pseudoTool(id:string, row: NonNullable<ReturnType<typeof localizedEquip
     vendor:row.brand??'', model:row.model??'' };
 }
 
-export function OriginalInspector({selection,states,onClose,onManualKey}:{
+export function OriginalInspector({selection,states,onClose,onManualKey,onSelectReference}:{
   selection:TwinSelection; states:Readonly<Record<string,FabToolState>>; onClose:()=>void;
-  onManualKey:(key:string,state:FabToolState)=>void;
+  onManualKey:(key:string,state:FabToolState)=>void; onSelectReference?:(id:string)=>void;
 }) {
   const {language,t}=useTwinLocale(); const zh=language==='zh';
   const equipment = selection.kind==='reference' ? localizedEquipment(selection.id,language) ?? ORIGINAL_TWIN_UI.equipment.find(row=>row.id===selection.id) : undefined;
@@ -84,7 +84,7 @@ export function OriginalInspector({selection,states,onClose,onManualKey}:{
       {catalog.notes&&<p className="twin-data-note">{catalog.notes}</p>}
       {!equipment.specs&&!capabilities.length&&<p>{equipment.locationDesc}</p>}
     </section>
-    {equipment.connectedTool&&<button type="button" className="twin-primary" onClick={()=>onManualKey(equipment.connectedTool!,'running')}>{t('联动设备')} · {equipment.connectedTool}</button>}
+    {equipment.connectedTool&&<button type="button" className="twin-primary" onClick={()=>{const target=ORIGINAL_TWIN_UI.equipment.find(row=>row.id===equipment.connectedTool); if(target) onSelectReference?.(target.id);}}>{t('联动设备')} · {equipment.connectedTool}</button>}
     <div className="twin-manual-state" role="group" aria-label={t('设备状态干预')}>
       {(['running','idle','down','maint'] as const).map(value=><button type="button" key={value} aria-pressed={state===value} onClick={()=>onManualKey(equipment.id,value)}>{value.toUpperCase()}</button>)}
     </div>
