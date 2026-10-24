@@ -38,7 +38,9 @@
 - 卡片增加原始 OEM 规格、工艺能力、来源、draft 标识和实时状态；定位框与鼠标拾取改为实际模型边界/三角形。修正滚动、Escape 关闭、FFU 初始状态、重载状态恢复及 B1 隐藏/恢复层的行为。
 - B1 增加原版四条 84m 主管（UPW/PCW/气体/化学品）、五组穿板前级管/PCW 支管、套管、波纹节、支架与泵站，地坪恢复到 -7m。完整 B1 工业设施仍未宣称像素一致。
 
-最新验证：**TypeScript、40/40 Vitest、生产构建和完整预览浏览器回归通过**；新增 GPU 像素/缓存及 121 台实际场景边界验收通过。PBR GPU 分块约 2.47 MB（gzip 579 KB），仍有 Vite 大分块提示。没有 glTF/GLB 资源、加载代码或 loader 依赖；Babylon 核心内仍有通用 `FALLOFF_GLTF`/错误码等符号，不能把“无 glTF 加载”误报为构建文本不含任何 glTF 字符串。
+最新验证：**TypeScript、42/42 Vitest、生产构建和完整预览浏览器回归通过**；新增 GPU 像素/缓存及 121 台实际场景边界验收通过。PBR GPU 分块约 2.47 MB（gzip 579 KB），仍有 Vite 大分块提示。没有 glTF/GLB 资源、加载代码或 loader 依赖；Babylon 核心内仍有通用 `FALLOFF_GLTF`/错误码等符号，不能把“无 glTF 加载”误报为构建文本不含任何 glTF 字符串。
+
+2026-10-24 再次合入 7 个修复：REST/SSE 快照按站点、数量和单调时间戳统一门禁；错误 `siteId` 不再静默回退；场景按 `siteId/fabId` 重挂载并阻断 Abort 后写入；原生静态阴影缓存增加 Alpha caster 筛选、索引/几何修订号缓存键和 GPU Buffer 容量复用；PCF texel 尺寸改为实际深度纹理尺寸；静态 caster 列表不再每帧分配；设备恢复后重置首帧时钟。新增快照门禁单测后为 42/42；`native-static-shadows.browser.ts` 实测 724 caster、11,756 三角形、95,510 个变暗像素、GPU validation 错误为 0。
 
 本地证据：`.local/original-reference-top.png`、`.local/original-matched-top.png`、`.local/original-geometry-browser-acceptance.json`、`.local/native-shadow-acceptance.json`。这些属于本机验收工件，不包含在发布包中。完整原版 HUD/研究模式等仍按功能清单继续，不据本次机台与阴影验收标记整个迁移 complete。
 

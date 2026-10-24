@@ -278,7 +278,10 @@ export function createWebGpuBackend(): SceneBackend {
       };
       engine.onContextRestoredObservable.add(() => {
         if (signal.aborted || disposed) return;
-        deviceLost = false; onStatus('WebGPU 设备和清洁室视图已重建 · 估算几何');
+        deviceLost = false;
+        lastFrameTime = performance.now();
+        // Native static resources are re-created lazily on the next scene render.
+        onStatus('WebGPU 设备和清洁室视图已重建 · 估算几何');
         if (!document.hidden) engine?.runRenderLoop(render);
       });
       const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(resize) : undefined;

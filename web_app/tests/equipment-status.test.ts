@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { watchEquipmentStatus, type EquipmentStatusSnapshot } from '../src/equipment-status';
+import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus, type EquipmentStatusSnapshot } from '../src/equipment-status';
 
 afterEach(() => vi.useRealTimers());
 it('marks cached data stale on disconnect or stalled streams, recovers only on valid frames, and stops on abort', () => {
@@ -29,4 +29,27 @@ it('marks cached data stale on disconnect or stalled streams, recovers only on v
   vi.advanceTimersByTime(20000);
   expect(state).toBe('live');
   expect(source.close).toHaveBeenCalledOnce();
+});
+
+it('accepts only scoped full snapshots in non-decreasing timestamp order', () => {
+  const onSnapshot = vi.fn();
+  const onInvalid = vi.fn();
+  const apply = createOrderedEquipmentStatusConsumer('site-1', 2, onSnapshot, onInvalid);
+  const snapshot = {
+    siteId: 'site-1',
+    generatedAt: '2026-10-24T02:00:00Z',
+    tools: [{ state: 'running' }, { state: 'idle' }],
+  };
+  expect(apply(snapshot)).toBe(true);
+  expect(apply({ ...snapshot, generatedAt: '2026-10-24T01:59:59Z' })).toBe(false);
+  expect(onSnapshot).toHaveBeenCalledTimes(1);
+
+  expect(apply({ ...snapshot, siteId: 'other-site' })).toBe(false);
+  expect(apply({ ...snapshot, tools: [{ state: 'running' }] })).toBe(false);
+  expect(apply({ ...snapshot, tools: [{ state: 'running' }, { state: 'unknown' }] })).toBe(false);
+  expect(onInvalid).toHaveBeenCalledTimes(3);
+
+  expect(apply({ ...snapshot, generatedAt: '2026-10-24T02:00:00Z' })).toBe(true);
+  expect(apply({ ...snapshot, generatedAt: '2026-10-24T02:00:01Z' })).toBe(true);
+  expect(onSnapshot).toHaveBeenCalledTimes(3);
 });

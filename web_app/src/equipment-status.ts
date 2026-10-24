@@ -39,3 +39,41 @@ export function watchEquipmentStatus(
     clearInterval(timer); source.onmessage = null; source.onerror = null; source.close();
   }, { once: true });
 }
+
+/**
+ * Accept only a valid, in-scope snapshot that does not predate the most recently
+ * applied REST or SSE frame. This is intentionally shared by both transports.
+ * A server-issued monotonically increasing revision should eventually replace
+ * the timestamp high-water mark when the API exposes one.
+ */
+export function createOrderedEquipmentStatusConsumer(
+  siteId: string,
+  expectedToolCount: number,
+  onSnapshot: (snapshot: EquipmentStatusSnapshot) => void,
+  onInvalid?: () => void,
+): (value: unknown) => boolean {
+  let lastGeneratedAt = Number.NEGATIVE_INFINITY;
+  return (value: unknown): boolean => {
+    if (typeof value !== 'object' || value === null) {
+      onInvalid?.();
+      return false;
+    }
+    const snapshot = value as Partial<EquipmentStatusSnapshot>;
+    const timestamp = typeof snapshot.generatedAt === 'string'
+      ? Date.parse(snapshot.generatedAt)
+      : Number.NaN;
+    if (snapshot.siteId !== siteId || !Number.isFinite(timestamp) ||
+        !Array.isArray(snapshot.tools) || snapshot.tools.length !== expectedToolCount ||
+        !snapshot.tools.every(tool =>
+          tool !== null && typeof tool === 'object' &&
+          (tool.state === 'running' || tool.state === 'idle' ||
+           tool.state === 'down' || tool.state === 'maint'))) {
+      onInvalid?.();
+      return false;
+    }
+    if (timestamp < lastGeneratedAt) return false;
+    lastGeneratedAt = timestamp;
+    onSnapshot(snapshot as EquipmentStatusSnapshot);
+    return true;
+  };
+}

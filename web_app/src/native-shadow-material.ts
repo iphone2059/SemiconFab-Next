@@ -37,11 +37,12 @@ fn fabShadowVisibility(worldPosition: vec3f) -> f32 {
   let clip = uniforms.fabLightVP * vec4f(worldPosition, 1.0);
   let ndc = clip.xyz / clip.w;
   let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+  let texelSize = 1.0 / vec2f(textureDimensions(fabShadowDepth));
   var visibility = 0.0;
   for (var y = -1; y <= 1; y++) {
     for (var x = -1; x <= 1; x++) {
       visibility += textureSampleCompare(fabShadowDepth, fabShadowDepthSampler,
-        uv + vec2f(f32(x), f32(y)) / 2048.0, ndc.z - 0.00015);
+        uv + vec2f(f32(x), f32(y)) * texelSize, ndc.z - 0.00015);
     }
   }
   let inside = all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0)) && ndc.z >= 0.0 && ndc.z <= 1.0;

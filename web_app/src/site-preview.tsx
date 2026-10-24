@@ -11,7 +11,7 @@ import {
 import type { CatalogEntryDto, FabDto, SiteDto } from './contracts';
 import { FabToolInspector, matchToolCatalog } from './fab-tool-inspector';
 import { ApiClient } from './api-client';
-import { watchEquipmentStatus } from './equipment-status';
+import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus } from './equipment-status';
 import { SceneFacade, type AmhsStats, type HoveredTool, type PickedTool, type SceneLayer } from './fab-scene';
 import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolCategory, type FabToolState } from './fab-layout';
 import { Panel } from './ui';
@@ -213,7 +213,7 @@ export const SiteScene = forwardRef<SiteSceneHandle, SiteSceneProps>(function Si
       if (facade.current === scene) facade.current = undefined;
       scene?.dispose();
     };
-  }, [site, generation]);
+  }, [site.siteId, fab.fabId, generation]);
 
   useImperativeHandle(
     ref,
@@ -589,23 +589,27 @@ export function SitePreview({ site }: { site: SiteDto }) {
   useEffect(() => {
     const api = new ApiClient();
     const controller = new AbortController();
-    const applySnapshot = (snapshot: Awaited<ReturnType<ApiClient['equipmentStatus']>>) => {
-      const next = FAB_LAYOUT.map((_, index): FabToolState => {
-        const state = snapshot.tools[index]?.state;
-        return state === 'running' || state === 'idle' || state === 'down' || state === 'maint'
-          ? state
-          : 'idle';
-      });
-      setToolStates(next);
-      setStatusFeed({ updatedAt: snapshot.generatedAt, stale: false });
-      next.forEach((state, index) => scene.current?.setToolState(index, state));
-    };
+    const applySnapshot = createOrderedEquipmentStatusConsumer(
+      site.siteId, FAB_LAYOUT.length, (snapshot) => {
+        const next = FAB_LAYOUT.map((_, index): FabToolState => {
+          const state = snapshot.tools[index]?.state;
+          return state === 'running' || state === 'idle' || state === 'down' || state === 'maint'
+            ? state
+            : 'idle';
+        });
+        setToolStates(next);
+        setStatusFeed({ updatedAt: snapshot.generatedAt, stale: false });
+        next.forEach((state, index) => scene.current?.setToolState(index, state));
+      }, () => setStatusFeed(current => current ? { ...current, stale: true } : current),
+    );
     const load = async () => {
       try {
         const snapshot = await api.equipmentStatus(site.siteId, controller.signal);
         if (!controller.signal.aborted) applySnapshot(snapshot);
       } catch {
-        setStatusFeed((current) => current ? { ...current, stale: true } : current);
+        if (!controller.signal.aborted) {
+          setStatusFeed((current) => current ? { ...current, stale: true } : current);
+        }
       }
     };
     void load();

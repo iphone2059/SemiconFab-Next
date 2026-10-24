@@ -15,7 +15,11 @@ import type { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 const SIZE = 2048;
 
 function isCaster(mesh: AbstractMesh): boolean {
-  return mesh.getClassName() !== 'LinesMesh' && mesh.isEnabled() && mesh.isVisible && mesh.visibility === 1 && (mesh.material?.alpha ?? 1) === 1;
+  const material = mesh.material;
+  return mesh.getClassName() !== 'LinesMesh' &&
+    mesh.isEnabled() && mesh.isVisible && mesh.visibility === 1 &&
+    (material?.alpha ?? 1) === 1 &&
+    !material?.needAlphaBlending() && !material?.needAlphaTesting();
 }
 
 /** Actual transformed triangles, including parent transforms and Babylon instances. */
@@ -46,7 +50,12 @@ export function shadowGeometryKey(meshes: readonly AbstractMesh[]): string {
   const geometry = meshes.map(mesh => {
     if (!isCaster(mesh)) return `${mesh.uniqueId}:off`;
     for (let node: TransformNode | null = mesh; node; node = node.parent as TransformNode | null) nodes.add(node);
-    return `${mesh.uniqueId}:${mesh.geometry?.uniqueId ?? '-'}:${mesh.getTotalVertices()}`;
+    // Revision is bumped by callers that mutate vertex/index data in place.
+    // Transform changes are detected independently from the node hierarchy.
+    const revision = typeof mesh.metadata?.staticShadowRevision === 'number'
+      ? mesh.metadata.staticShadowRevision
+      : 0;
+    return `${mesh.uniqueId}:${mesh.geometry?.uniqueId ?? '-'}:${mesh.getTotalVertices()}:${mesh.getIndices()?.length ?? 0}:${revision}`;
   });
   for (const node of nodes) {
     geometry.push(`${node.uniqueId}:${node.position.asArray()}:${node.rotation.asArray()}:${node.rotationQuaternion?.asArray()}:${node.scaling.asArray()}`);
@@ -88,6 +97,8 @@ export function createNativeStaticShadows(scene: Scene, engine: WebGPUEngine, li
   let bindGroup: GPUBindGroup;
   let vertex: GPUBuffer | undefined;
   let index: GPUBuffer | undefined;
+  let vertexCapacity = 0;
+  let indexCapacity = 0;
   let key = '';
   let dirty = true;
   let disposed = false;
@@ -98,8 +109,11 @@ export function createNativeStaticShadows(scene: Scene, engine: WebGPUEngine, li
   let lightKey = '';
   const release = () => {
     vertex?.destroy(); index?.destroy(); uniform?.destroy();
+    vertex = undefined; index = undefined;
+    vertexCapacity = 0; indexCapacity = 0;
     // The Babylon wrapper owns the native texture and destroys it on disposal.
     texture?.dispose(); texture = undefined;
+    binding.texture = undefined;
   };
   const initialize = () => {
     device = engine._device;
@@ -136,9 +150,19 @@ export function createNativeStaticShadows(scene: Scene, engine: WebGPUEngine, li
     const lightVP = createShadowMatrix(light.direction);
     binding.matrix = lightVP;
     device.queue.writeBuffer(uniform, 0, new Float32Array(lightVP.asArray()));
-    vertex?.destroy(); index?.destroy();
-    vertex = device.createBuffer({ size: Math.max(4, geometry.positions.byteLength), usage: BufferUsage.Vertex | BufferUsage.CopyDst });
-    index = device.createBuffer({ size: Math.max(4, geometry.indices.byteLength), usage: BufferUsage.Index | BufferUsage.CopyDst });
+    // Grow geometrical buffers geometrically and reuse them across cache rebuilds.
+    const vertexNeeded = Math.max(4, geometry.positions.byteLength);
+    const indexNeeded = Math.max(4, geometry.indices.byteLength);
+    if (!vertex || vertexNeeded > vertexCapacity) {
+      vertex?.destroy();
+      vertexCapacity = Math.max(vertexNeeded, vertexCapacity * 2);
+      vertex = device.createBuffer({ size: vertexCapacity, usage: BufferUsage.Vertex | BufferUsage.CopyDst });
+    }
+    if (!index || indexNeeded > indexCapacity) {
+      index?.destroy();
+      indexCapacity = Math.max(indexNeeded, indexCapacity * 2);
+      index = device.createBuffer({ size: indexCapacity, usage: BufferUsage.Index | BufferUsage.CopyDst });
+    }
     if (geometry.indices.length) {
       device.queue.writeBuffer(vertex, 0, geometry.positions);
       device.queue.writeBuffer(index, 0, geometry.indices);

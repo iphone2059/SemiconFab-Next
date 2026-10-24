@@ -683,9 +683,13 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   const heatmap = addToolHeatmap(scene);
   const airflow = addAirflow(scene);
   const amhsGroup = addAnimatedAmhs(scene, onAmhsStats);
+  // These static meshes are created once; keep the caster list stable to avoid
+  // allocating flatMap/filter arrays on every animation frame.
+  const staticCasters = [fab.equipment, fab.shell, fab.ceiling, fab.subfab]
+    .flatMap(root => root.getChildMeshes())
+    .filter(mesh => mesh !== fab.floor && !mesh.name.startsWith('procedural-slab') && !mesh.name.startsWith('status-'));
   const shadows = createNativeStaticShadows(scene, scene.getEngine() as WebGPUEngine, keyLight,
-    () => [fab.equipment, fab.shell, fab.ceiling, fab.subfab].flatMap(root => root.getChildMeshes())
-      .filter(mesh => mesh !== fab.floor && !mesh.name.startsWith('procedural-slab') && !mesh.name.startsWith('status-')));
+    () => staticCasters);
   scene.metadata = { ...scene.metadata, staticShadows: shadows };
   const layerVisibility = { ceiling: true, subfab: false, amhs: true, heatmap: false, airflow: false };
   let basementActive = false;
@@ -718,6 +722,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
       const target = layer === 'ceiling' ? fab.ceiling : fab.subfab;
       layerVisibility[layer] = visible;
       target.setEnabled(layer === 'ceiling' ? visible && !basementActive : visible || basementActive);
+      shadows.invalidate('layer-visibility');
     },
     setToolState(index, state) {
       statusLights.setState(index, state);
@@ -725,9 +730,11 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     },
     setExploded(active) {
       fab.equipment.position.y = active ? 2.4 : 0;
+      shadows.invalidate('equipment-exploded');
     },
     setBasement(active) {
       basementActive = active;
+      shadows.invalidate('basement-visibility');
       fab.shell.setEnabled(!active);
       fab.floor.setEnabled(!active);
       fab.subfab.setEnabled(active || layerVisibility.subfab);

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ApiClient } from './api-client';
-import { watchEquipmentStatus } from './equipment-status';
+import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus } from './equipment-status';
 import type { SiteDto } from './contracts';
 import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
 import type { SceneLayer } from './fab-scene';
@@ -34,8 +34,8 @@ export function PreviewPage() {
       .then((sites) => {
         if (controller.signal.aborted) return;
         const wanted = new URL(location.href).searchParams.get('siteId');
-        const next = sites.find((value) => value.siteId === wanted) ?? sites[0];
-        if (!next) throw new Error('没有可用的 FAB 站点');
+        const next = wanted ? sites.find((value) => value.siteId === wanted) : sites[0];
+        if (!next) throw new Error(wanted ? `指定的 FAB 站点不存在：${wanted}` : '没有可用的 FAB 站点');
         setSite(next);
       })
       .catch((reason: unknown) => {
@@ -48,15 +48,21 @@ export function PreviewPage() {
     if (!site) return;
     const api = new ApiClient();
     const controller = new AbortController();
-    const applySnapshot = (snapshot: Awaited<ReturnType<ApiClient['equipmentStatus']>>) => {
-      const next = FAB_LAYOUT.map((_, index): FabToolState => {
-        const state = snapshot.tools[index]?.state;
-        return state === 'running' || state === 'idle' || state === 'down' || state === 'maint' ? state : 'idle';
+    const applySnapshot = createOrderedEquipmentStatusConsumer(
+      site.siteId, FAB_LAYOUT.length, (snapshot) => {
+        const next = FAB_LAYOUT.map((_, index): FabToolState => {
+          const state = snapshot.tools[index]?.state;
+          return state === 'running' || state === 'idle' || state === 'down' || state === 'maint' ? state : 'idle';
+        });
+        setToolStates(next);
+        setStatusFeed({ updatedAt: snapshot.generatedAt, stale: false });
+      }, () => setStatusFeed(current => current ? { ...current, stale: true } : current),
+    );
+    void api.equipmentStatus(site.siteId, controller.signal)
+      .then(snapshot => { if (!controller.signal.aborted) applySnapshot(snapshot); })
+      .catch(() => {
+        if (!controller.signal.aborted) setStatusFeed(current => current ? { ...current, stale: true } : current);
       });
-      setToolStates(next);
-      setStatusFeed({ updatedAt: snapshot.generatedAt, stale: false });
-    };
-    void api.equipmentStatus(site.siteId, controller.signal).then(applySnapshot).catch(() => setStatusFeed((current) => current ? { ...current, stale: true } : current));
     const source = new EventSource(`/api/v1/sites/${encodeURIComponent(site.siteId)}/equipment-status/stream`);
     watchEquipmentStatus(source, site.siteId, applySnapshot,
       () => setStatusFeed(current => current && !current.stale ? { ...current, stale: true } : current), controller.signal);
