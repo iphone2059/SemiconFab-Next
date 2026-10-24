@@ -60,7 +60,7 @@
 
 - [x] Extract parameterized Box/Cylinder/Torus/Tube/etc recipes and original world transforms/hierarchy/materials/layer/system IDs from the read-only reference; no baked model or renderer import.
 - [x] Test recipe counts, transforms and bounds against independent reference; generate Babylon primitives/shared geometries and correct shadow caster flags.
-- [ ] Replace approximated walls/airlocks/B1/general FFU/roof/HVAC with corresponding recipes; retain existing 121-machine geometry.
+- [x] Replace approximated walls/airlocks/B1/general FFU/roof/HVAC with corresponding recipes; retain existing 121-machine geometry.
 - [ ] Verify L1/B1/Dual/Exploded/Roof/FFU/HVAC/Cut combinations and native shadow cache restoration in real WebGPU.
 
 ## Task 5 — dynamic source behavior
