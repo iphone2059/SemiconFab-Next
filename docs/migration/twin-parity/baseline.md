@@ -6,7 +6,7 @@ The user selected the final construction loaded by `../SemiconFab/twin.html`, wi
 
 ## Product boundary
 
-There is one single-FAB 3D page, `/twin` (`/twin.html` compatible). The independent preview page/component and embedded home canvas have been deleted. Old `/preview` and `/preview.html` URLs canonicalize to `/twin`, retaining parameters. The workbench has an ordinary new-tab **3D FAB** link. Rendering remains Babylon `WebGPUEngine` only, with native WebGPU depth shadows and no WebGL fallback, Three renderer, iframe renderer, glTF/GLB asset or loader dependency.
+There is one single-FAB 3D page, `/twin` (`/twin.html` compatible). The independent preview page/component and embedded home canvas have been deleted. Old `/preview` and `/preview.html` URLs canonicalize to `/twin`, retaining parameters. The workbench has an ordinary new-tab **3D FAB** link. Rendering remains Babylon `WebGPUEngine` only, with native WebGPU depth shadows and no WebGL fallback, Three renderer, iframe renderer, glTF/GLB asset or loader dependency. A measured headless performance baseline and its explicit limitations are in [performance-baseline.md](performance-baseline.md).
 
 ## Machine/source evidence
 

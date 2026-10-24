@@ -58,6 +58,7 @@ export function createWebGpuBackend(): SceneBackend {
   let lastFrameTime = performance.now();
   const fabTargets = new Map<string, Vector3>();
   let cleanup = () => {};
+  let perfBridge: { dispose: () => void } | undefined;
   let disposed = false;
   let deviceLost = false;
   let initialized = false;
@@ -69,6 +70,7 @@ export function createWebGpuBackend(): SceneBackend {
     if (pending) void pending.popErrorScope().catch(() => {});
   };
   const disposal = new InitializationDisposal(() => {
+    perfBridge?.dispose(); perfBridge = undefined;
     recovery.dispose();
     abandonRestoreValidation();
     cameraTransition = undefined;
@@ -276,6 +278,7 @@ export function createWebGpuBackend(): SceneBackend {
       };
       let lastHoverIndex: number | null = null;
       let lastHoverPickAt = 0;
+      const hoverPickMs = Math.max(0, Number(new URLSearchParams(location.search).get('hoverPickMs') ?? '50') || 0);
       const onPointerUp = (event: PointerEvent) => {
         if (Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY) > 6) return;
         const hit = findToolAt(event.clientX, event.clientY);
@@ -287,7 +290,7 @@ export function createWebGpuBackend(): SceneBackend {
         const now = performance.now();
         // Hover raycasts are CPU-side and only drive a tooltip; 50 ms is visually
         // indistinguishable and prevents pixel-by-pixel picking spikes while orbiting.
-        if (now - lastHoverPickAt < 50) return;
+        if (now - lastHoverPickAt < hoverPickMs) return;
         lastHoverPickAt = now;
         const hit = findToolAt(event.clientX, event.clientY);
         canvas.style.cursor = hit === null ? '' : 'pointer';
@@ -401,6 +404,34 @@ export function createWebGpuBackend(): SceneBackend {
         canvas.removeEventListener('dblclick', onDoubleClick);
       };
       engine.resize(); engine.runRenderLoop(render);
+      if (new URLSearchParams(location.search).has('perf')) {
+        void import('@babylonjs/core/Instrumentation/sceneInstrumentation').then(({ SceneInstrumentation }) => {
+          if (!scene || !engine || disposed) return;
+          const instrumentation = new SceneInstrumentation(scene);
+          instrumentation.captureFrameTime = true;
+          instrumentation.captureRenderTime = true;
+          instrumentation.captureActiveMeshesEvaluationTime = true;
+          const target = {
+            getStats: () => ({
+              fps: engine?.getFps() ?? 0,
+              frameTimeMs: instrumentation.frameTimeCounter.current,
+              renderTimeMs: instrumentation.renderTimeCounter.current,
+              activeMeshesEvaluationMs: instrumentation.activeMeshesEvaluationTimeCounter.current,
+              drawCalls: instrumentation.drawCallsCounter.current,
+              activeMeshes: scene?.getActiveMeshes().length ?? 0,
+              totalVertices: scene?.getTotalVertices() ?? 0,
+              heapBytes: (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory?.usedJSHeapSize ?? null,
+            }),
+          };
+          (window as Window & { __SEMICONFAB_PERF__?: typeof target }).__SEMICONFAB_PERF__ = target;
+          perfBridge = { dispose: () => {
+            instrumentation.dispose();
+            if ((window as Window & { __SEMICONFAB_PERF__?: typeof target }).__SEMICONFAB_PERF__ === target) {
+              delete (window as Window & { __SEMICONFAB_PERF__?: typeof target }).__SEMICONFAB_PERF__;
+            }
+          } };
+        });
+      }
       onStatus('WebGPU · 程序化 FAB · 121 台设备');
     },
     zoom(deltaY: number): void {
