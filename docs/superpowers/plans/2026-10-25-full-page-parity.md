@@ -32,18 +32,18 @@
 **Files:** `original-twin-data.ts`, generated `assets/original-twin-ui.json`, `twin-equipment.ts`; tests `original-twin-data.test.ts`, `twin-equipment.test.ts`.
 **Interfaces:** `OriginalEquipment`, `OriginalOem`, `TwinSelection`; `referenceDirectory`, `filterReferenceDirectory`, `resolveTwinSelection`; project 18 directory states into known catalog placements while keeping draft lights unchanged outside replay/live.
 
-- [ ] Freeze final reference objects and both localized projections with source hashes; distinguish original initial counter from actual directory length.
-- [ ] Test exact 18/116 identity/order and all four catalog mappings; category/state/localized search, repeated IDs and unmapped relations.
-- [ ] Implement typed data/selectors and exact DEMO tick ownership; verify full suite.
+- [x] Freeze final reference objects and both localized projections with source hashes; distinguish original initial counter from actual directory length.
+- [x] Test exact 18/116 identity/order and all four catalog mappings; category/state/localized search, repeated IDs and unmapped relations.
+- [x] Implement typed data/selectors and exact DEMO tick ownership; verify full suite.
 
 ## Task 2 — original sidebar, inspector and CAD elevation
 
 **Files:** `twin-sidebar.tsx`, `twin-inspector.tsx`, `twin-elevation.tsx`, `twin-page.tsx`, `fab-viewer.tsx`, `assets/twin.css`.
 **Interfaces:** selection discriminated by layout/reference/OEM; existing `PickedTool` remains compatible; `SceneFacade.selectEntity` handles facilities alongside `selectTool`.
 
-- [ ] Browser RED: source IDs for two tabs, category/state pills, clear/search and footer actions; OEM tab remains in the page.
-- [ ] Restore original card rows, ordering, active state/scroll, full header/CAD/spec/provenance/connections/telemetry/MES/SPC fields, source actions and draft CTA.
-- [ ] Port original CAD recipes to typed React SVG; no injected original HTML/controller.
+- [x] Browser RED: source IDs for two tabs, category/state pills, clear/search and footer actions; OEM tab remains in the page.
+- [x] Restore original card rows, ordering, active state/scroll, full header/CAD/spec/provenance/connections/telemetry/MES/SPC fields, source actions and draft CTA.
+- [x] Port original CAD recipes to typed React SVG; no injected original HTML/controller.
 - [ ] Verify switching locale, selection kinds, invalid/deleted IDs, connected-tool jumps and closing/reopening without stale fields.
 
 ## Task 3 — full top/bottom HUD, modals and preferences
