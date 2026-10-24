@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { buildWaferWaypoints, parseWaferRoutes } from '../src/wafer-route';
+import { buildWaferWaypoints, parseWaferRoutes, waferTransitPoint } from '../src/wafer-route';
 
 it('parses the three original product routes and projects steps onto the layout', () => {
   const routes = parseWaferRoutes(JSON.parse(readFileSync(new URL('../public/twin/routes.json', import.meta.url), 'utf8')));
@@ -13,4 +13,10 @@ it('parses the three original product routes and projects steps onto the layout'
   expect(waypoints[0].tool).toBeDefined();
   expect(Number.isFinite(waypoints[0].x)).toBe(true);
   expect(waypoints[1].step).toBe(2);
+  expect(waferTransitPoint(waypoints, 0, 0.4)).toMatchObject({ x: waypoints[0].x, z: waypoints[0].z, y: 2.5 });
+  const dwell = waferTransitPoint(waypoints, 1, 0.8);
+  expect(dwell.x).toBeCloseTo(waypoints[1].x);
+  expect(dwell.z).toBeCloseTo(waypoints[1].z);
+  const transit = waferTransitPoint(waypoints, 1, 0.35);
+  expect(Number.isFinite(transit.x)).toBe(true);
 });

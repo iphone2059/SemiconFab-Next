@@ -52,6 +52,7 @@ export interface SceneBackend {
   setCutPlane?(active: boolean, axis: CutAxis, position: number, invert: boolean): void;
   setXRayFilter?(filter: XRayFilter | null): void;
   setWaferPoint?(x: number, y: number, z: number, visible: boolean, focus: boolean): void;
+  setWaferTrail?(points: readonly (readonly [number, number, number])[]): void;
 }
 
 export class SceneFacade {
@@ -111,6 +112,9 @@ export class SceneFacade {
   }
   setWaferPoint(x: number, y: number, z: number, visible: boolean, focus: boolean): void {
     if (!this.controller.signal.aborted) this.backend.setWaferPoint?.(x, y, z, visible, focus);
+  }
+  setWaferTrail(points: readonly (readonly [number, number, number])[]): void {
+    if (!this.controller.signal.aborted) this.backend.setWaferTrail?.(points);
   }
   dispose(): void { this.controller.abort(); this.backend.dispose(); }
 }

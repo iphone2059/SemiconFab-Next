@@ -6,7 +6,7 @@ import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } f
 import type { AmhsStats, CutAxis, PickedTool, SceneLayer, XRayFilter } from './fab-scene';
 import { FabRail, SiteScene, type SiteSceneHandle } from './site-preview';
 import { ResearchReplay, researchClock } from './research-replay';
-import { buildWaferWaypoints, parseWaferRoutes, type WaferProduct, type WaferRouteStep } from './wafer-route';
+import { buildWaferWaypoints, parseWaferRoutes, waferTransitPoint, type WaferProduct, type WaferRouteStep } from './wafer-route';
 type EntryMode = 'visitor' | 'engineer' | 'research';
 type CameraView = 'iso' | 'top' | 'litho' | 'airshower' | 'etch' | 'oht';
 type FabLevel = 'L1' | 'B1' | 'DUAL' | 'EXPLODED';
@@ -109,6 +109,9 @@ export function TwinPage() {
   const [waferSpeed, setWaferSpeed] = useState<1 | 4 | 16>(1);
   const [waferFollow, setWaferFollow] = useState(true);
   const [waferError, setWaferError] = useState('');
+  const waferIndexRef = useRef(0);
+  const waferProgressRef = useRef(0);
+  const waferTrailRef = useRef<[number, number, number][]>([]);
   const modeRef = useRef<EntryMode>('engineer');
 
   useEffect(() => {
@@ -221,26 +224,48 @@ export function TwinPage() {
   const waferPoint = waferWaypoints[waferIndex];
 
   useEffect(() => {
-    if (!waferActive || !waferPoint) {
-      scene.current?.setWaferPoint(0, 0, 0, false, false);
+    if (!waferActive || !waferPoint || waferPlaying) {
+      if (!waferActive) scene.current?.setWaferPoint(0, 0, 0, false, false);
       return;
     }
     scene.current?.setWaferPoint(waferPoint.x, waferPoint.y, waferPoint.z, true, waferFollow);
-  }, [waferActive, waferPoint, waferFollow]);
+  }, [waferActive, waferPoint, waferFollow, waferPlaying]);
 
   useEffect(() => {
     if (!waferPlaying || !waferActive || waferWaypoints.length === 0) return;
-    const timer = window.setInterval(() => {
-      setWaferIndex((current) => {
-        if (current >= waferWaypoints.length - 1) {
+    let frame = 0;
+    let last = performance.now();
+    let running = true;
+    const tick = (now: number) => {
+      if (!running) return;
+      const dt = Math.min((now - last) / 1000, 0.1);
+      last = now;
+      const index = waferIndexRef.current;
+      waferProgressRef.current = Math.min(1, waferProgressRef.current + dt / (2 / waferSpeed));
+      const progress = waferProgressRef.current;
+      const point = waferTransitPoint(waferWaypoints, index, progress);
+      scene.current?.setWaferPoint(point.x, point.y, point.z, true, waferFollow);
+      const trail = waferTrailRef.current;
+      const previous = trail[trail.length - 1];
+      if (!previous || Math.hypot(point.x - previous[0], point.z - previous[2]) > 0.25) {
+        trail.push([point.x, point.y, point.z]);
+        if (trail.length > 30) trail.shift();
+        scene.current?.setWaferTrail(trail);
+      }
+      if (progress >= 1) {
+        if (index >= waferWaypoints.length - 1) {
           setWaferPlaying(false);
-          return current;
+          return;
         }
-        return current + 1;
-      });
-    }, 2000 / waferSpeed);
-    return () => window.clearInterval(timer);
-  }, [waferPlaying, waferActive, waferWaypoints.length, waferSpeed]);
+        waferIndexRef.current = index + 1;
+        waferProgressRef.current = 0;
+        setWaferIndex(index + 1);
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => { running = false; cancelAnimationFrame(frame); };
+  }, [waferPlaying, waferActive, waferWaypoints, waferSpeed, waferFollow]);
 
   useEffect(() => {
     try {
@@ -383,19 +408,28 @@ export function TwinPage() {
       setCamera(stop.preset ?? 'iso');
     }
   }
+  function clearWaferTrail(): void {
+    waferIndexRef.current = 0;
+    waferProgressRef.current = 0;
+    waferTrailRef.current = [];
+    scene.current?.setWaferTrail([]);
+  }
   function startWafer(): void {
     setWaferActive(true);
     setWaferIndex(0);
     setWaferPlaying(false);
     setWaferProduct('A');
+    clearWaferTrail();
   }
   function closeWafer(): void {
     setWaferActive(false);
     setWaferPlaying(false);
     scene.current?.setWaferPoint(0, 0, 0, false, false);
+    scene.current?.setWaferTrail([]);
     scene.current?.setView('iso');
   }
   function replayWafer(): void {
+    clearWaferTrail();
     setWaferIndex(0);
     setWaferPlaying(true);
   }
@@ -403,6 +437,13 @@ export function TwinPage() {
     setWaferProduct(product);
     setWaferIndex(0);
     setWaferPlaying(false);
+    clearWaferTrail();
+  }
+  function seekWafer(index: number): void {
+    setWaferPlaying(false);
+    waferIndexRef.current = index;
+    waferProgressRef.current = 0;
+    setWaferIndex(index);
   }
   function startTour(): void {
     applyTourStep(0);
@@ -636,7 +677,7 @@ export function TwinPage() {
                   <span>{waferPoint?.toolGroup ?? ''} · {waferPoint?.category ?? ''}</span>
                   <small>{waferPoint?.recipe ?? 'no recipe'}</small>
                 </div>
-                <input className="twin-wafer-scrubber" type="range" min={0} max={Math.max(0, waferWaypoints.length - 1)} step={1} value={waferIndex} onChange={(event) => { setWaferPlaying(false); setWaferIndex(Number(event.target.value)); }} aria-label="晶圆路线步骤" />
+                <input className="twin-wafer-scrubber" type="range" min={0} max={Math.max(0, waferWaypoints.length - 1)} step={1} value={waferIndex} onChange={(event) => seekWafer(Number(event.target.value))} aria-label="晶圆路线步骤" />
                 <div className="twin-wafer-actions">
                   <button type="button" onClick={() => setWaferPlaying((playing) => !playing)}>{waferPlaying ? '暂停' : '播放'}</button>
                   <button type="button" onClick={replayWafer}>重播</button>

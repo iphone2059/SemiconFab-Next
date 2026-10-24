@@ -125,6 +125,7 @@ export interface SiteSceneHandle {
   setCutPlane(active: boolean, axis: CutAxis, position: number, invert: boolean): void;
   setXRayFilter(filter: XRayFilter | null): void;
   setWaferPoint(x: number, y: number, z: number, visible: boolean, focus: boolean): void;
+  setWaferTrail(points: readonly (readonly [number, number, number])[]): void;
 }
 
 const ZONE_LEGEND = [
@@ -246,6 +247,7 @@ export const SiteScene = forwardRef<SiteSceneHandle, SiteSceneProps>(function Si
       setCutPlane: (active, axis, position, invert) => facade.current?.setCutPlane(active, axis, position, invert),
       setXRayFilter: (filter) => facade.current?.setXRayFilter(filter),
       setWaferPoint: (x, y, z, visible, focus) => facade.current?.setWaferPoint(x, y, z, visible, focus),
+      setWaferTrail: (points) => facade.current?.setWaferTrail(points),
     }),
     [],
   );

@@ -16,7 +16,7 @@
 
 ## Twin 页面骨架（2026-10-24）
 
-新增 `/twin` 页面级入口，作为 `twin.html` 1:1 对齐的 TWIN-02 起点；它复用现有单 FAB `SiteScene`/WebGPU 运行时，增加顶栏、相机预设、L1/B1/DUAL/EXPLODED、连续 0–100% Explode 滑条、X/Y/Z Cut 与 Invert、五站 Cinematic Tour、三步首次引导、All/UPW/Gas/Vac/Exhaust/AMHS X-Ray 过滤、Research JSONL 聚合回放（WIP/Active/UTIL/时间轴/倍速）、Wafer Follow A/B/C（120/104/92 步、FOUP 标记、相机跟随、1×/4×/16×）、图层、设备清单、选中检查器、AMHS/KPI/底部 HUD。Cut 使用真实 `scene.clipPlane`；静态阴影在 Cut 期间关闭，避免未裁剪的阴影残留。原预览 `/preview` 保留。Research 的逐设备着色仍待机器 ID 映射；未完成项与基线记录见 [twin-parity/baseline.md](twin-parity/baseline.md)。
+新增 `/twin` 页面级入口，作为 `twin.html` 1:1 对齐的 TWIN-02 起点；它复用现有单 FAB `SiteScene`/WebGPU 运行时，增加顶栏、相机预设、L1/B1/DUAL/EXPLODED、连续 0–100% Explode 滑条、X/Y/Z Cut 与 Invert、五站 Cinematic Tour、三步首次引导、All/UPW/Gas/Vac/Exhaust/AMHS X-Ray 过滤、Research JSONL 聚合回放（WIP/Active/UTIL/时间轴/倍速）、Wafer Follow A/B/C（120/104/92 步、FOUP 本体/法兰/门、30 点渐隐轨迹、Catmull-Rom 75/25 过渡-停留、相机跟随、1×/4×/16×）、图层、设备清单、选中检查器、AMHS/KPI/底部 HUD。Cut 使用真实 `scene.clipPlane`；静态阴影在 Cut 期间关闭，避免未裁剪的阴影残留。原预览 `/preview` 保留。Research 的逐设备着色仍待机器 ID 映射；未完成项与基线记录见 [twin-parity/baseline.md](twin-parity/baseline.md)。
 
 ## 单 FAB 产品边界（2026-10-24）
 

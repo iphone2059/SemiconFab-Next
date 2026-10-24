@@ -44,7 +44,7 @@ export function createWebGpuBackend(): SceneBackend {
   let basementEnabled = false;
   let dualEnabled = false;
   let waferMarker: ReturnType<typeof MeshBuilder.CreateBox> | undefined;
-  let waferBeacon: ReturnType<typeof MeshBuilder.CreateCylinder> | undefined;
+  let waferTrail: ReturnType<typeof MeshBuilder.CreateLines> | undefined;
   let lastFrameTime = performance.now();
   const fabTargets = new Map<string, Vector3>();
   let cleanup = () => {};
@@ -152,10 +152,22 @@ export function createWebGpuBackend(): SceneBackend {
       waferMarker.material = waferMarkerMaterial;
       waferMarker.isPickable = false;
       waferMarker.isVisible = false;
-      waferBeacon = MeshBuilder.CreateCylinder('wafer-follow-beacon', { height: 2.4, diameter: 0.07, tessellation: 8 }, scene);
-      waferBeacon.material = waferMarkerMaterial;
-      waferBeacon.isPickable = false;
-      waferBeacon.isVisible = false;
+      const waferFlangeMaterial = new StandardMaterial('wafer-follow-flange', scene);
+      waferFlangeMaterial.diffuseColor = new Color3(0.2, 0.27, 0.35);
+      waferFlangeMaterial.specularColor = new Color3(0.4, 0.4, 0.4);
+      const waferDoorMaterial = new StandardMaterial('wafer-follow-door', scene);
+      waferDoorMaterial.diffuseColor = new Color3(0.12, 0.16, 0.22);
+      waferDoorMaterial.specularColor = new Color3(0.5, 0.5, 0.5);
+      const flange = MeshBuilder.CreateBox('wafer-follow-flange-mesh', { width: 0.12, height: 0.04, depth: 0.12 }, scene);
+      flange.parent = waferMarker;
+      flange.position.y = 0.22;
+      flange.material = waferFlangeMaterial;
+      flange.isPickable = false;
+      const door = MeshBuilder.CreateBox('wafer-follow-door-mesh', { width: 0.44, height: 0.3, depth: 0.012 }, scene);
+      door.parent = waferMarker;
+      door.position.z = 0.231;
+      door.material = waferDoorMaterial;
+      door.isPickable = false;
       let selectedIndex = -1;
       const updateSelectionBounds = () => {
         const root = scene?.getTransformNodeByName(`procedural-tool-${selectedIndex}`);
@@ -387,16 +399,27 @@ export function createWebGpuBackend(): SceneBackend {
     },
     setWaferPoint(x: number, y: number, z: number, visible: boolean, focus: boolean): void {
       if (!waferMarker) return;
-      waferMarker.position.set(x, y + 2.2, z);
+      waferMarker.position.set(x, y, z);
       waferMarker.setEnabled(visible);
-      waferBeacon?.position.set(x, y + 1.0, z);
-      waferBeacon?.setEnabled(visible);
       if (visible && focus && camera) {
         cameraTransition = undefined;
-        camera.setTarget(new Vector3(x, y + 1.2, z));
+        camera.setTarget(new Vector3(x, y + 0.3, z));
         camera.radius = 36;
         camera.beta = 1.05;
       }
+    },
+    setWaferTrail(points: readonly (readonly [number, number, number])[]): void {
+      waferTrail?.dispose();
+      waferTrail = undefined;
+      if (points.length < 2 || !scene) return;
+      waferTrail = MeshBuilder.CreateLines('wafer-follow-trail', {
+        points: points.map(([x, y, z]) => new Vector3(x, y, z)),
+        colors: points.map((_, index) => {
+          const f = (index + 1) / points.length;
+          return new Color4(0.96 * f, (0.6 + 0.3 * f) * f, 0.05 * f, 0.9);
+        }),
+      }, scene);
+      waferTrail.isPickable = false;
     },
     setCutPlane(active: boolean, axis: CutAxis, position: number, invert: boolean): void {
       if (!scene) return;
