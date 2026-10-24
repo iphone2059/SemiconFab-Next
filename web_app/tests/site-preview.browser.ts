@@ -286,6 +286,31 @@ try {
   await evaluate(`document.querySelector('.scene-tool-list-item').click()`);
   await until(`!!document.querySelector('.twin-inspector')`);
   assert.match(await evaluate(`document.querySelector('.twin-inspector').innerText`), /FAB-01/);
+  await until(`!!document.querySelector('.twin-mes') && !!document.querySelector('.twin-spc')`);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-spc-sensors > div').length`), 4);
+  assert.match(await evaluate(`document.querySelector('.twin-spc-grid').innerText`), /Cp[\s\S]*Cpk[\s\S]*SIGMA/);
+  await evaluate(`Array.from(document.querySelectorAll('.twin-mes-actions button')).find((button) => button.textContent === 'Track-Out').click()`);
+  await until(`document.querySelector('.twin-mes-state')?.textContent === 'TRACKED_OUT'`);
+  await evaluate(`Array.from(document.querySelectorAll('.twin-mes-actions button')).find((button) => button.textContent === 'Hold').click()`);
+  await until(`document.querySelector('.twin-mes-state')?.textContent === 'HOLD_MRB'`);
+  await evaluate(`document.querySelector('.twin-inspector .twin-panel-title button[aria-label="关闭设备详情"]').click()`);
+  await until(`!document.querySelector('.twin-inspector')`);
+
+  await evaluate(`document.querySelector('.twin-yms-toggle').click()`);
+  await until(`!!document.querySelector('.twin-yms')`);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-patterns button').length`), 8);
+  assert.ok((await evaluate(`document.querySelectorAll('.twin-wafer-stage rect').length`)) > 400);
+  assert.match(await evaluate(`document.querySelector('.twin-yms-yield-row').innerText`), /GROSS YIELD/);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-model-grid > div').length`), 3);
+  await evaluate(`Array.from(document.querySelectorAll('.twin-yms-head nav button')).find((button) => button.textContent === 'Yield Waterfall').click()`);
+  await until(`!!document.querySelector('.twin-yield-view')`);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-yield-bars > div').length`), 8);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-yield-scenarios button').length`), 7);
+  await evaluate(`Array.from(document.querySelectorAll('.twin-yield-scenarios button')).find((button) => button.textContent === 'Etch Chamber RF Alarm').click()`);
+  await until(`document.querySelector('.twin-yield-scenarios button.active')?.textContent === 'Etch Chamber RF Alarm'`);
+  assert.match(await evaluate(`document.querySelector('.twin-yield-summary').innerText`), /OVERALL FAB YIELD/);
+  await evaluate(`document.querySelector('.twin-yms-close').click()`);
+  await until(`!document.querySelector('.twin-yms')`);
 
   if (await evaluate(`!!document.querySelector('.twin-onboarding')`)) {
     await evaluate(`document.querySelector('.twin-onboarding-head button').click()`);

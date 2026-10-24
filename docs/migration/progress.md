@@ -16,7 +16,7 @@
 
 ## Twin 页面骨架（2026-10-24）
 
-新增 `/twin` 页面级入口，作为 `twin.html` 1:1 对齐的 TWIN-02 起点；它复用现有单 FAB `SiteScene`/WebGPU 运行时，增加顶栏、相机预设、L1/B1/DUAL/EXPLODED、连续 0–100% Explode 滑条、X/Y/Z Cut 与 Invert、五站 Cinematic Tour、三步首次引导、All/UPW/Gas/Vac/Exhaust/AMHS X-Ray 过滤、Research JSONL 聚合回放（WIP/Active/UTIL/时间轴/倍速）、Wafer Follow A/B/C（120/104/92 步、FOUP 本体/法兰/门、30 点渐隐轨迹、Catmull-Rom 75/25 过渡-停留、相机跟随、1×/4×/16×）、图层、设备清单、选中检查器、AMHS/KPI/底部 HUD。Cut 使用真实 `scene.clipPlane`；静态阴影在 Cut 期间关闭，避免未裁剪的阴影残留。原预览 `/preview` 保留。Research 的逐设备着色仍待机器 ID 映射；未完成项与基线记录见 [twin-parity/baseline.md](twin-parity/baseline.md)。
+新增 `/twin` 页面级入口，作为 `twin.html` 1:1 对齐的 TWIN-02 起点；它复用现有单 FAB `SiteScene`/WebGPU 运行时，增加顶栏、相机预设、L1/B1/DUAL/EXPLODED、连续 0–100% Explode 滑条、X/Y/Z Cut 与 Invert、五站 Cinematic Tour、三步首次引导、All/UPW/Gas/Vac/Exhaust/AMHS X-Ray 过滤、Research JSONL 聚合回放（WIP/Active/UTIL/时间轴/倍速）、Wafer Follow A/B/C（120/104/92 步、FOUP 本体/法兰/门、30 点渐隐轨迹、Catmull-Rom 75/25 过渡-停留、相机跟随、1×/4×/16×）、SEMI MES E40/E87/E94（Track-In/Track-Out/Hold）、FDC SPC（Cp/Cpk/σ/Nelson）、YMS（WM-811K 图谱、26×26 Die Map、STDF V4、8 段 Yield Waterfall、Poisson/Murphy/Seeds、LIVE+6 场景）、图层、设备清单、选中检查器、AMHS/KPI/底部 HUD。Cut 使用真实 `scene.clipPlane`；静态阴影在 Cut 期间关闭，避免未裁剪的阴影残留。原预览 `/preview` 保留。Research 的逐设备着色仍待机器 ID 映射；未完成项与基线记录见 [twin-parity/baseline.md](twin-parity/baseline.md)。
 
 ## 单 FAB 产品边界（2026-10-24）
 
@@ -50,9 +50,9 @@
 - 卡片增加原始 OEM 规格、工艺能力、来源、draft 标识和实时状态；定位框与鼠标拾取改为实际模型边界/三角形。修正滚动、Escape 关闭、FFU 初始状态、重载状态恢复及 B1 隐藏/恢复层的行为。
 - B1 增加原版四条 84m 主管（UPW/PCW/气体/化学品）、五组穿板前级管/PCW 支管、套管、波纹节、支架与泵站，地坪恢复到 -7m。完整 B1 工业设施仍未宣称像素一致。
 
-最新验证：**TypeScript、46/46 Vitest、67/67 .NET 测试、生产构建和完整预览浏览器回归通过**；新增 GPU 像素/缓存及 121 台实际场景边界验收通过。PBR GPU 分块约 2.47 MB（gzip 579 KB），仍有 Vite 大分块提示。没有 glTF/GLB 资源、加载代码或 loader 依赖；Babylon 核心内仍有通用 `FALLOFF_GLTF`/错误码等符号，不能把“无 glTF 加载”误报为构建文本不含任何 glTF 字符串。
+最新验证：**TypeScript、54/54 Vitest、67/67 .NET 测试、生产构建和完整预览浏览器回归通过**；新增 GPU 像素/缓存及 121 台实际场景边界验收通过。PBR GPU 分块约 2.47 MB（gzip 579 KB），仍有 Vite 大分块提示。没有 glTF/GLB 资源、加载代码或 loader 依赖；Babylon 核心内仍有通用 `FALLOFF_GLTF`/错误码等符号，不能把“无 glTF 加载”误报为构建文本不含任何 glTF 字符串。
 
-2026-10-24 再次合入 7 个修复：REST/SSE 快照按站点、数量和单调时间戳统一门禁；错误 `siteId` 不再静默回退；场景按 `siteId/fabId` 重挂载并阻断 Abort 后写入；原生静态阴影缓存增加 Alpha caster 筛选、索引/几何修订号缓存键和 GPU Buffer 容量复用；PCF texel 尺寸改为实际深度纹理尺寸；静态 caster 列表不再每帧分配；设备恢复后重置首帧时钟。新增快照门禁单测后为 46/46；`native-static-shadows.browser.ts` 实测 724 caster、11,756 三角形、96,918 个变暗像素、GPU validation 错误为 0；几何原地更新令缓存 pass 从 8 增至 9 并恢复至 10。
+2026-10-24 再次合入 7 个修复：REST/SSE 快照按站点、数量和单调时间戳统一门禁；错误 `siteId` 不再静默回退；场景按 `siteId/fabId` 重挂载并阻断 Abort 后写入；原生静态阴影缓存增加 Alpha caster 筛选、索引/几何修订号缓存键和 GPU Buffer 容量复用；PCF texel 尺寸改为实际深度纹理尺寸；静态 caster 列表不再每帧分配；设备恢复后重置首帧时钟。新增快照门禁单测后为 54/54；`native-static-shadows.browser.ts` 实测 724 caster、11,756 三角形、96,918 个变暗像素、GPU validation 错误为 0；几何原地更新令缓存 pass 从 8 增至 9 并恢复至 10。
 
 服务端状态快照随后增加每站点单调 `sequence`（8 秒仿真 tick），REST/SSE 在同一 tick 返回同一序号；前端优先按序号拒绝迟到/重复帧，旧服务端缺少 `sequence` 时回退到时间戳。静态阴影几何 hook 接入 Babylon `onGeometryUpdated`，原地更新顶点/索引会自动递增修订号并失效缓存；直接写 GPU buffer 仍需显式 `invalidate('geometry')`。OHT 保留既有接触阴影，人员增加程序化地面接触圆盘；移动对象不进入静态 caster 集合，与原版静态设备阴影采用的分层方式一致。
 

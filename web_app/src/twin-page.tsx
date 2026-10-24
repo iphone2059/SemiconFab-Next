@@ -7,6 +7,9 @@ import type { AmhsStats, CutAxis, PickedTool, SceneLayer, XRayFilter } from './f
 import { FabRail, SiteScene, type SiteSceneHandle } from './site-preview';
 import { ResearchReplay, researchClock } from './research-replay';
 import { buildWaferWaypoints, parseWaferRoutes, waferTransitPoint, type WaferProduct, type WaferRouteStep } from './wafer-route';
+import { applyMesAction, buildTelemetry, computeSpc, createMesJob, type MesAction, type MesJob } from './process-control';
+import { BIN_COLORS, BIN_LABELS, WM811K_DEFECT_METADATA, generateWaferMap, stdfSummary, theoreticalYieldModels, waferMetrics, type BinCode, type DefectPattern } from './wafer-map';
+import { computeFabYield, DEFAULT_YIELD_INPUT, scenarioStates, YIELD_SCENARIOS } from './fab-yield';
 type EntryMode = 'visitor' | 'engineer' | 'research';
 type CameraView = 'iso' | 'top' | 'litho' | 'airshower' | 'etch' | 'oht';
 type FabLevel = 'L1' | 'B1' | 'DUAL' | 'EXPLODED';
@@ -92,6 +95,18 @@ export function TwinPage() {
   const [exploded, setExploded] = useState(false);
   const [basement, setBasement] = useState(false);
   const [selected, setSelected] = useState<PickedTool>();
+  const [mesJobs, setMesJobs] = useState<Record<number, MesJob>>({});
+  const [ymsOpen, setYmsOpen] = useState(false);
+  const [ymsTab, setYmsTab] = useState<'map' | 'yield'>('map');
+  const [waferPattern, setWaferPattern] = useState<DefectPattern>('clean');
+  const [waferSeed, setWaferSeed] = useState(811);
+  const [hoverDie, setHoverDie] = useState<{ r: number; c: number; bin: BinCode }>();
+  const [dieArea, setDieArea] = useState(100);
+  const [defectD0, setDefectD0] = useState(0.15);
+  const [clusterAlpha, setClusterAlpha] = useState(3);
+  const [yieldInput, setYieldInput] = useState(DEFAULT_YIELD_INPUT);
+  const [yieldScenario, setYieldScenario] = useState('live');
+  const [stdfCopied, setStdfCopied] = useState(false);
   const [status, setStatus] = useState('准备 WebGPU 视图…');
   const [amhs, setAmhs] = useState<AmhsStats>();
   const [railOpen, setRailOpen] = useState(true);
@@ -222,6 +237,33 @@ export function TwinPage() {
 
   const waferWaypoints = useMemo(() => waferRoutes ? buildWaferWaypoints(waferRoutes[waferProduct]) : [], [waferRoutes, waferProduct]);
   const waferPoint = waferWaypoints[waferIndex];
+  const selectedTelemetry = useMemo(() => selected ? buildTelemetry(FAB_LAYOUT[selected.index], selected.index) : undefined, [selected?.index]);
+  const selectedSpc = useMemo(() => selectedTelemetry ? computeSpc(selectedTelemetry.history, selectedTelemetry.sensors[0], toolStates[selected?.index ?? 0] === 'down') : undefined, [selectedTelemetry, toolStates, selected?.index]);
+  const selectedMes = selected ? mesJobs[selected.index] ?? createMesJob(FAB_LAYOUT[selected.index], selected.index) : undefined;
+  const waferDies = useMemo(() => generateWaferMap(waferPattern, waferSeed), [waferPattern, waferSeed]);
+  const waferAnalytics = useMemo(() => waferMetrics(waferDies), [waferDies]);
+  const yieldModels = useMemo(() => theoreticalYieldModels(dieArea, defectD0, clusterAlpha), [dieArea, defectD0, clusterAlpha]);
+  const stdf = useMemo(() => stdfSummary(waferDies, waferPattern), [waferDies, waferPattern]);
+  const yieldStates = useMemo(() => {
+    if (yieldScenario === 'live') return toolStates;
+    const scenario = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
+    return scenario ? scenarioStates(scenario) : toolStates;
+  }, [toolStates, yieldScenario]);
+  const fabYield = useMemo(() => computeFabYield(yieldStates, yieldInput), [yieldStates, yieldInput]);
+  const spcPlot = selectedTelemetry ? (() => {
+    const values = selectedTelemetry.history;
+    const low = Math.min(...values);
+    const high = Math.max(...values);
+    const range = high - low || 1;
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const std = Math.sqrt(values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / Math.max(1, values.length - 1)) || 0.001;
+    return {
+      points: values.map((value, index) => `${(index / (values.length - 1)) * 240},${30 - ((value - low) / range) * 26 - 2}`).join(' '),
+      meanY: 30 - ((mean - low) / range) * 26 - 2,
+      uclY: 30 - ((mean + 3 * std - low) / range) * 26 - 2,
+      lclY: 30 - ((mean - 3 * std - low) / range) * 26 - 2,
+    };
+  })() : undefined;
 
   useEffect(() => {
     if (!waferActive || !waferPoint || waferPlaying) {
@@ -408,6 +450,19 @@ export function TwinPage() {
       setCamera(stop.preset ?? 'iso');
     }
   }
+  function chooseYieldScenario(id: string): void {
+    setYieldScenario(id);
+    const scenario = YIELD_SCENARIOS.find((entry) => entry.id === id);
+    setYieldInput(scenario ? { purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime } : DEFAULT_YIELD_INPUT);
+  }
+  function runMesAction(action: MesAction): void {
+    if (!selected) return;
+    const index = selected.index;
+    setMesJobs((current) => ({
+      ...current,
+      [index]: applyMesAction(current[index] ?? createMesJob(FAB_LAYOUT[index], index), action),
+    }));
+  }
   function clearWaferTrail(): void {
     waferIndexRef.current = 0;
     waferProgressRef.current = 0;
@@ -508,6 +563,7 @@ export function TwinPage() {
           </div>
           <button type="button" className={`twin-tour${tourStep !== undefined ? ' active' : ''}`} aria-pressed={tourStep !== undefined} onClick={() => { if (tourStep === undefined) startTour(); else endTour(); }}>▶ Tour</button>
           <button type="button" className={`twin-wafer-toggle${waferActive ? ' active' : ''}`} aria-pressed={waferActive} onClick={() => { if (waferActive) closeWafer(); else startWafer(); }}>Wafer</button>
+          <button type="button" className={`twin-yms-toggle${ymsOpen ? ' active' : ''}`} aria-pressed={ymsOpen} onClick={() => setYmsOpen((open) => !open)}>YMS</button>
         </div>
         <div className="twin-topright">
           <span className={`twin-feed${mode === 'research' ? ' is-replay' : statusFeed?.stale ? ' is-stale' : ''}`}><i />{mode === 'research' ? 'REPLAY' : statusFeed?.stale ? 'CACHE' : 'LIVE'}</span>
@@ -602,6 +658,48 @@ export function TwinPage() {
               <dt>来源</dt><dd>本地布局 / OEM 目录</dd>
             </dl>
             <button type="button" className="twin-primary" onClick={() => scene.current?.selectTool(selected.index, true)}>在场景中定位</button>
+
+            {selectedMes && (
+              <section className="twin-process twin-mes" aria-label="SEMI MES Job Execution">
+                <div className="twin-process-head"><strong>SEMI MES · E40 / E87 / E94</strong><span className={`twin-mes-state ${selectedMes.state.toLowerCase()}`}>{selectedMes.state}</span></div>
+                <div className="twin-mes-grid">
+                  <div><span>CARRIER / FOUP</span><b>{selectedMes.carrierId}</b></div>
+                  <div><span>ACTIVE RECIPE</span><b title={selectedMes.recipeId}>{selectedMes.recipeId}</b></div>
+                  <div><span>LOT ID</span><b>{selectedMes.lotId}</b></div>
+                  <div><span>WAFER SLOT</span><b>{selectedMes.waferSlot} / 25</b></div>
+                </div>
+                <div className="twin-mes-step"><span>Step</span><b>{selectedMes.stepName}</b></div>
+                <div className="twin-mes-actions">
+                  <button type="button" onClick={() => runMesAction('track-in')}>Track-In</button>
+                  <button type="button" onClick={() => runMesAction('track-out')}>Track-Out</button>
+                  <button type="button" className="hold" onClick={() => runMesAction('hold')}>Hold</button>
+                </div>
+              </section>
+            )}
+
+            {selectedSpc && selectedTelemetry && spcPlot && (
+              <section className="twin-process twin-spc" aria-label="Process Capability">
+                <div className="twin-process-head"><strong>PROCESS CAPABILITY · SPC / Cpk</strong><span className={`twin-spc-state ${selectedSpc.status.startsWith('ALARM') ? 'alarm' : 'ok'}`}>{selectedSpc.status}</span></div>
+                <div className="twin-spc-grid">
+                  <div><span>Cp</span><b>{selectedSpc.cp.toFixed(2)}</b></div>
+                  <div><span>Cpk</span><b className={selectedSpc.cpk >= 1.67 ? 'good' : selectedSpc.cpk >= 1.33 ? '' : 'bad'}>{selectedSpc.cpk.toFixed(2)}</b></div>
+                  <div><span>SIGMA</span><b>{selectedSpc.sigma.toFixed(2)} σ</b></div>
+                </div>
+                <div className={`twin-spc-rule ${selectedSpc.rule.startsWith('Rule') ? 'alarm' : ''}`}><span>Nelson Run Rules</span><b>{selectedSpc.rule}</b></div>
+                <div className="twin-spc-sensors">
+                  {selectedTelemetry.sensors.map((sensor) => (
+                    <div key={sensor.name}><span>{sensor.name}</span><b>{sensor.value >= 1000 ? sensor.value.toFixed(0) : sensor.value < 0.01 ? sensor.value.toExponential(2) : sensor.value.toFixed(2)} <small>{sensor.unit}</small></b></div>
+                  ))}
+                </div>
+                <svg className="twin-spc-spark" viewBox="0 0 240 34" role="img" aria-label="FDC control chart">
+                  <line x1="0" x2="240" y1={spcPlot.uclY} y2={spcPlot.uclY} className="ucl" />
+                  <line x1="0" x2="240" y1={spcPlot.meanY} y2={spcPlot.meanY} className="cl" />
+                  <line x1="0" x2="240" y1={spcPlot.lclY} y2={spcPlot.lclY} className="lcl" />
+                  <polyline points={spcPlot.points} className="series" />
+                </svg>
+                <div className="twin-spc-legend"><span>LCL −3σ</span><span>CL</span><span>UCL +3σ</span></div>
+              </section>
+            )}
           </aside>
         )}
 
@@ -687,6 +785,98 @@ export function TwinPage() {
               </>
             )}
           </section>
+        )}
+
+        {ymsOpen && (
+          <div className="twin-yms-backdrop" onClick={() => setYmsOpen(false)}>
+            <section className="twin-yms" onClick={(event) => event.stopPropagation()} aria-label="YMS yield management">
+              <header className="twin-yms-head">
+                <div><strong>YMS · YIELD MANAGEMENT</strong><span>WM-811K SPATIAL CLASSIFIER · 8-STAGE CASCADING YIELD</span></div>
+                <nav>
+                  <button type="button" className={ymsTab === 'map' ? 'active' : ''} onClick={() => setYmsTab('map')}>Wafer Map</button>
+                  <button type="button" className={ymsTab === 'yield' ? 'active' : ''} onClick={() => setYmsTab('yield')}>Yield Waterfall</button>
+                </nav>
+                <button type="button" className="twin-yms-close" aria-label="关闭 YMS" onClick={() => setYmsOpen(false)}>×</button>
+              </header>
+
+              {ymsTab === 'map' ? (
+                <div className="twin-yms-map">
+                  <aside className="twin-patterns">
+                    <span className="twin-yms-label">WM-811K PATTERNS</span>
+                    {(Object.keys(WM811K_DEFECT_METADATA) as DefectPattern[]).map((pattern) => (
+                      <button type="button" key={pattern} className={waferPattern === pattern ? 'active' : ''} onClick={() => { setWaferPattern(pattern); setWaferSeed((seed) => seed + 1); }}>
+                        <b>{WM811K_DEFECT_METADATA[pattern].name}</b>
+                        <small>{WM811K_DEFECT_METADATA[pattern].confidence} confidence</small>
+                      </button>
+                    ))}
+                    <button type="button" className="twin-yms-random" onClick={() => { const patterns = Object.keys(WM811K_DEFECT_METADATA) as DefectPattern[]; setWaferPattern(patterns[Math.floor(Math.random() * patterns.length)]); setWaferSeed((seed) => seed + 1); }}>随机模式</button>
+                  </aside>
+                  <div className="twin-wafer-stage">
+                    <svg viewBox="0 0 320 320" role="img" aria-label="300mm wafer die map">
+                      <circle cx="160" cy="160" r="149" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="3" />
+                      <circle cx="160" cy="160" r="145" fill="#0f172a" stroke="#94a3b8" strokeWidth="1.5" />
+                      <circle cx="160" cy="160" r="139" fill="#1e293b" opacity="0.6" />
+                      {waferDies.map((die) => (
+                        <rect key={`${die.r}-${die.c}`} x={160 + die.dx - 5.15} y={160 + die.dy - 5.15} width={10.3} height={10.3} rx={1.5} fill={BIN_COLORS[die.bin]} stroke="#fff" strokeWidth={0.3} onMouseEnter={() => setHoverDie({ r: die.r, c: die.c, bin: die.bin })} onMouseLeave={() => setHoverDie(undefined)} />
+                      ))}
+                      <path d="M152 305 Q160 295 168 305" fill="none" stroke="#64748b" strokeWidth="2" />
+                    </svg>
+                    <div className="twin-wafer-hover">{hoverDie ? `Die [R${hoverDie.r}, C${hoverDie.c}] · ${BIN_LABELS[hoverDie.bin]}` : `300 mm · ${waferAnalytics.total} dies · Notch 180°`}</div>
+                  </div>
+                  <aside className="twin-yms-analytics">
+                    <div className="twin-yms-pattern"><span>CLASSIFIED PATTERN</span><b>{WM811K_DEFECT_METADATA[waferPattern].name}</b><small>Confidence {WM811K_DEFECT_METADATA[waferPattern].confidence}</small></div>
+                    <p>{WM811K_DEFECT_METADATA[waferPattern].desc}</p>
+                    <div className="twin-yms-cause"><span>ROOT CAUSE</span>{WM811K_DEFECT_METADATA[waferPattern].rootCause}</div>
+                    <div className="twin-yms-yield-row"><div><span>GROSS YIELD</span><b>{waferAnalytics.yieldPct.toFixed(1)}%</b><small>{waferAnalytics.good} / {waferAnalytics.total} dies</small></div><div><span>MODEL LOSS</span><b>{WM811K_DEFECT_METADATA[waferPattern].lossPct.toFixed(1)}%</b><small>D0 {waferAnalytics.d0.toFixed(3)}/cm²</small></div></div>
+                    <div className="twin-bin-list">
+                      {([1, 2, 3, 4, 5] as BinCode[]).map((bin) => <div key={bin}><i style={{ background: BIN_COLORS[bin] }} /><span>{BIN_LABELS[bin]}</span><b>{waferAnalytics.bins[bin]} · {((waferAnalytics.bins[bin] / Math.max(1, waferAnalytics.total)) * 100).toFixed(1)}%</b></div>)}
+                    </div>
+                    <div className="twin-yield-models">
+                      <span className="twin-yms-label">THEORETICAL YIELD MODELS</span>
+                      <label>Die area <b>{dieArea} mm²</b><input type="range" min={25} max={300} step={5} value={dieArea} onChange={(event) => setDieArea(Number(event.target.value))} /></label>
+                      <label>Defect D0 <b>{defectD0.toFixed(2)} /cm²</b><input type="range" min={0.02} max={0.6} step={0.01} value={defectD0} onChange={(event) => setDefectD0(Number(event.target.value))} /></label>
+                      <label>Cluster α <b>{clusterAlpha.toFixed(2)}</b><input type="range" min={0.5} max={6} step={0.1} value={clusterAlpha} onChange={(event) => setClusterAlpha(Number(event.target.value))} /></label>
+                      <div className="twin-model-grid"><div><span>POISSON</span><b>{yieldModels.poisson.toFixed(1)}%</b></div><div><span>MURPHY</span><b>{yieldModels.murphy.toFixed(1)}%</b></div><div><span>SEEDS</span><b>{yieldModels.seeds.toFixed(1)}%</b></div></div>
+                    </div>
+                    <div className="twin-stdf-head"><span>STDF V4 PREVIEW</span><button type="button" onClick={() => { void navigator.clipboard?.writeText(JSON.stringify(stdf, null, 2)).then(() => { setStdfCopied(true); window.setTimeout(() => setStdfCopied(false), 1800); }).catch(() => {}); }}>{stdfCopied ? 'Copied' : 'Copy JSON'}</button></div>
+                    <pre className="twin-stdf">{`MIR: LotID="LOT-300-8842", TestCode="CP1", Fab="FAB-1", Tester="ADVANTEST-V93K"
+WIR: WaferID="W-14", Diameter=300mm, Notch=180, TotalDies=${waferAnalytics.total}, Tested=${waferAnalytics.total}
+PRR: PassCount=${waferAnalytics.good}, FailCount=${waferAnalytics.total - waferAnalytics.good}, GrossYield=${waferAnalytics.yieldPct.toFixed(2)}%, D0_Est=${waferAnalytics.d0.toFixed(3)}/cm²
+BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin3=${waferAnalytics.bins[3]}, Bin4=${waferAnalytics.bins[4]}, Bin5=${waferAnalytics.bins[5]}`}</pre>
+                  </aside>
+                </div>
+              ) : (
+                <div className="twin-yield-view">
+                  <div className="twin-yield-summary">
+                    <div><span>OVERALL FAB YIELD</span><b>{(fabYield.totalYield * 100).toFixed(2)}%</b><small>Y_fab = ∏ Y_i</small></div>
+                    <div><span>EFFECTIVE CAPACITY</span><b>{fabYield.wpm.toLocaleString()}</b><small>wafers / month</small></div>
+                    <div><span>BOTTLENECK</span><b>{fabYield.bottleneck.short}</b><small>{fabYield.bottleneck.name}</small></div>
+                  </div>
+                  <div className="twin-yield-scenarios" aria-label="Yield scenarios">
+                    <button type="button" className={yieldScenario === 'live' ? 'active' : ''} onClick={() => chooseYieldScenario('live')}>LIVE</button>
+                    {YIELD_SCENARIOS.map((scenario) => <button type="button" key={scenario.id} className={yieldScenario === scenario.id ? 'active' : ''} onClick={() => chooseYieldScenario(scenario.id)}>{scenario.name}</button>)}
+                  </div>
+                  <div className="twin-yield-bars">
+                    {fabYield.modules.map((entry) => (
+                      <div key={entry.module.id} className={entry.bottleneck ? 'bottleneck' : ''}>
+                        <span className="twin-yield-icon">{entry.module.icon}</span>
+                        <span className="twin-yield-name">{entry.module.short} · {entry.module.name}</span>
+                        <b className="twin-yield-step">{(entry.stepYield * 100).toFixed(2)}%</b>
+                        <i><b style={{ width: `${Math.min(100, entry.cumulativeYield * 100)}%` }} /></i>
+                        <em>{(entry.cumulativeYield * 100).toFixed(1)}%</em>
+                        {entry.bottleneck && <strong>BOTTLENECK</strong>}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="twin-yield-inputs">
+                    <label>Raw material purity <b>{yieldInput.purity.toFixed(1)}N</b><input type="range" min={4} max={6} step={0.1} value={yieldInput.purity} onChange={(event) => setYieldInput((current) => ({ ...current, purity: Number(event.target.value) }))} /></label>
+                    <label>Equipment health <b>{yieldInput.health.toFixed(1)}%</b><input type="range" min={70} max={100} step={0.1} value={yieldInput.health} onChange={(event) => setYieldInput((current) => ({ ...current, health: Number(event.target.value) }))} /></label>
+                    <label>Queue lag <b>{yieldInput.lagTime.toFixed(1)} h</b><input type="range" min={0} max={16} step={0.1} value={yieldInput.lagTime} onChange={(event) => setYieldInput((current) => ({ ...current, lagTime: Number(event.target.value) }))} /></label>
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
         )}
 
         <div className="twin-bottom">
