@@ -30,6 +30,7 @@ async function pressEscape() {
 
   await command('Page.navigate', { url: baseUrl + '/' });
   await until(`!!document.querySelector('a[href="/twin"]')`);
+  await evaluate(`localStorage.removeItem('semicon_twin_onboarding_dismissed')`);
   assert.equal(await evaluate(`!!document.querySelector('canvas')`), false, 'the website entrance must not render a preview');
   assert.equal(await evaluate(`!!document.querySelector('a[href="/preview"]')`), false);
   await command('Page.navigate', { url: baseUrl + '/twin?lang=zh-CN' });
@@ -99,9 +100,27 @@ async function pressEscape() {
   await until(`!document.querySelector('.twin-yms')`);
 
   if (await evaluate(`!!document.querySelector('.twin-onboarding')`)) {
+    assert.match(await evaluate(`document.querySelector('.twin-onboarding').innerText`), /1\/3/);
+    await evaluate(`document.querySelector('#onboarding-next-btn').click()`);
+    await until(`document.querySelector('.twin-onboarding').innerText.includes('2/3')`);
     await evaluate(`document.querySelector('.twin-onboarding-head button').click()`);
     await until(`!document.querySelector('.twin-onboarding')`);
   }
+
+  await evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((item) => /Full Database|完整数据库/.test(item.textContent.trim())); button.click(); })()`);
+  await until(`!!document.querySelector('#oem-database-modal')`);
+  assert.equal(await evaluate(`document.querySelectorAll('#modal-database-tbody tr').length`), 116);
+  await evaluate(`(() => { const select = document.querySelector('#modal-segment-select'); select.value = 'Lithography'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await until(`Number(document.querySelector('#modal-matched-count').textContent) < 116`);
+  await pressEscape();
+  await until(`!document.querySelector('#oem-database-modal')`);
+  await evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((item) => /Open Arch|开放软件架构/.test(item.textContent.trim())); button.click(); })()`);
+  await until(`!!document.querySelector('#open-architecture-modal')`);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-arch-card').length`), 4);
+  assert.equal(await evaluate(`document.querySelectorAll('#open-architecture-modal tbody tr').length`), 4);
+  assert.equal(await evaluate(`document.querySelector('#open-architecture-modal')?.parentElement?.tagName`), 'BODY');
+  await pressEscape();
+  await until(`!document.querySelector('#open-architecture-modal')`);
 
   await evaluate(`document.querySelector('.twin-cut-toggle').click()`);
   await until(`!!document.querySelector('.twin-cut')`);

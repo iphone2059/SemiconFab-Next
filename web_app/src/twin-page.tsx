@@ -7,6 +7,7 @@ import type { AmhsStats, CutAxis, PickedTool, SceneLayer, XRayFilter } from './f
 import { FabViewport, type FabViewportHandle } from './fab-viewer';
 import { TwinSidebar } from './twin-sidebar';
 import { OriginalInspector } from './twin-inspector';
+import { TwinInfoDialog } from './twin-dialogs';
 import { ORIGINAL_TWIN_UI, type TwinSelection } from './original-twin-data';
 import { ResearchReplay, researchClock } from './research-replay';
 import { buildWaferWaypoints, waferTransitPoint, type WaferProduct } from './wafer-route';
@@ -225,6 +226,12 @@ function TwinContent() {
   }, [siteId]);
 
   useEffect(() => {
+    const modal = new URL(location.href).searchParams.get('modal');
+    if (modal === 'database' || modal === 'catalog') dispatch(twinPageActions.infoDialogSet('database'));
+    else if (modal === 'arch') dispatch(twinPageActions.infoDialogSet('architecture'));
+  }, []);
+
+  useEffect(() => {
     if (ui.statusSource !== 'demo' || !demo.playing) return;
     const timer = window.setInterval(() => dispatch(twinDemoActions.tick()), DEMO_TICK_MS);
     return () => window.clearInterval(timer);
@@ -316,11 +323,25 @@ function TwinContent() {
     const scenario = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
     return scenario ? scenarioStates(scenario) : toolStates;
   }, [toolStates, yieldScenario]);
+  const yieldDirectoryStates = useMemo(() => {
+    const scenario = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
+    const states: Record<string, FabToolState> = {};
+    for (const row of ORIGINAL_TWIN_UI.equipment) {
+      const override = scenario?.overrides[row.id];
+      states[row.id] = override
+        ? override.toLowerCase() as FabToolState
+        : yieldScenario === 'live' ? (demo.referenceLights[row.id] ?? 'running') : 'running';
+    }
+    return states;
+  }, [yieldScenario, demo.referenceLights]);
   const yieldUnresolved = useMemo(() => {
     const scenario = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
     return scenario ? resolveScenario(scenario).unresolvedIds : [];
   }, [yieldScenario]);
-  const fabYield = useMemo(() => computeFabYield(yieldStates, yieldInput), [yieldStates, yieldInput]);
+  const fabYield = useMemo(() => computeFabYield(yieldStates, yieldInput, {
+    directoryStates: yieldDirectoryStates,
+    scenarioId: yieldScenario === 'live' ? undefined : yieldScenario,
+  }), [yieldStates, yieldInput, yieldDirectoryStates, yieldScenario]);
   const spcPlot = selectedTelemetry ? (() => {
     const values = selectedTelemetry.history;
     const low = Math.min(...values);
@@ -995,12 +1016,11 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
         )}
 
         {infoDialog && (
-          <div className="twin-yms-backdrop" onClick={() => setInfoDialog(null)}>
-            <section className="twin-yms" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={infoDialog}>
-              <header className="twin-yms-head"><div><strong>{infoDialog === 'architecture' ? 'OPEN SOFTWARE ARCHITECTURE' : 'OEM DATABASE'}</strong><span>{infoDialog === 'architecture' ? 'React + TypeScript + Babylon.js WebGPU' : '116 SEMI-E72 records'}</span></div><button type="button" className="twin-yms-close" onClick={() => setInfoDialog(null)}>×</button></header>
-              <div className="twin-info-dialog">{infoDialog === 'architecture' ? <><p>Single-FAB procedural WebGPU runtime. React owns the page and typed HUD state; Babylon owns the WebGPU scene, native static shadows and cut plane.</p><p>No Three.js, WebGL fallback, iframe original page or glTF loaders are used in the production runtime.</p></> : <><p>The OEM tab contains all 116 source catalog rows. Selecting a row keeps the page in <code>/twin</code> and opens its source/spec record in the inspector.</p><p>Draft layout instances remain selectable in the 3D scene and are intentionally not treated as 121 directory cards.</p></>}</div>
-            </section>
-          </div>
+          <TwinInfoDialog
+            mode={infoDialog}
+            onClose={() => setInfoDialog(null)}
+            onSelectOem={(id) => handleTwinSelection({ kind: 'oem', id })}
+          />
         )}
 
         {onboarding && (
@@ -1012,8 +1032,8 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
               <label className="twin-onboarding-dont-show"><input id="onboarding-dont-show" type="checkbox" checked={onboardingDontShow} onChange={(event) => setOnboardingDontShow(event.target.checked)} /><span id="onboarding-dont-show-text">{t("不再提示")}</span></label>
               <div className="twin-onboarding-actions">
                 <button type="button" onClick={dismissOnboarding}>{t("跳过")}</button>
-                <button id="onboarding-prev-btn" type="button" onClick={() => dispatch({ type: 'onboarding/step', step: onboardingStep - 1 })} disabled={onboardingStep === 0}>{t("上一步")}</button>
-                <button id="onboarding-next-btn" type="button" className="primary" onClick={() => { if (onboardingStep === ONBOARDING_STEPS.length - 1) finishOnboarding(); else dispatch({ type: 'onboarding/step', step: onboardingStep + 1 }); }}>{onboardingStep === ONBOARDING_STEPS.length - 1 ? t("开始导览") : t("下一步")}</button>
+                <button id="onboarding-prev-btn" type="button" onClick={() => dispatch(twinUiActions.onboardingStep(onboardingStep - 1))} disabled={onboardingStep === 0}>{t("上一步")}</button>
+                <button id="onboarding-next-btn" type="button" className="primary" onClick={() => { if (onboardingStep === ONBOARDING_STEPS.length - 1) finishOnboarding(); else dispatch(twinUiActions.onboardingStep(onboardingStep + 1)); }}>{onboardingStep === ONBOARDING_STEPS.length - 1 ? t("开始导览") : t("下一步")}</button>
               </div>
             </div>
           </div>

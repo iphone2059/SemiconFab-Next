@@ -96,6 +96,8 @@ export interface TwinPageState {
     switched: boolean;
   };
   inspectorMes: Record<string, MesJob>;
+  oemDialog: { query: string; segment: string; vendor: string };
+  archQuery: string;
 }
 
 const initialPageState: TwinPageState = {
@@ -114,6 +116,8 @@ const initialPageState: TwinPageState = {
   yms: { open: false, tab: 'map', pattern: 'clean', seed: 811, dieArea: 100, defectD0: 0.15, clusterAlpha: 3, yieldInput: DEFAULT_YIELD_INPUT, yieldScenario: 'live', stdfCopied: false },
   sidebar: { tab: 'fab', query: '', category: 'ALL', segment: 'ALL', stateFilter: 'ALL', switched: false },
   inspectorMes: {},
+  oemDialog: { query: '', segment: 'ALL', vendor: 'ALL' },
+  archQuery: '',
 };
 
 export const twinPageSlice = createSlice({
@@ -164,6 +168,10 @@ export const twinPageSlice = createSlice({
     sidebarSegmentSet(state, action: PayloadAction<string>) { state.sidebar.segment = action.payload; },
     sidebarStateFilterToggle(state, action: PayloadAction<string>) { state.sidebar.stateFilter = state.sidebar.stateFilter === action.payload ? 'ALL' : action.payload; },
     inspectorMesSet(state, action: PayloadAction<{ id: string; job: MesJob }>) { state.inspectorMes[action.payload.id] = action.payload.job; },
+    oemDialogQuerySet(state, action: PayloadAction<string>) { state.oemDialog.query = action.payload; },
+    oemDialogSegmentSet(state, action: PayloadAction<string>) { state.oemDialog.segment = action.payload; },
+    oemDialogVendorSet(state, action: PayloadAction<string>) { state.oemDialog.vendor = action.payload; },
+    archQuerySet(state, action: PayloadAction<string>) { state.archQuery = action.payload; },
   },
 });
 

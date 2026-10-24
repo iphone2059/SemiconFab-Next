@@ -45,8 +45,10 @@
 - 新增数字孪生性能边界：Babylon 对象不进 Store；SSE/AMHS 遥测经 100ms 合并缓冲；Babylon 帧循环用 `store.getState()` 读取 demo/live 状态；高频 action 从 DevTools/序列化检查中过滤；Hover 拾取 50ms 节流。
 - 新增 B1 密集工业层：3 条 94m 螺旋风管及吊架/支管/阀箱、5 条 84m 二次工艺管及阀轮、21 台干泵撬、4 台洗涤塔、4 台冷水机、68 台 MCC 柜、安全通道和高棚灯；B1/DUAL 独立显示。
 - 新增巡检工程师相机跟随、Cut Invert、Research 利用率开关、页脚 ID 与 6m 网格/Subfab 深度徽标。
+- 恢复原版 OEM 数据库与开放架构弹窗：116 条 OEM 表格、搜索/工艺段/厂商过滤、4 个 ISA-95 架构层与基础设施对照表；弹窗挂载到 `BODY`，保留 Esc/背景关闭和焦点入口。
+- 修正首次引导步骤 action，并补齐弹窗浏览器验收；KPI 改为按原版最终 18 行目录统计 DOWN，`etch_down` 场景补回 bottleneck cycle +1.8。
 - 新增 WebGPU 性能基线：headless Chrome 1920×1080 DPR1 下 idle/orbit 约 1,670–1,688 draw calls、Babylon render 31–32ms、rAF p95 75ms；完整环境/方法/限制见 [performance-baseline.md](twin-parity/performance-baseline.md)。
-- 最新验证：TypeScript、120/120 Vitest、生产构建和 `/twin` 浏览器验收通过。Roof 模块 9 个 NullEngine 测试通过；尚未完成原版整页逐控件视觉阈值。
+- 最新验证：TypeScript、121/121 Vitest、生产构建和 `/twin` 浏览器验收通过。Roof 模块 9 个 NullEngine 测试通过；尚未完成原版整页逐控件视觉阈值。
 
 ## 单 FAB 产品边界（2026-10-24）
 

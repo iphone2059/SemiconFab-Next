@@ -1,5 +1,6 @@
-import { FAB_LAYOUT } from './fab-layout';
+import { FAB_LAYOUT, type FabToolState } from './fab-layout';
 import { resolveScenario, type ScenarioOverrides } from './twin-equipment';
+import { ORIGINAL_TWIN_UI } from './original-twin-data';
 
 export interface ProcessModule {
   id: string;
@@ -8,19 +9,26 @@ export interface ProcessModule {
   icon: string;
   baseYield: number;
   categories: readonly string[];
+  /** Original FAB_EQUIPMENT category names used by calculateFabYieldAndCapa. */
+  sourceBays: readonly string[];
   unit: string;
   paramName: string;
 }
+export interface FabYieldOptions {
+  /** Source 18-row directory lights. When present, down counts use FAB_EQUIPMENT, not the 121 layout. */
+  directoryStates?: Readonly<Record<string, FabToolState>>;
+  scenarioId?: string;
+}
 
 export const CORE_PROCESS_MODULES: readonly ProcessModule[] = [
-  { id: 'oxi', name: 'Thermal Oxidation / Diffusion', short: 'OXI', icon: '🔥', baseYield: 0.994, categories: ['thermal_processing'], unit: 'nm', paramName: 'Oxide Uniformity' },
-  { id: 'litho', name: 'High-NA EUV Lithography', short: 'LITHO', icon: '💡', baseYield: 0.985, categories: ['lithography'], unit: 'nm', paramName: 'Overlay Alignment Error' },
-  { id: 'etch', name: 'HAR Plasma & Atomic Etch', short: 'ETCH', icon: '⚡', baseYield: 0.988, categories: ['dry_etch'], unit: '°', paramName: 'Sidewall Verticality' },
-  { id: 'cvd', name: 'Conformal CVD/ALD Thin Film', short: 'CVD', icon: '🌡️', baseYield: 0.991, categories: ['thin_film_deposition'], unit: '%', paramName: 'Step Coverage Ratio' },
-  { id: 'imp', name: 'High-Current Ion Implant', short: 'IMP', icon: '⚛️', baseYield: 0.993, categories: ['ion_implantation'], unit: '%', paramName: 'Dopant Uniformity' },
-  { id: 'cmp', name: 'CMP Planarization', short: 'CMP', icon: '💎', baseYield: 0.989, categories: ['cmp', 'wet_clean'], unit: 'ea', paramName: 'Micro-Scratch Count' },
-  { id: 'pvd', name: 'Subtractive Ru/Cu Metallization', short: 'PVD', icon: '✨', baseYield: 0.992, categories: ['thin_film_deposition'], unit: '%', paramName: 'Via Fill Percentage' },
-  { id: 'anl', name: 'Rapid Thermal Millisecond Anneal', short: 'ANL', icon: '🌀', baseYield: 0.996, categories: ['thermal_processing'], unit: '%', paramName: 'Dopant Activation Rate' },
+  { id: 'oxi', name: 'Thermal Oxidation / Diffusion', short: 'OXI', icon: '🔥', baseYield: 0.994, categories: ['thermal_processing'], sourceBays: ['imp_therm'], unit: 'nm', paramName: 'Oxide Uniformity' },
+  { id: 'litho', name: 'High-NA EUV Lithography', short: 'LITHO', icon: '💡', baseYield: 0.985, categories: ['lithography'], sourceBays: ['litho'], unit: 'nm', paramName: 'Overlay Alignment Error' },
+  { id: 'etch', name: 'HAR Plasma & Atomic Etch', short: 'ETCH', icon: '⚡', baseYield: 0.988, categories: ['dry_etch'], sourceBays: ['etch'], unit: '°', paramName: 'Sidewall Verticality' },
+  { id: 'cvd', name: 'Conformal CVD/ALD Thin Film', short: 'CVD', icon: '🌡️', baseYield: 0.991, categories: ['thin_film_deposition'], sourceBays: ['depo'], unit: '%', paramName: 'Step Coverage Ratio' },
+  { id: 'imp', name: 'High-Current Ion Implant', short: 'IMP', icon: '⚛️', baseYield: 0.993, categories: ['ion_implantation'], sourceBays: ['imp_therm'], unit: '%', paramName: 'Dopant Uniformity' },
+  { id: 'cmp', name: 'CMP Planarization', short: 'CMP', icon: '💎', baseYield: 0.989, categories: ['cmp', 'wet_clean'], sourceBays: ['wet_cmp'], unit: 'ea', paramName: 'Micro-Scratch Count' },
+  { id: 'pvd', name: 'Subtractive Ru/Cu Metallization', short: 'PVD', icon: '✨', baseYield: 0.992, categories: ['thin_film_deposition'], sourceBays: ['depo'], unit: '%', paramName: 'Via Fill Percentage' },
+  { id: 'anl', name: 'Rapid Thermal Millisecond Anneal', short: 'ANL', icon: '🌀', baseYield: 0.996, categories: ['thermal_processing'], sourceBays: ['imp_therm'], unit: '%', paramName: 'Dopant Activation Rate' },
 ];
 
 export interface YieldInput {
@@ -131,19 +139,26 @@ export interface FabYield {
   factors: { purity: number; health: number; lag: number };
 }
 
-export function computeFabYield(states: readonly string[], input: YieldInput = DEFAULT_YIELD_INPUT): FabYield {
+export function computeFabYield(states: readonly string[], input: YieldInput = DEFAULT_YIELD_INPUT, options: FabYieldOptions = {}): FabYield {
   const purityFactor = input.purity >= 5.5 ? 1.002 : input.purity >= 5.0 ? 1.0 : input.purity >= 4.5 ? 0.96 : input.purity >= 4.0 ? 0.88 : 0.72;
   const healthFactor = 0.75 + 0.25 * (input.health / 100);
   const lagFactor = input.lagTime <= 1 ? 1.0 : input.lagTime <= 4 ? 0.985 : input.lagTime <= 8 ? 0.95 : input.lagTime <= 16 ? 0.88 : 0.78;
-  const downByCategory = new Map<string, number>();
+  const directoryStates = options.directoryStates;
+  const layoutDownByCategory = new Map<string, number>();
   FAB_LAYOUT.forEach((tool, index) => {
-    if (states[index] === 'down') downByCategory.set(tool.category, (downByCategory.get(tool.category) ?? 0) + 1);
+    if (states[index] === 'down') layoutDownByCategory.set(tool.category, (layoutDownByCategory.get(tool.category) ?? 0) + 1);
   });
   let cumulative = 1;
   let bottleneck: ProcessModule = CORE_PROCESS_MODULES[0];
   let minimum = 1;
   const modules: ModuleYield[] = CORE_PROCESS_MODULES.map((module) => {
-    const downCount = module.categories.reduce((sum, category) => sum + (downByCategory.get(category) ?? 0), 0);
+    // The source KPI counts DOWN rows in the final FAB_EQUIPMENT directory and
+    // compares against its bay ids, even though the rendered layout has 121
+    // draft instances. Keep that boundary explicit instead of substituting a
+    // convenient but different 121-instance projection.
+    const downCount = directoryStates
+      ? ORIGINAL_TWIN_UI.equipment.filter((row) => module.sourceBays.includes(row.category) && directoryStates[row.id] === 'down').length
+      : module.categories.reduce((sum, category) => sum + (layoutDownByCategory.get(category) ?? 0), 0);
     const downPenalty = downCount > 0 ? 1 - 0.08 * downCount : 1;
     const stepYield = Math.max(0.6, Math.min(0.999, module.baseYield * purityFactor * healthFactor * lagFactor * downPenalty));
     cumulative *= stepYield;
@@ -155,7 +170,8 @@ export function computeFabYield(states: readonly string[], input: YieldInput = D
   });
   for (const module of modules) module.bottleneck = module.module.id === bottleneck.id;
   const totalYield = Math.max(0.4, Math.min(0.985, cumulative));
-  const bottleneckCycle = Math.max(2.0, 2.0 + input.lagTime * 0.4);
+  // calculateFabYieldAndCapa adds 1.8 to the bottleneck cycle for etch_down.
+  const bottleneckCycle = Math.max(2.0, 2.0 + input.lagTime * 0.4 + (options.scenarioId === 'etch_down' ? 1.8 : 0));
   const wpm = Math.round(50000 * totalYield * (24 / (bottleneckCycle * 10)));
   return { totalYield, wpm, modules, bottleneck, factors: { purity: purityFactor, health: healthFactor, lag: lagFactor } };
 }
