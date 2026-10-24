@@ -4,6 +4,7 @@ export interface FabPlacement { readonly fabId: string; readonly code: string; r
 
 export type SceneViewPreset = 'iso' | 'top' | 'reset' | 'focus' | 'litho' | 'airshower' | 'etch' | 'oht';
 export type SceneLayer = 'amhs' | 'ceiling' | 'subfab' | 'heatmap' | 'airflow' | 'xray';
+export type CutAxis = 'X' | 'Y' | 'Z';
 
 export interface PickedTool {
   readonly index: number;
@@ -47,6 +48,7 @@ export interface SceneBackend {
   setExplodeFactor?(factor: number): void;
   setBasement?(active: boolean): void;
   setDual?(active: boolean): void;
+  setCutPlane?(active: boolean, axis: CutAxis, position: number, invert: boolean): void;
 }
 
 export class SceneFacade {
@@ -97,6 +99,9 @@ export class SceneFacade {
   }
   setDual(active: boolean): void {
     if (!this.controller.signal.aborted) this.backend.setDual?.(active);
+  }
+  setCutPlane(active: boolean, axis: CutAxis, position: number, invert: boolean): void {
+    if (!this.controller.signal.aborted) this.backend.setCutPlane?.(active, axis, position, invert);
   }
   dispose(): void { this.controller.abort(); this.backend.dispose(); }
 }

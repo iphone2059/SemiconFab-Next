@@ -3,7 +3,7 @@ import { ApiClient } from './api-client';
 import type { SiteDto } from './contracts';
 import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus } from './equipment-status';
 import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
-import type { AmhsStats, PickedTool, SceneLayer } from './fab-scene';
+import type { AmhsStats, CutAxis, PickedTool, SceneLayer } from './fab-scene';
 import { FabRail, SiteScene, type SiteSceneHandle } from './site-preview';
 type EntryMode = 'visitor' | 'engineer' | 'research';
 type CameraView = 'iso' | 'top' | 'litho' | 'airshower' | 'etch' | 'oht';
@@ -71,6 +71,10 @@ export function TwinPage() {
   const [view, setView] = useState<CameraView>('iso');
   const [level, setLevel] = useState<FabLevel>('L1');
   const [explodePercent, setExplodePercent] = useState(100);
+  const [cutActive, setCutActive] = useState(false);
+  const [cutAxis, setCutAxis] = useState<CutAxis>('X');
+  const [cutPosition, setCutPosition] = useState(0);
+  const [cutInvert, setCutInvert] = useState(false);
   const [mode, setMode] = useState<EntryMode>('engineer');
   const [tourStep, setTourStep] = useState<number>();
   const [onboarding, setOnboarding] = useState(false);
@@ -180,7 +184,12 @@ export function TwinPage() {
       return next;
     });
   }
+  function disableCut(): void {
+    if (cutActive) scene.current?.setCutPlane(false, cutAxis, cutPosition, cutInvert);
+    setCutActive(false);
+  }
   function resetLevel(): void {
+    disableCut();
     scene.current?.setDual(false);
     if (basement) scene.current?.setBasement(false);
     if (exploded) scene.current?.setExploded(false);
@@ -189,11 +198,24 @@ export function TwinPage() {
     setExploded(false);
     setLevel('L1');
   }
+  function toggleCut(): void {
+    if (cutActive) { disableCut(); return; }
+    resetLevel();
+    scene.current?.setCutPlane(true, cutAxis, cutPosition, cutInvert);
+    setCutActive(true);
+  }
+  function updateCut(axis: CutAxis, position: number, invert: boolean): void {
+    setCutAxis(axis);
+    setCutPosition(position);
+    setCutInvert(invert);
+    if (cutActive) scene.current?.setCutPlane(true, axis, position, invert);
+  }
   function setL1(): void {
     resetLevel();
   }
   function setB1(): void {
     if (level === 'B1') { resetLevel(); return; }
+    disableCut();
     scene.current?.setDual(false);
     if (exploded) scene.current?.setExploded(false);
     scene.current?.setExplodeFactor(0);
@@ -204,6 +226,7 @@ export function TwinPage() {
   }
   function setDual(): void {
     if (level === 'DUAL') { resetLevel(); return; }
+    disableCut();
     if (basement) scene.current?.setBasement(false);
     if (exploded) scene.current?.setExploded(false);
     scene.current?.setExplodeFactor(0);
@@ -214,6 +237,7 @@ export function TwinPage() {
   }
   function toggleExploded(): void {
     if (level === 'EXPLODED') { resetLevel(); return; }
+    disableCut();
     scene.current?.setDual(false);
     if (basement) scene.current?.setBasement(false);
     scene.current?.setExplodeFactor(explodePercent / 100);
@@ -295,6 +319,7 @@ export function TwinPage() {
             <button type="button" className={level === 'DUAL' ? 'active' : ''} onClick={setDual}>Dual</button>
             <button type="button" className={level === 'EXPLODED' ? 'active' : ''} onClick={toggleExploded}>Explode</button>
           </div>
+          <button type="button" className={`twin-cut-toggle${cutActive ? ' active' : ''}`} aria-pressed={cutActive} onClick={toggleCut}>Cut</button>
           <div className="twin-cameras" role="group" aria-label="相机预设">
             <button type="button" className={view === 'iso' ? 'active' : ''} onClick={() => setCamera('iso')}>ISO</button>
             <button type="button" className={view === 'top' ? 'active' : ''} onClick={() => setCamera('top')}>Top</button>
@@ -321,6 +346,18 @@ export function TwinPage() {
           <span>EXPLODE</span>
           <input type="range" min={0} max={100} step={1} value={explodePercent} onChange={(event) => changeExplode(Number(event.target.value))} aria-label="爆炸视图比例" />
           <b>{explodePercent}%</b>
+        </div>
+      )}
+
+      {cutActive && (
+        <div className="twin-cut" role="group" aria-label="剖切平面">
+          <span>CUT</span>
+          <select value={cutAxis} onChange={(event) => updateCut(event.target.value as CutAxis, cutPosition, cutInvert)} aria-label="剖切轴">
+            <option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option>
+          </select>
+          <input type="range" min={-55} max={55} step={1} value={cutPosition} onChange={(event) => updateCut(cutAxis, Number(event.target.value), cutInvert)} aria-label="剖切位置" />
+          <b>{cutPosition.toFixed(0)} m</b>
+          <label><input type="checkbox" checked={cutInvert} onChange={(event) => updateCut(cutAxis, cutPosition, event.target.checked)} /> Invert</label>
         </div>
       )}
 

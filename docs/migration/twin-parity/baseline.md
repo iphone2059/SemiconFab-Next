@@ -18,10 +18,10 @@ The new `/twin` route provides the first page-level shell without replacing the 
 - layer controls;
 - the existing `SiteScene` contract with its internal chrome hidden.
 
-Implemented in this shell: ISO/Top/Litho/Airlock camera presets, L1/B1/DUAL/Explode, continuous 0–100% explode slider, a five-stop cinematic tour (overview, litho, etch, OHT, Subfab), a three-step first-run onboarding with the original localStorage key, AMHS/FFU/Subfab/Heatmap/Airflow/X-Ray layers, equipment selection, Visitor/Engineer/Research presentation (Research replay is explicitly marked not connected).
+Implemented in this shell: ISO/Top/Litho/Airlock camera presets, L1/B1/DUAL/Explode, continuous 0–100% explode slider, X/Y/Z Cut with position and Invert, a five-stop cinematic tour (overview, litho, etch, OHT, Subfab), a three-step first-run onboarding with the original localStorage key, AMHS/FFU/Subfab/Heatmap/Airflow/X-Ray layers, equipment selection, Visitor/Engineer/Research presentation (Research replay is explicitly marked not connected). Cut is a real Babylon `scene.clipPlane`; static shadows are disabled while cut is active because the native shadow receiver is not yet clip-plane aware.
 
 ## Not yet parity
 
-Still required by the parity spec: full original HUD/control inventory, true cut planes, filtered X-Ray, research JSONL replay, wafer follow, MES/SPC/wafer map/yield, bilingual and theme persistence, golden screenshot diff, and real-GPU long-run acceptance.
+Still required by the parity spec: full original HUD/control inventory, filtered X-Ray (all/UPW/gas/vac/exhaust/AMHS), research JSONL replay, wafer follow, MES/SPC/wafer map/yield, bilingual and theme persistence, golden screenshot diff, and real-GPU long-run acceptance.
 
 Do not mark the page `PARITY_VERIFIED` from the shell alone.

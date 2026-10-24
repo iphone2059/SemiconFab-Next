@@ -4,11 +4,12 @@ import { _CommonDispose } from '@babylonjs/core/Engines/engine.common';
 import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Plane } from '@babylonjs/core/Maths/math.plane';
 import '@babylonjs/core/Culling/ray';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
-import type { AmhsStats, FabPlacement, HoveredTool, PickedTool, SceneBackend, SceneLayer, SceneViewPreset } from './fab-scene';
+import type { AmhsStats, CutAxis, FabPlacement, HoveredTool, PickedTool, SceneBackend, SceneLayer, SceneViewPreset } from './fab-scene';
 import { InitializationDisposal } from './babylon-lifecycle';
 import { loadLegacyFab, type LegacyRuntime } from './legacy-site';
 import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
@@ -366,6 +367,25 @@ export function createWebGpuBackend(): SceneBackend {
           duration: 520,
         };
       }
+    },
+    setCutPlane(active: boolean, axis: CutAxis, position: number, invert: boolean): void {
+      if (!scene) return;
+      if (!active) {
+        scene.clipPlane = null;
+        const shadows = scene.metadata?.staticShadows as { enabled: boolean } | undefined;
+        if (shadows) shadows.enabled = true;
+        return;
+      }
+      clearPicked();
+      const flipped = invert ? -1 : 1;
+      const p = Math.max(-60, Math.min(60, position));
+      scene.clipPlane = axis === 'X'
+        ? new Plane(flipped, 0, 0, -flipped * p)
+        : axis === 'Y'
+          ? new Plane(0, flipped, 0, -flipped * p)
+          : new Plane(0, 0, flipped, -flipped * p);
+      const shadows = scene.metadata?.staticShadows as { enabled: boolean } | undefined;
+      if (shadows) shadows.enabled = false;
     },
     setView(preset: SceneViewPreset, fabId?: string): void {
       if (!camera || disposed) return;

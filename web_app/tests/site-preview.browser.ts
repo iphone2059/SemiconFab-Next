@@ -291,6 +291,15 @@ try {
     await evaluate(`document.querySelector('.twin-onboarding-head button').click()`);
     await until(`!document.querySelector('.twin-onboarding')`);
   }
+
+  await evaluate(`document.querySelector('.twin-cut-toggle').click()`);
+  await until(`!!document.querySelector('.twin-cut')`);
+  await evaluate(`(() => { const slider = document.querySelector('.twin-cut input[type=range]'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(slider, '12'); slider.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await until(`document.querySelector('.twin-cut b')?.textContent === '12 m'`);
+  await evaluate(`document.querySelector('.twin-cut select').value = 'Z'; document.querySelector('.twin-cut select').dispatchEvent(new Event('change', { bubbles: true }))`);
+  await evaluate(`document.querySelector('.twin-cut-toggle').click()`);
+  await until(`!document.querySelector('.twin-cut')`);
+
   await evaluate(`document.querySelector('.twin-tour').click()`);
   await until(`!!document.querySelector('.twin-tour-card')`);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-tour-dots button').length`), 5);
