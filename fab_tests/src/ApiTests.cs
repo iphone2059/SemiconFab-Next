@@ -20,14 +20,14 @@ public sealed class ApiTests
     }
 
     [Fact]
-    public async Task SiteTemplateIsSharedButFabIdsAreIndependent()
+    public async Task SiteHasExactlyOneFab()
     {
         using var factory = Factory();
         using var client = Authorized(factory);
         var sites = await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites");
         var site = Assert.Single(sites!);
-        Assert.Equal(3, site.Fabs.Length);
-        Assert.Equal(3, site.Fabs.Select(f => f.FabId).Distinct().Count());
+        var fab = Assert.Single(site.Fabs);
+        Assert.Equal("FAB-01", fab.Code);
         Assert.Equal(64, site.TemplateHash.Length);
     }
 
@@ -54,14 +54,15 @@ public sealed class ApiTests
         }
         Assert.Equal("COMPLETED", run.Status);
         var result = (await client.GetFromJsonAsync<RunResult>($"/api/v1/runs/{created.RunId}/results"))!;
-        Assert.Equal(3, result.Fabs.Length);
-        Assert.All(result.Fabs, f => { Assert.Equal("3", f.CompletedLots); Assert.Equal(64, f.TraceHash.Length); });
+        var resultFab = Assert.Single(result.Fabs);
+        Assert.Equal("3", resultFab.CompletedLots);
+        Assert.Equal(64, resultFab.TraceHash.Length);
         Assert.NotEmpty((await client.GetFromJsonAsync<RunSummary[]>("/api/v1/runs"))!);
         using var kpi = await client.GetAsync($"/api/v1/sites/{site.SiteId}/kpi?runId={created.RunId}");
         Assert.Equal(HttpStatusCode.OK, kpi.StatusCode);
         using var totals = System.Text.Json.JsonDocument.Parse(await kpi.Content.ReadAsStringAsync());
-        Assert.Equal("9", totals.RootElement.GetProperty("completedLots").GetString());
-        Assert.Equal(3, totals.RootElement.GetProperty("fabCount").GetInt32());
+        Assert.Equal("3", totals.RootElement.GetProperty("completedLots").GetString());
+        Assert.Equal(1, totals.RootElement.GetProperty("fabCount").GetInt32());
     }
 
     [Fact]
@@ -75,6 +76,9 @@ public sealed class ApiTests
         var alien = request.Scenario.Fabs[0] with { FabId = Guid.NewGuid().ToString() };
         using var response = await Post(client, new CreateRunRequest(request.Scenario with { Fabs = [alien] }), "unknown-fab");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var second = request.Scenario.Fabs[0] with { FabId = Guid.NewGuid().ToString(), Code = "FAB-02" };
+        using var extra = await Post(client, new CreateRunRequest(request.Scenario with { Fabs = [request.Scenario.Fabs[0], second] }), "extra-fab");
+        Assert.Equal(HttpStatusCode.BadRequest, extra.StatusCode);
     }
 
     [Fact]

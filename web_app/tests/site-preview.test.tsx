@@ -7,11 +7,7 @@ const site: SiteDto = {
   siteId: 'site-demo',
   code: 'DEMO-SITE',
   templateHash: 'template-demo',
-  fabs: [
-    { fabId: 'fab-1', code: 'FAB-01' },
-    { fabId: 'fab-2', code: 'FAB-02' },
-    { fabId: 'fab-3', code: 'FAB-03' },
-  ],
+  fabs: [{ fabId: 'fab-1', code: 'FAB-01' }],
 };
 
 it('renders the preview chrome with a new-tab preview control', () => {

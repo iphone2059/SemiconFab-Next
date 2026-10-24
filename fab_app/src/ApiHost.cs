@@ -23,7 +23,7 @@ internal static class ApiHost
         if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
             builder.WebHost.UseUrls("http://127.0.0.1:5080");
         var data = Path.GetFullPath(builder.Configuration["Fab:DataDirectory"] ?? Path.Combine(builder.Environment.ContentRootPath, ".local", "data"));
-        builder.Services.AddSingleton(new SiteDirectory(builder.Configuration.GetValue("Fab:FabCount", 3)));
+        builder.Services.AddSingleton(new SiteDirectory());
         builder.Services.AddSingleton<EquipmentStatusService>();
         builder.Services.AddSingleton(new CatalogService(Path.GetFullPath(builder.Configuration["Fab:CatalogDirectory"]
             ?? Path.Combine(AppContext.BaseDirectory, "assets", "legacy"))));

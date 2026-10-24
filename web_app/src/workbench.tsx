@@ -27,6 +27,7 @@ function Workbench({ site }: { site: SiteDto }) {
   const [durationUs, setDurationUs] = useState('60000000');
   const [warmupUs, setWarmupUs] = useState('0');
   const [masterSeed, setMasterSeed] = useState('42');
+  const fab = site.fabs[0];
   const submissionScope = useMemo(() => new ScopeGate(), []);
   const pendingSubmission = useRef<{ json: string; key: string } | undefined>(undefined);
   useEffect(() => () => submissionScope.dispose(), [submissionScope]);
@@ -70,6 +71,10 @@ function Workbench({ site }: { site: SiteDto }) {
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setSubmitError('');
+    if (!fab) {
+      setSubmitError('当前站点没有可用的 FAB');
+      return;
+    }
     const validationError = validateScenario({
       lotCount,
       processTimeUs,
@@ -90,12 +95,12 @@ function Workbench({ site }: { site: SiteDto }) {
         masterSeed,
         durationUs,
         warmupUs,
-        fabs: site.fabs.map((fab) => ({
+        fabs: [{
           fabId: fab.fabId,
           code: fab.code,
           lotCount: lots,
           processTimeUs,
-        })),
+        }],
       },
     };
     const json = JSON.stringify(request);
@@ -123,16 +128,18 @@ function Workbench({ site }: { site: SiteDto }) {
   const displayedRun = run?.runId === runId ? run : undefined;
   const displayedResult = result?.runId === runId ? result : undefined;
   const completedLots = displayedResult?.fabs.reduce(
-    (sum, fab) => sum + BigInt(fab.completedLots),
+    (sum, resultFab) => sum + BigInt(resultFab.completedLots),
     0n,
   );
+  const execution = fab ? displayedRun?.executions.find((value) => value.fabId === fab.fabId) : undefined;
+  const metrics = fab ? displayedResult?.fabs.find((value) => value.fabId === fab.fabId) : undefined;
   return (
     <>
       <div className="metrics">
         <Metric
-          label="基地 FAB"
-          value={site.fabs.length.toString().padStart(2, '0')}
-          hint="来自 Site API · 独立执行域"
+          label="FAB"
+          value="01"
+          hint="FAB-01 · 单 FAB 执行域"
         />
         <Metric
           label="当前运行"
@@ -148,7 +155,7 @@ function Workbench({ site }: { site: SiteDto }) {
       </div>
       <div className="primary-grid">
         <SitePreview site={site} />
-        <Panel title="新建仿真" subtitle="三个 FAB 使用相同模板，运行状态相互隔离。">
+        <Panel title="新建仿真" subtitle="单 FAB 清洁室，独立执行域。">
           <form
             onSubmit={(event) => {
               void submit(event);
@@ -157,7 +164,7 @@ function Workbench({ site }: { site: SiteDto }) {
             <div className="model-label">◇ 合成 FIFO · 单设备加工模型</div>
             <div className="field-grid">
               <label>
-                每 FAB Lot 数
+                Lot 数
                 <input
                   value={lotCount}
                   onChange={(event) => setLotCount(event.target.value)}
@@ -205,14 +212,14 @@ function Workbench({ site }: { site: SiteDto }) {
             <p className="form-note">
               整数微秒 · 权威 DES 在后端执行
               <br />
-              不包含共享产能、跨 FAB 流转或真实工艺模型。
+              不包含共享产能或真实工艺模型。
             </p>
             {submitError && (
               <div className="error" role="alert">
                 {submitError}
               </div>
             )}
-            <button className="primary" disabled={submitting || !site.fabs.length}>
+            <button className="primary" disabled={submitting || !fab}>
               {submitting ? '正在提交…' : '创建并运行'}
               <span>↗</span>
             </button>
@@ -233,48 +240,44 @@ function Workbench({ site }: { site: SiteDto }) {
           运行查询失败：{runError}；下列已显示值可能过期。
         </div>
       )}
-      <div className="fab-grid">
-        {site.fabs.map((fab, index) => {
-          const execution = displayedRun?.executions.find((value) => value.fabId === fab.fabId);
-          const metrics = displayedResult?.fabs.find((value) => value.fabId === fab.fabId);
-          return (
-            <article className="fab-card" key={fab.fabId}>
-              <div className="fab-card-head">
-                <span className="fab-icon">{String(index + 1).padStart(2, '0')}</span>
-                <div>
-                  <h3>{fab.code}</h3>
-                  <small>独立执行域</small>
-                </div>
-                {execution ? (
-                  <StatusPill status={execution.status} />
-                ) : (
-                  <span className="muted">待选择 Run</span>
-                )}
+      <div className="fab-grid single-fab">
+        {fab && (
+          <article className="fab-card" key={fab.fabId}>
+            <div className="fab-card-head">
+              <span className="fab-icon">01</span>
+              <div>
+                <h3>{fab.code}</h3>
+                <small>单 FAB 执行域</small>
               </div>
-              <div className="fab-values">
-                <div>
-                  <span>完成 / 总 Lot</span>
-                  <strong>
-                    {execution
-                      ? `${count(execution.completedLots)} / ${count(execution.totalLots)}`
-                      : '—'}
-                  </strong>
-                </div>
-                <div>
-                  <span>仿真时间 / μs</span>
-                  <strong>{execution ? count(execution.simulationTimeUs) : '—'}</strong>
-                </div>
-              </div>
-              {execution && (
-                <CompletionBar completed={execution.completedLots} total={execution.totalLots} />
+              {execution ? (
+                <StatusPill status={execution.status} />
+              ) : (
+                <span className="muted">待选择 Run</span>
               )}
-              <div className="hash">
-                {metrics ? `轨迹 SHA ${metrics.traceHash.slice(0, 18)}…` : '等待后端提交结果'}
+            </div>
+            <div className="fab-values">
+              <div>
+                <span>完成 / 总 Lot</span>
+                <strong>
+                  {execution
+                    ? `${count(execution.completedLots)} / ${count(execution.totalLots)}`
+                    : '—'}
+                </strong>
               </div>
-              {execution?.error && <div className="error">{execution.error}</div>}
-            </article>
-          );
-        })}
+              <div>
+                <span>仿真时间 / μs</span>
+                <strong>{execution ? count(execution.simulationTimeUs) : '—'}</strong>
+              </div>
+            </div>
+            {execution && (
+              <CompletionBar completed={execution.completedLots} total={execution.totalLots} />
+            )}
+            <div className="hash">
+              {metrics ? `轨迹 SHA ${metrics.traceHash.slice(0, 18)}…` : '等待后端提交结果'}
+            </div>
+            {execution?.error && <div className="error">{execution.error}</div>}
+          </article>
+        )}
       </div>
       <Panel title="运行记录" subtitle="站点范围内的持久化 Run；点击查看执行状态与完整结果。">
         {listError && (

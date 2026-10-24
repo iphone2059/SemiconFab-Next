@@ -1,6 +1,6 @@
 # web_app
 
-唯一的 Web 前端项目：一个 Vite/React 单页站点，包含 API 客户端、契约类型、工作台 UI、状态同步与 Babylon WebGPU 视图。没有内部子包，也没有 pnpm workspace。
+唯一的 Web 前端项目：一个 Vite/React 单页站点，包含 API 客户端、契约类型、工作台 UI、状态同步与 Babylon WebGPU 视图。页面按原版产品边界只展示一个 FAB（FAB-01），没有多 FAB 选择器。没有内部子包，也没有 pnpm workspace。
 
 ## 文件
 
