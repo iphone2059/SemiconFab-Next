@@ -379,6 +379,10 @@ export function createWebGpuBackend(): SceneBackend {
         pose = { alpha: Math.PI / 1.7, beta: 1.08, radius: 42, target: new Vector3(-18, 1.5, -10) };
       } else if (preset === 'airshower') {
         pose = { alpha: 1.35, beta: 1.2, radius: 22, target: new Vector3(-43, 1.2, -10) };
+      } else if (preset === 'etch') {
+        pose = { alpha: 1.62, beta: 1.12, radius: 40, target: new Vector3(5, 1.4, -14) };
+      } else if (preset === 'oht') {
+        pose = { alpha: 1.8, beta: 1.24, radius: 72, target: new Vector3(0, 3.8, 0) };
       } else if (preset === 'reset') {
         pose = { alpha: Math.PI / 2, beta, radius: homeRadius, target: centered };
       } else if (preset === 'focus' && focusTarget) {

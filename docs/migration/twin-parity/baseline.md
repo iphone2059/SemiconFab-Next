@@ -18,10 +18,10 @@ The new `/twin` route provides the first page-level shell without replacing the 
 - layer controls;
 - the existing `SiteScene` contract with its internal chrome hidden.
 
-Implemented in this shell: ISO/Top/Litho/Airlock camera presets, L1/B1/DUAL/Explode, continuous 0–100% explode slider, AMHS/FFU/Subfab/Heatmap/Airflow/X-Ray layers, equipment selection, Tour toggle, Visitor/Engineer/Research presentation (Research replay is explicitly marked not connected).
+Implemented in this shell: ISO/Top/Litho/Airlock camera presets, L1/B1/DUAL/Explode, continuous 0–100% explode slider, a five-stop cinematic tour (overview, litho, etch, OHT, Subfab), a three-step first-run onboarding with the original localStorage key, AMHS/FFU/Subfab/Heatmap/Airflow/X-Ray layers, equipment selection, Visitor/Engineer/Research presentation (Research replay is explicitly marked not connected).
 
 ## Not yet parity
 
-Still required by the parity spec: full original HUD/control inventory, dual level, true cut planes, continuous explode, filtered X-Ray, onboarding, five-stop tour, research JSONL replay, wafer follow, MES/SPC/wafer map/yield, bilingual and theme persistence, golden screenshot diff, and real-GPU long-run acceptance.
+Still required by the parity spec: full original HUD/control inventory, true cut planes, filtered X-Ray, research JSONL replay, wafer follow, MES/SPC/wafer map/yield, bilingual and theme persistence, golden screenshot diff, and real-GPU long-run acceptance.
 
 Do not mark the page `PARITY_VERIFIED` from the shell alone.

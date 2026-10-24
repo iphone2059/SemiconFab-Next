@@ -6,8 +6,28 @@ import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } f
 import type { AmhsStats, PickedTool, SceneLayer } from './fab-scene';
 import { FabRail, SiteScene, type SiteSceneHandle } from './site-preview';
 type EntryMode = 'visitor' | 'engineer' | 'research';
-type CameraView = 'iso' | 'top' | 'litho' | 'airshower';
+type CameraView = 'iso' | 'top' | 'litho' | 'airshower' | 'etch' | 'oht';
 type FabLevel = 'L1' | 'B1' | 'DUAL' | 'EXPLODED';
+type TourStop = {
+  title: string;
+  subtitle: string;
+  preset?: CameraView;
+  level?: 'L1' | 'B1';
+};
+
+const TOUR_STOPS: TourStop[] = [
+  { title: '宏观 FAB', subtitle: '121 台设备 · 单 FAB 洁净室', preset: 'iso' },
+  { title: '光刻与风淋', subtitle: 'EUV / 高 NA · 人员气闸', preset: 'litho' },
+  { title: '刻蚀与沉积', subtitle: '多腔体集群与厂务管线', preset: 'etch' },
+  { title: 'AMHS 双环', subtitle: '24 台 OHT · 空中运输', preset: 'oht' },
+  { title: 'Subfab 地下层', subtitle: 'UPW / PCW / 气体 / 真空', level: 'B1' },
+];
+const ONBOARDING_KEY = 'semicon_twin_onboarding_dismissed';
+const ONBOARDING_STEPS = [
+  { title: '一个单 FAB 洁净室', body: '121 台设备、双环 OHT、天花板 FFU 与 Subfab 都在同一场景中。' },
+  { title: '层级与空间模式', body: '用 L1 / B1 / DUAL / Explode 切换楼层和拆解；设备卡可打开右侧检查器。' },
+  { title: '开始五站导览', body: 'Tour 会依次带你查看光刻、刻蚀、OHT 和 Subfab。按 Esc 可退出。' },
+];
 
 const CATEGORY_LABELS: Record<string, string> = {
   lithography: '光刻',
@@ -52,7 +72,9 @@ export function TwinPage() {
   const [level, setLevel] = useState<FabLevel>('L1');
   const [explodePercent, setExplodePercent] = useState(100);
   const [mode, setMode] = useState<EntryMode>('engineer');
-  const [touring, setTouring] = useState(false);
+  const [tourStep, setTourStep] = useState<number>();
+  const [onboarding, setOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
   const [exploded, setExploded] = useState(false);
   const [basement, setBasement] = useState(false);
   const [selected, setSelected] = useState<PickedTool>();
@@ -109,6 +131,20 @@ export function TwinPage() {
   useEffect(() => {
     if (site) document.title = `${site.code} / FAB-01 · 3D FAB`;
   }, [site]);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(ONBOARDING_KEY) !== '1') setOnboarding(true);
+    } catch {
+      // Storage may be blocked; the page still works without onboarding memory.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tourStep === undefined) return;
+    const timer = window.setTimeout(() => advanceTour(), 9000);
+    return () => window.clearTimeout(timer);
+  }, [tourStep]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -191,10 +227,44 @@ export function TwinPage() {
     setLevel('EXPLODED');
     scene.current?.setExplodeFactor(value / 100);
   }
-  function toggleTour(): void {
-    const next = !touring;
-    setTouring(next);
-    scene.current?.setTour(next);
+  function applyTourStep(index: number): void {
+    const stop = TOUR_STOPS[index];
+    if (!stop) return;
+    setTourStep(index);
+    setOnboarding(false);
+    resetLevel();
+    if (stop.level === 'B1') {
+      scene.current?.setBasement(true);
+      setBasement(true);
+      setLevel('B1');
+    } else {
+      setCamera(stop.preset ?? 'iso');
+    }
+  }
+  function startTour(): void {
+    applyTourStep(0);
+  }
+  function endTour(): void {
+    setTourStep(undefined);
+    resetLevel();
+    setCamera('iso');
+  }
+  function advanceTour(): void {
+    if (tourStep === undefined) return;
+    if (tourStep >= TOUR_STOPS.length - 1) endTour();
+    else applyTourStep(tourStep + 1);
+  }
+  function previousTour(): void {
+    if (tourStep === undefined) return;
+    applyTourStep(Math.max(0, tourStep - 1));
+  }
+  function dismissOnboarding(): void {
+    setOnboarding(false);
+    try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch { /* ignore storage denial */ }
+  }
+  function finishOnboarding(): void {
+    dismissOnboarding();
+    startTour();
   }
 
   if (error) {
@@ -231,7 +301,7 @@ export function TwinPage() {
             <button type="button" onClick={() => setCamera('litho')}>Litho</button>
             <button type="button" onClick={() => setCamera('airshower')}>Airlock</button>
           </div>
-          <button type="button" className={`twin-tour${touring ? ' active' : ''}`} aria-pressed={touring} onClick={toggleTour}>▶ Tour</button>
+          <button type="button" className={`twin-tour${tourStep !== undefined ? ' active' : ''}`} aria-pressed={tourStep !== undefined} onClick={() => { if (tourStep === undefined) startTour(); else endTour(); }}>▶ Tour</button>
         </div>
         <div className="twin-topright">
           <span className={`twin-feed${statusFeed?.stale ? ' is-stale' : ''}`}><i />{statusFeed?.stale ? 'CACHE' : 'LIVE'}</span>
@@ -267,8 +337,8 @@ export function TwinPage() {
           onAmhsStatsChange={setAmhs}
           layers={layers}
           onToggleLayer={toggleLayer}
-          touring={touring}
-          onToggleTour={toggleTour}
+          touring={false}
+          onToggleTour={() => undefined}
           exploded={exploded}
           explodeFactor={level === 'EXPLODED' ? explodePercent / 100 : 0}
           onToggleExploded={toggleExploded}
@@ -326,6 +396,41 @@ export function TwinPage() {
             <button type="button" key={layer} className={layers[layer] ? 'active' : ''} aria-pressed={!!layers[layer]} onClick={() => toggleLayer(layer)}>{label}</button>
           ))}
         </div>
+
+        {tourStep !== undefined && TOUR_STOPS[tourStep] && (
+          <section className="twin-tour-card" aria-label="Cinematic Tour">
+            <div className="twin-tour-head">
+              <span>TOUR {tourStep + 1}/{TOUR_STOPS.length}</span>
+              <button type="button" onClick={endTour} aria-label="关闭导览">跳过</button>
+            </div>
+            <h3>{TOUR_STOPS[tourStep].title}</h3>
+            <p>{TOUR_STOPS[tourStep].subtitle}</p>
+            <div className="twin-tour-dots" role="tablist" aria-label="导览站点">
+              {TOUR_STOPS.map((stop, index) => (
+                <button type="button" role="tab" aria-selected={index === tourStep} key={stop.title} className={index === tourStep ? 'active' : ''} onClick={() => applyTourStep(index)} aria-label={stop.title} />
+              ))}
+            </div>
+            <div className="twin-tour-actions">
+              <button type="button" onClick={previousTour} disabled={tourStep === 0}>上一步</button>
+              <button type="button" className="primary" onClick={advanceTour}>{tourStep === TOUR_STOPS.length - 1 ? '完成' : '下一站'}</button>
+            </div>
+          </section>
+        )}
+
+        {onboarding && (
+          <div className="twin-onboarding" role="dialog" aria-modal="false" aria-label="首次引导">
+            <div className="twin-onboarding-card">
+              <div className="twin-onboarding-head"><span>首次进入 · {onboardingStep + 1}/{ONBOARDING_STEPS.length}</span><button type="button" onClick={dismissOnboarding} aria-label="跳过引导">×</button></div>
+              <h3>{ONBOARDING_STEPS[onboardingStep].title}</h3>
+              <p>{ONBOARDING_STEPS[onboardingStep].body}</p>
+              <div className="twin-onboarding-actions">
+                <button type="button" onClick={dismissOnboarding}>跳过</button>
+                <button type="button" onClick={() => setOnboardingStep((step) => Math.max(0, step - 1))} disabled={onboardingStep === 0}>上一步</button>
+                <button type="button" className="primary" onClick={() => { if (onboardingStep === ONBOARDING_STEPS.length - 1) finishOnboarding(); else setOnboardingStep((step) => step + 1); }}>{onboardingStep === ONBOARDING_STEPS.length - 1 ? '开始导览' : '下一步'}</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );

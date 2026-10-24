@@ -287,6 +287,18 @@ try {
   await until(`!!document.querySelector('.twin-inspector')`);
   assert.match(await evaluate(`document.querySelector('.twin-inspector').innerText`), /FAB-01/);
 
+  if (await evaluate(`!!document.querySelector('.twin-onboarding')`)) {
+    await evaluate(`document.querySelector('.twin-onboarding-head button').click()`);
+    await until(`!document.querySelector('.twin-onboarding')`);
+  }
+  await evaluate(`document.querySelector('.twin-tour').click()`);
+  await until(`!!document.querySelector('.twin-tour-card')`);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-tour-dots button').length`), 5);
+  await evaluate(`document.querySelectorAll('.twin-tour-dots button')[2].click()`);
+  await until(`document.querySelector('.twin-tour-head span')?.textContent === 'TOUR 3/5'`);
+  await evaluate(`document.querySelector('.twin-tour-head button').click()`);
+  await until(`!document.querySelector('.twin-tour-card')`);
+
   assert.deepEqual(runtimeErrors, []);
   console.log('site preview browser acceptance passed');
 } finally {

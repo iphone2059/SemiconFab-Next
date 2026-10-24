@@ -2,7 +2,7 @@ import type { FabToolState } from './fab-layout';
 
 export interface FabPlacement { readonly fabId: string; readonly code: string; readonly position: readonly [number, number, number] }
 
-export type SceneViewPreset = 'iso' | 'top' | 'reset' | 'focus' | 'litho' | 'airshower';
+export type SceneViewPreset = 'iso' | 'top' | 'reset' | 'focus' | 'litho' | 'airshower' | 'etch' | 'oht';
 export type SceneLayer = 'amhs' | 'ceiling' | 'subfab' | 'heatmap' | 'airflow' | 'xray';
 
 export interface PickedTool {

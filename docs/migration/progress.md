@@ -16,7 +16,7 @@
 
 ## Twin 页面骨架（2026-10-24）
 
-新增 `/twin` 页面级入口，作为 `twin.html` 1:1 对齐的 TWIN-02 起点；它复用现有单 FAB `SiteScene`/WebGPU 运行时，增加顶栏、相机预设、L1/B1/DUAL/EXPLODED、连续 0–100% Explode 滑条、图层、设备清单、选中检查器、AMHS/KPI/底部 HUD。原预览 `/preview` 保留。当前仍只是页面骨架，Research 回放明确标注未接入；未完成项与基线记录见 [twin-parity/baseline.md](twin-parity/baseline.md)。
+新增 `/twin` 页面级入口，作为 `twin.html` 1:1 对齐的 TWIN-02 起点；它复用现有单 FAB `SiteScene`/WebGPU 运行时，增加顶栏、相机预设、L1/B1/DUAL/EXPLODED、连续 0–100% Explode 滑条、五站 Cinematic Tour、三步首次引导、图层、设备清单、选中检查器、AMHS/KPI/底部 HUD。原预览 `/preview` 保留。当前仍只是页面骨架，Research 回放明确标注未接入；未完成项与基线记录见 [twin-parity/baseline.md](twin-parity/baseline.md)。
 
 ## 单 FAB 产品边界（2026-10-24）
 

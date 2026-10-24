@@ -84,7 +84,7 @@ const ReloadIcon = () => (
   </Glyph>
 );
 
-type SceneView = 'iso' | 'top' | 'reset' | 'litho' | 'airshower';
+type SceneView = 'iso' | 'top' | 'reset' | 'litho' | 'airshower' | 'etch' | 'oht';
 
 export interface SiteSceneProps {
   site: SiteDto;
