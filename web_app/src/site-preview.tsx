@@ -59,15 +59,6 @@ const ResetIcon = () => (
   </Glyph>
 );
 
-const ExpandIcon = () => (
-  <Glyph>
-    <path d="M4 9V4h5" />
-    <path d="M20 9V4h-5" />
-    <path d="M4 15v5h5" />
-    <path d="M20 15v5h-5" />
-  </Glyph>
-);
-
 const CollapseIcon = () => (
   <Glyph>
     <path d="M9 4v5H4" />
@@ -657,7 +648,7 @@ export function SitePreview({ site }: { site: SiteDto }) {
   };
   const scene = useRef<SiteSceneHandle>(null);
   const root = useRef<HTMLElement>(null);
-  const maximize = useRef<HTMLButtonElement>(null);
+  const maximize = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
     const panel = root.current;
@@ -745,15 +736,6 @@ export function SitePreview({ site }: { site: SiteDto }) {
     });
   }
 
-  function openPreview() {
-    const url = new URL(window.location.href);
-    url.pathname = `${import.meta.env.BASE_URL}preview`.replace(/\/+/g, '/');
-    url.search = new URLSearchParams({ siteId: site.siteId }).toString();
-    url.hash = '';
-    window.open(url.toString(), '_blank', 'noopener,noreferrer');
-  }
-
-  const title = '在新标签页打开 FAB 预览';
   return (
     <>
       {expanded && <div className="preview-backdrop" aria-hidden="true" onClick={() => setExpanded(false)} />}
@@ -817,20 +799,15 @@ export function SitePreview({ site }: { site: SiteDto }) {
               </button>
             </div>
             <span className="panel-action-divider" aria-hidden="true" />
-            <a className="icon-button icon-with-label" href="/twin" aria-label="打开 Twin 1:1 页面" title="打开 Twin 1:1 页面">
-              <span>Twin 1:1</span>
-            </a>
-            <button
-              type="button"
+            <a
               ref={maximize}
               className="icon-button icon-with-label"
-              aria-label={title}
-              title={title}
-              onClick={openPreview}
+              href="/twin"
+              aria-label="打开 Twin 1:1 页面"
+              title="打开 Twin 1:1 页面"
             >
-              <ExpandIcon />
-              <span>新标签页</span>
-            </button>
+              <span>Twin 1:1</span>
+            </a>
           </div>
         }
       >

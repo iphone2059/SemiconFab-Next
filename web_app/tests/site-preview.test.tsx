@@ -10,11 +10,13 @@ const site: SiteDto = {
   fabs: [{ fabId: 'fab-1', code: 'FAB-01' }],
 };
 
-it('renders the preview chrome with a new-tab preview control', () => {
+it('renders the preview chrome with only the Twin 1:1 entry', () => {
   const html = renderToStaticMarkup(<SitePreview site={site} />);
   expect(html).toContain('基地空间概览');
   expect(html).toContain('class="panel site-preview"');
-  expect(html).toContain('aria-label="在新标签页打开 FAB 预览"');
+  expect(html).toContain('href="/twin"');
+  expect(html).toContain('aria-label="打开 Twin 1:1 页面"');
+  expect(html).not.toContain('新标签页');
   expect(html).toContain('aria-label="等轴视图"');
   expect(html).toContain('aria-pressed="true"');
   expect(html).toContain('aria-label="俯视视图"');

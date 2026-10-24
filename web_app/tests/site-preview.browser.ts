@@ -73,35 +73,28 @@ try {
   await command('Page.enable');
   await command('Runtime.enable');
   await command('Page.navigate', { url: 'http://127.0.0.1:5173/' });
-  await until(`!!document.querySelector('.site-preview .icon-with-label')`);
+  await until(`!!document.querySelector('.site-preview a.icon-with-label')`);
   await until(`!!document.querySelector('.site-preview .scene canvas')`);
 
   const initial = await evaluate(`(() => {
     const panel = document.querySelector('.site-preview');
     return {
-      label: panel.querySelector('button.icon-with-label').getAttribute('aria-label'),
+      label: panel.querySelector('a.icon-with-label').getAttribute('aria-label'),
       twinHref: panel.querySelector('a.icon-with-label')?.getAttribute('href'),
+      openButtons: panel.querySelectorAll('button.icon-with-label').length,
       backdrop: !!document.querySelector('.preview-backdrop'),
       fabOptions: panel.querySelectorAll('.fab-picker option').length,
       canvas: !!panel.querySelector('.scene canvas'),
     };
   })()`);
-  assert.equal(initial.label, '在新标签页打开 FAB 预览');
+  assert.equal(initial.label, '打开 Twin 1:1 页面');
   assert.equal(initial.twinHref, '/twin');
+  assert.equal(initial.openButtons, 0);
   assert.equal(initial.backdrop, false);
   assert.equal(initial.fabOptions, 0);
   assert.equal(initial.canvas, true);
 
-  const openedUrl = await evaluate(`(() => {
-    let captured = '';
-    const original = window.open;
-    window.open = (url) => { captured = String(url); return null; };
-    document.querySelector('.site-preview button.icon-with-label').click();
-    window.open = original;
-    return captured;
-  })()`);
-  assert.match(openedUrl, /\/preview\?siteId=/);
-  await command('Page.navigate', { url: openedUrl });
+  await command('Page.navigate', { url: 'http://127.0.0.1:5173/preview' });
   await until(`!!document.querySelector('.standalone-preview')`);
   await until(`!!document.querySelector('.standalone-stage .scene canvas')`);
   await until(`document.querySelector('.scene-status')?.textContent?.startsWith('WebGPU ·')`);
