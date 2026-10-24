@@ -37,8 +37,11 @@ async function pressEscape() {
   await until(`document.querySelector('.twin-status')?.getAttribute('title')?.startsWith('WebGPU ·')`);
   assert.equal(await evaluate(`document.querySelectorAll('#left-sidebar').length`), 1);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-levels button').length`), 4);
-  assert.equal(await evaluate(`document.querySelectorAll('.twin-cameras button').length`), 4);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-cameras button').length`), 5);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-mode option').length`), 3);
+  assert.equal(await evaluate(`document.querySelectorAll('#btn-focus-patrol').length`), 1);
+  assert.equal(await evaluate(`document.querySelector('#header-yield-val')?.textContent?.includes('%')`), true);
+  assert.ok((await evaluate(`document.querySelector('#header-wpm-val')?.textContent?.length`)) > 0);
   assert.equal(await evaluate(`document.querySelectorAll('#equipment-list [data-equipment-id]').length`), 18);
 
   await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'visitor'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
@@ -94,6 +97,7 @@ async function pressEscape() {
 
   await evaluate(`document.querySelector('.twin-cut-toggle').click()`);
   await until(`!!document.querySelector('.twin-cut')`);
+  assert.equal(await evaluate(`!!document.querySelector('#btn-cut-invert')`), true);
   await evaluate(`(() => { const slider = document.querySelector('.twin-cut input[type=range]'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(slider, '12'); slider.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   await until(`document.querySelector('.twin-cut b')?.textContent === '12 m'`);
   await evaluate(`document.querySelector('.twin-cut select').value = 'Z'; document.querySelector('.twin-cut select').dispatchEvent(new Event('change', { bubbles: true }))`);
@@ -113,6 +117,7 @@ async function pressEscape() {
   await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'research'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await until(`!!document.querySelector('.twin-research-hud')`);
   await until(`document.querySelector('.twin-research-head')?.innerText?.includes('27,263')`);
+  assert.equal(await evaluate(`!!document.querySelector('#btn-toggle-util-overlay')`), true);
   await evaluate(`(() => { const slider = document.querySelector('.twin-research-scrubber'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(slider, '1000000'); slider.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   await until(`document.querySelectorAll('.twin-research-stats strong')[1]?.textContent === '84'`);
   assert.match(await evaluate(`document.querySelector('.twin-research-clock').innerText`), /Day 12/);

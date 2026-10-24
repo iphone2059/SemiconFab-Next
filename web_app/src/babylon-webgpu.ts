@@ -476,6 +476,15 @@ export function createWebGpuBackend(): SceneBackend {
       }, scene);
       waferTrail.isPickable = false;
     },
+    focusPatrol(): void {
+      const patrol = scene?.getTransformNodeByName('operator-5');
+      if (!patrol || !camera) return;
+      const target = patrol.getAbsolutePosition();
+      cameraTransition = undefined;
+      camera.setTarget(new Vector3(target.x, 1.2, target.z));
+      camera.radius = 18;
+      camera.beta = 1.08;
+    },
     setCutPlane(active: boolean, axis: CutAxis, position: number, invert: boolean): void {
       if (!scene) return;
       if (!active) {

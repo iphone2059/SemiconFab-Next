@@ -54,6 +54,7 @@ export interface SceneBackend {
   setXRayFilter?(filter: XRayFilter | null): void;
   setWaferPoint?(x: number, y: number, z: number, visible: boolean, focus: boolean): void;
   setWaferTrail?(points: readonly (readonly [number, number, number])[]): void;
+  focusPatrol?(): void;
 }
 
 export class SceneFacade {
@@ -119,6 +120,9 @@ export class SceneFacade {
   }
   setWaferTrail(points: readonly (readonly [number, number, number])[]): void {
     if (!this.controller.signal.aborted) this.backend.setWaferTrail?.(points);
+  }
+  focusPatrol(): void {
+    if (!this.controller.signal.aborted) this.backend.focusPatrol?.();
   }
   dispose(): void { this.controller.abort(); this.backend.dispose(); }
 }

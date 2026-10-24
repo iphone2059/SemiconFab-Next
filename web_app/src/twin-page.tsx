@@ -131,6 +131,7 @@ function TwinContent() {
   const [research, setResearch] = useState<ResearchReplay>();
   const [researchLoading, setResearchLoading] = useState(false);
   const [researchError, setResearchError] = useState('');
+  const [showResearchUtil, setShowResearchUtil] = useState(true);
   const [waferProduct, setWaferProduct] = useState<WaferProduct>('A');
   const [waferRoutes, setWaferRoutes] = useState<Record<WaferProduct, WaferRouteStep[]>>();
   const [waferIndex, setWaferIndex] = useState(0);
@@ -139,6 +140,7 @@ function TwinContent() {
   const waferIndexRef = useRef(0);
   const waferProgressRef = useRef(0);
   const waferTrailRef = useRef<[number, number, number][]>([]);
+  const suppressToolSelectionRef = useRef(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -434,8 +436,10 @@ function TwinContent() {
     setSelection(next);
     if (next.kind === 'reference') {
       const row = ORIGINAL_TWIN_UI.equipment.find((item) => item.id === next.id);
+      const catalogIndex = FAB_LAYOUT.findIndex((tool) => tool.originalKind === 'catalog' && tool.recordId === next.id);
       setSelected(undefined);
-      scene.current?.clearSelection();
+      if (catalogIndex >= 0) { suppressToolSelectionRef.current = true; scene.current?.selectTool(catalogIndex, false); window.setTimeout(() => { suppressToolSelectionRef.current = false; }, 0); }
+      else scene.current?.clearSelection();
       if (row?.level === 'B1') { dispatch({ type: 'level/set', level: 'B1' }); scene.current?.setDual(false); scene.current?.setBasement(true); }
     } else if (next.kind === 'oem') {
       setSelected(undefined);
@@ -444,6 +448,7 @@ function TwinContent() {
   }
   function handleToolChange(tool?: PickedTool): void {
     setSelected(tool);
+    if (suppressToolSelectionRef.current) { suppressToolSelectionRef.current = false; return; }
     if (tool && selection?.kind === 'reference' && FAB_LAYOUT[tool.index]?.recordId === selection.id) return;
     if (tool) setSelection({ kind: 'layout', index: tool.index });
     else if (selection?.kind === 'layout') setSelection(undefined);
@@ -560,6 +565,7 @@ function TwinContent() {
             <button type="button" aria-label="Top" title="Top Down Plan View" onClick={() => setCamera('top')}><OriginalIcon name="top" /></button>
             <button type="button" aria-label="Litho" title="Focus Litho Amber Core" onClick={() => setCamera('litho')}><OriginalIcon name="litho" /></button>
             <button type="button" aria-label="Airlock" title="Focus Cleanroom Air Shower" onClick={() => setCamera('airshower')}><OriginalIcon name="airlock" /></button>
+            <button id="btn-focus-patrol" type="button" aria-label={t("跟踪巡检工程师")} title={t("跟踪巡检工程师")} onClick={() => scene.current?.focusPatrol()}><OriginalIcon name="user-check" /></button>
           </div>
           <button id="btn-cinematic-tour" type="button" className={`twin-tour${tourStep !== undefined ? ' active' : ''}`} aria-pressed={tourStep !== undefined} onClick={() => { if (tourStep === undefined) startTour(); else endTour(); }}><OriginalIcon name="tour" />{tourStep === undefined ? 'Tour' : 'Stop'}</button>
           <div className="twin-layers" aria-label={t("图层")}>
@@ -574,8 +580,8 @@ function TwinContent() {
       </header>
 
       <div className="twin-subbar" id="tour-status-subbar">
-        <button className="twin-yield-pill" type="button" title="Cascading Yield Model" onClick={() => { setYmsOpen(true); setYmsTab('yield'); }}>{(fabYield.totalYield * 100).toFixed(2)}%⌄</button>
-        <span className="twin-throughput">{fabYield.wpm.toLocaleString('en-US')}<small>{t("片/月")}</small></span>
+        <button id="header-yield-val" className="twin-yield-pill" type="button" title="Cascading Yield Model" onClick={() => { setYmsOpen(true); setYmsTab('yield'); }}>{(fabYield.totalYield * 100).toFixed(2)}%⌄</button>
+        <span id="header-wpm-val" className="twin-throughput">{fabYield.wpm.toLocaleString('en-US')}<small>{t("片/月")}</small></span>
         <section className="twin-simulation" aria-label={t("B01 场景控制")}>
           <button id="btn-sim-play" type="button" disabled={ui.statusSource !== 'demo'} title={ui.statusSource !== 'demo' ? t("请选择本地 DEMO 状态来源") : 'Toggle Sim Clock · 1600 ms'} onClick={() => dispatchDemo({ type: 'play', playing: !demo.playing })} aria-pressed={ui.statusSource === 'demo' && demo.playing}>{demo.playing ? 'Ⅱ' : '▶'} <span id="lbl-sim-cycle">#{demo.cycle}</span></button>
           <select id="dt-scenario-select" aria-label="Scenario" value={demo.scenarioId} disabled={ui.statusSource !== 'demo'} onChange={(event) => chooseDemoScenario(event.target.value)}>
@@ -607,7 +613,7 @@ function TwinContent() {
           </select>
           <input type="range" min={-55} max={55} step={1} value={cutPosition} onChange={(event) => updateCut(cutAxis, Number(event.target.value), cutInvert)} aria-label={t("剖切位置")} />
           <b>{cutPosition.toFixed(0)} m</b>
-          <label><input type="checkbox" checked={cutInvert} onChange={(event) => updateCut(cutAxis, cutPosition, event.target.checked)} /> Invert</label>
+          <label><input id="btn-cut-invert" type="checkbox" checked={cutInvert} onChange={(event) => updateCut(cutAxis, cutPosition, event.target.checked)} /> Invert</label>
         </div>
       )}
 
@@ -758,7 +764,8 @@ function TwinContent() {
                   <div><span>ACTIVE</span><strong>{researchSnapshot.activeTools}</strong><small>tools</small></div>
                   <div><span>TOP UTIL</span><strong>{(researchSnapshot.utilization[0]?.utilization ?? 0).toFixed(1)}%</strong><small>{researchSnapshot.utilization[0]?.toolGroup ?? '—'}</small></div>
                 </div>
-                <div className="twin-research-util">
+                <button id="btn-toggle-util-overlay" type="button" className="twin-research-util-toggle" aria-pressed={showResearchUtil} onClick={() => setShowResearchUtil((open) => !open)}>{t("利用率热力图")}</button>
+                {showResearchUtil && <div className="twin-research-util">
                   {researchSnapshot.utilization.slice(0, 4).map((group) => (
                     <div key={group.toolGroup}>
                       <span>{group.toolGroup}</span>
@@ -766,7 +773,7 @@ function TwinContent() {
                       <em>{group.busy}/{group.total}</em>
                     </div>
                   ))}
-                </div>
+                </div>}
                 <div className="twin-research-amhs">AMHS SIMULATED · jobs {amhs?.completed ?? 0} · avg {amhs?.avgDelivery?.toFixed(1) ?? '—'} s · active {amhs?.active ?? 0}/24</div>
                 <p className="twin-research-footnote">{t("只读展示事件流，不是 Checkpoint/WAL。原版别名命中")}{replayProjection?.mappedCount ?? 0}{t("/121 台；未映射设备保留进入回放前的状态。217 台仿真设备与布局不是一一对应。AMHS 为独立动画时钟，JSONL 无运输事件。")}</p>
               </>

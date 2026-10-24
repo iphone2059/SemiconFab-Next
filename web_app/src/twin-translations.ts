@@ -50,6 +50,8 @@ export const TWIN_EN: Readonly<Record<string, string>> = {
   "重量": "Weight",
   "来源等级": "Source tier",
   "联动设备": "Linked tool",
+  "跟踪巡检工程师": "Track inspection engineer",
+  "利用率热力图": "Utilization heatmap",
   "先进试验线": "Advanced Pilot Line",
   "光刻": "Lithography",
   "光刻与风淋": "Lithography and air shower",

@@ -37,6 +37,7 @@ export interface FabViewportHandle {
   setXRayFilter(filter: XRayFilter | null): void;
   setWaferPoint(x: number, y: number, z: number, visible: boolean, focus: boolean): void;
   setWaferTrail(points: readonly (readonly [number, number, number])[]): void;
+  focusPatrol(): void;
 }
 
 const TOOL_CATEGORY_LABELS: Record<string, string> = {
@@ -138,6 +139,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
       setXRayFilter: (filter) => facade.current?.setXRayFilter(filter),
       setWaferPoint: (x, y, z, visible, focus) => facade.current?.setWaferPoint(x, y, z, visible, focus),
       setWaferTrail: (points) => facade.current?.setWaferTrail(points),
+      focusPatrol: () => facade.current?.focusPatrol(),
     }),
     [],
   );
