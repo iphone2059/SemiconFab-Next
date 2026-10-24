@@ -43,6 +43,8 @@ export function createWebGpuBackend(): SceneBackend {
   let touring = false;
   let basementEnabled = false;
   let dualEnabled = false;
+  let waferMarker: ReturnType<typeof MeshBuilder.CreateBox> | undefined;
+  let waferBeacon: ReturnType<typeof MeshBuilder.CreateCylinder> | undefined;
   let lastFrameTime = performance.now();
   const fabTargets = new Map<string, Vector3>();
   let cleanup = () => {};
@@ -142,6 +144,18 @@ export function createWebGpuBackend(): SceneBackend {
       selection.material = selectionMaterial;
       selection.isPickable = false;
       selection.isVisible = false;
+      waferMarker = MeshBuilder.CreateBox('wafer-follow-marker', { width: 0.55, height: 0.4, depth: 0.45 }, scene);
+      const waferMarkerMaterial = new StandardMaterial('wafer-follow-marker-material', scene);
+      waferMarkerMaterial.diffuseColor = new Color3(0.96, 0.62, 0.04);
+      waferMarkerMaterial.emissiveColor = new Color3(0.5, 0.24, 0.01);
+      waferMarkerMaterial.specularColor = new Color3(0.3, 0.2, 0.05);
+      waferMarker.material = waferMarkerMaterial;
+      waferMarker.isPickable = false;
+      waferMarker.isVisible = false;
+      waferBeacon = MeshBuilder.CreateCylinder('wafer-follow-beacon', { height: 2.4, diameter: 0.07, tessellation: 8 }, scene);
+      waferBeacon.material = waferMarkerMaterial;
+      waferBeacon.isPickable = false;
+      waferBeacon.isVisible = false;
       let selectedIndex = -1;
       const updateSelectionBounds = () => {
         const root = scene?.getTransformNodeByName(`procedural-tool-${selectedIndex}`);
@@ -370,6 +384,19 @@ export function createWebGpuBackend(): SceneBackend {
     },
     setXRayFilter(filter: XRayFilter | null): void {
       legacyRuntime?.setXRayFilter(filter);
+    },
+    setWaferPoint(x: number, y: number, z: number, visible: boolean, focus: boolean): void {
+      if (!waferMarker) return;
+      waferMarker.position.set(x, y + 2.2, z);
+      waferMarker.setEnabled(visible);
+      waferBeacon?.position.set(x, y + 1.0, z);
+      waferBeacon?.setEnabled(visible);
+      if (visible && focus && camera) {
+        cameraTransition = undefined;
+        camera.setTarget(new Vector3(x, y + 1.2, z));
+        camera.radius = 36;
+        camera.beta = 1.05;
+      }
     },
     setCutPlane(active: boolean, axis: CutAxis, position: number, invert: boolean): void {
       if (!scene) return;

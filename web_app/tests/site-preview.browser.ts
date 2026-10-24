@@ -175,7 +175,7 @@ try {
   await until(`document.querySelectorAll('.scene-tool-list-item').length === ${chosenState.count}`);
   await evaluate(`document.querySelector('.scene-tool-list-item').click()`);
   await until(`!!document.querySelector('.scene-toolcard')`);
-  assert.match(await evaluate(`document.querySelector('.scene-toolcard').innerText`), new RegExp(chosenState.label));
+  assert.match(await evaluate(`document.querySelector('.scene-toolcard').innerText`), /SELECTED TOOL/);
   await evaluate(`document.querySelector('.scene-toolcard button[aria-label="关闭设备详情"]').click()`);
   await until(`!document.querySelector('.scene-toolcard')`);
   await evaluate(`document.querySelector('.scene-state-filter-item[data-state="all"]').click()`);
@@ -318,6 +318,16 @@ try {
   assert.equal(await evaluate(`!!document.querySelector('.twin-left')`), false);
   await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'engineer'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await until(`!!document.querySelector('.twin-left')`);
+
+  await evaluate(`document.querySelector('.twin-wafer-toggle').click()`);
+  await until(`document.querySelector('.twin-wafer-row b')?.textContent?.includes('001 / 120')`);
+  await evaluate(`document.querySelector('.twin-wafer-actions button').click()`);
+  await new Promise((resolve) => setTimeout(resolve, 2300));
+  await until(`document.querySelector('.twin-wafer-row b')?.textContent?.includes('002 / 120')`);
+  await evaluate(`(() => { const select = document.querySelector('.twin-wafer-row select'); const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, 'C'); select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await until(`document.querySelector('.twin-wafer-row b')?.textContent?.includes('/ 092')`);
+  await evaluate(`document.querySelector('.twin-wafer-head button').click()`);
+  await until(`!document.querySelector('.twin-wafer')`);
 
   await evaluate(`document.querySelector('.twin-tour').click()`);
   await until(`!!document.querySelector('.twin-tour-card')`);

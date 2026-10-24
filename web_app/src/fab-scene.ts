@@ -51,6 +51,7 @@ export interface SceneBackend {
   setDual?(active: boolean): void;
   setCutPlane?(active: boolean, axis: CutAxis, position: number, invert: boolean): void;
   setXRayFilter?(filter: XRayFilter | null): void;
+  setWaferPoint?(x: number, y: number, z: number, visible: boolean, focus: boolean): void;
 }
 
 export class SceneFacade {
@@ -107,6 +108,9 @@ export class SceneFacade {
   }
   setXRayFilter(filter: XRayFilter | null): void {
     if (!this.controller.signal.aborted) this.backend.setXRayFilter?.(filter);
+  }
+  setWaferPoint(x: number, y: number, z: number, visible: boolean, focus: boolean): void {
+    if (!this.controller.signal.aborted) this.backend.setWaferPoint?.(x, y, z, visible, focus);
   }
   dispose(): void { this.controller.abort(); this.backend.dispose(); }
 }
