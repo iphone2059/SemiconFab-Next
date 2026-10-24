@@ -2,6 +2,7 @@ import { Scene } from '@babylonjs/core/scene';
 import { buildProceduralFab } from './procedural-fab';
 import { buildOriginalRoofHvac } from './original-roof-hvac';
 import { buildOriginalFacilityArchitecture } from './original-facility-architecture';
+import { buildOriginalSubfabFacilities } from './original-subfab-facilities';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
@@ -449,6 +450,9 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   const architecture = buildOriginalFacilityArchitecture(scene, architectureParent);
   architecture.setVisible(true);
   architecture.setCeilingVisible(false);
+  const subfabParent = new TransformNode('subfab-facilities-parent', scene);
+  const subfabDense = buildOriginalSubfabFacilities(scene, subfabParent);
+  subfabDense.setVisible(false);
   // Replace the early procedural air-shower approximation with the source airlocks.
   for (const mesh of scene.meshes) if (mesh.name.startsWith('airshower-')) mesh.setEnabled(false);
   scene.onBeforeRenderObservable.add(() => { const now = performance.now(); roofHvac.update(now); architecture.update(now); });
@@ -479,7 +483,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   const amhsGroup = addAnimatedAmhs(scene, onAmhsStats);
   // These static meshes are created once; keep the caster list stable to avoid
   // allocating flatMap/filter arrays on every animation frame.
-  const staticCasters = [fab.equipment, fab.shell, fab.subfab, roofHvac.group]
+  const staticCasters = [fab.equipment, fab.shell, fab.subfab, roofHvac.group, subfabDense.group]
     .flatMap(root => root.getChildMeshes())
     .filter(mesh => mesh !== fab.floor && !mesh.name.startsWith('procedural-slab') && !mesh.name.startsWith('status-') && mesh.metadata?.staticShadowCaster !== false);
   const shadows = createNativeStaticShadows(scene, scene.getEngine() as WebGPUEngine, keyLight,
@@ -550,6 +554,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     architecture.setVisible(!basementActive);
     architecture.setCeilingVisible(!basementActive && !dualActive && layerVisibility.ceiling);
     roofHvac.setVisible(layerVisibility.roof && !basementActive && !dualActive);
+    subfabDense.setVisible(basementActive || dualActive);
     amhsGroup.setEnabled(!basementActive && layerVisibility.amhs);
     heatmap.group.setEnabled(!basementActive && layerVisibility.heatmap);
     airflow.group.setEnabled(!basementActive && layerVisibility.airflow);

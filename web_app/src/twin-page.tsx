@@ -142,6 +142,7 @@ function TwinContent() {
   const [researchError, setResearchError] = useState('');
   const [showResearchUtil, setShowResearchUtil] = useState(true);
   const [tourRemainingMs, setTourRemainingMs] = useState(0);
+  const [onboardingDontShow, setOnboardingDontShow] = useState(true);
   const [waferProduct, setWaferProduct] = useState<WaferProduct>('A');
   const [waferRoutes, setWaferRoutes] = useState<Record<WaferProduct, WaferRouteStep[]>>();
   const [waferIndex, setWaferIndex] = useState(0);
@@ -435,10 +436,20 @@ function TwinContent() {
   function updateCut(axis: CutAxis, position: number, invert: boolean): void {
     dispatch({ type: 'cut/set', axis, positionM: position, invert });
   }
-  function setL1(): void { dispatch({ type: 'level/set', level: 'L1' }); }
-  function setB1(): void { dispatch({ type: 'level/set', level: level === 'B1' ? 'L1' : 'B1' }); }
-  function setDual(): void { dispatch({ type: 'level/set', level: level === 'DUAL' ? 'L1' : 'DUAL' }); }
-  function toggleExploded(): void { dispatch({ type: 'spatial/toggle', mode: 'exploded' }); }
+  function flyLevel(next: 'L1' | 'B1' | 'DUAL' | 'EXPLODED'): void {
+    const poses = {
+      L1: { position: [0, 52, 64] as const, target: [0, 2, 0] as const },
+      B1: { position: [-15, -2, 34] as const, target: [-15, -6, -5] as const },
+      DUAL: { position: [0, 38, 62] as const, target: [0, -3, 0] as const },
+      EXPLODED: { position: [55, 44, 72] as const, target: [0, -4, 0] as const },
+    };
+    const pose = poses[next];
+    scene.current?.setCameraPose(pose.position, pose.target, 850);
+  }
+  function setL1(): void { dispatch({ type: 'level/set', level: 'L1' }); flyLevel('L1'); }
+  function setB1(): void { const next = level === 'B1' ? 'L1' : 'B1'; dispatch({ type: 'level/set', level: next }); flyLevel(next); }
+  function setDual(): void { const next = level === 'DUAL' ? 'L1' : 'DUAL'; dispatch({ type: 'level/set', level: next }); flyLevel(next); }
+  function toggleExploded(): void { dispatch({ type: 'spatial/toggle', mode: 'exploded' }); flyLevel(level === 'EXPLODED' ? 'L1' : 'EXPLODED'); }
   function changeExplode(percent: number): void { dispatch({ type: 'explode/set', percent }); }
   function applyTourStep(index: number): void {
     const stop = TOUR_STOPS[index];
@@ -457,7 +468,7 @@ function TwinContent() {
       setSelected(undefined);
       if (catalogIndex >= 0) { suppressToolSelectionRef.current = true; scene.current?.selectTool(catalogIndex, false); window.setTimeout(() => { suppressToolSelectionRef.current = false; }, 0); }
       else scene.current?.clearSelection();
-      if (row?.level === 'B1') { dispatch({ type: 'level/set', level: 'B1' }); scene.current?.setDual(false); scene.current?.setBasement(true); }
+      if (row?.level === 'B1') { dispatch({ type: 'level/set', level: 'B1' }); flyLevel('B1'); scene.current?.setDual(false); scene.current?.setBasement(true); }
     } else if (next.kind === 'oem') {
       setSelected(undefined);
       scene.current?.clearSelection();
@@ -543,7 +554,7 @@ function TwinContent() {
   }
   function dismissOnboarding(): void {
     dispatch({ type: 'onboarding/close' });
-    try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch { /* ignore storage denial */ }
+    try { if (onboardingDontShow) localStorage.setItem(ONBOARDING_KEY, '1'); } catch { /* ignore storage denial */ }
   }
   function finishOnboarding(): void {
     dismissOnboarding();
@@ -745,6 +756,7 @@ function TwinContent() {
             onClose={() => { scene.current?.clearSelection(); setSelection(undefined); setSelected(undefined); }}
             onManualKey={handleManualKey}
             onSelectReference={(id) => handleTwinSelection({ kind: 'reference', id })}
+            onSelectOem={(id) => handleTwinSelection({ kind: 'oem', id })}
           />
         )}
 
@@ -986,6 +998,7 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
               <div className="twin-onboarding-head"><span id="onboarding-step-counter">{t("首次进入 ·")}{onboardingStep + 1}/{ONBOARDING_STEPS.length}</span><button type="button" onClick={dismissOnboarding} aria-label={t("跳过引导")}>×</button></div>
               <h3 id="onboarding-title">{t(ONBOARDING_STEPS[onboardingStep].title)}</h3>
               <p id="onboarding-desc">{t(ONBOARDING_STEPS[onboardingStep].body)}</p>
+              <label className="twin-onboarding-dont-show"><input id="onboarding-dont-show" type="checkbox" checked={onboardingDontShow} onChange={(event) => setOnboardingDontShow(event.target.checked)} /><span id="onboarding-dont-show-text">{t("不再提示")}</span></label>
               <div className="twin-onboarding-actions">
                 <button type="button" onClick={dismissOnboarding}>{t("跳过")}</button>
                 <button id="onboarding-prev-btn" type="button" onClick={() => dispatch({ type: 'onboarding/step', step: onboardingStep - 1 })} disabled={onboardingStep === 0}>{t("上一步")}</button>

@@ -27,9 +27,9 @@ function pseudoTool(id:string, row: NonNullable<ReturnType<typeof localizedEquip
     vendor:row.brand??'', model:row.model??'' };
 }
 
-export function OriginalInspector({selection,states,onClose,onManualKey,onSelectReference}:{
+export function OriginalInspector({selection,states,onClose,onManualKey,onSelectReference,onSelectOem}:{
   selection:TwinSelection; states:Readonly<Record<string,FabToolState>>; onClose:()=>void;
-  onManualKey:(key:string,state:FabToolState)=>void; onSelectReference?:(id:string)=>void;
+  onManualKey:(key:string,state:FabToolState)=>void; onSelectReference?:(id:string)=>void; onSelectOem?:(id:string)=>void;
 }) {
   const {language,t}=useTwinLocale(); const zh=language==='zh';
   const equipment = selection.kind==='reference' ? localizedEquipment(selection.id,language) ?? ORIGINAL_TWIN_UI.equipment.find(row=>row.id===selection.id) : undefined;
@@ -61,6 +61,8 @@ export function OriginalInspector({selection,states,onClose,onManualKey,onSelect
   const catalog=(equipment.catalogRecord?.record??{}) as {physical?:Record<string,{value?:unknown;unit?:string;provenance?:{source?:string;tier?:string}}>;process_capability?:{capabilities?:{process?:string;detail?:{value?:string}}[]};notes?:string;record_status?:string;source_tier?:string};
   const weight=catalog.physical?.weight_kg?.value;
   const sourceUrl=equipment.sourceUrl??findSourceUrl(equipment.catalogRecord)??findSourceUrl(catalog);
+  const oemMatch=ORIGINAL_TWIN_UI.oem.find(row=>row.inFabId===equipment.id)??ORIGINAL_TWIN_UI.oem.find(row=>row.model===equipment.model);
+  const completeness=(equipment.catalogRecord as {completeness_pct?:number}|undefined)?.completeness_pct;
   const capabilities=(catalog.process_capability?.capabilities??[]).map(item=>`${item.process??''}: ${item.detail?.value??''}`).filter(Boolean);
   const act=(action:MesAction)=>setMes(current=>current?applyMesAction(current,action):current);
   return <aside className="twin-inspector original-inspector" aria-label={t('设备详情')}>
@@ -84,11 +86,12 @@ export function OriginalInspector({selection,states,onClose,onManualKey,onSelect
       {catalog.notes&&<p className="twin-data-note">{catalog.notes}</p>}
       {!equipment.specs&&!capabilities.length&&<p>{equipment.locationDesc}</p>}
     </section>
+    {oemMatch&&<button type="button" className="twin-primary" onClick={()=>onSelectOem?.(oemMatch.id)}>{t('OEM 目录')} · {oemMatch.model}</button>}
     {equipment.connectedTool&&<button type="button" className="twin-primary" onClick={()=>{const target=ORIGINAL_TWIN_UI.equipment.find(row=>row.id===equipment.connectedTool); if(target) onSelectReference?.(target.id);}}>{t('联动设备')} · {equipment.connectedTool}</button>}
     <div className="twin-manual-state" role="group" aria-label={t('设备状态干预')}>
       {(['running','idle','down','maint'] as const).map(value=><button type="button" key={value} aria-pressed={state===value} onClick={()=>onManualKey(equipment.id,value)}>{value.toUpperCase()}</button>)}
     </div>
-    <section id="inspect-source-card" className="twin-process"><div className="twin-process-head"><strong>SOURCE</strong><span>{equipment.conformance_level??catalog.record_status??''}</span></div><p>{equipment.locationDesc??`${equipment.bay} · ${equipment.level}`}</p>{sourceUrl&&<a href={sourceUrl} target="_blank" rel="noreferrer">{sourceUrl}</a>}</section>
+    <section id="inspect-source-card" className="twin-process"><div className="twin-process-head"><strong>SOURCE</strong><span>{equipment.conformance_level??catalog.record_status??''}</span></div><p>{equipment.locationDesc??`${equipment.bay} · ${equipment.level}`}</p>{sourceUrl&&<a href={sourceUrl} target="_blank" rel="noreferrer">{sourceUrl}</a>}<div className="twin-spec-row"><span>{t('完整度')}</span><b>{completeness===undefined?'—':`${completeness}%`}</b></div><div className="twin-spec-row"><span>{t('记录状态')}</span><b>{catalog.record_status??'—'}</b></div></section>
     {telemetry&&mes&&spc&&<>
       <section id="telemetry-sensors-grid" className="twin-process"><div className="twin-process-head"><strong>FDC TELEMETRY</strong><span>{telemetry.soh.toFixed(1)}% SOH</span></div><div className="twin-spc-sensors">{telemetry.sensors.map(sensor=><div key={sensor.name}><span>{sensor.name}</span><b>{sensor.value<0.01?sensor.value.toExponential(2):sensor.value.toFixed(2)} <small>{sensor.unit}</small></b></div>)}</div></section>
       <section className="twin-process twin-mes"><div className="twin-process-head"><strong>SEMI MES · E40 / E87 / E94</strong><span id="mes-job-state-badge" className={`twin-mes-state ${mes.state.toLowerCase()}`}>{mes.state}</span></div><div className="twin-mes-grid"><div><span>CARRIER</span><b>{mes.carrierId}</b></div><div><span>RECIPE</span><b>{mes.recipeId}</b></div><div><span>STEP</span><b>{mes.stepName}</b></div><div><span>WAFER SLOT</span><b>{mes.waferSlot} / 25</b></div></div><div className="twin-mes-actions"><button type="button" onClick={()=>act('track-in')}>Track-In</button><button type="button" onClick={()=>act('track-out')}>Track-Out</button><button type="button" className="hold" onClick={()=>act('hold')}>Hold</button></div></section>
