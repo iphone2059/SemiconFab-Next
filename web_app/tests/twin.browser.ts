@@ -35,16 +35,16 @@ async function pressEscape() {
   await command('Page.navigate', { url: baseUrl + '/twin?lang=zh-CN' });
   await until(`!!document.querySelector('.twin-page')`);
   await until(`document.querySelector('.twin-status')?.getAttribute('title')?.startsWith('WebGPU ·')`);
-  assert.equal(await evaluate(`document.querySelectorAll('.twin-left .scene-rail').length`), 1);
+  assert.equal(await evaluate(`document.querySelectorAll('#left-sidebar').length`), 1);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-levels button').length`), 4);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-cameras button').length`), 4);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-mode option').length`), 3);
-  assert.ok((await evaluate(`document.querySelectorAll('.scene-tool-list-item').length`)) > 0);
+  assert.equal(await evaluate(`document.querySelectorAll('#equipment-list [data-equipment-id]').length`), 18);
 
   await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'visitor'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  await until(`!document.querySelector('.twin-left')`);
+  await until(`!document.querySelector('#left-sidebar')`);
   await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'engineer'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  await until(`!!document.querySelector('.twin-left')`);
+  await until(`!!document.querySelector('#left-sidebar')`);
 
   await evaluate(`document.querySelectorAll('.twin-levels button')[1].click()`);
   await until(`document.querySelectorAll('.twin-levels button')[1].getAttribute('class')?.includes('active')`);
@@ -58,9 +58,9 @@ async function pressEscape() {
   await evaluate(`document.querySelectorAll('.twin-levels button')[0].click()`);
   await until(`document.querySelectorAll('.twin-levels button')[0].getAttribute('class')?.includes('active')`);
 
-  await evaluate(`document.querySelector('.scene-tool-list-item').click()`);
+  await evaluate(`document.querySelector('#equipment-list [data-equipment-id]').click()`);
   await until(`!!document.querySelector('.twin-inspector')`);
-  assert.match(await evaluate(`document.querySelector('.twin-inspector').innerText`), /FAB-01/);
+  assert.match(await evaluate(`document.querySelector('.twin-inspector').innerText`), /FAB REFERENCE/);
   await until(`!!document.querySelector('.twin-mes') && !!document.querySelector('.twin-spc')`);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-spc-sensors > div').length`), 4);
   assert.match(await evaluate(`document.querySelector('.twin-spc-grid').innerText`), /Cp[\s\S]*Cpk[\s\S]*SIGMA/);
@@ -99,6 +99,8 @@ async function pressEscape() {
   await evaluate(`document.querySelector('.twin-cut select').value = 'Z'; document.querySelector('.twin-cut select').dispatchEvent(new Event('change', { bubbles: true }))`);
   await evaluate(`document.querySelector('.twin-cut-toggle').click()`);
   await until(`!document.querySelector('.twin-cut')`);
+  await evaluate(`document.querySelectorAll('.twin-levels button')[0].click()`);
+  await until(`document.querySelectorAll('.twin-levels button')[0].getAttribute('class')?.includes('active')`);
 
   await evaluate(`document.querySelector('#btn-toggle-xray').click()`);
   await until(`!!document.querySelector('.twin-xray')`);
@@ -115,21 +117,21 @@ async function pressEscape() {
   await until(`document.querySelectorAll('.twin-research-stats strong')[1]?.textContent === '84'`);
   assert.match(await evaluate(`document.querySelector('.twin-research-clock').innerText`), /Day 12/);
   assert.match(await evaluate(`document.querySelector('.twin-feed').innerText`), /REPLAY/);
-  assert.equal(await evaluate(`!!document.querySelector('.twin-left')`), false);
+  assert.equal(await evaluate(`!!document.querySelector('#left-sidebar')`), false);
   await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'engineer'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  await until(`!!document.querySelector('.twin-left')`);
+  await until(`!!document.querySelector('#left-sidebar')`);
 
   // This instance loses its original replay alias to packaging. A new replay
   // session must freeze the latest DEMO state, even at an unchanged replay time.
-  await evaluate(`document.querySelectorAll('.scene-tool-list-item')[2].click()`);
+  await evaluate(`document.querySelectorAll('#equipment-list [data-equipment-id]')[2].click()`);
   await until(`!!document.querySelector('.twin-manual-state')`);
   await evaluate(`[...document.querySelectorAll('.twin-manual-state button')].find(b=>b.textContent==='MAINT').click()`);
   await until(`document.querySelector('.twin-manual-state button[aria-pressed="true"]')?.textContent==='MAINT'`);
-  await evaluate(`(() => { const select=document.querySelector('#mode-select');select.value='research';select.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await evaluate(`(() => { const select=document.querySelector('.twin-mode select');select.value='research';select.dispatchEvent(new Event('change',{bubbles:true})); })()`);
   await until(`!!document.querySelector('.twin-research-hud')`);
   assert.equal(await evaluate(`document.querySelector('.twin-manual-state button[aria-pressed="true"]')?.textContent`), 'MAINT');
-  await evaluate(`(() => { const select=document.querySelector('#mode-select');select.value='engineer';select.dispatchEvent(new Event('change',{bubbles:true})); })()`);
-  await until(`!!document.querySelector('.twin-left')`);
+  await evaluate(`(() => { const select=document.querySelector('.twin-mode select');select.value='engineer';select.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await until(`!!document.querySelector('#left-sidebar')`);
 
   await evaluate(`document.querySelector('.twin-wafer-toggle').click()`);
   await until(`document.querySelector('.twin-wafer-row b')?.textContent?.includes('001 / 120')`);
@@ -169,7 +171,7 @@ async function pressEscape() {
   await command('Page.navigate', { url: baseUrl + '/twin?mode=engineer' });
   await until(`document.documentElement.lang === 'en' && document.querySelector('#lang-toggle-btn')?.textContent === 'English'`);
   await until(`document.querySelector('.twin-status')?.getAttribute('title')?.startsWith('WebGPU ·')`);
-  await evaluate(`(()=>{const input=document.querySelector('.scene-rail-search');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Lithography');input.dispatchEvent(new Event('input',{bubbles:true}))})()`);
-  await until(`document.querySelectorAll('.scene-tool-list-item').length===8`);
+  await evaluate(`(()=>{const input=document.querySelector('#search-input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Lithography');input.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+  await until(`document.querySelectorAll('#equipment-list [data-equipment-id]').length > 0 && document.querySelectorAll('#equipment-list [data-equipment-id]').length < 18`);
   return { controls: true, exclusiveModes: true, escapeWithFocusedControl: true, language: true, fontFloorPx: 12, singlePage: true };
 }

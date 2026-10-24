@@ -54,3 +54,20 @@ it('pauses ticks, changes only RUNNING/IDLE on the original third-cycle cadence,
   expect(demoReducer(demoReducer(createDemoState(42), { type: 'tick' }), { type: 'tick' })).toEqual(sameSeed);
   expect(demoReducer(state, { type: 'manual', index: 121, state: 'running' })).toBe(state);
 });
+
+it('updates a source UUID light target without changing every instance of that model', () => {
+  const initial=createDemoState(42);
+  const state=demoReducer(initial,{type:'manual-key',key:FAB_LAYOUT[8].recordId,state:'idle'});
+  expect(state.states[8]).toBe('running');
+  expect(state.states[14]).toBe('idle');
+  expect(state.keys[FAB_LAYOUT[8].recordId]).toBe('idle');
+});
+
+it('keeps draft lamp states across source scenario reset while resetting directory tools', () => {
+  let state=demoReducer(createDemoState(42),{type:'manual-key',key:'TG01_LITHO_03',state:'idle'});
+  state=demoReducer(state,{type:'manual-key',key:FAB_LAYOUT[52].recordId,state:'down'});
+  state=demoReducer(state,{type:'scenario',scenario:YIELD_SCENARIOS[0]});
+  expect(state.states[100]).toBe('idle');
+  expect(state.states[52]).toBe('running');
+  expect(state.keys[FAB_LAYOUT[52].recordId]).toBe('running');
+});

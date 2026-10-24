@@ -6,7 +6,10 @@ import type { SiteDto } from './contracts';
 import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus } from './equipment-status';
 import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
 import type { AmhsStats, CutAxis, PickedTool, SceneLayer, XRayFilter } from './fab-scene';
-import { FabRail, FabViewport, type FabViewportHandle } from './fab-viewer';
+import { FabViewport, type FabViewportHandle } from './fab-viewer';
+import { TwinSidebar } from './twin-sidebar';
+import { OriginalInspector } from './twin-inspector';
+import { ORIGINAL_TWIN_UI, type TwinSelection } from './original-twin-data';
 import { ResearchReplay, researchClock } from './research-replay';
 import { buildWaferWaypoints, parseWaferRoutes, waferTransitPoint, type WaferProduct, type WaferRouteStep } from './wafer-route';
 import { applyMesAction, buildTelemetry, computeSpc, createMesJob, type MesAction, type MesJob } from './process-control';
@@ -107,6 +110,7 @@ function TwinContent() {
   const layers = useMemo(() => ({ ...layerPreferences, airflow: projected.airflow, heatmap: projected.heatmap, xray: projected.xray !== null }),
     [layerPreferences, projected.airflow, projected.heatmap, projected.xray]);
   const [selected, setSelected] = useState<PickedTool>();
+  const [selection, setSelection] = useState<TwinSelection>();
   const [mesJobs, setMesJobs] = useState<Record<number, MesJob>>({});
   const [ymsOpen, setYmsOpen] = useState(false);
   const [ymsTab, setYmsTab] = useState<'map' | 'yield'>('map');
@@ -122,7 +126,8 @@ function TwinContent() {
   const [status, setStatus] = useState(t("准备 WebGPU 视图…"));
   const appliedCameraView = useRef<CameraView | undefined>(undefined);
   const [amhs, setAmhs] = useState<AmhsStats>();
-  const [railOpen, setRailOpen] = useState(true);
+  const [railOpen] = useState(true);
+  const [infoDialog, setInfoDialog] = useState<'architecture' | 'database' | null>(null);
   const [research, setResearch] = useState<ResearchReplay>();
   const [researchLoading, setResearchLoading] = useState(false);
   const [researchError, setResearchError] = useState('');
@@ -425,6 +430,27 @@ function TwinContent() {
     const scenario = YIELD_SCENARIOS.find((entry) => entry.id === id);
     setYieldInput(scenario ? { purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime } : DEFAULT_YIELD_INPUT);
   }
+  function handleTwinSelection(next: TwinSelection): void {
+    setSelection(next);
+    if (next.kind === 'reference') {
+      const row = ORIGINAL_TWIN_UI.equipment.find((item) => item.id === next.id);
+      setSelected(undefined);
+      scene.current?.clearSelection();
+      if (row?.level === 'B1') { dispatch({ type: 'level/set', level: 'B1' }); scene.current?.setDual(false); scene.current?.setBasement(true); }
+    } else if (next.kind === 'oem') {
+      setSelected(undefined);
+      scene.current?.clearSelection();
+    }
+  }
+  function handleToolChange(tool?: PickedTool): void {
+    setSelected(tool);
+    if (tool && selection?.kind === 'reference' && FAB_LAYOUT[tool.index]?.recordId === selection.id) return;
+    if (tool) setSelection({ kind: 'layout', index: tool.index });
+    else if (selection?.kind === 'layout') setSelection(undefined);
+  }
+  function handleManualKey(key: string, state: FabToolState): void {
+    dispatchDemo({ type: 'manual-key', key, state });
+  }
   function runMesAction(action: MesAction): void {
     if (!selected) return;
     const index = selected.index;
@@ -601,7 +627,7 @@ function TwinContent() {
           site={site}
           fab={fab}
           toolStates={toolStates}
-          onToolChange={setSelected}
+          onToolChange={handleToolChange}
           onStatusChange={setStatus}
           onAmhsStatsChange={setAmhs}
           layers={layers}
@@ -611,21 +637,19 @@ function TwinContent() {
         />
 
         {railOpen && mode === 'engineer' && (
-          <div className="twin-left">
-            <div className="twin-panel-title"><span>FAB EQUIPMENT</span><button type="button" onClick={() => setRailOpen(false)} aria-label={t("收起设备清单")}>×</button></div>
-            <FabRail
-              selectedToolIndex={selected?.index}
-              onSelectTool={(index) => scene.current?.selectTool(index, false)}
-              toolStates={toolStates}
-              statusFeed={ui.statusSource === 'sse-live' ? statusFeed : undefined}
-            />
-          </div>
+          <div className="original-hud"><TwinSidebar
+            selection={selection}
+            states={demo.keys}
+            badgeCount={67}
+            onSelect={handleTwinSelection}
+            onArchitecture={() => setInfoDialog('architecture')}
+            onDatabase={() => setInfoDialog('database')}
+          /></div>
         )}
-        {!railOpen && mode === 'engineer' && <button type="button" className="twin-rail-open" onClick={() => setRailOpen(true)}>{t("设备清单 ›")}</button>}
 
-        {selected && mode !== 'visitor' && (
+        {selected && mode !== 'visitor' && selection?.kind === 'layout' && (
           <aside className="twin-inspector" aria-label={t("设备详情")}>
-            <div className="twin-panel-title"><span>SELECTED TOOL · {String(selected.index + 1).padStart(3, '0')}</span><button type="button" aria-label={t("关闭设备详情")} onClick={() => { scene.current?.clearSelection(); setSelected(undefined); }}>×</button></div>
+            <div className="twin-panel-title"><span>SELECTED TOOL · {String(selected.index + 1).padStart(3, '0')}</span><button type="button" aria-label={t("关闭设备详情")} onClick={() => { scene.current?.clearSelection(); setSelected(undefined); setSelection(undefined); }}>×</button></div>
             <h2>{selected.vendor}</h2>
             <h3>{selected.model}</h3>
             <span className="twin-chip">{t(CATEGORY_LABELS[selected.category] ?? selected.category)}</span>
@@ -686,6 +710,16 @@ function TwinContent() {
               </section>
             )}
           </aside>
+        )}
+
+        {selection && selection.kind !== 'layout' && mode !== 'visitor' && (
+          <OriginalInspector
+            key={`${selection.kind}-${selection.id}`}
+            selection={selection}
+            states={demo.keys}
+            onClose={() => { scene.current?.clearSelection(); setSelection(undefined); setSelected(undefined); }}
+            onManualKey={handleManualKey}
+          />
         )}
 
         {mode === 'research' && (
@@ -902,6 +936,15 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
               <button type="button" className="primary" onClick={advanceTour}>{tourStep === TOUR_STOPS.length - 1 ? t("完成") : t("下一站")}</button>
             </div>
           </section>
+        )}
+
+        {infoDialog && (
+          <div className="twin-yms-backdrop" onClick={() => setInfoDialog(null)}>
+            <section className="twin-yms" onClick={(event) => event.stopPropagation()} aria-label={infoDialog}>
+              <header className="twin-yms-head"><div><strong>{infoDialog === 'architecture' ? 'OPEN SOFTWARE ARCHITECTURE' : 'OEM DATABASE'}</strong><span>{infoDialog === 'architecture' ? 'React + TypeScript + Babylon.js WebGPU' : '116 SEMI-E72 records'}</span></div><button type="button" className="twin-yms-close" onClick={() => setInfoDialog(null)}>×</button></header>
+              <div className="twin-info-dialog">{infoDialog === 'architecture' ? <><p>Single-FAB procedural WebGPU runtime. React owns the page and typed HUD state; Babylon owns the WebGPU scene, native static shadows and cut plane.</p><p>No Three.js, WebGL fallback, iframe original page or glTF loaders are used in the production runtime.</p></> : <><p>The OEM tab contains all 116 source catalog rows. Selecting a row keeps the page in <code>/twin</code> and opens its source/spec record in the inspector.</p><p>Draft layout instances remain selectable in the 3D scene and are intentionally not treated as 121 directory cards.</p></>}</div>
+            </section>
+          </div>
         )}
 
         {onboarding && (

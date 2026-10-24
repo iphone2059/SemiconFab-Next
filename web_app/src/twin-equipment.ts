@@ -1,48 +1,10 @@
-import { FAB_LAYOUT, FAB_TOOL_STATES, type FabLayoutTool, type FabToolState } from './fab-layout';
+import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
 import type { ResearchSnapshot } from './research-replay';
-
-export interface LayoutIdentity {
-  instanceId: string;
-  recordId: string;
-  machineId: string;
-  replayTarget: boolean;
-}
+import { TWIN_LAYOUT_IDENTITIES } from './layout-identities';
+import { buildOriginalSignalRegistry, ORIGINAL_TWIN_UI } from './original-twin-data';
+export { buildLayoutIdentities, TWIN_LAYOUT_IDENTITIES, type LayoutIdentity } from './layout-identities';
 
 export interface ScenarioOverrides { overrides: Readonly<Record<string, 'RUNNING' | 'IDLE' | 'DOWN' | 'MAINT'>> }
-
-// Original CATEGORY_BAYS + buildDraftGhosts insertion order. Packaging/Test aliases
-// intentionally collide with Litho/Metrology: preserve the source Map's actual winner.
-const MIMAC_GROUP: Record<string, string> = {
-  lithography: 'TG01_LITHO', resist_track: 'TG02_TRACK', dry_etch: 'TG03_ETCH',
-  thin_film_deposition: 'TG05_CVD', thermal_processing: 'TG07_FURN_DIFF',
-  ion_implantation: 'TG09_IMPL_MED', cmp: 'TG11_CMP_OX', wet_clean: 'TG13_WET_BENCH',
-  metrology: 'TG16_MET_CD', inspection: 'TG18_INSPECT', packaging: 'TG01_LITHO',
-  test: 'TG16_MET_CD', other: 'TG14_WET_SINGLE',
-};
-const FAMILY_ORDER: Record<string, number> = {
-  lithography: 0, resist_track: 0, thermal_processing: 1, cmp: 2, wet_clean: 2,
-  thin_film_deposition: 3, dry_etch: 4, ion_implantation: 5,
-  metrology: 6, inspection: 6, other: 6, packaging: 7, test: 7,
-};
-
-export function buildLayoutIdentities(layout: readonly FabLayoutTool[] = FAB_LAYOUT): LayoutIdentity[] {
-  const bayCounts = new Map<string, number>();
-  const rows = layout.map((tool, index) => {
-    const ordinal = (bayCounts.get(tool.category) ?? 0) + 1;
-    bayCounts.set(tool.category, ordinal);
-    return { instanceId: `FAB-01/tool-${String(index + 1).padStart(3, '0')}`, recordId: tool.recordId,
-      machineId: `${MIMAC_GROUP[tool.category]}_${String(ordinal).padStart(2, '0')}`, replayTarget: false };
-  });
-  const order = layout.map((tool, index) => ({ index,
-    rank: tool.originalKind === 'catalog' ? -1 : FAMILY_ORDER[tool.category] ?? 6 }));
-  order.sort((a, b) => a.rank - b.rank || a.index - b.index);
-  const winners = new Map<string, number>();
-  for (const { index } of order) winners.set(rows[index].machineId, index);
-  for (const row of rows) row.replayTarget = rows[winners.get(row.machineId)!] === row;
-  return rows;
-}
-
-export const TWIN_LAYOUT_IDENTITIES = buildLayoutIdentities();
 
 export function resolveScenario(scenario: ScenarioOverrides) {
   const matched = new Set<string>();
@@ -68,35 +30,56 @@ export function projectReplayStates(snapshot: ResearchSnapshot, base: readonly F
 }
 
 export const DEMO_TICK_MS = 1600;
-export interface DemoState { states: FabToolState[]; cycle: number; playing: boolean; seed: number; scenarioId: string; unresolvedIds: string[] }
+export interface DemoState { states: FabToolState[]; keys: Record<string, FabToolState>; referenceLights: Record<string, FabToolState>; cycle: number; playing: boolean; seed: number; scenarioId: string; unresolvedIds: string[] }
 export type DemoEvent = { type: 'tick' } | { type: 'play'; playing: boolean }
   | { type: 'manual'; index: number; state: FabToolState }
+  | { type: 'manual-key'; key: string; state: FabToolState }
   | { type: 'scenario'; scenario: ScenarioOverrides & { id: string } };
+const originalSignals = buildOriginalSignalRegistry();
+const originalSignalKeys = [...originalSignals.keys()];
+function applySignal(state: DemoState, key: string, value: FabToolState): DemoState {
+  const target = originalSignals.get(key);
+  const states = [...state.states];
+  if (target?.layoutIndex !== undefined) states[target.layoutIndex] = value;
+  return { ...state, states, keys: { ...state.keys, [key]: value },
+    referenceLights: target?.referenceId ? { ...state.referenceLights, [target.referenceId]: value } : state.referenceLights };
+}
 export function createDemoState(seed = 42): DemoState {
-  return { states: FAB_LAYOUT.map(() => 'running'), cycle: 1, playing: true, seed, scenarioId: 'baseline', unresolvedIds: [] };
+  return { states: FAB_LAYOUT.map(() => 'running'), keys: {}, referenceLights: {}, cycle: 1, playing: true, seed, scenarioId: 'baseline', unresolvedIds: [] };
 }
 export function demoReducer(state: DemoState, event: DemoEvent): DemoState {
   switch (event.type) {
     case 'play': return { ...state, playing: event.playing };
+    case 'manual-key': return applySignal(state, event.key, event.state);
     case 'manual': {
       if (!Number.isInteger(event.index) || event.index < 0 || event.index >= state.states.length) return state;
       const states = [...state.states];
       states[event.index] = event.state;
       return { ...state, states };
     }
-    case 'scenario': return { ...state, ...resolveScenario(event.scenario), scenarioId: event.scenario.id };
+    case 'scenario': {
+      let next = state;
+      // Original applyScenario resets the final directory only. Draft aliases
+      // and their visible lamps retain earlier writes, even on Scenario reset.
+      for (const row of ORIGINAL_TWIN_UI.equipment) next = applySignal(next, row.id,
+        (event.scenario.overrides[row.id] ?? 'RUNNING').toLowerCase() as FabToolState);
+      const keys = { ...next.keys };
+      for (const [key, value] of Object.entries(event.scenario.overrides)) keys[key] = value.toLowerCase() as FabToolState;
+      return { ...next, keys, scenarioId: event.scenario.id,
+        unresolvedIds: Object.keys(event.scenario.overrides).filter(key => !originalSignals.has(key) && !ORIGINAL_TWIN_UI.equipment.some(row => row.id === key)) };
+    }
     case 'tick': {
       if (!state.playing) return state;
       const cycle = state.cycle + 1;
       if (cycle % 3 !== 0) return { ...state, cycle };
       let seed = state.seed;
       const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 0x100000000; };
-      const index = Math.floor(random() * state.states.length);
-      const chance = random();
-      const states = [...state.states];
-      if (states[index] === 'running' && chance < 0.28) states[index] = 'idle';
-      else if (states[index] === 'idle' && chance < 0.65) states[index] = 'running';
-      return { ...state, cycle, states, seed };
+      const key = originalSignalKeys[Math.floor(random() * originalSignalKeys.length)];
+      const current = state.keys[key] ?? 'running';
+      let next = state;
+      if (current === 'running' && random() < 0.28) next = applySignal(state, key, 'idle');
+      else if (current === 'idle' && random() < 0.65) next = applySignal(state, key, 'running');
+      return { ...next, cycle, seed };
     }
   }
 }
