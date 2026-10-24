@@ -42,6 +42,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: '其他设备',
 };
 
+const CATEGORY_BAYS: Record<string, [string, string]> = {
+  lithography: ['光刻曝光区', 'Lithography Bay'], resist_track: ['涂胶显影区', 'Track Bay'], dry_etch: ['等离子刻蚀区', 'Etch Bay'],
+  thin_film_deposition: ['薄膜沉积区', 'Deposition Bay'], cmp: ['CMP 研磨区', 'CMP Bay'], wet_clean: ['湿法清洗区', 'Wet Clean Bay'],
+  ion_implantation: ['离子注入区', 'Implant Bay'], thermal_processing: ['扩散/热处理区', 'Diffusion Bay'], metrology: ['量测区', 'Metrology Bay'],
+  inspection: ['检测区', 'Inspection Bay'], packaging: ['先进封装区', 'Packaging Bay'], test: ['测试区', 'Test Bay'], other: ['其他设备区', 'Other Bay'],
+};
+
 const LAYER_LABELS: { layer: SceneLayer; label: string }[] = [
   { layer: 'amhs', label: 'AMHS' },
   { layer: 'ceiling', label: 'FFU' },
@@ -606,7 +613,7 @@ function TwinContent() {
       {level === 'EXPLODED' && (
         <div className="twin-explode" role="group" aria-label={t("爆炸视图")}>
           <span>EXPLODE</span>
-          <input type="range" min={0} max={100} step={1} value={explodePercent} onChange={(event) => changeExplode(Number(event.target.value))} aria-label={t("爆炸视图比例")} />
+          <input id="explode-slider" type="range" min={0} max={100} step={1} value={explodePercent} onChange={(event) => changeExplode(Number(event.target.value))} aria-label={t("爆炸视图比例")} />
           <b>{explodePercent}%</b>
         </div>
       )}
@@ -614,17 +621,17 @@ function TwinContent() {
       {cutActive && (
         <div className="twin-cut" role="group" aria-label={t("剖切平面")}>
           <span>CUT</span>
-          <select value={cutAxis} onChange={(event) => updateCut(event.target.value as CutAxis, cutPosition, cutInvert)} aria-label={t("剖切轴")}>
+          <select id="cut-axis-select" value={cutAxis} onChange={(event) => updateCut(event.target.value as CutAxis, cutPosition, cutInvert)} aria-label={t("剖切轴")}>
             <option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option>
           </select>
-          <input type="range" min={-55} max={55} step={1} value={cutPosition} onChange={(event) => updateCut(cutAxis, Number(event.target.value), cutInvert)} aria-label={t("剖切位置")} />
+          <input id="cut-slider" type="range" min={-55} max={55} step={1} value={cutPosition} onChange={(event) => updateCut(cutAxis, Number(event.target.value), cutInvert)} aria-label={t("剖切位置")} />
           <b>{cutPosition.toFixed(0)} m</b>
           <label><input id="btn-cut-invert" type="checkbox" checked={cutInvert} onChange={(event) => updateCut(cutAxis, cutPosition, event.target.checked)} /> Invert</label>
         </div>
       )}
 
       {ui.spatialMode === 'aerodynamics' && (
-        <section className="twin-aero-hud" aria-label="Aerodynamics">
+        <section id="hud-panel-aero" className="twin-aero-hud" aria-label="Aerodynamics">
           <strong>{t("AERODYNAMICS · 层流与压差")}</strong>
           <span>{t("黄光区 +30 Pa → 主工艺区 +15 Pa → 灰区 0 Pa")}</span>
           <span>{selected ? `#${selected.index + 1}` : t("主工艺区")} · {pressure.pressure.toFixed(2)} Pa · ∂P/∂z {pressure.gradZ.toFixed(2)} Pa/m</span>
@@ -746,10 +753,11 @@ function TwinContent() {
             {research && researchSnapshot && (
               <>
                 <div className="twin-research-clock">
-                  <strong>{researchClock(researchTime)}</strong>
+                  <strong id="research-time-clock">{researchClock(researchTime)}</strong>
                   <span>{researchTime.toFixed(0)} s / {research.durationSec.toFixed(0)} s</span>
                 </div>
                 <input
+                  id="research-scrubber"
                   className="twin-research-scrubber"
                   type="range"
                   min={0}
@@ -760,18 +768,18 @@ function TwinContent() {
                   aria-label={t("回放时间轴")}
                 />
                 <div className="twin-research-controls">
-                  <button type="button" onClick={() => { if (researchTime >= research.durationSec) setResearchTime(0); setResearchPlaying(!researchPlaying); }}>{researchPlaying ? t("暂停") : t("播放")}</button>
+                  <button id="research-play-btn" type="button" onClick={() => { if (researchTime >= research.durationSec) setResearchTime(0); setResearchPlaying(!researchPlaying); }}>{researchPlaying ? t("暂停") : t("播放")}</button>
                   {([1, 10, 100, 500] as const).map((speed) => (
                     <button type="button" key={speed} className={researchSpeed === speed ? 'active' : ''} onClick={() => setResearchSpeed(speed)}>{speed}×</button>
                   ))}
                 </div>
                 <div className="twin-research-stats">
-                  <div><span>WIP</span><strong>{researchSnapshot.wip} lots</strong><small>{researchSnapshot.wip * 25} wafers</small></div>
+                  <div><span>WIP</span><strong id="research-wip-val">{researchSnapshot.wip} lots</strong><small>{researchSnapshot.wip * 25} wafers</small></div>
                   <div><span>ACTIVE</span><strong>{researchSnapshot.activeTools}</strong><small>tools</small></div>
                   <div><span>TOP UTIL</span><strong>{(researchSnapshot.utilization[0]?.utilization ?? 0).toFixed(1)}%</strong><small>{researchSnapshot.utilization[0]?.toolGroup ?? '—'}</small></div>
                 </div>
                 <button id="btn-toggle-util-overlay" type="button" className="twin-research-util-toggle" aria-pressed={showResearchUtil} onClick={() => setShowResearchUtil((open) => !open)}>{t("利用率热力图")}</button>
-                {showResearchUtil && <div className="twin-research-util">
+                {showResearchUtil && <div id="research-utilization-overlay" className="twin-research-util">
                   {researchSnapshot.utilization.slice(0, 4).map((group) => (
                     <div key={group.toolGroup}>
                       <span>{group.toolGroup}</span>
@@ -780,7 +788,7 @@ function TwinContent() {
                     </div>
                   ))}
                 </div>}
-                <div className="twin-research-amhs">AMHS SIMULATED · jobs {amhs?.completed ?? 0} · avg {amhs?.avgDelivery?.toFixed(1) ?? '—'} s · active {amhs?.active ?? 0}/24</div>
+                <div id="research-amhs-badge" className="twin-research-amhs">AMHS SIMULATED · jobs {amhs?.completed ?? 0} · avg {amhs?.avgDelivery?.toFixed(1) ?? '—'} s · active {amhs?.active ?? 0}/24</div>
                 <p className="twin-research-footnote">{t("只读展示事件流，不是 Checkpoint/WAL。原版别名命中")}{replayProjection?.mappedCount ?? 0}{t("/121 台；未映射设备保留进入回放前的状态。217 台仿真设备与布局不是一一对应。AMHS 为独立动画时钟，JSONL 无运输事件。")}</p>
               </>
             )}
@@ -806,8 +814,9 @@ function TwinContent() {
                 </div>
                 <div className="twin-wafer-step">
                   <strong>{waferPoint?.tool?.model ?? '—'}</strong>
-                  <span>{waferPoint?.toolGroup ?? ''} · {waferPoint?.category ?? ''}</span>
-                  <small>{waferPoint?.recipe ?? 'no recipe'}</small>
+                  <span>{waferPoint?.toolGroup ?? ''} · {waferPoint?.recipe ?? 'no recipe'}</span>
+                  <small>{waferPoint ? (language === 'zh' ? CATEGORY_BAYS[waferPoint.category]?.[0] : CATEGORY_BAYS[waferPoint.category]?.[1]) ?? waferPoint.category : ''}</small>
+                  <em className="twin-wafer-status">{waferIndex >= waferWaypoints.length - 1 && !waferPlaying ? t('路线完成') : waferPlaying ? t('晶圆流转中…') : t('已暂停')}</em>
                 </div>
                 <input className="twin-wafer-scrubber" type="range" min={0} max={Math.max(0, waferWaypoints.length - 1)} step={1} value={waferIndex} onChange={(event) => seekWafer(Number(event.target.value))} aria-label={t("晶圆路线步骤")} />
                 <div className="twin-wafer-actions">
@@ -941,11 +950,11 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
               <span>TOUR {tourStep + 1}/{TOUR_STOPS.length}</span>
               <button type="button" onClick={endTour} aria-label={t("关闭导览")}>{t("跳过")}</button>
             </div>
-            <h3>{language === 'zh' ? TOUR_STOPS[tourStep].title : TOUR_STOPS[tourStep].titleEn}</h3>
-            <p>{language === 'zh' ? TOUR_STOPS[tourStep].subtitle : TOUR_STOPS[tourStep].subtitleEn}</p>
-            <div className="twin-tour-dots" role="tablist" aria-label={t("导览站点")}>
+            <h3 id="tour-hud-title">{language === 'zh' ? TOUR_STOPS[tourStep].title : TOUR_STOPS[tourStep].titleEn}</h3>
+            <p id="tour-hud-desc">{language === 'zh' ? TOUR_STOPS[tourStep].subtitle : TOUR_STOPS[tourStep].subtitleEn}</p>
+            <div id="tour-dots-container" className="twin-tour-dots" role="tablist" aria-label={t("导览站点")}>
               {TOUR_STOPS.map((stop, index) => (
-                <button type="button" role="tab" aria-selected={index === tourStep} key={stop.title} className={index === tourStep ? 'active' : ''} onClick={() => applyTourStep(index)} aria-label={language === 'zh' ? stop.title : stop.titleEn} />
+                <button id={`tour-dot-${index}`} type="button" role="tab" aria-selected={index === tourStep} key={stop.title} className={index === tourStep ? 'active' : ''} onClick={() => applyTourStep(index)} aria-label={language === 'zh' ? stop.title : stop.titleEn} />
               ))}
             </div>
             <div className="twin-tour-actions">
@@ -965,15 +974,15 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
         )}
 
         {onboarding && (
-          <div className="twin-onboarding" role="dialog" aria-modal="false" aria-label={t("首次引导")}>
+          <div id="onboarding-bubble" className="twin-onboarding" role="dialog" aria-modal="false" aria-label={t("首次引导")}>
             <div className="twin-onboarding-card">
-              <div className="twin-onboarding-head"><span>{t("首次进入 ·")}{onboardingStep + 1}/{ONBOARDING_STEPS.length}</span><button type="button" onClick={dismissOnboarding} aria-label={t("跳过引导")}>×</button></div>
-              <h3>{t(ONBOARDING_STEPS[onboardingStep].title)}</h3>
-              <p>{t(ONBOARDING_STEPS[onboardingStep].body)}</p>
+              <div className="twin-onboarding-head"><span id="onboarding-step-counter">{t("首次进入 ·")}{onboardingStep + 1}/{ONBOARDING_STEPS.length}</span><button type="button" onClick={dismissOnboarding} aria-label={t("跳过引导")}>×</button></div>
+              <h3 id="onboarding-title">{t(ONBOARDING_STEPS[onboardingStep].title)}</h3>
+              <p id="onboarding-desc">{t(ONBOARDING_STEPS[onboardingStep].body)}</p>
               <div className="twin-onboarding-actions">
                 <button type="button" onClick={dismissOnboarding}>{t("跳过")}</button>
-                <button type="button" onClick={() => dispatch({ type: 'onboarding/step', step: onboardingStep - 1 })} disabled={onboardingStep === 0}>{t("上一步")}</button>
-                <button type="button" className="primary" onClick={() => { if (onboardingStep === ONBOARDING_STEPS.length - 1) finishOnboarding(); else dispatch({ type: 'onboarding/step', step: onboardingStep + 1 }); }}>{onboardingStep === ONBOARDING_STEPS.length - 1 ? t("开始导览") : t("下一步")}</button>
+                <button id="onboarding-prev-btn" type="button" onClick={() => dispatch({ type: 'onboarding/step', step: onboardingStep - 1 })} disabled={onboardingStep === 0}>{t("上一步")}</button>
+                <button id="onboarding-next-btn" type="button" className="primary" onClick={() => { if (onboardingStep === ONBOARDING_STEPS.length - 1) finishOnboarding(); else dispatch({ type: 'onboarding/step', step: onboardingStep + 1 }); }}>{onboardingStep === ONBOARDING_STEPS.length - 1 ? t("开始导览") : t("下一步")}</button>
               </div>
             </div>
           </div>
