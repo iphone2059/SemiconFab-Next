@@ -3,8 +3,9 @@ import { ApiClient } from './api-client';
 import type { SiteDto } from './contracts';
 import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus } from './equipment-status';
 import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
-import type { AmhsStats, CutAxis, PickedTool, SceneLayer } from './fab-scene';
+import type { AmhsStats, CutAxis, PickedTool, SceneLayer, XRayFilter } from './fab-scene';
 import { FabRail, SiteScene, type SiteSceneHandle } from './site-preview';
+import { ResearchReplay, researchClock } from './research-replay';
 type EntryMode = 'visitor' | 'engineer' | 'research';
 type CameraView = 'iso' | 'top' | 'litho' | 'airshower' | 'etch' | 'oht';
 type FabLevel = 'L1' | 'B1' | 'DUAL' | 'EXPLODED';
@@ -51,7 +52,14 @@ const LAYER_LABELS: { layer: SceneLayer; label: string }[] = [
   { layer: 'subfab', label: 'Subfab' },
   { layer: 'heatmap', label: 'Heatmap' },
   { layer: 'airflow', label: 'Airflow' },
-  { layer: 'xray', label: 'X-Ray' },
+];
+const XRAY_FILTERS: { filter: XRayFilter; label: string }[] = [
+  { filter: 'all', label: 'All' },
+  { filter: 'upw', label: 'UPW' },
+  { filter: 'gas', label: 'Gas' },
+  { filter: 'vac', label: 'Vac' },
+  { filter: 'exhaust', label: 'Exhaust' },
+  { filter: 'amhs', label: 'AMHS' },
 ];
 
 export function TwinPage() {
@@ -75,6 +83,7 @@ export function TwinPage() {
   const [cutAxis, setCutAxis] = useState<CutAxis>('X');
   const [cutPosition, setCutPosition] = useState(0);
   const [cutInvert, setCutInvert] = useState(false);
+  const [xrayFilter, setXRayFilter] = useState<XRayFilter | null>(null);
   const [mode, setMode] = useState<EntryMode>('engineer');
   const [tourStep, setTourStep] = useState<number>();
   const [onboarding, setOnboarding] = useState(false);
@@ -85,6 +94,13 @@ export function TwinPage() {
   const [status, setStatus] = useState('准备 WebGPU 视图…');
   const [amhs, setAmhs] = useState<AmhsStats>();
   const [railOpen, setRailOpen] = useState(true);
+  const [research, setResearch] = useState<ResearchReplay>();
+  const [researchLoading, setResearchLoading] = useState(false);
+  const [researchError, setResearchError] = useState('');
+  const [researchTime, setResearchTime] = useState(0);
+  const [researchPlaying, setResearchPlaying] = useState(false);
+  const [researchSpeed, setResearchSpeed] = useState<1 | 10 | 100 | 500>(10);
+  const modeRef = useRef<EntryMode>('engineer');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -115,9 +131,11 @@ export function TwinPage() {
           const value = snapshot.tools[index]?.state;
           return value === 'running' || value === 'idle' || value === 'down' || value === 'maint' ? value : 'idle';
         });
-        setToolStates(next);
         setStatusFeed({ updatedAt: snapshot.generatedAt, stale: false });
-        next.forEach((state, index) => scene.current?.setToolState(index, state));
+        if (modeRef.current !== 'research') {
+          setToolStates(next);
+          next.forEach((state, index) => scene.current?.setToolState(index, state));
+        }
       },
       () => setStatusFeed((current) => current ? { ...current, stale: true } : current),
     );
@@ -135,6 +153,49 @@ export function TwinPage() {
   useEffect(() => {
     if (site) document.title = `${site.code} / FAB-01 · 3D FAB`;
   }, [site]);
+
+  useEffect(() => {
+    modeRef.current = mode;
+    if (mode !== 'research') setResearchPlaying(false);
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode !== 'research' || research) return;
+    const controller = new AbortController();
+    setResearchLoading(true);
+    setResearchError('');
+    void fetch('/twin/events-t1-fifo.jsonl', { signal: controller.signal })
+      .then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.text(); })
+      .then((text) => {
+        if (controller.signal.aborted) return;
+        const replay = ResearchReplay.parse(text);
+        setResearch(replay);
+        setResearchTime(Math.min(3600, replay.durationSec));
+      })
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted) setResearchError(reason instanceof Error ? reason.message : '回放数据加载失败');
+      })
+      .finally(() => { if (!controller.signal.aborted) setResearchLoading(false); });
+    return () => controller.abort();
+  }, [mode, research]);
+
+  useEffect(() => {
+    if (!researchPlaying || !research) return;
+    let last = performance.now();
+    const timer = window.setInterval(() => {
+      const now = performance.now();
+      const elapsed = ((now - last) / 1000) * researchSpeed;
+      last = now;
+      setResearchTime((current) => {
+        const next = Math.min(research.durationSec, current + elapsed);
+        if (next >= research.durationSec) setResearchPlaying(false);
+        return next;
+      });
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [researchPlaying, research, researchSpeed]);
+
+  const researchSnapshot = useMemo(() => research?.snapshot(researchTime), [research, researchTime]);
 
   useEffect(() => {
     try {
@@ -187,6 +248,18 @@ export function TwinPage() {
   function disableCut(): void {
     if (cutActive) scene.current?.setCutPlane(false, cutAxis, cutPosition, cutInvert);
     setCutActive(false);
+  }
+  function applyXRayFilter(filter: XRayFilter | null): void {
+    setXRayFilter(filter);
+    setLayers((current) => ({ ...current, xray: filter !== null }));
+    if (filter && filter !== 'all' && filter !== 'amhs') {
+      scene.current?.setBasement(false);
+      scene.current?.setDual(true);
+      setBasement(false);
+      setExploded(false);
+      setLevel('DUAL');
+    }
+    scene.current?.setXRayFilter(filter);
   }
   function resetLevel(): void {
     disableCut();
@@ -329,16 +402,26 @@ export function TwinPage() {
           <button type="button" className={`twin-tour${tourStep !== undefined ? ' active' : ''}`} aria-pressed={tourStep !== undefined} onClick={() => { if (tourStep === undefined) startTour(); else endTour(); }}>▶ Tour</button>
         </div>
         <div className="twin-topright">
-          <span className={`twin-feed${statusFeed?.stale ? ' is-stale' : ''}`}><i />{statusFeed?.stale ? 'CACHE' : 'LIVE'}</span>
+          <span className={`twin-feed${mode === 'research' ? ' is-replay' : statusFeed?.stale ? ' is-stale' : ''}`}><i />{mode === 'research' ? 'REPLAY' : statusFeed?.stale ? 'CACHE' : 'LIVE'}</span>
           <a href="/">工作台</a>
         </div>
       </header>
 
       <div className="twin-kpis">
-        <span><b>{utilization.toFixed(1)}%</b> UTIL</span>
-        <span><b>{FAB_LAYOUT.length}</b> TOOLS</span>
-        <span><b>{String(amhs?.active ?? 0).padStart(2, '0')}/{amhs?.total ?? 24}</b> OHT</span>
-        <span><b>{stateCounts.down}</b> ALARM</span>
+        {mode === 'research' && researchSnapshot ? (
+          <>
+            <span><b>{researchSnapshot.wip}</b> WIP</span>
+            <span><b>{researchSnapshot.activeTools}</b> ACTIVE</span>
+            <span>DAY <b>{researchClock(researchTime).split(' ')[1]}</b></span>
+          </>
+        ) : (
+          <>
+            <span><b>{utilization.toFixed(1)}%</b> UTIL</span>
+            <span><b>{FAB_LAYOUT.length}</b> TOOLS</span>
+            <span><b>{String(amhs?.active ?? 0).padStart(2, '0')}/{amhs?.total ?? 24}</b> OHT</span>
+            <span><b>{stateCounts.down}</b> ALARM</span>
+          </>
+        )}
       </div>
 
       {level === 'EXPLODED' && (
@@ -384,7 +467,7 @@ export function TwinPage() {
           onToggleBasement={setB1}
         />
 
-        {railOpen && mode !== 'visitor' && (
+        {railOpen && mode === 'engineer' && (
           <div className="twin-left">
             <div className="twin-panel-title"><span>FAB EQUIPMENT</span><button type="button" onClick={() => setRailOpen(false)} aria-label="收起设备清单">×</button></div>
             <FabRail
@@ -395,7 +478,7 @@ export function TwinPage() {
             />
           </div>
         )}
-        {!railOpen && mode !== 'visitor' && <button type="button" className="twin-rail-open" onClick={() => setRailOpen(true)}>设备清单 ›</button>}
+        {!railOpen && mode === 'engineer' && <button type="button" className="twin-rail-open" onClick={() => setRailOpen(true)}>设备清单 ›</button>}
 
         {selected && mode !== 'visitor' && (
           <aside className="twin-inspector" aria-label="设备详情">
@@ -415,24 +498,78 @@ export function TwinPage() {
         )}
 
         {mode === 'research' && (
-          <div className="twin-research-note" role="status">
-            <strong>Research 回放尚未接入</strong>
-            <span>当前只显示实时合成状态；JSONL 时间轴将在 TWIN-11 接入，未用模拟数据冒充回放。</span>
-          </div>
+          <section className="twin-research-hud" aria-label="Research Replay">
+            <div className="twin-research-head">
+              <span className="technical">RESEARCH REPLAY · JSONL</span>
+              <span>{research ? `${research.eventCount.toLocaleString('en-US')} rows` : 'display projection'}</span>
+            </div>
+            {researchLoading && <p className="twin-research-status">正在载入 27,263 行展示事件…</p>}
+            {researchError && <p className="twin-research-status error-text">回放加载失败：{researchError}</p>}
+            {research && researchSnapshot && (
+              <>
+                <div className="twin-research-clock">
+                  <strong>{researchClock(researchTime)}</strong>
+                  <span>{researchTime.toFixed(0)} s / {research.durationSec.toFixed(0)} s</span>
+                </div>
+                <input
+                  className="twin-research-scrubber"
+                  type="range"
+                  min={0}
+                  max={Math.max(1, research.durationSec)}
+                  step={1}
+                  value={researchTime}
+                  onChange={(event) => { setResearchPlaying(false); setResearchTime(Number(event.target.value)); }}
+                  aria-label="回放时间轴"
+                />
+                <div className="twin-research-controls">
+                  <button type="button" onClick={() => { if (researchTime >= research.durationSec) setResearchTime(0); setResearchPlaying((playing) => !playing); }}>{researchPlaying ? '暂停' : '播放'}</button>
+                  {([1, 10, 100, 500] as const).map((speed) => (
+                    <button type="button" key={speed} className={researchSpeed === speed ? 'active' : ''} onClick={() => setResearchSpeed(speed)}>{speed}×</button>
+                  ))}
+                </div>
+                <div className="twin-research-stats">
+                  <div><span>WIP</span><strong>{researchSnapshot.wip} lots</strong><small>{researchSnapshot.wip * 25} wafers</small></div>
+                  <div><span>ACTIVE</span><strong>{researchSnapshot.activeTools}</strong><small>tools</small></div>
+                  <div><span>TOP UTIL</span><strong>{(researchSnapshot.utilization[0]?.utilization ?? 0).toFixed(1)}%</strong><small>{researchSnapshot.utilization[0]?.toolGroup ?? '—'}</small></div>
+                </div>
+                <div className="twin-research-util">
+                  {researchSnapshot.utilization.slice(0, 4).map((group) => (
+                    <div key={group.toolGroup}>
+                      <span>{group.toolGroup}</span>
+                      <i><b style={{ width: `${Math.min(100, group.utilization)}%` }} /></i>
+                      <em>{group.busy}/{group.total}</em>
+                    </div>
+                  ))}
+                </div>
+                <p className="twin-research-footnote">只读展示事件流，不是 Checkpoint/WAL；本阶段为 WIP / UTIL 聚合回放，设备逐台着色仍待映射。</p>
+              </>
+            )}
+          </section>
         )}
 
         <div className="twin-bottom">
           <span className="twin-status"><i className={status.startsWith('WebGPU') ? 'ok' : ''} />{status}</span>
           <span>FAB-01 · 单 FAB</span>
-          <span>AMHS OHT {String(amhs?.active ?? 0).padStart(2, '0')}/{amhs?.total ?? 24}</span>
-          <span>{stateCounts.running} RUN · {stateCounts.idle} IDLE · {stateCounts.down} DOWN · {stateCounts.maint} MAINT</span>
+          <span>{mode === 'research' ? 'JSONL display only' : `AMHS OHT ${String(amhs?.active ?? 0).padStart(2, '0')}/${amhs?.total ?? 24}`}</span>
+          <span>{mode === 'research' ? `REPLAY · WIP ${researchSnapshot?.wip ?? 0} · ACTIVE ${researchSnapshot?.activeTools ?? 0}` : `${stateCounts.running} RUN · ${stateCounts.idle} IDLE · ${stateCounts.down} DOWN · ${stateCounts.maint} MAINT`}</span>
         </div>
 
         <div className="twin-layers" aria-label="图层">
           {LAYER_LABELS.map(({ layer, label }) => (
             <button type="button" key={layer} className={layers[layer] ? 'active' : ''} aria-pressed={!!layers[layer]} onClick={() => toggleLayer(layer)}>{label}</button>
           ))}
+          <button type="button" className={xrayFilter ? 'active' : ''} aria-pressed={!!xrayFilter} onClick={() => applyXRayFilter(xrayFilter ? null : 'all')}>X-Ray</button>
         </div>
+
+        {xrayFilter && (
+          <div className="twin-xray" role="group" aria-label="X-Ray 过滤">
+            <span>X-RAY</span>
+            {XRAY_FILTERS.map(({ filter, label }) => (
+              <button type="button" key={filter} className={xrayFilter === filter ? 'active' : ''} onClick={() => applyXRayFilter(filter)}>{label}</button>
+            ))}
+            <button type="button" className="close" onClick={() => applyXRayFilter(null)} aria-label="关闭 X-Ray">×</button>
+          </div>
+        )}
 
         {tourStep !== undefined && TOUR_STOPS[tourStep] && (
           <section className="twin-tour-card" aria-label="Cinematic Tour">

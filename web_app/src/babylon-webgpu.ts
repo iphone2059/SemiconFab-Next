@@ -9,7 +9,7 @@ import '@babylonjs/core/Culling/ray';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
-import type { AmhsStats, CutAxis, FabPlacement, HoveredTool, PickedTool, SceneBackend, SceneLayer, SceneViewPreset } from './fab-scene';
+import type { AmhsStats, CutAxis, FabPlacement, HoveredTool, PickedTool, SceneBackend, SceneLayer, SceneViewPreset, XRayFilter } from './fab-scene';
 import { InitializationDisposal } from './babylon-lifecycle';
 import { loadLegacyFab, type LegacyRuntime } from './legacy-site';
 import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
@@ -367,6 +367,9 @@ export function createWebGpuBackend(): SceneBackend {
           duration: 520,
         };
       }
+    },
+    setXRayFilter(filter: XRayFilter | null): void {
+      legacyRuntime?.setXRayFilter(filter);
     },
     setCutPlane(active: boolean, axis: CutAxis, position: number, invert: boolean): void {
       if (!scene) return;

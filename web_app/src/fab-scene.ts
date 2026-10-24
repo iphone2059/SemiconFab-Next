@@ -5,6 +5,7 @@ export interface FabPlacement { readonly fabId: string; readonly code: string; r
 export type SceneViewPreset = 'iso' | 'top' | 'reset' | 'focus' | 'litho' | 'airshower' | 'etch' | 'oht';
 export type SceneLayer = 'amhs' | 'ceiling' | 'subfab' | 'heatmap' | 'airflow' | 'xray';
 export type CutAxis = 'X' | 'Y' | 'Z';
+export type XRayFilter = 'all' | 'upw' | 'gas' | 'vac' | 'exhaust' | 'amhs';
 
 export interface PickedTool {
   readonly index: number;
@@ -49,6 +50,7 @@ export interface SceneBackend {
   setBasement?(active: boolean): void;
   setDual?(active: boolean): void;
   setCutPlane?(active: boolean, axis: CutAxis, position: number, invert: boolean): void;
+  setXRayFilter?(filter: XRayFilter | null): void;
 }
 
 export class SceneFacade {
@@ -102,6 +104,9 @@ export class SceneFacade {
   }
   setCutPlane(active: boolean, axis: CutAxis, position: number, invert: boolean): void {
     if (!this.controller.signal.aborted) this.backend.setCutPlane?.(active, axis, position, invert);
+  }
+  setXRayFilter(filter: XRayFilter | null): void {
+    if (!this.controller.signal.aborted) this.backend.setXRayFilter?.(filter);
   }
   dispose(): void { this.controller.abort(); this.backend.dispose(); }
 }

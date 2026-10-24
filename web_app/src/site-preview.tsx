@@ -12,7 +12,7 @@ import type { CatalogEntryDto, FabDto, SiteDto } from './contracts';
 import { FabToolInspector, matchToolCatalog } from './fab-tool-inspector';
 import { ApiClient } from './api-client';
 import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus } from './equipment-status';
-import { SceneFacade, type AmhsStats, type CutAxis, type HoveredTool, type PickedTool, type SceneLayer } from './fab-scene';
+import { SceneFacade, type AmhsStats, type CutAxis, type HoveredTool, type PickedTool, type SceneLayer, type XRayFilter } from './fab-scene';
 import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolCategory, type FabToolState } from './fab-layout';
 import { Panel } from './ui';
 
@@ -123,6 +123,7 @@ export interface SiteSceneHandle {
   setBasement(active: boolean): void;
   setDual(active: boolean): void;
   setCutPlane(active: boolean, axis: CutAxis, position: number, invert: boolean): void;
+  setXRayFilter(filter: XRayFilter | null): void;
 }
 
 const ZONE_LEGEND = [
@@ -242,6 +243,7 @@ export const SiteScene = forwardRef<SiteSceneHandle, SiteSceneProps>(function Si
       setBasement: (active) => facade.current?.setBasement(active),
       setDual: (active) => facade.current?.setDual(active),
       setCutPlane: (active, axis, position, invert) => facade.current?.setCutPlane(active, axis, position, invert),
+      setXRayFilter: (filter) => facade.current?.setXRayFilter(filter),
     }),
     [],
   );

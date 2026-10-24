@@ -15,7 +15,8 @@ import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import { SpotLight } from '@babylonjs/core/Lights/spotLight';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { FAB_LAYOUT, FAB_LAYOUT_BOUNDS, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
-import type { AmhsStats } from './fab-scene';
+import type { AmhsStats, XRayFilter } from './fab-scene';
+import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine';
 import { createNativeStaticShadows } from './native-static-shadows';
 
@@ -382,6 +383,7 @@ export interface LegacyRuntime {
   setExplodeFactor(factor: number): void;
   setBasement(active: boolean): void;
   setDual(active: boolean): void;
+  setXRayFilter(filter: XRayFilter | null): void;
 }
 
 interface StatusLightRuntime {
@@ -697,6 +699,50 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   let basementActive = false;
   let dualActive = false;
   let explodeFactor = 0;
+  let xrayFilter: XRayFilter | null = null;
+  const xrayMaterialAlpha = new Map<number, number>();
+  const xrayVisibility = new Map<AbstractMesh, boolean>();
+  const isSystemMesh = (mesh: AbstractMesh, filter: XRayFilter): boolean => {
+    const name = mesh.name.toLowerCase();
+    if (filter === 'amhs') return name.includes('oht') || name.includes('amhs');
+    if (!name.startsWith('subfab-')) return false;
+    if (filter === 'upw') return name.includes('upw');
+    if (filter === 'gas') return name.includes('gas');
+    if (filter === 'vac') return name.includes('vac') || name.includes('pump') || name.includes('booster');
+    return name.includes('foreline') || name.includes('heated') || name.includes('exhaust');
+  };
+  const restoreXRay = () => {
+    for (const material of scene.materials) {
+      const alpha = xrayMaterialAlpha.get(material.uniqueId);
+      if (alpha !== undefined) material.alpha = alpha;
+    }
+    for (const [mesh, visible] of xrayVisibility) mesh.isVisible = visible;
+    xrayMaterialAlpha.clear();
+    xrayVisibility.clear();
+    if (xrayFilter !== null) fab.subfab.setEnabled(basementActive || dualActive || layerVisibility.subfab);
+    xrayFilter = null;
+  };
+  const applyXRay = (filter: XRayFilter | null) => {
+    restoreXRay();
+    if (!filter) return;
+    xrayFilter = filter;
+    for (const material of scene.materials) {
+      xrayMaterialAlpha.set(material.uniqueId, material.alpha);
+      if (material.name.startsWith('original-tool-material-') || material.name.startsWith('subfab-')) {
+        material.alpha = filter === 'all' ? 0.18 : 0.12;
+      }
+      if (material.name.startsWith('native-oht-') && filter !== 'amhs') material.alpha = 0.18;
+    }
+    if (filter !== 'all' && filter !== 'amhs') {
+      fab.subfab.setEnabled(true);
+      for (const mesh of fab.subfab.getChildMeshes()) {
+        xrayVisibility.set(mesh, mesh.isVisible);
+        const matches = isSystemMesh(mesh, filter);
+        mesh.isVisible = matches;
+        if (matches && mesh.material) mesh.material.alpha = 1;
+      }
+    }
+  };
   const applyExplodeFactor = (factor: number) => {
     explodeFactor = Math.max(0, Math.min(1, factor));
     fab.equipment.position.y = 2.4 * explodeFactor;
@@ -738,11 +784,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
         return;
       }
       if (layer === 'xray') {
-        for (const material of scene.materials) {
-          if (material.name.startsWith('original-tool-material-')) {
-            (material as StandardMaterial).wireframe = visible;
-          }
-        }
+        applyXRay(visible ? (xrayFilter ?? 'all') : null);
         return;
       }
       const target = layer === 'ceiling' ? fab.ceiling : fab.subfab;
@@ -771,6 +813,9 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
       if (active) basementActive = false;
       syncLevel();
       shadows.invalidate('dual-visibility');
+    },
+    setXRayFilter(filter) {
+      applyXRay(filter);
     },
   };
 }

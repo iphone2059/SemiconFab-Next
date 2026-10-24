@@ -300,6 +300,25 @@ try {
   await evaluate(`document.querySelector('.twin-cut-toggle').click()`);
   await until(`!document.querySelector('.twin-cut')`);
 
+  await evaluate(`Array.from(document.querySelectorAll('.twin-layers button')).find((button) => button.textContent === 'X-Ray').click()`);
+  await until(`!!document.querySelector('.twin-xray')`);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-xray button').length`), 7);
+  await evaluate(`Array.from(document.querySelectorAll('.twin-xray button')).find((button) => button.textContent === 'UPW').click()`);
+  await until(`document.querySelectorAll('.twin-levels button')[2].getAttribute('class')?.includes('active')`);
+  await evaluate(`Array.from(document.querySelectorAll('.twin-xray button')).find((button) => button.textContent === '×').click()`);
+  await until(`!document.querySelector('.twin-xray')`);
+
+  await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'research'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await until(`!!document.querySelector('.twin-research-hud')`);
+  await until(`document.querySelector('.twin-research-head')?.innerText?.includes('27,263')`);
+  await evaluate(`(() => { const slider = document.querySelector('.twin-research-scrubber'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(slider, '1000000'); slider.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await until(`document.querySelectorAll('.twin-research-stats strong')[1]?.textContent === '84'`);
+  assert.match(await evaluate(`document.querySelector('.twin-research-clock').innerText`), /Day 12/);
+  assert.match(await evaluate(`document.querySelector('.twin-feed').innerText`), /REPLAY/);
+  assert.equal(await evaluate(`!!document.querySelector('.twin-left')`), false);
+  await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'engineer'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await until(`!!document.querySelector('.twin-left')`);
+
   await evaluate(`document.querySelector('.twin-tour').click()`);
   await until(`!!document.querySelector('.twin-tour-card')`);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-tour-dots button').length`), 5);
