@@ -66,6 +66,7 @@ it('preserves legacy route query semantics while bounding and deduplicating comp
   expect(
     readCatalogRoute(new URL('https://example.test/catalog-demo.html?category=lithography')).view,
   ).toBe('catalog');
+  expect(readCatalogRoute(new URL('https://example.test/twin')).view).toBe('twin');
 });
 
 it('does not turn arbitrary provenance strings into executable links', () => {

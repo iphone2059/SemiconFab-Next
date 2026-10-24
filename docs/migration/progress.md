@@ -14,6 +14,10 @@
 - 中文/英文、明暗主题、原语言存储键及 `lang/theme` 参数；目录页仅渲染派生数据，不会将本地预览变成服务端审批或运行状态。
 - `web_app/src/` 仅 TS/TSX；`tests/` 与 `assets/` 为同级目录。启动入口、工作台、错误边界分离。Babylon 由三维视图按需加载，目录页不加载 GPU 模块。
 
+## Twin 页面骨架（2026-10-24）
+
+新增 `/twin` 页面级入口，作为 `twin.html` 1:1 对齐的 TWIN-02 起点；它复用现有单 FAB `SiteScene`/WebGPU 运行时，增加顶栏、相机预设、楼层、图层、设备清单、选中检查器、AMHS/KPI/底部 HUD。原预览 `/preview` 保留。当前仍只是页面骨架，Research 回放明确标注未接入；未完成项与基线记录见 [twin-parity/baseline.md](twin-parity/baseline.md)。
+
 ## 单 FAB 产品边界（2026-10-24）
 
 原版 SemiconFab 只展示一个洁净室 FAB，本项目据此收敛多 FAB 入口：

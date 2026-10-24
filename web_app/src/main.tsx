@@ -3,9 +3,11 @@ import { createRoot } from 'react-dom/client';
 import { CatalogPage } from './catalog-page';
 import { readCatalogRoute } from './catalog-data';
 import { PreviewPage } from './preview-page';
+import { TwinPage } from './twin-page';
 import { ErrorBoundary } from './error-boundary';
 import WorkbenchApp from './workbench';
 import '../assets/styles.css';
+import '../assets/twin.css';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Application root element is missing.');
@@ -15,6 +17,8 @@ createRoot(container).render(
     <ErrorBoundary>
       {route.view === 'workbench' ? (
         <WorkbenchApp />
+      ) : route.view === 'twin' ? (
+        <TwinPage />
       ) : route.view === 'preview' ? (
         <PreviewPage />
       ) : (

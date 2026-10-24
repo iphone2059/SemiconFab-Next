@@ -79,13 +79,15 @@ try {
   const initial = await evaluate(`(() => {
     const panel = document.querySelector('.site-preview');
     return {
-      label: panel.querySelector('.icon-with-label').getAttribute('aria-label'),
+      label: panel.querySelector('button.icon-with-label').getAttribute('aria-label'),
+      twinHref: panel.querySelector('a.icon-with-label')?.getAttribute('href'),
       backdrop: !!document.querySelector('.preview-backdrop'),
       fabOptions: panel.querySelectorAll('.fab-picker option').length,
       canvas: !!panel.querySelector('.scene canvas'),
     };
   })()`);
   assert.equal(initial.label, '在新标签页打开 FAB 预览');
+  assert.equal(initial.twinHref, '/twin');
   assert.equal(initial.backdrop, false);
   assert.equal(initial.fabOptions, 0);
   assert.equal(initial.canvas, true);
@@ -94,7 +96,7 @@ try {
     let captured = '';
     const original = window.open;
     window.open = (url) => { captured = String(url); return null; };
-    document.querySelector('.site-preview .icon-with-label').click();
+    document.querySelector('.site-preview button.icon-with-label').click();
     window.open = original;
     return captured;
   })()`);
@@ -254,6 +256,29 @@ try {
   assert.match(await evaluate(`document.querySelector('.standalone-title strong').innerText`), /FAB-01/);
   assert.equal(await evaluate(`!!document.querySelector('.site-preview')`), false);
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('.scene')).touchAction`), 'none');
+
+  await command('Page.navigate', { url: 'http://127.0.0.1:5173/twin' });
+  await until(`!!document.querySelector('.twin-page')`);
+  await until(`document.querySelector('.twin-status')?.textContent?.startsWith('WebGPU ·')`);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-left .scene-rail').length`), 1);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-levels button').length`), 3);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-cameras button').length`), 4);
+  assert.equal(await evaluate(`document.querySelectorAll('.twin-mode option').length`), 3);
+  assert.ok((await evaluate(`document.querySelectorAll('.scene-tool-list-item').length`)) > 0);
+
+  await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'visitor'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await until(`!document.querySelector('.twin-left')`);
+  await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'engineer'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await until(`!!document.querySelector('.twin-left')`);
+
+  await evaluate(`document.querySelectorAll('.twin-levels button')[1].click()`);
+  await until(`document.querySelectorAll('.twin-levels button')[1].getAttribute('class')?.includes('active')`);
+  await evaluate(`document.querySelectorAll('.twin-levels button')[0].click()`);
+  await until(`document.querySelectorAll('.twin-levels button')[0].getAttribute('class')?.includes('active')`);
+
+  await evaluate(`document.querySelector('.scene-tool-list-item').click()`);
+  await until(`!!document.querySelector('.twin-inspector')`);
+  assert.match(await evaluate(`document.querySelector('.twin-inspector').innerText`), /FAB-01/);
 
   assert.deepEqual(runtimeErrors, []);
   console.log('site preview browser acceptance passed');

@@ -84,7 +84,7 @@ const ReloadIcon = () => (
   </Glyph>
 );
 
-type SceneView = 'iso' | 'top' | 'reset';
+type SceneView = 'iso' | 'top' | 'reset' | 'litho' | 'airshower';
 
 export interface SiteSceneProps {
   site: SiteDto;
@@ -101,6 +101,9 @@ export interface SiteSceneProps {
   onToggleExploded: () => void;
   basement: boolean;
   onToggleBasement: () => void;
+  chrome?: boolean;
+  onStatusChange?: (status: string) => void;
+  onAmhsStatsChange?: (stats: AmhsStats) => void;
 }
 
 export interface SiteSceneHandle {
@@ -109,6 +112,7 @@ export interface SiteSceneHandle {
   resize(): void;
   reload(): void;
   selectTool(index: number, focus?: boolean): void;
+  clearSelection(): void;
   setLayer(layer: SceneLayer, visible: boolean): void;
   setToolState(index: number, state: FabToolState): void;
   setTour(active: boolean): void;
@@ -162,7 +166,7 @@ function ToolCard({ tool, onClose, onFocus }: { tool: PickedTool; onClose: () =>
 }
 
 export const SiteScene = forwardRef<SiteSceneHandle, SiteSceneProps>(function SiteScene(
-  { site, fab, expanded, overlay, toolStates, onToolChange, layers, onToggleLayer, touring, onToggleTour, exploded, onToggleExploded, basement, onToggleBasement },
+  { site, fab, expanded, overlay, toolStates, onToolChange, layers, onToggleLayer, touring, onToggleTour, exploded, onToggleExploded, basement, onToggleBasement, chrome = true, onStatusChange, onAmhsStatsChange },
   ref,
 ) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -192,13 +196,14 @@ export const SiteScene = forwardRef<SiteSceneHandle, SiteSceneProps>(function Si
           [{ fabId: fab.fabId, code: fab.code, position: [0, 0, 0] }],
           (value) => {
             setStatus(value);
+            onStatusChange?.(value);
             setReady(value.startsWith('WebGPU ·') || value.startsWith('WebGPU 设备'));
           },
           (tool) => {
             setSelectedTool(tool ?? undefined);
             onToolChange?.(tool ?? undefined);
           },
-          (stats) => setAmhsStats(stats),
+          (stats) => { setAmhsStats(stats); onAmhsStatsChange?.(stats); },
           (hover) => setHoveredTool(hover ?? undefined),
         );
       })
@@ -223,6 +228,7 @@ export const SiteScene = forwardRef<SiteSceneHandle, SiteSceneProps>(function Si
       resize: () => facade.current?.resize(),
       reload: () => { setReady(false); setStatus('准备 WebGPU 视图…'); setGeneration((value) => value + 1); },
       selectTool: (index, focus) => facade.current?.selectTool(index, focus),
+      clearSelection: () => facade.current?.clearSelection(),
       setLayer: (layer, visible) => facade.current?.setLayer(layer, visible),
       setToolState: (index, state) => facade.current?.setToolState(index, state),
       setTour: (active) => facade.current?.setTour(active),
@@ -272,7 +278,7 @@ export const SiteScene = forwardRef<SiteSceneHandle, SiteSceneProps>(function Si
   const downTools = toolStates.filter((state) => state === 'down').length;
   const utilization = (runningTools / FAB_LAYOUT.length) * 100;
   return (
-    <div className={`scene${expanded ? ' scene-expanded' : ''}`}>
+    <div className={`scene${expanded ? ' scene-expanded' : ''}${chrome ? '' : ' scene-bare'}`}>
       <canvas ref={canvas} aria-label="FAB 基地估算占位几何" />
       <div className="scene-top">
         <div className="scene-live">
@@ -792,6 +798,9 @@ export function SitePreview({ site }: { site: SiteDto }) {
               </button>
             </div>
             <span className="panel-action-divider" aria-hidden="true" />
+            <a className="icon-button icon-with-label" href="/twin" aria-label="打开 Twin 1:1 页面" title="打开 Twin 1:1 页面">
+              <span>Twin 1:1</span>
+            </a>
             <button
               type="button"
               ref={maximize}

@@ -356,6 +356,10 @@ export function createWebGpuBackend(): SceneBackend {
       let pose: CameraPose;
       if (preset === 'top') {
         pose = { alpha: Math.PI / 2, beta: 0.08, radius: focusTarget ? 48 : 95, target: focusTarget?.clone() ?? centered };
+      } else if (preset === 'litho') {
+        pose = { alpha: Math.PI / 1.7, beta: 1.08, radius: 42, target: new Vector3(-18, 1.5, -10) };
+      } else if (preset === 'airshower') {
+        pose = { alpha: 1.35, beta: 1.2, radius: 22, target: new Vector3(-43, 1.2, -10) };
       } else if (preset === 'reset') {
         pose = { alpha: Math.PI / 2, beta, radius: homeRadius, target: centered };
       } else if (preset === 'focus' && focusTarget) {

@@ -12,9 +12,11 @@ export function readCatalogRoute(url: URL) {
       ? ('compare' as const)
       : ['/catalog', '/catalog-demo', '/catalog-demo.html'].includes(url.pathname)
         ? ('catalog' as const)
-        : ['/preview', '/preview.html'].includes(url.pathname)
-          ? ('preview' as const)
-          : ('workbench' as const),
+        : ['/twin', '/twin.html'].includes(url.pathname)
+          ? ('twin' as const)
+          : ['/preview', '/preview.html'].includes(url.pathname)
+            ? ('preview' as const)
+            : ('workbench' as const),
     domain: (domain === 'OSAT' || domain === 'FAB' ? domain : 'ALL') as CatalogDomain,
     category: url.searchParams.get('category') ?? '',
     query: url.searchParams.get('q') ?? '',
