@@ -46,6 +46,10 @@ async function pressEscape() {
   await until(`document.querySelector('#btn-toggle-roof').getAttribute('aria-pressed') === 'true'`);
   await evaluate(`document.querySelector('#btn-toggle-roof').click()`);
   await until(`document.querySelector('#btn-toggle-roof').getAttribute('aria-pressed') === 'false'`);
+  await evaluate(`document.querySelector('#btn-toggle-ceiling').click()`);
+  await until(`document.querySelector('#btn-toggle-ceiling').getAttribute('aria-pressed') === 'true'`);
+  await evaluate(`document.querySelector('#btn-toggle-ceiling').click()`);
+  await until(`document.querySelector('#btn-toggle-ceiling').getAttribute('aria-pressed') === 'false'`);
   assert.equal(await evaluate(`document.querySelectorAll('#equipment-list [data-equipment-id]').length`), 18);
 
   await evaluate(`(() => { const select = document.querySelector('.twin-mode select'); select.value = 'visitor'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
