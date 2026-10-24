@@ -14,11 +14,39 @@
 - 中文/英文、明暗主题、原语言存储键及 `lang/theme` 参数；目录页仅渲染派生数据，不会将本地预览变成服务端审批或运行状态。
 - `web_app/src/` 仅 TS/TSX；`tests/` 与 `assets/` 为同级目录。启动入口、工作台、错误边界分离。Babylon 由三维视图按需加载，目录页不加载 GPU 模块。
 
+## FAB 单场景与 WebGPU 程序化验收（2026-10-24）
+
+单 FAB 空间预览已完成程序化替代，不再加载 `fab.gltf` 或任何 glTF/GLB 资源，保留原版的单 FAB 边界。
+
+- `web_app/src/procedural-fab.ts`：程序化生成 121 台设备、洁净室、Stocker/FOUP、FFU、空气淋浴、墙柱、Subfab 管线和 6 名 Bunny Suit 巡检人员；设备按原版 `layout-default.json` 的 rotation 数据旋转。
+- `web_app/src/legacy-site.ts`：双环 OHT（24 车）、状态塔、层切换、B1 地下剖切、Explode、人员步态和 SSE 状态同步；设备阴影现由原生 WebGPU 静态深度缓存生成，详见下方追加验收。
+- `/preview?siteId=…`：独立新标签页、单 FAB、全屏画布、LIVE SSE 状态、层控制、缩放、视图/模式、Tour、设备卡片和 OEM 目录入口。
+- 仅使用 `WebGPUEngine`，无 WebGL fallback；`@babylonjs/loaders`、`babylonjs-gltf2interface` 及 glTF 资源已从源码、`node_modules` 和锁文件移除。
+
+验证：TypeScript 通过；前端 32/32 Vitest 通过；Vite 生产构建通过；`site-preview.browser.ts` 通过（新标签页、单 FAB、实时状态、层、模式、设备/人员、缩放）。GPU 分块约 1.93 MB（gzip 约 456 KB）。
+
+上述 32 项为此前一轮验证。当前新增验收如下；完整 HUD、整页像素一致性和真实 GPU 性能仍需单独验收。
+
+### 原生深度阴影与 121 台机台逐台对齐（追加于 2026-10-24）
+
+- `original-tool-geometry.ts` 直接移植原版 `getSilhouetteFamilyGeometries` 与 `createCatalogToolMesh` 的参数化形状。原版该布局实际为 **117 台八类模板 + 4 台目录模型**。删除旧的统一 1.55 倍放大、猜测性腔体、屋顶附件及重复旋转数据；尺寸、位置、旋转与模板选择由原始布局/目录决定。
+- `tests/fixtures/original-tool-reference.json` 来自只读运行原版 `../SemiconFab/twin.html?layout=/twin/layout-default.json&mode=engineer` 的几何、材质与世界边界，记录三个来源文件的 SHA-256。仅为测试基线，不随产品加载。目录模型选中时的呼吸缩放在基线中归一化为 1；信号灯颜色继续由现有 SSE 状态控制。
+- 单元比较覆盖全部 121 台的身份、坐标、旋转和边界、八类模板的顶点/颜色，以及四台目录模型每个部件的几何、材质颜色、透明度、金属度、粗糙度和线框边。原版来源文件哈希保持不变。
+- **真实 WebGPU 场景复核 121/121 通过**：世界包围盒最大浮点差异 `8.52346417445915e-7 m`；这是程序几何一致性，不是厂家尺寸实测认证。原版概念模板的尺寸状态仍保留。
+- `native-static-shadows.ts` 使用同一 GPUDevice 上的 `depth32float`、2048² 纹理和原生 depth-only pipeline；`native-shadow-material.ts` 在 Standard/PBR 主渲染中用 `textureSampleCompare` 过滤深度，只调制主光直射项。原有设备 Canvas 烘焙阴影已删除；移动 OHT/人员与状态灯不进入静态 caster 缓存。
+- 当前静态深度记录 724 个 caster、11,756 个三角形。相机移动时保持一次生成；机台变换、FFU 显隐和光向变化各按需重建。像素读回测得 82,662 个明显变暗像素；关闭主光时阴影开关改变像素为 0，GPU validation errors 为 0。设备丢失后的 native 资源重建路径已实现，尚未单独进行设备丢失注入验收。
+- 卡片增加原始 OEM 规格、工艺能力、来源、draft 标识和实时状态；定位框与鼠标拾取改为实际模型边界/三角形。修正滚动、Escape 关闭、FFU 初始状态、重载状态恢复及 B1 隐藏/恢复层的行为。
+- B1 增加原版四条 84m 主管（UPW/PCW/气体/化学品）、五组穿板前级管/PCW 支管、套管、波纹节、支架与泵站，地坪恢复到 -7m。完整 B1 工业设施仍未宣称像素一致。
+
+最新验证：**TypeScript、40/40 Vitest、生产构建和完整预览浏览器回归通过**；新增 GPU 像素/缓存及 121 台实际场景边界验收通过。PBR GPU 分块约 2.47 MB（gzip 579 KB），仍有 Vite 大分块提示。没有 glTF/GLB 资源、加载代码或 loader 依赖；Babylon 核心内仍有通用 `FALLOFF_GLTF`/错误码等符号，不能把“无 glTF 加载”误报为构建文本不含任何 glTF 字符串。
+
+本地证据：`.local/original-reference-top.png`、`.local/original-matched-top.png`、`.local/original-geometry-browser-acceptance.json`、`.local/native-shadow-acceptance.json`。这些属于本机验收工件，不包含在发布包中。完整原版 HUD/研究模式等仍按功能清单继续，不据本次机台与阴影验收标记整个迁移 complete。
+
 ## 验证与范围
 
 执行入口：`./scripts/verify.ps1`，覆盖契约生成漂移、架构约束、导入校验、三个 .NET 项目的 Release 构建和测试、前端类型/单元检查及构建。本批最终结果：导入工具 8/8、后端 65/65、前端 27/27 通过；三个 .NET 项目 Release 构建、TS 类型检查与 Vite 构建通过，契约与架构检查通过。Vite 仍提示 Babylon GPU 分块约 1.9 MB（gzip 约 448 KB）；已按需加载，未据此宣称 GPU 性能达标。
 
-浏览器入口：`node web_app/tests/catalog.browser.mjs`，需要本地开发站点与监听 `127.0.0.1:9335` 的隔离 Chromium/Edge。已验证 253 条加载、隐藏 draft 后 9 条、OSAT 86 条与分页、真实输入搜索、详情/Escape、四项对比限制、旧入口/查询、本地导入失败保留数据、自定义新增/修改记录对比、前进后退、主题及原工作台 Run 完成。目录页未请求 Babylon/GPU 资源；本批浏览器运行未出现未捕获异常。
+浏览器入口：`node web_app/tests/catalog.browser.ts`，需要本地开发站点与监听 `127.0.0.1:9335` 的隔离 Chromium/Edge。已验证 253 条加载、隐藏 draft 后 9 条、OSAT 86 条与分页、真实输入搜索、详情/Escape、四项对比限制、旧入口/查询、本地导入失败保留数据、自定义新增/修改记录对比、前进后退、主题及原工作台 Run 完成。目录页未请求 Babylon/GPU 资源；本批浏览器运行未出现未捕获异常。
 
 `dotnet publish fab_app/fab_app.csproj -c Release --no-build --no-restore -o .local/catalog-publish` 成功；发布目录中的 11 个数据工件与源工件逐字节一致。额外的独立进程启动冒烟检查被自动审批拒绝（仅返回 `blocked by policy`，无具体理由），因此不声称该项已通过。全部 139 个原版文件的哈希保持不变。
 

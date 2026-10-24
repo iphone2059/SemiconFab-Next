@@ -45,3 +45,7 @@ npx --yes pnpm@12.15.0 typecheck
 npx --yes pnpm@12.15.0 test
 npx --yes pnpm@12.15.0 build
 ```
+
+机台几何基线见 `tests/fixtures/original-tool-reference.json`：原版 121 台布局的运行时提取结果，仅用于测试。`original-tool-geometry.test.ts` 比较全部机台边界、八类顶点/颜色及四台目录模型的部件和材质。
+
+已有隔离 Chromium CDP 会话（默认 9335，可设 `CDP_PORT`）并打开本地 `/preview` 时，可运行 `node tests/native-static-shadows.browser.ts`，验证真实 GPU 像素、静态缓存、层/光源失效与环境光隔离。它不会启动浏览器，也不改变渲染后端。`tests/site-preview.browser.ts` 验证预览交互；没有 CDP 端口时也可通过连接浏览器的 CDP transport 调用阴影测试导出的 `runNativeShadowAcceptance`。

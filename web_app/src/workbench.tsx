@@ -5,61 +5,13 @@ import { Panel, StatusPill } from './ui';
 import { Metric } from './widgets';
 import { CompletionBar } from './charting';
 import { ScopeGate, startPolling } from './state-sync';
-import { SceneFacade } from './fab-scene';
+import { SitePreview } from './site-preview';
 import { validateScenario } from './scenario';
 
 const api = new ApiClient();
 const message = (error: unknown) => (error instanceof Error ? error.message : '未知错误');
 const complete = (status: string) => status.toUpperCase() === 'COMPLETED';
 const count = (value: string) => BigInt(value).toLocaleString('zh-CN');
-
-function SiteScene({ site }: { site: SiteDto }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const [status, setStatus] = useState('准备 WebGPU 视图…');
-  const [generation, setGeneration] = useState(0);
-  useEffect(() => {
-    const element = canvas.current;
-    if (!element) return;
-    const controller = new AbortController();
-    let facade: SceneFacade | undefined;
-    void import('./babylon-webgpu')
-      .then(({ createWebGpuBackend }) => {
-        if (controller.signal.aborted) return;
-        facade = new SceneFacade(createWebGpuBackend());
-        return facade.mount(
-          element,
-          site.fabs.map((fab, index) => ({
-            fabId: fab.fabId,
-            code: fab.code,
-            position: [(index - (site.fabs.length - 1) / 2) * 46, 0, 0],
-          })),
-          setStatus,
-        );
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) setStatus(message(error));
-      });
-    return () => {
-      controller.abort();
-      facade?.dispose();
-    };
-  }, [site, generation]);
-  return (
-    <div className="scene">
-      <canvas ref={canvas} aria-label="FAB 基地估算占位几何" />
-      <div className="scene-top">
-        <span className="technical">SITE DIGITAL VIEW</span>
-        <span className="scene-tag">米 · 右手系 · +Y UP</span>
-      </div>
-      <div className="scene-caption">
-        <span>{status}</span>
-        <button className="ghost" onClick={() => setGeneration((value) => value + 1)}>
-          重新加载视图 ↻
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function Workbench({ site }: { site: SiteDto }) {
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -195,19 +147,7 @@ function Workbench({ site }: { site: SiteDto }) {
         <Metric label="运行模式" value="独立仿真" hint="INDEPENDENT · 合成 FIFO 模型" />
       </div>
       <div className="primary-grid">
-        <Panel title="基地空间概览" subtitle="共享几何模板，独立 FAB 实例；非真实设备布局。">
-          <SiteScene site={site} />
-          <div className="scene-legend">
-            <span>
-              <i />
-              估算加工设备
-            </span>
-            <span>无实时设备连接</span>
-            <span>
-              {site.code} / {site.fabs.length} FAB
-            </span>
-          </div>
-        </Panel>
+        <SitePreview site={site} />
         <Panel title="新建仿真" subtitle="三个 FAB 使用相同模板，运行状态相互隔离。">
           <form
             onSubmit={(event) => {

@@ -36,7 +36,7 @@ try {
     if (-not $fabReady) { throw 'API did not become ready. Inspect .local/api.log.' }
     Push-Location -LiteralPath (Join-Path $fabProjectRoot 'web_app')
     try {
-        npx --yes pnpm@12.15.0 dev
+        npm run dev
         $fabExitCode = $LASTEXITCODE
     } finally { Pop-Location }
 } finally {

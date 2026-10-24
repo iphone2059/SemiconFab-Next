@@ -1,0 +1,32 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { watchEquipmentStatus, type EquipmentStatusSnapshot } from '../src/equipment-status';
+
+afterEach(() => vi.useRealTimers());
+it('marks cached data stale on disconnect or stalled streams, recovers only on valid frames, and stops on abort', () => {
+  vi.useFakeTimers();
+  const source = { onmessage: null, onerror: null, close: vi.fn() } as unknown as EventSource;
+  const controller = new AbortController();
+  let state = 'waiting'; let last: EquipmentStatusSnapshot | undefined;
+  watchEquipmentStatus(source, 'site-1', snapshot => { last = snapshot; state = 'live'; }, () => { state = 'stale'; }, controller.signal);
+  const snapshot = { siteId: 'site-1', generatedAt: '2026-10-24T02:00:00Z', tools: [{ state: 'running' }] };
+  const send = (value: unknown) => source.onmessage?.call(source, { data: JSON.stringify(value) } as MessageEvent);
+  send(snapshot);
+  expect(state).toBe('live');
+  source.onerror?.call(source, {} as Event);
+  expect(state).toBe('stale');
+  send({ ...snapshot, siteId: 'other-site' });
+  expect(state).toBe('stale');
+  send({ ...snapshot, tools: null });
+  expect(state).toBe('stale');
+  send(snapshot);
+  expect(state).toBe('live');
+  vi.advanceTimersByTime(12000);
+  expect(state).toBe('stale');
+  expect(last).toEqual(snapshot);
+  send(snapshot);
+  expect(state).toBe('live');
+  controller.abort();
+  vi.advanceTimersByTime(20000);
+  expect(state).toBe('live');
+  expect(source.close).toHaveBeenCalledOnce();
+});

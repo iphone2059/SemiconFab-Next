@@ -1,3 +1,4 @@
+// @ts-nocheck — standalone CDP harness; page.evaluate payloads are untyped.
 // Requires the local dev server and an isolated Chromium/Edge CDP port (9335).
 // No browser automation dependency and no WebGPU hardware acceptance claim.
 import assert from 'node:assert/strict';

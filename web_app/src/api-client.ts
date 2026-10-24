@@ -1,4 +1,5 @@
 import type { CatalogPageDto, CreateRunRequest, RunResult, RunSummary, SiteDto } from './contracts';
+import type { EquipmentStatusSnapshot } from './equipment-status';
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -38,6 +39,9 @@ export class ApiClient {
   }
   sites(signal?: AbortSignal): Promise<SiteDto[]> {
     return this.request('/sites', { signal });
+  }
+  equipmentStatus(siteId: string, signal?: AbortSignal): Promise<EquipmentStatusSnapshot> {
+    return this.request(`/sites/${encodeURIComponent(siteId)}/equipment-status`, { signal });
   }
   catalog(
     filters: { domain?: string; category?: string; q?: string } = {},

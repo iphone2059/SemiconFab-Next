@@ -25,6 +25,19 @@ describe('HTTP contract', () => {
     expect(sent?.signal).toBe(controller.signal);
     expect(new Headers(sent?.headers).has('X-Fab-Dev-Key')).toBe(false);
   });
+  it('requests the server equipment status feed with an abort signal', async () => {
+    let sentUrl = '';
+    let sent: RequestInit | undefined;
+    const controller = new AbortController();
+    const api = new ApiClient(async (url, init) => {
+      sentUrl = String(url);
+      sent = init;
+      return new Response(JSON.stringify({ siteId: 's', generatedAt: 'now', tools: [] }));
+    });
+    await api.equipmentStatus('site-1', controller.signal);
+    expect(sentUrl).toBe('/api/v1/sites/site-1/equipment-status');
+    expect(sent?.signal).toBe(controller.signal);
+  });
   it('preserves ProblemDetails and status on failure', async () => {
     const api = new ApiClient(
       async () =>

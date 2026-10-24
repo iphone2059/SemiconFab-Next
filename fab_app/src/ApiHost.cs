@@ -24,6 +24,7 @@ internal static class ApiHost
             builder.WebHost.UseUrls("http://127.0.0.1:5080");
         var data = Path.GetFullPath(builder.Configuration["Fab:DataDirectory"] ?? Path.Combine(builder.Environment.ContentRootPath, ".local", "data"));
         builder.Services.AddSingleton(new SiteDirectory(builder.Configuration.GetValue("Fab:FabCount", 3)));
+        builder.Services.AddSingleton<EquipmentStatusService>();
         builder.Services.AddSingleton(new CatalogService(Path.GetFullPath(builder.Configuration["Fab:CatalogDirectory"]
             ?? Path.Combine(AppContext.BaseDirectory, "assets", "legacy"))));
         builder.Services.AddLocalOrchestration(data);
@@ -67,6 +68,29 @@ internal static class ApiHost
         api.MapGet("/catalog/{id:guid}", (Guid id, CatalogService catalog) =>
             catalog.Find(id) is { } entry ? Results.Ok(entry) : Results.Problem(statusCode: 404, title: "Catalog record not found"));
         api.MapGet("/sites", (SiteDirectory catalog) => catalog.GetSites());
+        api.MapGet("/sites/{siteId:guid}/equipment-status", (Guid siteId, EquipmentStatusService status) => status.Get(siteId));
+        api.MapGet("/sites/{siteId:guid}/equipment-status/stream", async (Guid siteId, EquipmentStatusService status, HttpContext context, CancellationToken cancellationToken) =>
+        {
+            context.Response.Headers.ContentType = "text/event-stream";
+            context.Response.Headers.CacheControl = "no-cache";
+            context.Response.Headers.Connection = "keep-alive";
+            context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
+            try
+            {
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    var snapshot = status.Get(siteId);
+                    var json = System.Text.Json.JsonSerializer.Serialize(snapshot, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+                    await context.Response.WriteAsync($"data: {json}\n\n", cancellationToken);
+                    await context.Response.Body.FlushAsync(cancellationToken);
+                    await Task.Delay(TimeSpan.FromSeconds(4), cancellationToken);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Client disconnected.
+            }
+        });
         api.MapGet("/capabilities", () => new { contractVersion = 1, model = "SYNTHETIC_FIFO_SINGLE_TOOL_V1", independent = true, sharedCapacity = false, otControl = false, postgresql = false, binaryRealtime = false, productionReady = false });
         api.MapGet("/runs", (IRunService runs) => runs.List());
         api.MapPost("/runs", (CreateRunRequest request, HttpContext context, IRunService runs, SiteDirectory catalog) =>

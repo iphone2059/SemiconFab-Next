@@ -1,6 +1,22 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { createWebGpuBackend } from '../src/babylon-webgpu';
+import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
+import { Scene } from '@babylonjs/core/scene';
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 afterEach(() => vi.unstubAllGlobals());
+it('loads the instancing support required by shared FAB geometry', () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  try {
+    const template = MeshBuilder.CreateBox('tool-template', {}, scene);
+    const instance = template.createInstance('fab-tool');
+    expect(instance.sourceMesh).toBe(template);
+    expect(instance.getTotalVertices()).toBeGreaterThan(0);
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
 it('rejects missing WebGPU without ever creating a graphics context', async () => {
   vi.stubGlobal('window', { isSecureContext: true });
   vi.stubGlobal('navigator', {});

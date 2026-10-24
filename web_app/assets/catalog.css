@@ -1,10 +1,10 @@
 .catalog-shell {
-  --catalog-bg: #f2f1ec;
-  --catalog-panel: #fbfaf6;
-  --catalog-ink: #183c3a;
-  --catalog-muted: #687c77;
-  --catalog-border: #d5ddd5;
-  --catalog-accent: #12675d;
+  --catalog-bg: #f3f7fc;
+  --catalog-panel: #ffffff;
+  --catalog-ink: #253c59;
+  --catalog-muted: #536d89;
+  --catalog-border: #dbe6f2;
+  --catalog-accent: #2f6fd6;
   background: var(--catalog-bg);
   color: var(--catalog-ink);
   color-scheme: light;
@@ -312,7 +312,7 @@
   border-radius: 10px;
 }
 .catalog-dialog::backdrop {
-  background: #142622a6;
+  background: #20395680;
   backdrop-filter: blur(4px);
 }
 .catalog-dialog-head {

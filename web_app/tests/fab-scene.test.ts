@@ -24,4 +24,28 @@ describe('renderer lifecycle', () => {
     facade.dispose(); notify?.('late device lost');
     expect(updates).toEqual(['device init failed']);
   });
+  it('forwards camera and resize commands while the facade is alive', () => {
+    const calls: string[] = [];
+    const facade = new SceneFacade({
+      mount: async () => {},
+      dispose: () => calls.push('dispose'),
+      setView: (preset, fabId) => calls.push(`view:${preset}:${fabId ?? '-'}`),
+      zoom: (deltaY) => calls.push(`zoom:${deltaY}`),
+      resize: () => calls.push('resize'),
+    });
+    facade.setView('top');
+    facade.setView('focus', 'fab-1');
+    facade.zoom(40);
+    facade.resize();
+    expect(calls).toEqual(['view:top:-', 'view:focus:fab-1', 'zoom:40', 'resize']);
+    facade.dispose();
+    facade.setView('reset');
+    facade.zoom(-20);
+    facade.resize();
+    expect(calls).toEqual(['view:top:-', 'view:focus:fab-1', 'zoom:40', 'resize', 'dispose']);
+  });
+  it('works with backends that do not expose optional scene controls', () => {
+    const facade = new SceneFacade({ mount: async () => {}, dispose: () => {} });
+    expect(() => { facade.setView('iso'); facade.zoom(10); facade.resize(); facade.dispose(); }).not.toThrow();
+  });
 });
