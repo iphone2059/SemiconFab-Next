@@ -156,7 +156,7 @@ async function pressEscape() {
   await until(`!!document.querySelector('.twin-tour-card')`);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-tour-dots button').length`), 5);
   await evaluate(`document.querySelectorAll('.twin-tour-dots button')[2].click()`);
-  await until(`document.querySelector('.twin-tour-head span')?.textContent === 'TOUR 3/5'`);
+  await until(`document.querySelector('.twin-tour-head span')?.textContent?.includes('TOUR 3/5')`);
   await evaluate(`document.querySelector('.twin-tour-head button').click()`);
   await until(`!document.querySelector('.twin-tour-card')`);
 

@@ -54,6 +54,7 @@ export const TWIN_EN: Readonly<Record<string, string>> = {
   "利用率热力图": "Utilization heatmap",
   "网格: 6m × 6m · Subfab: -7.0m": "Grid: 6m × 6m · Subfab: -7.0m",
   "工艺分区图例": "Process zone legend",
+  "屋顶与 HVAC：示意图": "Roof & HVAC: Schematic",
   "路线完成": "Route complete",
   "晶圆流转中…": "Navigating…",
   "已暂停": "Paused",

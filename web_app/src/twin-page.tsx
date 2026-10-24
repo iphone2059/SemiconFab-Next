@@ -141,6 +141,7 @@ function TwinContent() {
   const [researchLoading, setResearchLoading] = useState(false);
   const [researchError, setResearchError] = useState('');
   const [showResearchUtil, setShowResearchUtil] = useState(true);
+  const [tourRemainingMs, setTourRemainingMs] = useState(0);
   const [waferProduct, setWaferProduct] = useState<WaferProduct>('A');
   const [waferRoutes, setWaferRoutes] = useState<Record<WaferProduct, WaferRouteStep[]>>();
   const [waferIndex, setWaferIndex] = useState(0);
@@ -382,8 +383,11 @@ function TwinContent() {
   useEffect(() => {
     if (tourStep === undefined) return;
     const stop = TOUR_STOPS[tourStep];
-    const timer = window.setTimeout(() => advanceTour(), stop.durationMs + stop.holdMs);
-    return () => window.clearTimeout(timer);
+    const total = stop.durationMs + stop.holdMs;
+    setTourRemainingMs(total);
+    const tick = window.setInterval(() => setTourRemainingMs((remaining) => Math.max(0, remaining - 250)), 250);
+    const timer = window.setTimeout(() => advanceTour(), total);
+    return () => { window.clearTimeout(timer); window.clearInterval(tick); };
   }, [tourStep]);
 
   useEffect(() => {
@@ -629,6 +633,8 @@ function TwinContent() {
           <label><input id="btn-cut-invert" type="checkbox" checked={cutInvert} onChange={(event) => updateCut(cutAxis, cutPosition, event.target.checked)} /> Invert</label>
         </div>
       )}
+
+      {layers.roof && <div id="roof-schematic-badge" className="twin-roof-badge">{t("屋顶与 HVAC：示意图")}</div>}
 
       {ui.spatialMode === 'aerodynamics' && (
         <section id="hud-panel-aero" className="twin-aero-hud" aria-label="Aerodynamics">
@@ -947,9 +953,10 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
         {tourStep !== undefined && TOUR_STOPS[tourStep] && (
           <section id="cinematic-hud" className="twin-tour-card" aria-label="Cinematic Tour">
             <div className="twin-tour-head">
-              <span>TOUR {tourStep + 1}/{TOUR_STOPS.length}</span>
+              <span>TOUR {tourStep + 1}/{TOUR_STOPS.length} · <b id="tour-hud-timer">{Math.ceil(tourRemainingMs / 1000)}s</b></span>
               <button type="button" onClick={endTour} aria-label={t("关闭导览")}>{t("跳过")}</button>
             </div>
+            <div id="tour-progress-bar" className="twin-tour-progress"><i style={{ width: `${Math.min(100, Math.max(0, 100 - (tourRemainingMs / Math.max(1, TOUR_STOPS[tourStep].durationMs + TOUR_STOPS[tourStep].holdMs)) * 100))}%` }} /></div>
             <h3 id="tour-hud-title">{language === 'zh' ? TOUR_STOPS[tourStep].title : TOUR_STOPS[tourStep].titleEn}</h3>
             <p id="tour-hud-desc">{language === 'zh' ? TOUR_STOPS[tourStep].subtitle : TOUR_STOPS[tourStep].subtitleEn}</p>
             <div id="tour-dots-container" className="twin-tour-dots" role="tablist" aria-label={t("导览站点")}>

@@ -1,6 +1,7 @@
 import { Scene } from '@babylonjs/core/scene';
 import { buildProceduralFab } from './procedural-fab';
 import { buildOriginalRoofHvac } from './original-roof-hvac';
+import { buildOriginalFacilityArchitecture } from './original-facility-architecture';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
@@ -444,11 +445,17 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   const fab = buildProceduralFab(scene);
   const roofParent = new TransformNode('roof-hvac-parent', scene);
   const roofHvac = buildOriginalRoofHvac(scene, roofParent);
-  scene.onBeforeRenderObservable.add(() => roofHvac.update(performance.now()));
+  const architectureParent = new TransformNode('facility-architecture-parent', scene);
+  const architecture = buildOriginalFacilityArchitecture(scene, architectureParent);
+  architecture.setVisible(true);
+  architecture.setCeilingVisible(false);
+  // Replace the early procedural air-shower approximation with the source airlocks.
+  for (const mesh of scene.meshes) if (mesh.name.startsWith('airshower-')) mesh.setEnabled(false);
+  scene.onBeforeRenderObservable.add(() => { const now = performance.now(); roofHvac.update(now); architecture.update(now); });
   // Original PBR surfaces already receive scene.ambientColor. A hemispheric
   // light here would add a second ambient term (most obvious on floor/columns).
   ambient.excludedMeshes = scene.meshes.filter(mesh => mesh.material instanceof PBRMaterial);
-  fab.ceiling.setEnabled(true);
+  fab.ceiling.setEnabled(false);
   fab.subfab.setEnabled(false);
 
   // Fixed original key direction, shared by the native depth and receiver passes.
@@ -472,13 +479,13 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   const amhsGroup = addAnimatedAmhs(scene, onAmhsStats);
   // These static meshes are created once; keep the caster list stable to avoid
   // allocating flatMap/filter arrays on every animation frame.
-  const staticCasters = [fab.equipment, fab.shell, fab.ceiling, fab.subfab, roofHvac.group]
+  const staticCasters = [fab.equipment, fab.shell, fab.subfab, roofHvac.group]
     .flatMap(root => root.getChildMeshes())
     .filter(mesh => mesh !== fab.floor && !mesh.name.startsWith('procedural-slab') && !mesh.name.startsWith('status-') && mesh.metadata?.staticShadowCaster !== false);
   const shadows = createNativeStaticShadows(scene, scene.getEngine() as WebGPUEngine, keyLight,
     () => staticCasters);
   scene.metadata = { ...scene.metadata, staticShadows: shadows };
-  const layerVisibility = { ceiling: true, roof: false, subfab: false, amhs: true, heatmap: false, airflow: false };
+  const layerVisibility = { ceiling: false, roof: false, subfab: false, amhs: true, heatmap: false, airflow: false };
   let basementActive = false;
   let dualActive = false;
   let explodeFactor = 0;
@@ -540,7 +547,8 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     fab.subfab.setEnabled(basementActive || dualActive || layerVisibility.subfab);
     fab.equipment.setEnabled(!basementActive);
     fab.personnel.setEnabled(!basementActive);
-    fab.ceiling.setEnabled(!basementActive && !dualActive && layerVisibility.ceiling);
+    architecture.setVisible(!basementActive);
+    architecture.setCeilingVisible(!basementActive && !dualActive && layerVisibility.ceiling);
     roofHvac.setVisible(layerVisibility.roof && !basementActive && !dualActive);
     amhsGroup.setEnabled(!basementActive && layerVisibility.amhs);
     heatmap.group.setEnabled(!basementActive && layerVisibility.heatmap);
@@ -579,9 +587,14 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
         shadows.invalidate('roof-visibility');
         return;
       }
-      const target = layer === 'ceiling' ? fab.ceiling : fab.subfab;
-      layerVisibility[layer] = visible;
-      target.setEnabled(layer === 'ceiling' ? visible && !basementActive : visible || basementActive || dualActive);
+      if (layer === 'ceiling') {
+        layerVisibility.ceiling = visible;
+        architecture.setCeilingVisible(visible && !basementActive && !dualActive);
+        shadows.invalidate('ceiling-visibility');
+        return;
+      }
+      layerVisibility.subfab = visible;
+      fab.subfab.setEnabled(visible || basementActive || dualActive);
       shadows.invalidate('layer-visibility');
     },
     setToolState(index, state) {
@@ -610,6 +623,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     },
     setLanguage(language) {
       roofHvac.setLanguage(language);
+      architecture.setLanguage(language);
     },
   };
 }
