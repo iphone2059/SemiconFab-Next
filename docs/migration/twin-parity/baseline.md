@@ -115,6 +115,15 @@ passes; the declared scenario proves the port, not the original fleet's long-run
 renderer still uses the previous AMHS approximation until the Phase A integration step, so no visual
 parity follows from this artifact.
 
+Renderer integration followed in the same increment. `legacy-site.ts` advances the controller on the
+scene tick, maps arc length, hoist, dual-cable, FOUP and LED outputs onto the OHT meshes and feeds the
+AMHS HUD; the original FOUP-below-gripper hierarchy and cables are restored. The frozen page used
+unseeded `Math.random`, while Next uses the declared seed 42 so the stream is reproducible. Local
+browser evidence (Headless Chrome 155, WebGPU adapter available, 1600×900 DPR 1, dev server):
+`AMHS OHT` active vehicles rose 00→06/24 within ~12 s with zero console errors or exceptions, and the
+Twin UI acceptance suite passes including a new live AMHS-HUD assertion. This is runtime integration
+evidence only: personnel/air-shower/tour/wafer vectors, Golden keyframes and visual parity remain open.
+
 ## Earlier GPU evidence interpretation
 
 `evidence/native-shadow-acceptance.json` measures cache behavior, visible shadow contrast, ambient isolation and validation errors. `cut-shadow-acceptance.json` measures clipped depth coverage and exact restoration. `device-loss-acceptance.json` requires a new device, a new native pass, the **completed** WebGPU status, unchanged manual camera and no new-device validation errors. Waiting text does not qualify. Readback acquires the current presentation frame; a previously presented swap texture must not be reused.

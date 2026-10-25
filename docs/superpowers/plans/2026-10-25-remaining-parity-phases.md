@@ -52,8 +52,13 @@ implementations: `legacy-site.ts` (OHT hoist/load constants around lines 216–3
 **2026-10-25 progress:** the AMHS slice is landed — `tools/build_twin_dynamics_vectors.cjs`,
 `web_app/tests/fixtures/original-dynamics-vectors.json` and the exact
 `web_app/src/amhs-timeline.ts` port with `web_app/tests/amhs-timeline.test.ts` (548 transition events,
-121 sampled frames, 32 tasks / 14 deliveries over a declared 120 s scenario). Personnel, air-shower and
-tour/wafer vectors are still open; the renderer still uses the previous AMHS approximation until A3.
+121 sampled frames, 32 tasks / 14 deliveries over a declared 120 s scenario). Renderer integration is
+also landed: `legacy-site.ts` advances the controller on the scene tick with the declared seed 42
+(replacing the frozen page's unseeded `Math.random`), maps arc length / hoist / cable / FOUP / LED
+outputs onto the OHT meshes (FOUP now hangs below the gripper and the dual cables are restored) and
+feeds the AMHS HUD. Local Headless Chrome 155 WebGPU evidence: active vehicles rose 00→06/24 within
+~12 s, zero console errors/exceptions, and the Twin UI acceptance (with a new AMHS-HUD assertion)
+passes. Personnel, air-shower and tour/wafer vectors plus pixel-Golden acceptance remain open.
 
 - New tool `tools/build_twin_dynamics_vectors.cjs`, modelled on
   `tools/build_twin_process_vectors.cjs`: verify `twin.html` SHA against
@@ -283,8 +288,9 @@ remaining delta. Until then Phase A stays open even if unit tests pass.
 ## Immediate next actions
 
 - [x] Canonical locale normalization (en-US/zh-CN) with unit tests, legacy input compatibility.
-- [x] AMHS source vectors + pure controller port (exact fixture replay); personnel/air-shower and tour/wafer vectors still pending.
-- [ ] Wire the AMHS controller into `legacy-site.ts` behind the existing scene tick and capture browser keyframes.
+- [x] AMHS source vectors + pure controller port (exact fixture replay) and renderer wiring with browser HUD evidence.
+- [ ] Personnel/air-shower/tour/wafer source vectors.
+- [ ] X-Ray WGSL hologram shader (next user-requested item after AMHS).
 - [ ] B1 exploded pure math and guide-link geometry from source constants.
 - [ ] C1 i18n inventory extractor (en/zh bytes only) before touching copy.
 - [ ] Extend browser evidence and Golden tooling only after the first three artifacts land.
