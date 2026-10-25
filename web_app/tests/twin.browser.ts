@@ -107,14 +107,19 @@ async function pressEscape() {
     await until(`!document.querySelector('.twin-onboarding')`);
   }
 
-  await evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((item) => /Full Database|完整数据库/.test(item.textContent.trim())); button.click(); })()`);
+  await evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((item) => /Full Database|完整数据库/.test(item.textContent.trim())); button.focus(); button.click(); })()`);
   await until(`!!document.querySelector('#oem-database-modal')`);
   assert.equal(await evaluate(`document.querySelectorAll('#modal-database-tbody tr').length`), 116);
+  assert.equal(await evaluate(`document.activeElement?.closest('#oem-database-modal') !== null`), true);
+  await command('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 });
+  await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 });
+  assert.equal(await evaluate(`document.activeElement?.closest('#oem-database-modal') !== null`), true);
   await evaluate(`(() => { const select = document.querySelector('#modal-segment-select'); select.value = 'Lithography'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await until(`Number(document.querySelector('#modal-matched-count').textContent) < 116`);
   await pressEscape();
   await until(`!document.querySelector('#oem-database-modal')`);
-  await evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((item) => /Open Arch|开放软件架构/.test(item.textContent.trim())); button.click(); })()`);
+  assert.match(await evaluate(`document.activeElement?.textContent ?? ''`), /Full Database|完整数据库/);
+  await evaluate(`(() => { const button = [...document.querySelectorAll('button')].find((item) => /Open Arch|开放软件架构/.test(item.textContent.trim())); button.focus(); button.click(); })()`);
   await until(`!!document.querySelector('#open-architecture-modal')`);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-arch-card').length`), 4);
   assert.equal(await evaluate(`document.querySelectorAll('#open-architecture-modal tbody tr').length`), 4);

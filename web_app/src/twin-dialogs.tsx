@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTwinLocale } from './twin-i18n';
 import { ORIGINAL_TWIN_UI, filterOriginalOem, type OriginalOem } from './original-twin-data';
 import { useAppDispatch, useAppSelector } from './store/hooks';
+import { useDialogFocusTrap } from './dialog-focus';
 import { twinPageActions } from './store/twinUiSlice';
 
 const ARCH_LAYERS = [
@@ -48,6 +49,7 @@ export function TwinInfoDialog({ mode, onClose, onSelectOem }: { mode: 'architec
   const dispatch = useAppDispatch();
   const { oemDialog, archQuery } = useAppSelector((state) => state.twinPage);
   const dialog = useRef<HTMLDivElement>(null);
+  useDialogFocusTrap(dialog);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); onClose(); } };
     window.addEventListener('keydown', onKey);
