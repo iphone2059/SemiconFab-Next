@@ -51,3 +51,22 @@ ProblemDetails/status, idempotency/JSON, abort propagation and non-JSON failures
 No backend implementation changed. Full Golden, nine-language, exact dynamics,
 production-bundle browser, 60-minute and full repeated-loss parity gates retain
 their prior status in `twin-parity/baseline.md`.
+
+## Final renderer-readiness correction
+
+Inspecting the final screenshot caught a scene failure that the earlier HUD-only
+checks missed. Network capture identified a Babylon dependency returning
+`504 Outdated Optimize Dep`; the source module itself returned HTTP 200. The
+local Vite process was restarted with forced dependency optimization, retaining
+the existing API. No product rendering fallback or dependency version changed.
+
+`remaining-state.browser.ts` now requires an explicit WebGPU-ready status before
+accepting clock/FDC assertions, rejects caught module-load failures and allows a
+bounded cold-start wait. The rerun returned `WebGPU · 程序化 FAB · 121 台设备`,
+clock `#2 -> #3`, changing sensor values and pause. The final screenshot was
+visually inspected with the 3D scene present. Two harness regressions distinguish
+a working HUD with a failed renderer from an actual ready renderer.
+The frontend suite including these regressions passes **136/136**.
+
+Concurrent dialog-focus work landed in a separate commit during this final
+check; its implementation was left intact.
