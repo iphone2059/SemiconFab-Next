@@ -26,6 +26,21 @@ export interface AmhsTask {
   state: AmhsTaskState;
 }
 
+/** Declared seed for the product-side task stream; original page used unseeded Math.random. */
+export const AMHS_TRAFFIC_SEED = 42;
+
+/** Declared deterministic replacement for the frozen page's Math.random (same LCG as the fixtures). */
+export function createAmhsRandom(seed: number): { random: () => number; seed: () => number } {
+  let state = seed >>> 0;
+  return {
+    random: () => {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      return state / 2 ** 32;
+    },
+    seed: () => state,
+  };
+}
+
 export const AMHS_LED_COLORS = {
   IDLE: 0x10b981,
   TO_PICKUP: 0x38bdf8,

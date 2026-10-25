@@ -1,18 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { advanceAmhsState, createAmhsState, AMHS_LED_COLORS, type AmhsState, type AmhsVehicle } from '../src/amhs-timeline';
+import { advanceAmhsState, createAmhsRandom, createAmhsState, AMHS_LED_COLORS, type AmhsState, type AmhsVehicle } from '../src/amhs-timeline';
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/original-dynamics-vectors.json', import.meta.url), 'utf8'));
 
 const round = (value: number, digits = 6): number => Math.round(value * 10 ** digits) / 10 ** digits + 0;
-
-function randomStream(seed: number) {
-  let state = seed >>> 0;
-  return {
-    random: () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 2 ** 32; },
-    seed: () => state,
-  };
-}
 
 function phaseOf(vehicle: AmhsVehicle): string | null {
   if (vehicle.state !== 'LOADING' && vehicle.state !== 'UNLOADING') return null;
@@ -40,7 +32,7 @@ function vehicleView(vehicle: AmhsVehicle) {
 }
 
 function simulate(): { state: AmhsState; events: Record<string, unknown>[]; snapshots: unknown[]; stats: unknown } {
-  const stream = randomStream(fixture.scenario.seed);
+  const stream = createAmhsRandom(fixture.scenario.seed);
   const state = createAmhsState({
     loops: fixture.scenario.loops,
     initialNextTaskTime: fixture.scenario.initialNextTaskTime,

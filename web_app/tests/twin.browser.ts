@@ -17,7 +17,8 @@ async function until(expression) {
     if (await evaluate(expression)) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`Browser condition timed out: ${expression}`);
+  const diagnostic = await evaluate("JSON.stringify({ url: location.href, bottom: document.querySelector('.twin-bottom')?.textContent ?? null, status: document.querySelector('.twin-status')?.getAttribute('title') ?? null, mode: document.querySelector('.twin-mode select')?.value ?? null })").catch(() => 'diagnostic unavailable');
+  throw new Error(`Browser condition timed out: ${expression} | ${diagnostic}`);
 }
 async function pressEscape() {
   await command('Input.dispatchKeyEvent', {
@@ -36,6 +37,9 @@ async function pressEscape() {
   await command('Page.navigate', { url: baseUrl + '/twin?lang=zh-CN' });
   await until(`!!document.querySelector('.twin-page')`);
   await until(`document.querySelector('.twin-status')?.getAttribute('title')?.startsWith('WebGPU ·')`);
+  // Source-exact AMHS controller must dispatch jobs and report active vehicles in the live HUD.
+  await until(`!!document.querySelector('.twin-bottom')`);
+  await until(`(() => { const text = document.querySelector('.twin-bottom')?.textContent ?? ''; const hit = text.indexOf('AMHS OHT '); return hit >= 0 && Number(text.slice(hit + 9, hit + 11)) > 0; })()`, 30000);
   assert.equal(await evaluate(`document.querySelectorAll('#left-sidebar').length`), 1);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-levels button').length`), 4);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-cameras button').length`), 5);

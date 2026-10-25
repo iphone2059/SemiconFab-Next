@@ -21,6 +21,7 @@ import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine';
 import { createNativeStaticShadows } from './native-static-shadows';
 import { createAerodynamics } from './aerodynamics';
+import { advanceAmhsState, AMHS_LED_COLORS, AMHS_TRAFFIC_SEED, createAmhsRandom, createAmhsState, type AmhsStation } from './amhs-timeline';
 
 const color = (hex: string) => Color3.FromHexString(hex);
 
@@ -78,8 +79,15 @@ function addAnimatedAmhs(scene: Scene, onStats?: (stats: AmhsStats) => void): Tr
     [28.0, 52.5, 88.0, 112.0, 153.0, 176.0, 245.0],
     [0.0, 28.0, 55.0, 86.0, 112.0, 132.0, 162.5],
   ];
-  const stations = stationPositions.map((list, loop) =>
-    list.map((s) => ((s % arcs[loop].total) / arcs[loop].total)),
+  const stations: AmhsStation[][] = stationPositions.map((list, loop) =>
+    list.map((s, index) => ({
+      id: 'L' + (loop + 1) + '-ST' + String(index + 1).padStart(2, '0'),
+      loopId: (loop + 1) as 1 | 2,
+      s,
+      bay: '',
+      bayName: '',
+      bayNameZh: '',
+    })),
   );
 
   const group = new TransformNode('native-amhs', scene);
@@ -131,24 +139,21 @@ function addAnimatedAmhs(scene: Scene, onStats?: (stats: AmhsStats) => void): Tr
   const foupMaterial = new StandardMaterial('native-oht-foup', scene);
   foupMaterial.diffuseColor = color('#dbeafe');
   foupMaterial.emissiveColor = color('#1d4ed8').scale(0.15);
+  const cableMaterial = new StandardMaterial('native-oht-cable', scene);
+  cableMaterial.diffuseColor = color('#94a3b8');
+  cableMaterial.emissiveColor = color('#94a3b8').scale(0.2);
 
-  type OhtState = 'idle' | 'toPickup' | 'loading' | 'toDropoff' | 'unloading';
-  type OhtTask = { loop: number; pickup: number; dropoff: number; createdAt: number };
   const cars: {
     body: ReturnType<typeof MeshBuilder.CreateBox>;
     arc: ArcPath;
     loop: number;
     index: number;
-    progress: number;
-    speed: number;
-    maxSpeed: number;
-    state: OhtState;
-    target: number | null;
-    dwell: number;
-    task: OhtTask | null;
+    id: number;
     led: StandardMaterial;
+    ledHex: number;
     hoist: ReturnType<typeof MeshBuilder.CreateBox>;
     foup: ReturnType<typeof MeshBuilder.CreateBox>;
+    cables: ReturnType<typeof MeshBuilder.CreateCylinder>[];
     shadow: ReturnType<typeof MeshBuilder.CreateGround>;
   }[] = [];
   for (let loop = 0; loop < 2; loop += 1) {
@@ -184,32 +189,24 @@ function addAnimatedAmhs(scene: Scene, onStats?: (stats: AmhsStats) => void): Tr
       hoist.isPickable = false;
       const foup = MeshBuilder.CreateBox(`native-oht-foup-${loop}-${index}`, { width: 0.55, height: 0.42, depth: 0.55 }, scene);
       foup.parent = hoist;
-      foup.position.y = 0.44;
+      foup.position.y = -0.7;
       foup.material = foupMaterial;
       foup.isVisible = false;
       foup.isPickable = false;
+      const cables = [0, 1].map((side) => {
+        const cable = MeshBuilder.CreateCylinder('native-oht-cable-' + loop + '-' + index + '-' + side, { diameter: 0.024, height: 0.5, tessellation: 6 }, scene);
+        cable.parent = body;
+        cable.position.set(side === 0 ? -0.25 : 0.25, -0.25, 0);
+        cable.scaling.y = 0.5;
+        cable.material = cableMaterial;
+        cable.isPickable = false;
+        return cable;
+      });
       const shadow = MeshBuilder.CreateGround(`native-oht-shadow-${loop}-${index}`, { width: 2.4, height: 1.6 }, scene);
       shadow.parent = group;
       shadow.material = shadowMaterial;
       shadow.isPickable = false;
-      const progress = (index / 12 + loop * 0.37) % 1;
-      cars.push({
-        body,
-        arc: arcs[loop],
-        loop,
-        index,
-        progress,
-        speed: 1.1 + (index % 4) * 0.08,
-        maxSpeed: 2.6 + loop * 0.2,
-        state: 'idle',
-        target: null,
-        dwell: 0,
-        task: null,
-        led,
-        hoist,
-        foup,
-        shadow,
-      });
+      cars.push({ body, arc: arcs[loop], loop, index, id: loop * 12 + index, led, ledHex: AMHS_LED_COLORS.IDLE, hoist, foup, cables, shadow });
     }
   }
 
@@ -227,20 +224,27 @@ function addAnimatedAmhs(scene: Scene, onStats?: (stats: AmhsStats) => void): Tr
     }
   }
 
-  const setLed = (car: (typeof cars)[number], state: OhtState) => {
-    const tint = state === 'loading' || state === 'unloading'
-      ? '#f59e0b'
-      : state === 'toPickup' || state === 'toDropoff'
-        ? '#38bdf8'
-        : '#10b981';
-    car.led.emissiveColor = color(tint);
-    car.led.diffuseColor = color(tint);
+  const traffic = createAmhsState({
+    loops: {
+      1: { length: arcs[0].total, stations: stations[0] },
+      2: { length: arcs[1].total, stations: stations[1] },
+    },
+    initialNextTaskTime: 1.0,
+    vehicles: [
+      ...Array.from({ length: 12 }, (_, index) => ({ loopId: 1 as const, s: (index / 12) * arcs[0].total })),
+      ...Array.from({ length: 12 }, (_, index) => ({ loopId: 2 as const, s: (index / 12) * arcs[1].total })),
+    ],
+  });
+  const trafficRandom = createAmhsRandom(AMHS_TRAFFIC_SEED).random;
+  const ledColors = new Map<number, Color3>();
+  const ledColor = (hex: number) => {
+    let tint = ledColors.get(hex);
+    if (!tint) {
+      tint = Color3.FromHexString('#' + hex.toString(16).padStart(6, '0'));
+      ledColors.set(hex, tint);
+    }
+    return tint;
   };
-
-  const tasks: OhtTask[] = [];
-  let taskTimer = 2.5;
-  let completedTasks = 0;
-  let totalDeliverySeconds = 0;
   let statsTimer = 0;
   let lastTick = performance.now() / 1000;
   scene.onBeforeRenderObservable.add(() => {
@@ -248,110 +252,14 @@ function addAnimatedAmhs(scene: Scene, onStats?: (stats: AmhsStats) => void): Tr
     const dt = Math.min(0.12, Math.max(0.001, now - lastTick));
     lastTick = now;
 
-    taskTimer -= dt;
-    if (taskTimer <= 0 && tasks.length < 8) {
-      const loop = Math.random() < 0.5 ? 0 : 1;
-      const list = stations[loop];
-      const pickupIndex = Math.floor(Math.random() * list.length);
-      let dropoffIndex = Math.floor(Math.random() * list.length);
-      if (dropoffIndex === pickupIndex) dropoffIndex = (dropoffIndex + 1) % list.length;
-      tasks.push({ loop, pickup: list[pickupIndex], dropoff: list[dropoffIndex], createdAt: now });
-      taskTimer = 4 + Math.random() * 4;
-    }
-
-    for (let taskIndex = 0; taskIndex < tasks.length; taskIndex += 1) {
-      const task = tasks[taskIndex];
-      let assigned: (typeof cars)[number] | undefined;
-      let assignedDistance = Number.POSITIVE_INFINITY;
-      for (const car of cars) {
-        if (car.loop !== task.loop || car.state !== 'idle') continue;
-        const distance = ((task.pickup - car.progress + 1) % 1);
-        if (distance < assignedDistance) {
-          assignedDistance = distance;
-          assigned = car;
-        }
-      }
-      if (assigned) {
-        assigned.state = 'toPickup';
-        assigned.target = task.pickup;
-        assigned.task = task;
-        setLed(assigned, 'toPickup');
-        tasks.splice(taskIndex, 1);
-        taskIndex -= 1;
-      }
-    }
+    advanceAmhsState(traffic, dt, trafficRandom);
 
     for (const car of cars) {
-      if (car.state === 'loading' || car.state === 'unloading') {
-        const elapsed = 2.6 - car.dwell;
-        const ease = (progress: number) => 0.5 - Math.cos(Math.min(1, Math.max(0, progress)) * Math.PI) / 2;
-        if (elapsed < 1.1) {
-          car.hoist.position.y = -0.48 - 2.5 * ease(elapsed / 1.1);
-        } else if (elapsed < 1.9) {
-          car.hoist.position.y = -2.98;
-          if (elapsed >= 1.5) car.foup.isVisible = car.state === 'loading';
-        } else {
-          car.hoist.position.y = -0.48 - 2.5 * (1 - ease((elapsed - 1.9) / 0.7));
-        }
-        car.dwell = Math.max(0, car.dwell - dt);
-        if (car.dwell === 0) {
-          car.hoist.position.y = -0.48;
-          if (car.state === 'loading') {
-            car.state = 'toDropoff';
-            car.target = car.task?.dropoff ?? null;
-            car.foup.isVisible = true;
-            setLed(car, 'toDropoff');
-          } else {
-            if (car.task) {
-              completedTasks += 1;
-              totalDeliverySeconds += now - car.task.createdAt;
-            }
-            car.state = 'idle';
-            car.target = null;
-            car.task = null;
-            car.foup.isVisible = false;
-            setLed(car, 'idle');
-          }
-        }
-      } else {
-        let gapMeters = Number.POSITIVE_INFINITY;
-        for (const other of cars) {
-          if (other === car || other.arc !== car.arc) continue;
-          const gap = ((other.progress - car.progress + 1) % 1) * car.arc.total;
-          if (gap > 0.001 && gap < gapMeters) gapMeters = gap;
-        }
-        const followingLimit = Math.max(0, gapMeters - 3.2) / car.arc.total;
-        const targetDistance = car.target === null ? Number.POSITIVE_INFINITY : (car.target - car.progress + 1) % 1;
-        let desiredSpeed = car.state === 'idle' ? 1.35 : car.maxSpeed;
-        if (gapMeters < 12) desiredSpeed = Math.min(desiredSpeed, Math.max(0, (gapMeters - 3.2) * 0.9));
-        if (car.target !== null) desiredSpeed = Math.min(desiredSpeed, Math.sqrt(2 * 1.8 * Math.max(0, targetDistance * car.arc.total)));
-        const acceleration = car.speed < desiredSpeed ? 1.6 : 3.0;
-        car.speed += Math.max(-acceleration * dt, Math.min(acceleration * dt, desiredSpeed - car.speed));
-        const speedLimit = Math.min(followingLimit, targetDistance) * car.arc.total / dt;
-        car.speed = Math.min(car.speed, speedLimit);
-        let step = car.speed * dt / car.arc.total;
-        step = Math.min(step, followingLimit, targetDistance);
-        if (car.target !== null && targetDistance <= step + 0.0008) {
-          car.progress = car.target;
-          if (car.state === 'toPickup') {
-            car.state = 'loading';
-            car.speed = 0;
-            car.dwell = 2.6;
-            car.target = null;
-            setLed(car, 'loading');
-          } else if (car.state === 'toDropoff') {
-            car.state = 'unloading';
-            car.speed = 0;
-            car.dwell = 2.6;
-            car.target = null;
-            setLed(car, 'unloading');
-          }
-        } else {
-          car.progress = (car.progress + step) % 1;
-        }
-      }
-      const point = arcPoint(car.arc, car.progress);
-      const ahead = arcPoint(car.arc, (car.progress + 0.002) % 1);
+      const vehicle = traffic.vehicles[car.id];
+      const loopLength = traffic.loops[vehicle.loopId].length;
+      const progress = ((vehicle.s / loopLength) % 1 + 1) % 1;
+      const point = arcPoint(car.arc, progress);
+      const ahead = arcPoint(car.arc, (progress + 0.002) % 1);
       car.body.position.set(point.x, 5.8, point.z);
       car.shadow.position.set(point.x + 1.15, 0.053, point.z + 1.3);
       const tangent = ahead.subtract(point).normalize();
@@ -359,17 +267,30 @@ function addAnimatedAmhs(scene: Scene, onStats?: (stats: AmhsStats) => void): Tr
       if (car.body.rotationQuaternion) {
         Quaternion.FromUnitVectorsToRef(Vector3.Right(), tangent, car.body.rotationQuaternion);
       }
+      car.hoist.position.y = -0.48 + vehicle.hoistY;
+      car.foup.isVisible = vehicle.foupVisible;
+      for (const cable of car.cables) {
+        cable.scaling.y = vehicle.cableScaleY;
+        cable.position.y = vehicle.cableY - 5.8;
+      }
+      if (car.ledHex !== vehicle.ledHex) {
+        car.ledHex = vehicle.ledHex;
+        const tint = ledColor(vehicle.ledHex);
+        car.led.emissiveColor = tint;
+        car.led.diffuseColor = tint;
+      }
     }
 
     statsTimer -= dt;
     if (statsTimer <= 0) {
       statsTimer = 0.5;
+      const active = traffic.vehicles.filter((vehicle) => vehicle.state !== 'IDLE').length;
       onStats?.({
-        active: cars.filter((car) => car.state !== 'idle').length,
-        total: cars.length,
-        queued: tasks.length,
-        completed: completedTasks,
-        avgDelivery: completedTasks > 0 ? totalDeliverySeconds / completedTasks : null,
+        active,
+        total: traffic.vehicles.length,
+        queued: traffic.queue.length,
+        completed: traffic.completed.length,
+        avgDelivery: traffic.completed.length > 0 ? traffic.totalDeliveryTime / traffic.completed.length : null,
       });
     }
   });
