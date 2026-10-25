@@ -1,6 +1,11 @@
 # Complete original Twin page parity
 
 > **For agentic workers:** Use superpowers:executing-plans inline, with tests before each behavior change and a final independent code review.
+>
+> **2026-10-25 continuation:** remaining open work is re-staged in
+> [remaining-parity-phases.md](2026-10-25-remaining-parity-phases.md). Locale target is
+> **en-US + zh-CN only**; nine-language coverage is withdrawn per user instruction, and the
+> original twin page has no theme control (see that plan's scope decisions).
 
 **Goal:** Complete the remaining original-page controls, HUD, facilities and differential acceptance without replacing the existing WebGPU equipment/shadow implementation.
 
@@ -52,7 +57,7 @@
 
 - [ ] Compare source control ledger; implement remaining header actions, roof/HVAC/patrol/camera controls, footer legend/grid/stats and original breakpoints.
 - [ ] Restore OEM database, architecture/provenance/help and Yield/Map dialog flows, focus/Esc/backdrop behavior and internal valid targets.
-- [ ] Restore all source-language labels/tooltips, original storage/theme migration, dark/light styling and responsive behavior; test blocked storage and URL precedence.
+- [ ] Restore all source-language labels/tooltips in **en-US/zh-CN**, original storage/URL preference behavior and source responsive rules; theme adjudication is recorded (frozen original twin page has no theme control).
 
 ## Task 4 — complete static facilities and system identity
 
