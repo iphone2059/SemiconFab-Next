@@ -1,5 +1,5 @@
 import { useEffect, useMemo, type FormEvent } from 'react';
-import type { CreateRunRequest, RunResult, RunSummary, SiteDto } from './contracts';
+import type { CreateRunRequest, SiteDto } from './contracts';
 import { Panel, StatusPill } from './ui';
 import { Metric } from './widgets';
 import { CompletionBar } from './charting';

@@ -42,7 +42,7 @@ it('owns wafer progress and bounded trail, and clears them on seek, product chan
 it('invalidates an in-flight local import when returning to server data', () => {
   const store = configureStore({ reducer: catalogSlice.reducer });
   store.dispatch(catalogActions.importStarted('import-a'));
-  store.dispatch(catalogActions.importErrorSet('invalid JSON'));
+  store.dispatch(catalogActions.importFailed({ requestId: 'import-a', error: 'invalid JSON' }));
   store.dispatch(catalogActions.localImportCleared());
   store.dispatch(catalogActions.localImportApplied({ requestId: 'import-a', entries: [], importId: 'stale.json' }));
   expect(store.getState().localEntries).toBeNull();

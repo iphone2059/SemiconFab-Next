@@ -70,7 +70,6 @@ export const catalogSlice = createSlice({
       state.localEntries = null; state.localImportId = ''; state.importError = '';
       state.importRequestId = undefined; state.importPending = false;
     },
-    importErrorSet(state, action: PayloadAction<string>) { state.importError = action.payload; },
     hydrate(state, action: PayloadAction<Partial<CatalogState>>) { Object.assign(state, action.payload); state.hydrated = true; },
   },
 });

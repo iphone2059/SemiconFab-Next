@@ -17,7 +17,6 @@ import {
   parseCatalogEntries,
   readCatalogRoute,
   safeExternalUrl,
-  type CatalogDomain,
   type CatalogField,
 } from './catalog-data';
 import { readPreferences, type Preferences } from './preferences';

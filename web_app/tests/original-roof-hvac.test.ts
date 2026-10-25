@@ -13,7 +13,6 @@ import {
   ORIGINAL_ROOF_MAU,
   ORIGINAL_ROOF_MAUS,
   ORIGINAL_ROOF_PARAPETS,
-  ORIGINAL_ROOF_SLAB,
   ORIGINAL_ROOF_SUPPLY_MAINS,
   ROOF_EXHAUST_PARTICLES_PER_STACK,
   ROOF_EXHAUST_PARTICLE_COUNT,
@@ -217,7 +216,7 @@ describe('original roof and exterior HVAC port', () => {
         expectPoint(feeder.maximumWorld, [mau.x + 0.45, 9, 15]);
       }
 
-      const drops = ORIGINAL_ROOF_BAY_DROPS.map((branch, index) => mesh(scene, 'original-roof-supply-drop-' + index));
+      const drops = ORIGINAL_ROOF_BAY_DROPS.map((_branch, index) => mesh(scene, 'original-roof-supply-drop-' + index));
       expect(drops).toHaveLength(12);
       ORIGINAL_ROOF_BAY_DROPS.forEach((branch, index) => {
         const bounds = worldBounds(drops[index]);

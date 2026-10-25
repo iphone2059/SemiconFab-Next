@@ -1,7 +1,7 @@
 // Standalone WebGPU performance harness. Requires the dev server and a dedicated
 // Chromium CDP port. It records a real browser baseline; it is not a CI unit test.
 import { writeFileSync } from 'node:fs';
-import { summarizeFrames, summarizeLongTasks } from '../src/perf-metrics.ts';
+import { summarizeFrames, summarizeLongTasks } from './support/perf-metrics.ts';
 
 const port = Number(process.env.PERF_CDP_PORT ?? '9336');
 const tabs = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();

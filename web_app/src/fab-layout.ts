@@ -21,7 +21,6 @@ export interface FabLayoutTool {
   readonly model: string;
 }
 
-export const FAB_LAYOUT_BOUNDS = { minX: -32.75, maxX: 42.5, minZ: -23.5, maxZ: 25 } as const;
 
 export const FAB_LAYOUT: readonly FabLayoutTool[] = [
   { recordId: 'c327b57f-9e72-50d5-87a3-0986242ffb86', rotationDegrees: 0, originalKind: 'draft', dimensionTier: 'inferred', x: -31, z: -22.5, width: 2.2, depth: 2.6, height: 3.2, category: 'lithography', vendor: 'ASML', model: 'TWINSCAN NXT:2050i' },

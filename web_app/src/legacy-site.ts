@@ -15,7 +15,7 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import { SpotLight } from '@babylonjs/core/Lights/spotLight';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
-import { FAB_LAYOUT, FAB_LAYOUT_BOUNDS, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
+import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
 import type { AmhsStats, XRayFilter } from './fab-scene';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine';
@@ -381,7 +381,6 @@ export type LegacyLayer = 'amhs' | 'ceiling' | 'roof' | 'subfab' | 'heatmap' | '
 export interface LegacyRuntime {
   setLayer(layer: LegacyLayer, visible: boolean): void;
   setToolState(index: number, state: FabToolState): void;
-  setExploded(active: boolean): void;
   setExplodeFactor(factor: number): void;
   setBasement(active: boolean): void;
   setDual(active: boolean): void;
@@ -604,9 +603,6 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     },
     setToolState(index, state) {
       statusLights.setState(index, state);
-    },
-    setExploded(active) {
-      applyExplodeFactor(active ? 1 : 0);
     },
     setExplodeFactor(factor) {
       applyExplodeFactor(factor);

@@ -3,7 +3,9 @@ import type { CatalogPageDto, RunResult, RunSummary, SiteDto } from '../contract
 import type { EquipmentStatusSnapshot } from '../equipment-status';
 import { parseWaferRoutes, type WaferProduct, type WaferRouteStep } from '../wafer-route';
 
-const rootQuery = fetchBaseQuery({ baseUrl: '/', credentials: 'same-origin', cache: 'no-store' });
+const rootQuery = fetchBaseQuery({ baseUrl: '/', credentials: 'same-origin', cache: 'no-store',
+  fetchFn: (input, init) => globalThis.fetch(input, init),
+});
 
 export const twinApi = createApi({
   reducerPath: 'twinApi',

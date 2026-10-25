@@ -44,7 +44,7 @@ export function createProcessMesJob(equipment: ProcessEquipment, now = Date.now(
   };
 }
 
-export function applyMesAction(job: MesJob, action: MesAction, _now = Date.now()): MesJob {
+export function applyMesAction(job: MesJob, action: MesAction): MesJob {
   // Source actions retain the initialization timestamp.
   if (action === 'track-in') return { ...job, state: 'TRACKED_IN' };
   if (action === 'track-out') return { ...job, state: 'TRACKED_OUT', waferSlot: (job.waferSlot % 25) + 1 };

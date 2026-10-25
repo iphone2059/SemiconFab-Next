@@ -4,19 +4,6 @@ import { localeActions } from './store/localeSlice';
 import { TWIN_EN } from './twin-translations';
 
 export type TwinLanguage = 'zh' | 'en';
-const normalize = (value: string | null): TwinLanguage | undefined => value === 'en' ? 'en'
-  : value === 'zh' || value === 'zh-CN' || value === 'zh-TW' ? 'zh' : undefined;
-
-export function readTwinLanguage(storage: Pick<Storage, 'getItem'>, search: string, browserLanguage: string): TwinLanguage {
-  const explicit = normalize(new URLSearchParams(search).get('lang'));
-  if (explicit) return explicit;
-  try {
-    const saved = normalize(storage.getItem('semiconfab_lang')) ?? normalize(storage.getItem('semicon_lang'));
-    if (saved) return saved;
-  } catch { /* Storage denial must not prevent opening the FAB. */ }
-  return browserLanguage.toLowerCase().startsWith('zh') ? 'zh' : 'en';
-}
-
 export function persistTwinLanguage(storage: Pick<Storage, 'setItem'>, language: TwinLanguage): void {
   try {
     storage.setItem('semiconfab_lang', language === 'zh' ? 'zh-CN' : 'en');

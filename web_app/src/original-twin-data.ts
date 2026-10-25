@@ -63,14 +63,3 @@ export function buildOriginalSignalRegistry(): Map<string, OriginalSignalTarget>
   }
   return registry;
 }
-export function projectOriginalSignalStates(history: readonly { key: string; state: FabToolState }[]) {
-  const registry = buildOriginalSignalRegistry();
-  const layout: FabToolState[] = FAB_LAYOUT.map(() => 'running');
-  const keys: Record<string, FabToolState> = {};
-  for (const {key, state} of history) {
-    keys[key] = state;
-    const target = registry.get(key);
-    if (target?.layoutIndex !== undefined) layout[target.layoutIndex] = state;
-  }
-  return { layout, keys };
-}

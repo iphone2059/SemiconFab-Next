@@ -4,7 +4,6 @@ import { FAB_TOOL_STATES, type FabToolState } from '../fab-layout';
 import { createTwinUiState, twinUiReducer, type EntryMode, type FabLevel, type SpatialMode, type TwinUiEvent, type TwinUiState, type TwinView } from '../twin-state';
 import type { TwinSelection } from '../original-twin-data';
 import type { MesJob } from '../process-control';
-import { applyMesAction, createMesJob } from '../process-control';
 import { DEFAULT_YIELD_INPUT, type YieldInput } from '../fab-yield';
 import type { DefectPattern } from '../wafer-map';
 import { waferTransitPoint, type WaferProduct, type WaferWaypoint } from '../wafer-route';
@@ -26,7 +25,6 @@ export const twinUiSlice = createSlice({
     viewSet(state, action: PayloadAction<TwinView>) { return reduce(state, { type: 'view/set', view: action.payload }); },
     levelSet(state, action: PayloadAction<FabLevel>) { return reduce(state, { type: 'level/set', level: action.payload }); },
     spatialToggle(state, action: PayloadAction<Exclude<SpatialMode, null>>) { return reduce(state, { type: 'spatial/toggle', mode: action.payload }); },
-    spatialClose(state) { return reduce(state, { type: 'spatial/close' }); },
     cutSet(state, action: PayloadAction<{ axis: CutAxis; positionM: number; invert: boolean }>) { return reduce(state, { type: 'cut/set', ...action.payload }); },
     xraySet(state, action: PayloadAction<XRayFilter | null>) { return reduce(state, { type: 'xray/set', filter: action.payload }); },
     explodeSet(state, action: PayloadAction<number>) { return reduce(state, { type: 'explode/set', percent: action.payload }); },
@@ -82,8 +80,6 @@ export interface TwinPageState {
   layerPreferences: Record<SceneLayer, boolean>;
   amhs?: AmhsStats;
   infoDialog: 'architecture' | 'database' | null;
-  researchLoading: boolean;
-  researchError: string;
   showResearchUtil: boolean;
   tourRemainingMs: number;
   onboardingDontShow: boolean;
@@ -108,8 +104,6 @@ const initialPageState: TwinPageState = {
   mesJobs: {},
   layerPreferences: { amhs: true, ceiling: false, roof: false, subfab: false, heatmap: false, airflow: false, xray: false },
   infoDialog: null,
-  researchLoading: false,
-  researchError: '',
   showResearchUtil: true,
   tourRemainingMs: 0,
   onboardingDontShow: true,
@@ -127,13 +121,11 @@ export const twinPageSlice = createSlice({
   reducers: {
     siteIdSet(state, action: PayloadAction<string | undefined>) { state.siteId = action.payload; },
     siteErrorSet(state, action: PayloadAction<string | undefined>) { state.siteError = action.payload; },
-    liveStatesSet(state, action: PayloadAction<FabToolState[]>) { state.liveToolStates = action.payload; },
     liveSnapshotReceived(state, action: PayloadAction<{ states: FabToolState[]; updatedAt: string }>) {
       state.liveToolStates = action.payload.states;
       state.statusFeed = { updatedAt: action.payload.updatedAt, stale: false };
     },
     replayBaseSet(state, action: PayloadAction<readonly FabToolState[]>) { state.replayBase = [...action.payload]; },
-    statusFeedSet(state, action: PayloadAction<{ updatedAt: string; stale: boolean } | undefined>) { state.statusFeed = action.payload; },
     statusFeedStale(state) { if (state.statusFeed) state.statusFeed = { ...state.statusFeed, stale: true }; },
     selectedSet(state, action: PayloadAction<PickedTool | undefined>) { state.selected = action.payload; },
     selectionSet(state, action: PayloadAction<TwinSelection | undefined>) { state.selection = action.payload; },
@@ -141,8 +133,6 @@ export const twinPageSlice = createSlice({
     layerToggled(state, action: PayloadAction<SceneLayer>) { const layer = action.payload; state.layerPreferences[layer] = !state.layerPreferences[layer]; },
     amhsSet(state, action: PayloadAction<AmhsStats | undefined>) { state.amhs = action.payload; },
     infoDialogSet(state, action: PayloadAction<'architecture' | 'database' | null>) { state.infoDialog = action.payload; },
-    researchLoadingSet(state, action: PayloadAction<boolean>) { state.researchLoading = action.payload; },
-    researchErrorSet(state, action: PayloadAction<string>) { state.researchError = action.payload; },
     showResearchUtilToggled(state) { state.showResearchUtil = !state.showResearchUtil; },
     tourRemainingSet(state, action: PayloadAction<number>) { state.tourRemainingMs = Math.max(0, action.payload); },
     tourTick(state) { state.tourRemainingMs = Math.max(0, state.tourRemainingMs - 250); },
@@ -172,9 +162,7 @@ export const twinPageSlice = createSlice({
     waferFollowSet(state, action: PayloadAction<boolean>) { state.wafer.follow = action.payload; },
     ymsOpenSet(state, action: PayloadAction<boolean>) { state.yms.open = action.payload; },
     ymsTabSet(state, action: PayloadAction<'map' | 'yield'>) { state.yms.tab = action.payload; },
-    ymsPatternSet(state, action: PayloadAction<DefectPattern>) { state.yms.pattern = action.payload; },
     ymsRandomize(state, action: PayloadAction<DefectPattern>) { state.yms.pattern = action.payload; state.yms.seed += 1; },
-    ymsSeedIncremented(state) { state.yms.seed += 1; },
     ymsHoverDieSet(state, action: PayloadAction<YmsUiState['hoverDie']>) { state.yms.hoverDie = action.payload; },
     ymsDieAreaSet(state, action: PayloadAction<number>) { state.yms.dieArea = action.payload; },
     ymsDefectD0Set(state, action: PayloadAction<number>) { state.yms.defectD0 = action.payload; },
@@ -197,12 +185,6 @@ export const twinPageSlice = createSlice({
     builder.addCase(twinUiSlice.actions.waferClose, state => { state.wafer.progress = 0; state.wafer.trail = []; state.wafer.point = undefined; });
   },
 });
-
-/** Applies a MES action to the selected layout index without keeping a parallel reducer. */
-export function applyMesJobAction(input: { jobs: Record<number, MesJob>; index: number; tool: Parameters<typeof createMesJob>[0]; action: Parameters<typeof applyMesAction>[1] }) {
-  const job = applyMesAction(input.jobs[input.index] ?? createMesJob(input.tool, input.index), input.action);
-  return { index: input.index, job };
-}
 
 export const twinUiActions = twinUiSlice.actions;
 export const twinPageActions = twinPageSlice.actions;

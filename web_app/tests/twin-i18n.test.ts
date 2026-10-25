@@ -1,9 +1,11 @@
 import { expect, it } from 'vitest';
-import { readTwinLanguage, twinTranslator, persistTwinLanguage } from '../src/twin-i18n';
+import { twinTranslator, persistTwinLanguage } from '../src/twin-i18n';
+import { readTwinLanguage } from '../src/preferences';
 
 it('honors URL, both original preference keys and browser language in order', () => {
   const storage = { getItem: (key: string) => key === 'semiconfab_lang' ? 'zh-CN' : null };
   expect(readTwinLanguage(storage, '?lang=en', 'zh-SG')).toBe('en');
+  expect(readTwinLanguage(storage, '?lang=en-US', 'zh-SG')).toBe('en');
   expect(readTwinLanguage(storage, '', 'en-US')).toBe('zh');
   expect(readTwinLanguage({ getItem: () => null }, '', 'en-US')).toBe('en');
   expect(readTwinLanguage({ getItem: () => null }, '?lang=zh', 'en-US')).toBe('zh');

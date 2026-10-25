@@ -76,9 +76,13 @@ wafer speed/product/seek, and a completed real GPUDevice replacement with zero
 validation errors, unchanged camera, and 16,384 bytes of readback. Recovery took
 4,380 ms. An earlier capture exceeded its 3-second transport deadline but the UI
 also visibly recovered; this is not a complete repeated-loss matrix. Current
-frontend verification is 138/138 Vitest, TypeScript and Vite build. Full Golden,
+frontend verification at that increment was 138/138 Vitest, TypeScript and Vite build. Full Golden,
 nine-language/responsive/theme styling, exact dynamics, production-bundle and
 60-minute acceptance remain pending. Status stays **NOT PARITY_VERIFIED**.
+
+The subsequent [dead-code cleanup](../dead-code-cleanup-2026-10-25.md) retires four
+tests for removed implementations and validates the active RTK transport;
+latest frontend verification is **134/134**, strict unused checks and build pass.
 
 ## Earlier GPU evidence interpretation
 

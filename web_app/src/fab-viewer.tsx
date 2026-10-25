@@ -6,7 +6,7 @@ import { createCoalescedDispatcher } from './store/telemetry-buffer';
 import type { FabDto, SiteDto } from './contracts';
 import { bindViewerZoom } from './viewer-zoom';
 import { SceneFacade, type AmhsStats, type CutAxis, type HoveredTool, type PickedTool, type SceneLayer, type SceneViewPreset, type XRayFilter } from './fab-scene';
-import { FAB_LAYOUT, FAB_TOOL_STATE_META, type FabToolState } from './fab-layout';
+import { FAB_TOOL_STATE_META, type FabToolState } from './fab-layout';
 
 export interface FabViewportProps {
   site: SiteDto;
@@ -34,7 +34,6 @@ export interface FabViewportHandle {
   setLayer(layer: SceneLayer, visible: boolean): void;
   setToolState(index: number, state: FabToolState): void;
   setTour(active: boolean): void;
-  setExploded(active: boolean): void;
   setExplodeFactor(factor: number): void;
   setBasement(active: boolean): void;
   setDual(active: boolean): void;
@@ -45,22 +44,6 @@ export interface FabViewportHandle {
   focusPatrol(): void;
   setLanguage(language: 'zh' | 'en'): void;
 }
-
-const TOOL_CATEGORY_LABELS: Record<string, string> = {
-  lithography: '光刻',
-  resist_track: '涂胶显影',
-  dry_etch: '干法刻蚀',
-  thin_film_deposition: '薄膜沉积',
-  cmp: '化学机械抛光',
-  wet_clean: '湿法清洗',
-  ion_implantation: '离子注入',
-  thermal_processing: '热处理',
-  metrology: '量测',
-  inspection: '检测',
-  packaging: '封装',
-  test: '测试',
-  other: '其他设备',
-};
 
 export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(function FabViewport(
   { site, fab, toolStates, onToolChange, layers, explodeFactor, basement, dual, onStatusChange, onAmhsStatsChange, getToolStates },
@@ -148,7 +131,6 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
       setLayer: (layer, visible) => facade.current?.setLayer(layer, visible),
       setToolState: (index, state) => facade.current?.setToolState(index, state),
       setTour: (active) => facade.current?.setTour(active),
-      setExploded: (active) => facade.current?.setExploded(active),
       setExplodeFactor: (factor) => facade.current?.setExplodeFactor(factor),
       setBasement: (active) => facade.current?.setBasement(active),
       setDual: (active) => facade.current?.setDual(active),

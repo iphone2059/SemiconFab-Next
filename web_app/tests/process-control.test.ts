@@ -10,10 +10,10 @@ describe('MES job execution', () => {
     expect(job.recipeId).toMatch(/^RCP-LITH-2NM-V[1-5]\.0$/);
     const again = createMesJob(FAB_LAYOUT[0], 0, 999);
     expect({ ...again, updatedAt: 100 }).toEqual(job);
-    const out = applyMesAction(job, 'track-out', 200);
+    const out = applyMesAction(job, 'track-out');
     expect(out.state).toBe('TRACKED_OUT');
     expect(out.waferSlot).toBe(15);
-    expect(applyMesAction(out, 'hold', 300).state).toBe('HOLD_MRB');
+    expect(applyMesAction(out, 'hold').state).toBe('HOLD_MRB');
   });
 });
 

@@ -55,7 +55,6 @@ export function createWebGpuBackend(): SceneBackend {
   let dualEnabled = false;
   let waferMarker: ReturnType<typeof MeshBuilder.CreateBox> | undefined;
   let waferTrail: ReturnType<typeof MeshBuilder.CreateLines> | undefined;
-  let lastFrameTime = performance.now();
   const fabTargets = new Map<string, Vector3>();
   let cleanup = () => {};
   let perfBridge: { dispose: () => void } | undefined;
@@ -131,7 +130,6 @@ export function createWebGpuBackend(): SceneBackend {
       scene.fogMode = Scene.FOGMODE_EXP2;
       scene.fogColor = new Color3(0.945, 0.961, 0.976);
       scene.fogDensity = 0.0055;
-      const beta = Math.PI / 3.64;
       homeRadius = Math.hypot(58, 68);
       camera = new ArcRotateCamera('site-camera', Math.PI / 2, Math.acos(58 / homeRadius), homeRadius, new Vector3(0, 0, 0), scene);
       camera.fov = Math.PI / 4;
@@ -335,9 +333,6 @@ export function createWebGpuBackend(): SceneBackend {
       const visibility = () => { if (document.hidden || deviceLost) engine?.stopRenderLoop(); else engine?.runRenderLoop(render); };
       const render = () => {
         if (signal.aborted || disposed || deviceLost) return;
-        const frameNow = performance.now();
-        const frameDelta = Math.min(0.05, Math.max(0, (frameNow - lastFrameTime) / 1000));
-        lastFrameTime = frameNow;
         if (camera && cameraTransition) {
           const progress = Math.min(1, (performance.now() - cameraTransition.startedAt) / cameraTransition.duration);
           const eased = 0.5 - Math.cos(progress * Math.PI) / 2;
@@ -365,7 +360,6 @@ export function createWebGpuBackend(): SceneBackend {
         scene?._rebuildGeometries();
         deviceLost = false;
         recovery.restored(scene?.getFrameId() ?? 0);
-        lastFrameTime = performance.now();
         // Native static resources are re-created lazily on the next scene render.
         onStatus('GPU 设备已重建，等待恢复首帧完成…');
         if (!document.hidden) engine?.runRenderLoop(render);
@@ -459,11 +453,6 @@ export function createWebGpuBackend(): SceneBackend {
       if (touring === active) return;
       touring = active;
       cameraTransition = undefined;
-      lastFrameTime = performance.now();
-    },
-    setExploded(active: boolean): void {
-      legacyRuntime?.setExploded(active);
-      refreshSelection();
     },
     setExplodeFactor(factor: number): void {
       legacyRuntime?.setExplodeFactor(factor);
@@ -558,7 +547,6 @@ export function createWebGpuBackend(): SceneBackend {
     setView(preset: SceneViewPreset, fabId?: string): void {
       if (!camera || disposed) return;
       const focusTarget = fabId ? fabTargets.get(fabId) : undefined;
-      const centered = new Vector3(0, 0, 0);
       const beta = Math.PI / 3.64;
       let pose: CameraPose;
       if (preset === 'top') {

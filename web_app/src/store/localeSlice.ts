@@ -1,29 +1,12 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { TwinLanguage } from '../twin-i18n';
-import { readPreferences, type Preferences } from '../preferences';
-
-function initialLanguage(): TwinLanguage {
-  if (typeof window === 'undefined') return 'zh';
-  try {
-    const url = new URL(location.href).searchParams.get('lang');
-    if (url === 'en' || url === 'en-US') return 'en';
-    if (url === 'zh' || url === 'zh-CN') return 'zh';
-    const stored = localStorage.getItem('semiconfab_lang') ?? localStorage.getItem('semicon_lang');
-    if (stored === 'en' || stored === 'en-US') return 'en';
-    if (stored === 'zh' || stored === 'zh-CN') return 'zh';
-    return navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
-  } catch {
-    return navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
-  }
-}
+import { readPreferences, readTwinLanguage, type Preferences } from '../preferences';
 export const localeSlice = createSlice({
   name: 'locale',
   initialState: (): Preferences => {
-    let theme: Preferences['theme'] = 'light';
-    if (typeof window !== 'undefined') {
-      try { theme = readPreferences(localStorage, location.search).theme; } catch { /* storage denied */ }
-    }
-    return { language: initialLanguage(), theme };
+    if (typeof window === 'undefined') return { language: 'zh', theme: 'light' };
+    const storage = { getItem: (key: string) => { try { return localStorage.getItem(key); } catch { return null; } } };
+    return { language: readTwinLanguage(storage, location.search, navigator.language), theme: readPreferences(storage, location.search).theme };
   },
   reducers: {
     preferencesSet(_state, action: PayloadAction<Preferences>) { return action.payload; },

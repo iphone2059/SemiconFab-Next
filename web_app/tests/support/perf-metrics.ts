@@ -1,3 +1,4 @@
+/** Capture analysis helpers; these are not part of the product runtime. */
 export interface FrameStats {
   count: number;
   minMs: number;

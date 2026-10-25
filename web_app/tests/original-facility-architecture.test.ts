@@ -425,16 +425,16 @@ describe('original facility architecture shell', () => {
     try {
       const { scene, controller } = fixture;
       const chamberNames = ORIGINAL_AIR_SHOWERS.map(config => 'original-airshower-' + config.id);
-      const labelY = (chamberName: string, timeMs: number, x: number) => {
+      const labelY = (chamberName: string, timeMs: number) => {
         controller.update(timeMs);
         return mesh(scene, chamberName + '-billboard').position.y;
       };
       // Source formula: (height + 1.2) + sin(nowSec * 2.2 + ash.position.x) * 0.08.
       ORIGINAL_AIR_SHOWERS.forEach((config, index) => {
         const expectedAtZero = config.height + ORIGINAL_AIR_SHOWER.sprite.yOffset + Math.sin(0 * 2.2 + config.x) * 0.08;
-        expect(labelY(chamberNames[index], 0, config.x)).toBeCloseTo(expectedAtZero, 10);
+        expect(labelY(chamberNames[index], 0)).toBeCloseTo(expectedAtZero, 10);
         const expectedAtSecond = config.height + ORIGINAL_AIR_SHOWER.sprite.yOffset + Math.sin(1 * 2.2 + config.x) * 0.08;
-        expect(labelY(chamberNames[index], 1000, config.x)).toBeCloseTo(expectedAtSecond, 10);
+        expect(labelY(chamberNames[index], 1000)).toBeCloseTo(expectedAtSecond, 10);
       });
 
       const blowingSeen = [false, false];
@@ -442,7 +442,7 @@ describe('original facility architecture shell', () => {
       const allowedIndicatorColors = [0x10b981, 0xf59e0b, 0x0284c7, 0x78350f, 0x0f172a];
       for (let step = 0; step <= 140; step++) {
         controller.update(step * 100);
-        ORIGINAL_AIR_SHOWERS.forEach((config, index) => {
+        ORIGINAL_AIR_SHOWERS.forEach((_config, index) => {
           const chamberName = chamberNames[index];
           const indicators = [0, 1].map(door => mesh(scene, chamberName + '-indicator-' + door).material as PBRMaterial);
           const jets = [0, 1, 2, 3].map(jet => mesh(scene, chamberName + '-jet-' + jet).material as PBRMaterial);

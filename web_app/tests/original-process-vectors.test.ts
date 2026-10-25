@@ -34,7 +34,7 @@ it('matches frozen-source MES and all source telemetry categories with explicit 
 it('preserves source MES action timestamps and wraps all 25 wafer slots', () => {
   let job = createProcessMesJob(fixture.mesEquipment, 1000);
   for (const vector of fixture.mesActions) {
-    job = applyMesAction(job, vector.action as MesAction, 2000);
+    job = applyMesAction(job, vector.action as MesAction);
     expect(job).toEqual(vector.job);
   }
 });

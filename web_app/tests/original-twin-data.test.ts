@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { FAB_LAYOUT } from '../src/fab-layout';
-import { ORIGINAL_TWIN_UI, filterReferenceEquipment, filterOriginalOem, buildOriginalSignalRegistry, projectOriginalSignalStates } from '../src/original-twin-data';
+import { ORIGINAL_TWIN_UI, filterReferenceEquipment, filterOriginalOem, buildOriginalSignalRegistry } from '../src/original-twin-data';
+import { createDemoState, demoReducer } from '../src/twin-equipment';
 
 it('preserves the final 18-row directory separately from 121 placements and the original stale 67 badge', () => {
   expect(ORIGINAL_TWIN_UI.equipment).toHaveLength(18);
@@ -29,9 +30,9 @@ it('reproduces all 220 original signal keys and last-writer targets for record a
 
 it('keeps source state keys distinct from the visible last-written light state', () => {
   const history=[{key:FAB_LAYOUT[8].recordId,state:'idle' as const},{key:'TG02_TRACK_01',state:'down' as const}];
-  const result=projectOriginalSignalStates(history);
-  expect(result.layout[8]).toBe('down');
-  expect(result.layout[14]).toBe('idle');
+  const result=history.reduce((state,event)=>demoReducer(state,{type:'manual-key',...event}),createDemoState(42));
+  expect(result.states[8]).toBe('down');
+  expect(result.states[14]).toBe('idle');
   expect(result.keys[FAB_LAYOUT[8].recordId]).toBe('idle');
   expect(result.keys['TG02_TRACK_01']).toBe('down');
 });

@@ -87,5 +87,6 @@ validated by `createOrderedEquipmentStatusConsumer` and dispatched into
   so StrictMode replay cannot reread a URL already changed by persistence effects.
 - Imports and submissions retain request identity in Redux; late results cannot
   restore a cleared import or select a run belonging to a former site.
-- `api-client.ts` remains a small standalone transport used by its contract tests;
-  application pages no longer construct it.
+- The obsolete `api-client.ts` was removed in the 2026-10-25 cleanup. Transport
+  guarantees are tested against actual RTK endpoints in `tests/rtk-api.test.ts`.
+  There is no second application HTTP client or custom polling loop.

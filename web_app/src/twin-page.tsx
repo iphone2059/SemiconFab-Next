@@ -3,7 +3,7 @@ import { useTwinLocale, TwinLocaleProvider } from './twin-i18n';
 import { useEffect, useMemo, useRef } from 'react';
 import { shallowEqual } from 'react-redux';
 import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus, type EquipmentStatusSnapshot } from './equipment-status';
-import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
+import { FAB_LAYOUT, FAB_TOOL_STATE_META, type FabToolState } from './fab-layout';
 import type { AmhsStats, CutAxis, PickedTool, SceneLayer, XRayFilter } from './fab-scene';
 import { FabViewport, type FabViewportHandle } from './fab-viewer';
 import { TwinSidebar } from './twin-sidebar';
@@ -20,8 +20,8 @@ import { DEMO_TICK_MS, projectReplayStates, resolveScenario, TWIN_LAYOUT_IDENTIT
 import { cleanroomPressureField } from './cleanroom-pressure';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from './original-tour';
 import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
-import { twinApi, useGetSitesQuery, useGetEquipmentStatusQuery, useGetResearchEventsQuery, useGetWaferRoutesQuery } from './store/api';
-import { twinUiActions, twinPageActions, type TwinPageState } from './store/twinUiSlice';
+import { useGetSitesQuery, useGetEquipmentStatusQuery, useGetResearchEventsQuery, useGetWaferRoutesQuery } from './store/api';
+import { twinUiActions, twinPageActions } from './store/twinUiSlice';
 import { twinDemoActions } from './store/twinDemoSlice';
 import { runtimeActions } from './store/runtimeSlice';
 import { createCoalescedDispatcher } from './store/telemetry-buffer';
@@ -138,20 +138,13 @@ function TwinContent() {
   const setSelected = (value?: PickedTool) => dispatch(twinPageActions.selectedSet(value));
   const setSelection = (value?: TwinSelection) => dispatch(twinPageActions.selectionSet(value));
   const setReplayBase = (value: readonly FabToolState[]) => dispatch(twinPageActions.replayBaseSet(value));
-  const setLiveToolStates = (value: FabToolState[]) => dispatch(twinPageActions.liveStatesSet(value));
-  const setStatusFeed = (value: { updatedAt: string; stale: boolean } | undefined) => dispatch(twinPageActions.statusFeedSet(value));
-  const setAmhs = (value: AmhsStats | undefined) => dispatch(twinPageActions.amhsSet(value));
   const setInfoDialog = (value: 'architecture' | 'database' | null) => dispatch(twinPageActions.infoDialogSet(value));
-  const setShowResearchUtil = (value: boolean) => dispatch(twinPageActions.showResearchUtilToggled());
+  const toggleResearchUtil = () => dispatch(twinPageActions.showResearchUtilToggled());
   const setOnboardingDontShow = (value: boolean) => dispatch(twinPageActions.onboardingDontShowSet(value));
   const setTourRemainingMs = (value: number) => dispatch(twinPageActions.tourRemainingSet(value));
   const setYmsOpen = (value: boolean) => dispatch(twinPageActions.ymsOpenSet(value));
   const setYmsTab = (value: 'map' | 'yield') => dispatch(twinPageActions.ymsTabSet(value));
-  const setWaferPattern = (value: DefectPattern) => dispatch(twinPageActions.ymsPatternSet(value));
-  const setWaferSeed = (value: number | ((seed: number) => number)) => {
-    if (typeof value === 'function') dispatch(twinPageActions.ymsSeedIncremented());
-    else dispatch(twinPageActions.ymsSeedIncremented());
-  };
+  const selectWaferPattern = (value: DefectPattern) => dispatch(twinPageActions.ymsRandomize(value));
   const setHoverDie = (value: { r: number; c: number; bin: BinCode } | undefined) => dispatch(twinPageActions.ymsHoverDieSet(value));
   const setDieArea = (value: number) => dispatch(twinPageActions.ymsDieAreaSet(value));
   const setDefectD0 = (value: number) => dispatch(twinPageActions.ymsDefectD0Set(value));
@@ -438,7 +431,6 @@ function TwinContent() {
     for (const state of toolStates) counts[state] += 1;
     return counts;
   }, [toolStates]);
-  const utilization = (stateCounts.running / FAB_LAYOUT.length) * 100;
   const pressure = cleanroomPressureField(selected?.x ?? 0, selected?.z ?? 0);
 
   function setCamera(next: CameraView): void {
@@ -819,7 +811,7 @@ function TwinContent() {
                   <div><span>ACTIVE</span><strong>{researchSnapshot.activeTools}</strong><small>tools</small></div>
                   <div><span>TOP UTIL</span><strong>{(researchSnapshot.utilization[0]?.utilization ?? 0).toFixed(1)}%</strong><small>{researchSnapshot.utilization[0]?.toolGroup ?? '—'}</small></div>
                 </div>
-                <button id="btn-toggle-util-overlay" type="button" className="twin-research-util-toggle" aria-pressed={showResearchUtil} onClick={() => setShowResearchUtil(!showResearchUtil)}>{t("利用率热力图")}</button>
+                <button id="btn-toggle-util-overlay" type="button" className="twin-research-util-toggle" aria-pressed={showResearchUtil} onClick={toggleResearchUtil}>{t("利用率热力图")}</button>
                 {showResearchUtil && <div id="research-utilization-overlay" className="twin-research-util">
                   {researchSnapshot.utilization.slice(0, 4).map((group) => (
                     <div key={group.toolGroup}>
@@ -888,12 +880,12 @@ function TwinContent() {
                   <aside className="twin-patterns">
                     <span className="twin-yms-label">WM-811K PATTERNS</span>
                     {(Object.keys(WM811K_DEFECT_METADATA) as DefectPattern[]).map((pattern) => (
-                      <button type="button" key={pattern} className={waferPattern === pattern ? 'active' : ''} onClick={() => { setWaferPattern(pattern); setWaferSeed((seed) => seed + 1); }}>
+                      <button type="button" key={pattern} className={waferPattern === pattern ? 'active' : ''} onClick={() => selectWaferPattern(pattern)}>
                         <b>{WM811K_DEFECT_METADATA[pattern].name}</b>
                         <small>{WM811K_DEFECT_METADATA[pattern].confidence} confidence</small>
                       </button>
                     ))}
-                    <button type="button" className="twin-yms-random" onClick={() => { const patterns = Object.keys(WM811K_DEFECT_METADATA) as DefectPattern[]; setWaferPattern(patterns[Math.floor(Math.random() * patterns.length)]); setWaferSeed((seed) => seed + 1); }}>{t("随机模式")}</button>
+                    <button type="button" className="twin-yms-random" onClick={() => { const patterns = Object.keys(WM811K_DEFECT_METADATA) as DefectPattern[]; selectWaferPattern(patterns[Math.floor(Math.random() * patterns.length)]); }}>{t("随机模式")}</button>
                   </aside>
                   <div className="twin-wafer-stage">
                     <svg viewBox="0 0 320 320" role="img" aria-label="300mm wafer die map">
