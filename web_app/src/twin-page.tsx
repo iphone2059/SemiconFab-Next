@@ -229,6 +229,7 @@ function TwinContent() {
     const modal = new URL(location.href).searchParams.get('modal');
     if (modal === 'database' || modal === 'catalog') dispatch(twinPageActions.infoDialogSet('database'));
     else if (modal === 'arch') dispatch(twinPageActions.infoDialogSet('architecture'));
+    else if (modal === 'yms') { dispatch(twinPageActions.ymsOpenSet(true)); dispatch(twinPageActions.ymsTabSet('map')); }
   }, []);
 
   useEffect(() => {
@@ -406,7 +407,8 @@ function TwinContent() {
 
   useEffect(() => {
     try {
-      if (localStorage.getItem(ONBOARDING_KEY) !== '1') dispatch(twinUiActions.onboardingOpen());
+      const modal = new URL(location.href).searchParams.get('modal');
+      if (!modal && localStorage.getItem(ONBOARDING_KEY) !== '1') dispatch(twinUiActions.onboardingOpen());
     } catch {
       // Storage may be blocked; the page still works without onboarding memory.
     }

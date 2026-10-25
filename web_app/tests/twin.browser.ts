@@ -205,5 +205,15 @@ async function pressEscape() {
   await until(`document.querySelector('.twin-status')?.getAttribute('title')?.startsWith('WebGPU ·')`);
   await evaluate(`(()=>{const input=document.querySelector('#search-input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Lithography');input.dispatchEvent(new Event('input',{bubbles:true}))})()`);
   await until(`document.querySelectorAll('#equipment-list [data-equipment-id]').length > 0 && document.querySelectorAll('#equipment-list [data-equipment-id]').length < 18`);
+
+  await command('Page.navigate', { url: baseUrl + '/twin?lang=en&modal=arch' });
+  await until(`!!document.querySelector('#open-architecture-modal')`);
+  assert.equal(await evaluate(`!!document.querySelector('.twin-onboarding')`), false);
+  await pressEscape();
+  await until(`!document.querySelector('#open-architecture-modal')`);
+  await command('Page.navigate', { url: baseUrl + '/twin?lang=en&modal=yms' });
+  await until(`!!document.querySelector('.twin-yms')`);
+  await evaluate(`document.querySelector('.twin-yms-close').click()`);
+  await until(`!document.querySelector('.twin-yms')`);
   return { controls: true, exclusiveModes: true, escapeWithFocusedControl: true, language: true, fontFloorPx: 12, singlePage: true };
 }
