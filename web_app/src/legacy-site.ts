@@ -396,6 +396,8 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     fab.applyPersonnelFrame(frame);
     architecture.applyAirShowerFrames(frame.airShowers);
   });
+  // Read-only diagnostics for `?perf` acceptance runs; product UI never reads this.
+  const perfDiagnostics = new URLSearchParams(location.search).has('perf') ? { personnelTimeline } : {};
   const subfabParent = new TransformNode('subfab-facilities-parent', scene);
   const subfabDense = buildOriginalSubfabFacilities(scene, subfabParent);
   subfabDense.setVisible(false);
@@ -435,7 +437,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     .filter(mesh => mesh !== fab.floor && !mesh.name.startsWith('procedural-slab') && !mesh.name.startsWith('status-') && mesh.metadata?.staticShadowCaster !== false);
   const shadows = createNativeStaticShadows(scene, scene.getEngine() as WebGPUEngine, keyLight,
     () => staticCasters);
-  scene.metadata = { ...scene.metadata, staticShadows: shadows };
+  scene.metadata = { ...scene.metadata, staticShadows: shadows, ...perfDiagnostics };
   const layerVisibility = { ceiling: false, roof: false, subfab: false, amhs: true, heatmap: false, airflow: false };
   let basementActive = false;
   let dualActive = false;

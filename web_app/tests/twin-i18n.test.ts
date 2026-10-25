@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { twinTranslator, persistTwinLanguage } from '../src/twin-i18n';
 import { readTwinLanguage } from '../src/preferences';
+import { GENERATED_TWIN_EN } from '../src/twin-translations.generated';
 
 it('honors URL, both original preference keys and browser language in order', () => {
   const storage = { getItem: (key: string) => key === 'semiconfab_lang' ? 'zh-CN' : null };
@@ -28,4 +29,14 @@ it('translates controls, tool states and parameterized HUD labels without transl
   expect(en('回放加载失败：{0}', ['HTTP 503'])).toBe('Replay load failed: HTTP 503');
   expect(en('TWINSCAN NXE:3400C')).toBe('TWINSCAN NXE:3400C');
   expect(twinTranslator('zh')('跟随晶圆')).toBe('跟随晶圆');
+});
+
+it('uses the frozen source copy as the authoritative English label', () => {
+  const en = twinTranslator('en');
+  for (const source of ['爆炸解构', '气流热力图', '开放软件架构'] as const) {
+    expect(GENERATED_TWIN_EN[source], source).toBeTruthy();
+    expect(en(source)).toBe(GENERATED_TWIN_EN[source]);
+  }
+  expect(en('爆炸解构')).toBe('Explode');
+  expect(twinTranslator('zh')('Explode')).toBe('爆炸解构');
 });

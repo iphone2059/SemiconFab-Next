@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, type PropsWithChildren }
 import { useAppDispatch, useAppSelector } from './store/hooks';
 import { localeActions } from './store/localeSlice';
 import { TWIN_EN } from './twin-translations';
+import { GENERATED_TWIN_EN } from './twin-translations.generated';
 import { languageTag } from './preferences';
 
 export type TwinLanguage = 'zh' | 'en';
@@ -12,10 +13,13 @@ export function persistTwinLanguage(storage: Pick<Storage, 'setItem'>, language:
   } catch { /* The current page can still switch language. */ }
 }
 
-const reverse = new Map(Object.entries(TWIN_EN).map(([zh, en]) => [en, zh]));
+// Frozen-source copy wins for every zh string present in the extracted inventory; the
+// hand-written map only augments Next-specific labels the source never had.
+const TWIN_EN_ALL: Readonly<Record<string, string>> = { ...TWIN_EN, ...GENERATED_TWIN_EN };
+const reverse = new Map(Object.entries(TWIN_EN_ALL).map(([zh, en]) => [en, zh]));
 export function twinTranslator(language: TwinLanguage) {
   return (text: string, parameters: readonly unknown[] = []): string => {
-    const translated = language === 'en' ? TWIN_EN[text] ?? text : reverse.get(text) ?? text;
+    const translated = language === 'en' ? TWIN_EN_ALL[text] ?? text : reverse.get(text) ?? text;
     return translated.replace(/\{(\d+)\}/g, (_, index: string) => String(parameters[Number(index)] ?? ''));
   };
 }

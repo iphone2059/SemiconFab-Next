@@ -1,6 +1,14 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { ORIGINAL_EXPLODED_LINKS, explodedLinkFrame } from '../src/original-exploded-link-data';
+const fixture = JSON.parse(readFileSync(new URL('./fixtures/original-exploded-links.json', import.meta.url), 'utf8'));
 describe('frozen SemiconFab exploded equipment connections', () => {
+  it('matches the frozen-source FAB_EQUIPMENT table row-for-row', () => {
+    expect(fixture.equipmentCount).toBe(69);
+    expect(fixture.sourceLines.FAB_EQUIPMENT).toEqual([5061, 7482]);
+    expect(fixture.sourceSha256).toBe('f7e013b1d01b53ba89984ee75280211a8b29db76b17bc5025eb30035e4a26687');
+    expect(fixture.pairs).toEqual(ORIGINAL_EXPLODED_LINKS);
+  });
   it('has 12 exact B1-to-L1 connections', () => {
     expect(ORIGINAL_EXPLODED_LINKS).toHaveLength(12);
     expect(new Set(ORIGINAL_EXPLODED_LINKS.map(x => x.subId)).size).toBe(12);

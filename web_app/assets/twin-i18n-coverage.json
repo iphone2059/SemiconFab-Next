@@ -1,0 +1,1588 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "tools/audit_twin_i18n_coverage.mjs",
+  "generatorCommand": "node tools/audit_twin_i18n_coverage.mjs",
+  "source": {
+    "fixture": "web_app/assets/original-twin-i18n.json",
+    "fixtureSha256": "b9cf4435ae0a90143eaea1497688594e27e7d768eec4a9c2d8bc94c89cbcc280",
+    "module": "web_app/src/twin-translations.generated.ts",
+    "twinTranslations": "web_app/src/twin-translations.ts",
+    "generatedMapEntries": 281,
+    "generatedCollisions": 9,
+    "twinEnEntries": 175
+  },
+  "generated": {
+    "entries": {
+      "sourcePairs": 308,
+      "uniqueZh": 281,
+      "collapsedDuplicates": 27,
+      "collisions": 9
+    },
+    "fixtureCounts": {
+      "keys": 132,
+      "attributeRefs": 133,
+      "uniqueAttributeKeys": 133,
+      "missingDictionaryKeys": 1,
+      "dynamic": 176,
+      "missing": 6,
+      "skipped": 16
+    },
+    "sourceSha256": {
+      "twin.html": "f7e013b1d01b53ba89984ee75280211a8b29db76b17bc5025eb30035e4a26687",
+      "js/translations.js": "9583c939e0310bc37b556a6b4e5a0220e66d1030706d1adc2b71a51bd97ed46c",
+      "js/i18n.js": "195551a502c0446b2735f513f4365899e93272fa709c60d150701243dddfceef"
+    },
+    "fixtureSha256": "b9cf4435ae0a90143eaea1497688594e27e7d768eec4a9c2d8bc94c89cbcc280",
+    "collisionPolicy": "first occurrence in fixture order wins; all distinct en values are listed in first-appearance order",
+    "collisionKeys": [
+      "先进封装与异构集成区",
+      "光学缺陷暗场检测区",
+      "动态 3D 截面剖切透析",
+      "化学机械研磨平坦化区",
+      "在线微观量测与椭偏仪区",
+      "待补充",
+      "正在步向黄光风淋气闸",
+      "等离子干法刻蚀区",
+      "薄膜沉积与外延区"
+    ]
+  },
+  "scope": {
+    "scanRoot": "web_app/src",
+    "fileExtensions": [
+      ".ts",
+      ".tsx"
+    ],
+    "excluded": [
+      ".d.ts"
+    ],
+    "twinUiRule": "file imports the twin i18n hook module (useTwinLocale surface)",
+    "callRule": "t(<literal zh>), t(<literal zh>, <literal en>), t(<literal zh>, [parameters]); non-literal first arguments are counted, not paired",
+    "scannedFiles": [
+      "web_app/src/aerodynamics.ts",
+      "web_app/src/airflow-texture.ts",
+      "web_app/src/amhs-timeline.ts",
+      "web_app/src/babylon-lifecycle.ts",
+      "web_app/src/babylon-webgpu.ts",
+      "web_app/src/catalog-data.ts",
+      "web_app/src/catalog-page.tsx",
+      "web_app/src/charting.tsx",
+      "web_app/src/cleanroom-pressure.ts",
+      "web_app/src/contracts.generated.ts",
+      "web_app/src/contracts.ts",
+      "web_app/src/dialog-focus.ts",
+      "web_app/src/equipment-status.ts",
+      "web_app/src/error-boundary.tsx",
+      "web_app/src/fab-layout.ts",
+      "web_app/src/fab-scene.ts",
+      "web_app/src/fab-viewer.tsx",
+      "web_app/src/fab-yield.ts",
+      "web_app/src/layout-identities.ts",
+      "web_app/src/legacy-site.ts",
+      "web_app/src/main.tsx",
+      "web_app/src/native-shadow-material.ts",
+      "web_app/src/native-static-shadows.ts",
+      "web_app/src/original-environment.ts",
+      "web_app/src/original-exploded-link-data.ts",
+      "web_app/src/original-exploded-links.ts",
+      "web_app/src/original-facility-architecture.ts",
+      "web_app/src/original-icons.tsx",
+      "web_app/src/original-lighting.ts",
+      "web_app/src/original-patrol-status.ts",
+      "web_app/src/original-roof-hvac.ts",
+      "web_app/src/original-subfab-facilities.ts",
+      "web_app/src/original-tool-geometry.ts",
+      "web_app/src/original-tour.ts",
+      "web_app/src/original-twin-data.ts",
+      "web_app/src/personnel-timeline.ts",
+      "web_app/src/preferences.ts",
+      "web_app/src/procedural-fab.ts",
+      "web_app/src/process-control.ts",
+      "web_app/src/research-replay.ts",
+      "web_app/src/scenario.ts",
+      "web_app/src/state-sync.ts",
+      "web_app/src/store/api.ts",
+      "web_app/src/store/catalogSlice.ts",
+      "web_app/src/store/hooks.ts",
+      "web_app/src/store/localeSlice.ts",
+      "web_app/src/store/runtimeSlice.ts",
+      "web_app/src/store/store.ts",
+      "web_app/src/store/telemetry-buffer.ts",
+      "web_app/src/store/twinDemoSlice.ts",
+      "web_app/src/store/twinUiSlice.ts",
+      "web_app/src/store/workbenchSlice.ts",
+      "web_app/src/subfab-utilities.ts",
+      "web_app/src/twin-dialogs.tsx",
+      "web_app/src/twin-elevation.tsx",
+      "web_app/src/twin-equipment.ts",
+      "web_app/src/twin-i18n.tsx",
+      "web_app/src/twin-inspector.tsx",
+      "web_app/src/twin-page.tsx",
+      "web_app/src/twin-sidebar.tsx",
+      "web_app/src/twin-spatial.ts",
+      "web_app/src/twin-state.ts",
+      "web_app/src/twin-translations.generated.ts",
+      "web_app/src/twin-translations.ts",
+      "web_app/src/ui.tsx",
+      "web_app/src/viewer-zoom.ts",
+      "web_app/src/wafer-map.ts",
+      "web_app/src/wafer-route.ts",
+      "web_app/src/widgets.tsx",
+      "web_app/src/workbench.tsx",
+      "web_app/src/xray-hologram.ts"
+    ],
+    "twinUiFiles": [
+      "web_app/src/fab-viewer.tsx",
+      "web_app/src/original-twin-data.ts",
+      "web_app/src/twin-dialogs.tsx",
+      "web_app/src/twin-inspector.tsx",
+      "web_app/src/twin-page.tsx",
+      "web_app/src/twin-sidebar.tsx"
+    ]
+  },
+  "totals": {
+    "literalPairs": 178,
+    "twinUiPairs": 137,
+    "otherUiPairs": 41,
+    "explicitPairs": 41,
+    "oneArgPairs": 136,
+    "parameterizedPairs": 1,
+    "frozenMappedPairs": 20,
+    "twinEnOnlyPairs": 117,
+    "absentFromBothMaps": 41,
+    "matchedFrozen": 0,
+    "frozenContradictions": 0,
+    "allowlistedContradictions": 0,
+    "unallowlistedContradictions": 0,
+    "absentExplicitPairs": 41,
+    "emptyEnglishArguments": 0,
+    "nonStringEnglishArguments": 0,
+    "nonLiteralFirstArgumentCalls": 11
+  },
+  "surfaces": {
+    "twin-ui": {
+      "literalPairs": 137,
+      "twinUiPairs": 137,
+      "otherUiPairs": 0,
+      "explicitPairs": 0,
+      "oneArgPairs": 136,
+      "parameterizedPairs": 1,
+      "frozenMappedPairs": 20,
+      "twinEnOnlyPairs": 115,
+      "absentFromBothMaps": 2,
+      "matchedFrozen": 0,
+      "frozenContradictions": 0,
+      "allowlistedContradictions": 0,
+      "unallowlistedContradictions": 0,
+      "absentExplicitPairs": 0,
+      "emptyEnglishArguments": 0,
+      "nonStringEnglishArguments": 0,
+      "nonLiteralFirstArgumentCalls": 0
+    },
+    "other-ui": {
+      "literalPairs": 41,
+      "twinUiPairs": 0,
+      "otherUiPairs": 41,
+      "explicitPairs": 41,
+      "oneArgPairs": 0,
+      "parameterizedPairs": 0,
+      "frozenMappedPairs": 0,
+      "twinEnOnlyPairs": 2,
+      "absentFromBothMaps": 39,
+      "matchedFrozen": 0,
+      "frozenContradictions": 0,
+      "allowlistedContradictions": 0,
+      "unallowlistedContradictions": 0,
+      "absentExplicitPairs": 41,
+      "emptyEnglishArguments": 0,
+      "nonStringEnglishArguments": 0,
+      "nonLiteralFirstArgumentCalls": 0
+    }
+  },
+  "files": [
+    {
+      "path": "web_app/src/catalog-page.tsx",
+      "surface": "other-ui",
+      "literalPairs": 41,
+      "twinUiPairs": 0,
+      "otherUiPairs": 0,
+      "explicitPairs": 41,
+      "oneArgPairs": 0,
+      "parameterizedPairs": 0,
+      "frozenMappedPairs": 0,
+      "twinEnOnlyPairs": 2,
+      "absentFromBothMaps": 39,
+      "matchedFrozen": 0,
+      "frozenContradictions": 0,
+      "allowlistedContradictions": 0,
+      "unallowlistedContradictions": 0,
+      "absentExplicitPairs": 41,
+      "emptyEnglishArguments": 0,
+      "nonStringEnglishArguments": 0,
+      "nonLiteralFirstArgumentCalls": 0
+    },
+    {
+      "path": "web_app/src/fab-viewer.tsx",
+      "surface": "twin-ui",
+      "literalPairs": 3,
+      "twinUiPairs": 0,
+      "otherUiPairs": 0,
+      "explicitPairs": 0,
+      "oneArgPairs": 3,
+      "parameterizedPairs": 0,
+      "frozenMappedPairs": 0,
+      "twinEnOnlyPairs": 3,
+      "absentFromBothMaps": 0,
+      "matchedFrozen": 0,
+      "frozenContradictions": 0,
+      "allowlistedContradictions": 0,
+      "unallowlistedContradictions": 0,
+      "absentExplicitPairs": 0,
+      "emptyEnglishArguments": 0,
+      "nonStringEnglishArguments": 0,
+      "nonLiteralFirstArgumentCalls": 0
+    },
+    {
+      "path": "web_app/src/twin-dialogs.tsx",
+      "surface": "twin-ui",
+      "literalPairs": 15,
+      "twinUiPairs": 0,
+      "otherUiPairs": 0,
+      "explicitPairs": 0,
+      "oneArgPairs": 15,
+      "parameterizedPairs": 0,
+      "frozenMappedPairs": 1,
+      "twinEnOnlyPairs": 13,
+      "absentFromBothMaps": 1,
+      "matchedFrozen": 0,
+      "frozenContradictions": 0,
+      "allowlistedContradictions": 0,
+      "unallowlistedContradictions": 0,
+      "absentExplicitPairs": 0,
+      "emptyEnglishArguments": 0,
+      "nonStringEnglishArguments": 0,
+      "nonLiteralFirstArgumentCalls": 0
+    },
+    {
+      "path": "web_app/src/twin-inspector.tsx",
+      "surface": "twin-ui",
+      "literalPairs": 20,
+      "twinUiPairs": 0,
+      "otherUiPairs": 0,
+      "explicitPairs": 0,
+      "oneArgPairs": 20,
+      "parameterizedPairs": 0,
+      "frozenMappedPairs": 0,
+      "twinEnOnlyPairs": 19,
+      "absentFromBothMaps": 1,
+      "matchedFrozen": 0,
+      "frozenContradictions": 0,
+      "allowlistedContradictions": 0,
+      "unallowlistedContradictions": 0,
+      "absentExplicitPairs": 0,
+      "emptyEnglishArguments": 0,
+      "nonStringEnglishArguments": 0,
+      "nonLiteralFirstArgumentCalls": 0
+    },
+    {
+      "path": "web_app/src/twin-page.tsx",
+      "surface": "twin-ui",
+      "literalPairs": 99,
+      "twinUiPairs": 0,
+      "otherUiPairs": 0,
+      "explicitPairs": 0,
+      "oneArgPairs": 98,
+      "parameterizedPairs": 1,
+      "frozenMappedPairs": 19,
+      "twinEnOnlyPairs": 80,
+      "absentFromBothMaps": 0,
+      "matchedFrozen": 0,
+      "frozenContradictions": 0,
+      "allowlistedContradictions": 0,
+      "unallowlistedContradictions": 0,
+      "absentExplicitPairs": 0,
+      "emptyEnglishArguments": 0,
+      "nonStringEnglishArguments": 0,
+      "nonLiteralFirstArgumentCalls": 0
+    }
+  ],
+  "allowlistPolicy": "An explicit English argument that contradicts the frozen en value is only tolerated for a declared Next-specific label (zhCN + explicitEn) carrying a non-empty justification. Empty, non-string, non-allowlisted contradictory and stale allowlist entries are hard failures.",
+  "allowlist": [],
+  "findings": {
+    "absentFromBothMaps": [
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 442,
+        "surface": "other-ui",
+        "zhCN": "文件超过 10 MiB。",
+        "explicitEn": "File exceeds 10 MiB.",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 449,
+        "surface": "other-ui",
+        "zhCN": "导入失败",
+        "explicitEn": "Import failed",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 460,
+        "surface": "other-ui",
+        "zhCN": "主导航",
+        "explicitEn": "Main navigation",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 461,
+        "surface": "other-ui",
+        "zhCN": "基地工作台",
+        "explicitEn": "Workbench",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 474,
+        "surface": "other-ui",
+        "zhCN": "设备对比",
+        "explicitEn": "Compare",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 486,
+        "surface": "other-ui",
+        "zhCN": "切换主题",
+        "explicitEn": "Toggle theme",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 501,
+        "surface": "other-ui",
+        "zhCN": "让设备差异，清晰可见。",
+        "explicitEn": "See how the tools compare.",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 502,
+        "surface": "other-ui",
+        "zhCN": "从设备开始，理解晶圆工厂。",
+        "explicitEn": "Understand the fab, one tool at a time.",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 505,
+        "surface": "other-ui",
+        "zhCN": "前道制造与封装测试设备 · 原始规格、字段来源与估算依据",
+        "explicitEn": "Front-end & OSAT equipment · Original specifications, provenance and estimates",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 513,
+        "surface": "other-ui",
+        "zhCN": "条设备记录",
+        "explicitEn": "equipment records",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 518,
+        "surface": "other-ui",
+        "zhCN": "本地预览：仅替换此页面显示，不会上传、批准或修改基地设备。",
+        "explicitEn": "Local preview: this page only. No upload, approval or Site equipment changes. Export JSON to share local data.",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 522,
+        "surface": "other-ui",
+        "zhCN": "迁移自原版设备库。L1 / draft 为历史标签；估价为带日期的参考区间。",
+        "explicitEn": "Migrated from the original catalog. L1 / draft are legacy labels; estimates are dated reference ranges.",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 531,
+        "surface": "other-ui",
+        "zhCN": "重新读取服务端目录",
+        "explicitEn": "Reload server catalog",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 536,
+        "surface": "other-ui",
+        "zhCN": "设备对比结果",
+        "explicitEn": "Comparison results",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 541,
+        "surface": "other-ui",
+        "zhCN": "目录中未找到：",
+        "explicitEn": "Not found in catalog: ",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 542,
+        "surface": "other-ui",
+        "zhCN": "移除",
+        "explicitEn": "Remove",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 549,
+        "surface": "other-ui",
+        "zhCN": "设备领域",
+        "explicitEn": "Equipment domain",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 560,
+        "surface": "other-ui",
+        "zhCN": "全部设备",
+        "explicitEn": "All equipment",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 565,
+        "surface": "other-ui",
+        "zhCN": "载入本地 JSON",
+        "explicitEn": "Load local JSON",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 588,
+        "surface": "other-ui",
+        "zhCN": "导出目录",
+        "explicitEn": "Export catalog",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 592,
+        "surface": "other-ui",
+        "zhCN": "恢复服务端目录",
+        "explicitEn": "Restore server catalog",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 603,
+        "surface": "other-ui",
+        "zhCN": "厂商、型号或分类…",
+        "explicitEn": "Vendor, model or category…",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 611,
+        "surface": "other-ui",
+        "zhCN": "设备分类",
+        "explicitEn": "Category",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 619,
+        "surface": "other-ui",
+        "zhCN": "所有分类",
+        "explicitEn": "All categories",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 639,
+        "surface": "other-ui",
+        "zhCN": "隐藏 draft 记录",
+        "explicitEn": "Hide draft records",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 648,
+        "surface": "other-ui",
+        "zhCN": "正在读取目录…",
+        "explicitEn": "Loading catalog…",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 659,
+        "surface": "other-ui",
+        "zhCN": "对比",
+        "explicitEn": "Compare",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 660,
+        "surface": "other-ui",
+        "zhCN": "设备型号",
+        "explicitEn": "Equipment",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 661,
+        "surface": "other-ui",
+        "zhCN": "分类",
+        "explicitEn": "Category",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 662,
+        "surface": "other-ui",
+        "zhCN": "原版等级 / 完整度",
+        "explicitEn": "Legacy level / completeness",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 663,
+        "surface": "other-ui",
+        "zhCN": "估算价格 / USD",
+        "explicitEn": "Estimated price / USD",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 664,
+        "surface": "other-ui",
+        "zhCN": "详情",
+        "explicitEn": "Details",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 704,
+        "surface": "other-ui",
+        "zhCN": "查看规格",
+        "explicitEn": "Inspect",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 715,
+        "surface": "other-ui",
+        "zhCN": "暂无可用目录，请重试或载入本地 JSON。",
+        "explicitEn": "Catalog unavailable. Retry or load local JSON.",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 719,
+        "surface": "other-ui",
+        "zhCN": "没有匹配设备，请调整筛选条件。",
+        "explicitEn": "No matching tools. Adjust the filters.",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 724,
+        "surface": "other-ui",
+        "zhCN": "上一页",
+        "explicitEn": "Previous",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 733,
+        "surface": "other-ui",
+        "zhCN": "下一页",
+        "explicitEn": "Next",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 741,
+        "surface": "other-ui",
+        "zhCN": "数据许可",
+        "explicitEn": "Data license",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 745,
+        "surface": "other-ui",
+        "zhCN": "原始数据与来源保留 · 型号目录独立于运行状态",
+        "explicitEn": "Original data & provenance preserved · Catalog independent of Run state",
+        "kind": "explicit"
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 77,
+        "surface": "twin-ui",
+        "zhCN": "关闭",
+        "explicitEn": null,
+        "kind": "one-arg"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 46,
+        "surface": "twin-ui",
+        "zhCN": "尺寸",
+        "explicitEn": null,
+        "kind": "one-arg"
+      }
+    ],
+    "twinEnOnly": [
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 467,
+        "surface": "other-ui",
+        "zhCN": "设备目录",
+        "explicitEn": "Catalog",
+        "twinEn": "Equipment Catalog"
+      },
+      {
+        "file": "web_app/src/catalog-page.tsx",
+        "line": 598,
+        "surface": "other-ui",
+        "zhCN": "搜索设备",
+        "explicitEn": "Search equipment",
+        "twinEn": "Search equipment"
+      },
+      {
+        "file": "web_app/src/fab-viewer.tsx",
+        "line": 107,
+        "surface": "twin-ui",
+        "zhCN": "场景初始化失败",
+        "explicitEn": null,
+        "twinEn": "Scene initialization failed"
+      },
+      {
+        "file": "web_app/src/fab-viewer.tsx",
+        "line": 171,
+        "surface": "twin-ui",
+        "zhCN": "FAB WebGPU 场景",
+        "explicitEn": null,
+        "twinEn": "FAB WebGPU scene"
+      },
+      {
+        "file": "web_app/src/fab-viewer.tsx",
+        "line": 176,
+        "surface": "twin-ui",
+        "zhCN": "重新加载",
+        "explicitEn": null,
+        "twinEn": "Reload"
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 71,
+        "surface": "twin-ui",
+        "zhCN": "OEM 数据库",
+        "explicitEn": null,
+        "twinEn": "OEM Database"
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 81,
+        "surface": "twin-ui",
+        "zhCN": "搜索 OEM 数据库",
+        "explicitEn": null,
+        "twinEn": "Search OEM database"
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 81,
+        "surface": "twin-ui",
+        "zhCN": "搜索型号、厂商、规格或工艺节点…",
+        "explicitEn": null,
+        "twinEn": "Search by model, OEM vendor, specs, or process node..."
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 82,
+        "surface": "twin-ui",
+        "zhCN": "工艺段",
+        "explicitEn": null,
+        "twinEn": "Segment"
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 83,
+        "surface": "twin-ui",
+        "zhCN": "全部工艺段",
+        "explicitEn": null,
+        "twinEn": "All Segments"
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 86,
+        "surface": "twin-ui",
+        "zhCN": "厂商",
+        "explicitEn": null,
+        "twinEn": "Vendor"
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 87,
+        "surface": "twin-ui",
+        "zhCN": "全部厂商",
+        "explicitEn": null,
+        "twinEn": "All Vendors"
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 100,
+        "surface": "twin-ui",
+        "zhCN": "复制记录",
+        "explicitEn": null,
+        "twinEn": "Copy record"
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 100,
+        "surface": "twin-ui",
+        "zhCN": "查看",
+        "explicitEn": null,
+        "twinEn": "View"
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 104,
+        "surface": "twin-ui",
+        "zhCN": "没有匹配的 OEM 记录",
+        "explicitEn": null,
+        "twinEn": "No matching OEM records"
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 108,
+        "surface": "twin-ui",
+        "zhCN": "搜索开源工具 (secsgem, pyspc, PySTDF, SimPy, ClickHouse)…",
+        "explicitEn": null,
+        "twinEn": "Search open-source tools (secsgem, pyspc, PySTDF, SimPy, ClickHouse)..."
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 108,
+        "surface": "twin-ui",
+        "zhCN": "搜索架构",
+        "explicitEn": null,
+        "twinEn": "Search architecture"
+      },
+      {
+        "file": "web_app/src/twin-dialogs.tsx",
+        "line": 123,
+        "surface": "twin-ui",
+        "zhCN": "没有匹配的架构条目",
+        "explicitEn": null,
+        "twinEn": "No matching architecture entries"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 38,
+        "surface": "twin-ui",
+        "zhCN": "设备详情",
+        "explicitEn": null,
+        "twinEn": "Tool details"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 39,
+        "surface": "twin-ui",
+        "zhCN": "关闭设备详情",
+        "explicitEn": null,
+        "twinEn": "Close tool details"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 44,
+        "surface": "twin-ui",
+        "zhCN": "厂商",
+        "explicitEn": null,
+        "twinEn": "Vendor"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 45,
+        "surface": "twin-ui",
+        "zhCN": "型号",
+        "explicitEn": null,
+        "twinEn": "Model"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 47,
+        "surface": "twin-ui",
+        "zhCN": "重量",
+        "explicitEn": null,
+        "twinEn": "Weight"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 48,
+        "surface": "twin-ui",
+        "zhCN": "来源等级",
+        "explicitEn": null,
+        "twinEn": "Source tier"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 63,
+        "surface": "twin-ui",
+        "zhCN": "设备详情",
+        "explicitEn": null,
+        "twinEn": "Tool details"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 64,
+        "surface": "twin-ui",
+        "zhCN": "关闭设备详情",
+        "explicitEn": null,
+        "twinEn": "Close tool details"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 69,
+        "surface": "twin-ui",
+        "zhCN": "厂商",
+        "explicitEn": null,
+        "twinEn": "Vendor"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 70,
+        "surface": "twin-ui",
+        "zhCN": "型号",
+        "explicitEn": null,
+        "twinEn": "Model"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 71,
+        "surface": "twin-ui",
+        "zhCN": "尺寸 (m)",
+        "explicitEn": null,
+        "twinEn": "Dimensions (m)"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 72,
+        "surface": "twin-ui",
+        "zhCN": "重量",
+        "explicitEn": null,
+        "twinEn": "Weight"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 73,
+        "surface": "twin-ui",
+        "zhCN": "位置",
+        "explicitEn": null,
+        "twinEn": "Location"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 74,
+        "surface": "twin-ui",
+        "zhCN": "来源等级",
+        "explicitEn": null,
+        "twinEn": "Source tier"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 84,
+        "surface": "twin-ui",
+        "zhCN": "OEM 目录",
+        "explicitEn": null,
+        "twinEn": "OEM catalog"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 85,
+        "surface": "twin-ui",
+        "zhCN": "联动设备",
+        "explicitEn": null,
+        "twinEn": "Linked tool"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 86,
+        "surface": "twin-ui",
+        "zhCN": "设备状态干预",
+        "explicitEn": null,
+        "twinEn": "Tool state override"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 89,
+        "surface": "twin-ui",
+        "zhCN": "完整度",
+        "explicitEn": null,
+        "twinEn": "Completeness"
+      },
+      {
+        "file": "web_app/src/twin-inspector.tsx",
+        "line": 89,
+        "surface": "twin-ui",
+        "zhCN": "记录状态",
+        "explicitEn": null,
+        "twinEn": "Record status"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 121,
+        "surface": "twin-ui",
+        "zhCN": "回放数据加载失败",
+        "explicitEn": null,
+        "twinEn": "Replay data load failed"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 122,
+        "surface": "twin-ui",
+        "zhCN": "路线加载失败",
+        "explicitEn": null,
+        "twinEn": "Route load failed"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 182,
+        "surface": "twin-ui",
+        "zhCN": "指定的 FAB 站点不存在：{0}",
+        "explicitEn": null,
+        "twinEn": "The requested FAB site does not exist: {0}"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 182,
+        "surface": "twin-ui",
+        "zhCN": "没有可用的 FAB 站点",
+        "explicitEn": null,
+        "twinEn": "No FAB site is available"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 183,
+        "surface": "twin-ui",
+        "zhCN": "当前产品必须只有一个 FAB",
+        "explicitEn": null,
+        "twinEn": "This product requires exactly one FAB"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 191,
+        "surface": "twin-ui",
+        "zhCN": "FAB 数据加载失败",
+        "explicitEn": null,
+        "twinEn": "FAB data load failed"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 593,
+        "surface": "twin-ui",
+        "zhCN": "无法加载 FAB",
+        "explicitEn": null,
+        "twinEn": "Unable to load FAB"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 593,
+        "surface": "twin-ui",
+        "zhCN": "返回工作台",
+        "explicitEn": null,
+        "twinEn": "Back to workspace"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 596,
+        "surface": "twin-ui",
+        "zhCN": "正在加载 FAB…",
+        "explicitEn": null,
+        "twinEn": "Loading FAB…"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 611,
+        "surface": "twin-ui",
+        "zhCN": "楼层",
+        "explicitEn": null,
+        "twinEn": "Levels"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 619,
+        "surface": "twin-ui",
+        "zhCN": "相机预设",
+        "explicitEn": null,
+        "twinEn": "Camera presets"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 624,
+        "surface": "twin-ui",
+        "zhCN": "跟踪巡检工程师",
+        "explicitEn": null,
+        "twinEn": "Track inspection engineer"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 624,
+        "surface": "twin-ui",
+        "zhCN": "跟踪巡检工程师",
+        "explicitEn": null,
+        "twinEn": "Track inspection engineer"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 627,
+        "surface": "twin-ui",
+        "zhCN": "图层",
+        "explicitEn": null,
+        "twinEn": "Layers"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 641,
+        "surface": "twin-ui",
+        "zhCN": "B01 场景控制",
+        "explicitEn": null,
+        "twinEn": "B01 Scenario Controls"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 642,
+        "surface": "twin-ui",
+        "zhCN": "请选择本地 DEMO 状态来源",
+        "explicitEn": null,
+        "twinEn": "Select the local DEMO status source"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 650,
+        "surface": "twin-ui",
+        "zhCN": "状态来源",
+        "explicitEn": null,
+        "twinEn": "Status source"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 657,
+        "surface": "twin-ui",
+        "zhCN": "爆炸视图",
+        "explicitEn": null,
+        "twinEn": "Exploded view"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 659,
+        "surface": "twin-ui",
+        "zhCN": "爆炸视图比例",
+        "explicitEn": null,
+        "twinEn": "Explode factor"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 665,
+        "surface": "twin-ui",
+        "zhCN": "剖切平面",
+        "explicitEn": null,
+        "twinEn": "Section plane"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 667,
+        "surface": "twin-ui",
+        "zhCN": "剖切轴",
+        "explicitEn": null,
+        "twinEn": "Cut axis"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 670,
+        "surface": "twin-ui",
+        "zhCN": "剖切位置",
+        "explicitEn": null,
+        "twinEn": "Cut position"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 676,
+        "surface": "twin-ui",
+        "zhCN": "屋顶与 HVAC：示意图",
+        "explicitEn": null,
+        "twinEn": "Roof & HVAC: Schematic"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 680,
+        "surface": "twin-ui",
+        "zhCN": "AERODYNAMICS · 层流与压差",
+        "explicitEn": null,
+        "twinEn": "AERODYNAMICS · Laminar flow and pressure"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 681,
+        "surface": "twin-ui",
+        "zhCN": "黄光区 +30 Pa → 主工艺区 +15 Pa → 灰区 0 Pa",
+        "explicitEn": null,
+        "twinEn": "Litho +30 Pa → Main bay +15 Pa → Ambient 0 Pa"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 682,
+        "surface": "twin-ui",
+        "zhCN": "主工艺区",
+        "explicitEn": null,
+        "twinEn": "Main process bay"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 683,
+        "surface": "twin-ui",
+        "zhCN": "压差热力图",
+        "explicitEn": null,
+        "twinEn": "Pressure Heatmap"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 684,
+        "surface": "twin-ui",
+        "zhCN": "1500 层流粒子 · 原版示意压差场",
+        "explicitEn": null,
+        "twinEn": "1500 laminar particles · original schematic pressure field"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 684,
+        "surface": "twin-ui",
+        "zhCN": "B1 隐藏洁净室粒子",
+        "explicitEn": null,
+        "twinEn": "Cleanroom particles hidden in B1"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 684,
+        "surface": "twin-ui",
+        "zhCN": "；非实测 CFD",
+        "explicitEn": null,
+        "twinEn": "; schematic, not measured CFD"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 716,
+        "surface": "twin-ui",
+        "zhCN": "设备详情",
+        "explicitEn": null,
+        "twinEn": "Tool details"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 717,
+        "surface": "twin-ui",
+        "zhCN": "关闭设备详情",
+        "explicitEn": null,
+        "twinEn": "Close tool details"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 723,
+        "surface": "twin-ui",
+        "zhCN": "FAB 实例",
+        "explicitEn": null,
+        "twinEn": "FAB instance"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 724,
+        "surface": "twin-ui",
+        "zhCN": "实例标识",
+        "explicitEn": null,
+        "twinEn": "Instance ID"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 725,
+        "surface": "twin-ui",
+        "zhCN": " · 原版别名被覆盖",
+        "explicitEn": null,
+        "twinEn": " · overridden original alias"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 725,
+        "surface": "twin-ui",
+        "zhCN": "回放别名",
+        "explicitEn": null,
+        "twinEn": "Replay alias"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 726,
+        "surface": "twin-ui",
+        "zhCN": "尺寸 (mm)",
+        "explicitEn": null,
+        "twinEn": "Dimensions (mm)"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 727,
+        "surface": "twin-ui",
+        "zhCN": "位置 (m)",
+        "explicitEn": null,
+        "twinEn": "Position (m)"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 728,
+        "surface": "twin-ui",
+        "zhCN": "本地布局 / OEM 目录",
+        "explicitEn": null,
+        "twinEn": "Local layout / OEM catalog"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 728,
+        "surface": "twin-ui",
+        "zhCN": "来源",
+        "explicitEn": null,
+        "twinEn": "Source"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 730,
+        "surface": "twin-ui",
+        "zhCN": "在场景中定位",
+        "explicitEn": null,
+        "twinEn": "Focus this tool in 3D"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 731,
+        "surface": "twin-ui",
+        "zhCN": "设备状态干预",
+        "explicitEn": null,
+        "twinEn": "Tool state override"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 734,
+        "surface": "twin-ui",
+        "zhCN": "状态干预限本地 DEMO；MES / SPC 为页面演示，不持久化、不发送后端制造命令。",
+        "explicitEn": null,
+        "twinEn": "State overrides apply only to local DEMO. MES / SPC are page demonstrations, are not persisted and send no manufacturing commands."
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 798,
+        "surface": "twin-ui",
+        "zhCN": "正在载入 27,263 行展示事件…",
+        "explicitEn": null,
+        "twinEn": "Loading 27,263 display events…"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 799,
+        "surface": "twin-ui",
+        "zhCN": "回放加载失败：",
+        "explicitEn": null,
+        "twinEn": "Replay load failed: "
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 815,
+        "surface": "twin-ui",
+        "zhCN": "回放时间轴",
+        "explicitEn": null,
+        "twinEn": "Replay timeline"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 818,
+        "surface": "twin-ui",
+        "zhCN": "播放",
+        "explicitEn": null,
+        "twinEn": "Play"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 818,
+        "surface": "twin-ui",
+        "zhCN": "暂停",
+        "explicitEn": null,
+        "twinEn": "Pause"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 828,
+        "surface": "twin-ui",
+        "zhCN": "利用率热力图",
+        "explicitEn": null,
+        "twinEn": "Utilization heatmap"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 839,
+        "surface": "twin-ui",
+        "zhCN": "/121 台；未映射设备保留进入回放前的状态。217 台仿真设备与布局不是一一对应。AMHS 为独立动画时钟，JSONL 无运输事件。",
+        "explicitEn": null,
+        "twinEn": "/121 tools. Unmapped tools retain their pre-replay state. The 217 simulation machines do not map one-to-one to the layout. AMHS uses an independent animation clock; JSONL contains no transport events."
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 839,
+        "surface": "twin-ui",
+        "zhCN": "只读展示事件流，不是 Checkpoint/WAL。原版别名命中",
+        "explicitEn": null,
+        "twinEn": "Read-only display events, not Checkpoint/WAL. Original aliases map "
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 847,
+        "surface": "twin-ui",
+        "zhCN": "关闭晶圆跟随",
+        "explicitEn": null,
+        "twinEn": "Close Wafer Follow"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 848,
+        "surface": "twin-ui",
+        "zhCN": "路线加载失败：",
+        "explicitEn": null,
+        "twinEn": "Route load failed: "
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 849,
+        "surface": "twin-ui",
+        "zhCN": "正在加载 A/B/C 路线…",
+        "explicitEn": null,
+        "twinEn": "Loading product A/B/C routes…"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 854,
+        "surface": "twin-ui",
+        "zhCN": "晶圆产品",
+        "explicitEn": null,
+        "twinEn": "Wafer product"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 866,
+        "surface": "twin-ui",
+        "zhCN": "晶圆流转中…",
+        "explicitEn": null,
+        "twinEn": "Navigating…"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 868,
+        "surface": "twin-ui",
+        "zhCN": "晶圆路线步骤",
+        "explicitEn": null,
+        "twinEn": "Wafer route step"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 870,
+        "surface": "twin-ui",
+        "zhCN": "播放",
+        "explicitEn": null,
+        "twinEn": "Play"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 870,
+        "surface": "twin-ui",
+        "zhCN": "暂停",
+        "explicitEn": null,
+        "twinEn": "Pause"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 871,
+        "surface": "twin-ui",
+        "zhCN": "重播",
+        "explicitEn": null,
+        "twinEn": "Replay"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 873,
+        "surface": "twin-ui",
+        "zhCN": "跟随",
+        "explicitEn": null,
+        "twinEn": "Follow"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 889,
+        "surface": "twin-ui",
+        "zhCN": "关闭 YMS",
+        "explicitEn": null,
+        "twinEn": "Close YMS"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 902,
+        "surface": "twin-ui",
+        "zhCN": "随机模式",
+        "explicitEn": null,
+        "twinEn": "Random pattern"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 949,
+        "surface": "twin-ui",
+        "zhCN": "此原版场景的旧设备 ID 不在当前布局中，未施加类别级 DOWN：",
+        "explicitEn": null,
+        "twinEn": "These original scenario IDs are absent from the layout; no category-wide DOWN override was applied: "
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 973,
+        "surface": "twin-ui",
+        "zhCN": "网格: 6m × 6m · Subfab: -7.0m",
+        "explicitEn": null,
+        "twinEn": "Grid: 6m × 6m · Subfab: -7.0m"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 977,
+        "surface": "twin-ui",
+        "zhCN": "FAB-01 · 单 FAB",
+        "explicitEn": null,
+        "twinEn": "FAB-01 · single FAB"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 978,
+        "surface": "twin-ui",
+        "zhCN": "工艺分区图例",
+        "explicitEn": null,
+        "twinEn": "Process zone legend"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 985,
+        "surface": "twin-ui",
+        "zhCN": "X-Ray 过滤",
+        "explicitEn": null,
+        "twinEn": "X-Ray filters"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 990,
+        "surface": "twin-ui",
+        "zhCN": "关闭 X-Ray",
+        "explicitEn": null,
+        "twinEn": "Close X-Ray"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 998,
+        "surface": "twin-ui",
+        "zhCN": "关闭导览",
+        "explicitEn": null,
+        "twinEn": "Close Tour"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 998,
+        "surface": "twin-ui",
+        "zhCN": "跳过",
+        "explicitEn": null,
+        "twinEn": "Skip"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 1003,
+        "surface": "twin-ui",
+        "zhCN": "导览站点",
+        "explicitEn": null,
+        "twinEn": "Tour stops"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 1010,
+        "surface": "twin-ui",
+        "zhCN": "下一站",
+        "explicitEn": null,
+        "twinEn": "Next stop"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 1010,
+        "surface": "twin-ui",
+        "zhCN": "完成",
+        "explicitEn": null,
+        "twinEn": "Finish"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 1024,
+        "surface": "twin-ui",
+        "zhCN": "首次引导",
+        "explicitEn": null,
+        "twinEn": "Onboarding"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 1026,
+        "surface": "twin-ui",
+        "zhCN": "跳过引导",
+        "explicitEn": null,
+        "twinEn": "Skip onboarding"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 1026,
+        "surface": "twin-ui",
+        "zhCN": "首次进入 ·",
+        "explicitEn": null,
+        "twinEn": "First visit ·"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 1031,
+        "surface": "twin-ui",
+        "zhCN": "跳过",
+        "explicitEn": null,
+        "twinEn": "Skip"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 1033,
+        "surface": "twin-ui",
+        "zhCN": "下一步",
+        "explicitEn": null,
+        "twinEn": "Next"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 1033,
+        "surface": "twin-ui",
+        "zhCN": "开始导览",
+        "explicitEn": null,
+        "twinEn": "Start Tour"
+      }
+    ],
+    "frozenContradictions": [],
+    "allowlistedContradictions": [],
+    "missingEnglishArguments": [],
+    "staleAllowlist": []
+  },
+  "checks": {
+    "ok": true,
+    "hardFailures": []
+  }
+}
