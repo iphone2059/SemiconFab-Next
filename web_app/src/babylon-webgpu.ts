@@ -410,6 +410,12 @@ export function createWebGpuBackend(): SceneBackend {
             getScene: () => scene,
             getEngine: () => engine,
             getShadow: () => scene?.metadata?.staticShadows ?? null,
+            getCameraPose: () => {
+              if (!camera) return null;
+              const p = camera.position;
+              const t = camera.target;
+              return { position: [p.x, p.y, p.z], target: [t.x, t.y, t.z] };
+            },
             getStats: () => ({
               fps: engine?.getFps() ?? 0,
               frameTimeMs: instrumentation.frameTimeCounter.current,
@@ -550,6 +556,12 @@ export function createWebGpuBackend(): SceneBackend {
         : axis === 'Y'
           ? new Plane(0, flipped, 0, -flipped * p)
           : new Plane(0, 0, flipped, -flipped * p);
+    },
+    getCameraPose(): { position: readonly [number, number, number]; target: readonly [number, number, number] } | null {
+      if (!camera) return null;
+      const p = camera.position;
+      const t = camera.target;
+      return { position: [p.x, p.y, p.z], target: [t.x, t.y, t.z] };
     },
     setView(preset: SceneViewPreset, fabId?: string): void {
       if (!camera || disposed) return;

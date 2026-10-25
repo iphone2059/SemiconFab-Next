@@ -266,7 +266,11 @@ export function createTourTimeline(scenario: TourScenario): TourTimeline {
   };
 
   const scheduleRaf = (callback: (nowMs: number) => void): void => {
-    const due = (Math.floor(clockMs / scenario.frameMs) + 1) * scenario.frameMs;
+    // Floating-point frame boundaries can make floor(clock/frame)+1 land exactly on
+    // clockMs; a due<=now RAF would then be processed forever inside one step.
+    const frameIndex = Math.floor((clockMs + 1e-9) / scenario.frameMs);
+    let due = (frameIndex + 1) * scenario.frameMs;
+    if (!(due > clockMs + 1e-9)) due = clockMs + scenario.frameMs;
     queue.push({ due, sequence: sequence++, kind: 'raf', callback });
   };
 

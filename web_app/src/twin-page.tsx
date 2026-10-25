@@ -1,6 +1,6 @@
 import { OriginalIcon } from './original-icons';
 import { useTwinLocale, TwinLocaleProvider } from './twin-i18n';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { shallowEqual } from 'react-redux';
 import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus, type EquipmentStatusSnapshot } from './equipment-status';
 import { FAB_LAYOUT, FAB_TOOL_STATE_META, type FabToolState } from './fab-layout';
@@ -19,6 +19,8 @@ import { projectTwinSceneState, type EntryMode, type TwinView as CameraView } fr
 import { DEMO_TICK_MS, projectReplayStates, resolveScenario, TWIN_LAYOUT_IDENTITIES } from './twin-equipment';
 import { cleanroomPressureField } from './cleanroom-pressure';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from './original-tour';
+import { buildTourScenario, TOUR_INITIAL_CAMERA, TOUR_INITIAL_TARGET } from './tour-scenario';
+import { createTourTimeline, type TourFrame, type TourTimeline } from './tour-wafer-timeline';
 import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
 import { useGetSitesQuery, useGetEquipmentStatusQuery, useGetResearchEventsQuery, useGetWaferRoutesQuery } from './store/api';
 import { twinUiActions, twinPageActions } from './store/twinUiSlice';
@@ -101,7 +103,7 @@ function TwinContent() {
   const researchTime = ui.research.timeSec;
   const researchPlaying = ui.research.playing;
   const researchSpeed = ui.research.speed;
-  const { siteId, siteError: error, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, amhs, infoDialog, showResearchUtil, tourRemainingMs, onboardingDontShow } = page;
+  const { siteId, siteError: error, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, amhs, infoDialog, showResearchUtil, onboardingDontShow } = page;
   const waferProduct = useAppSelector(state => state.twinPage.wafer.product);
   const waferIndex = useAppSelector(state => state.twinPage.wafer.index);
   const waferFollow = useAppSelector(state => state.twinPage.wafer.follow);
@@ -124,6 +126,10 @@ function TwinContent() {
   const layers = useMemo(() => ({ ...layerPreferences, airflow: projected.airflow, heatmap: projected.heatmap, xray: projected.xray !== null }),
     [layerPreferences, projected.airflow, projected.heatmap, projected.xray]);
   const appliedCameraView = useRef<CameraView | undefined>(undefined);
+  const tourTimelineRef = useRef<TourTimeline | null>(null);
+  const tourLoopRef = useRef<number | null>(null);
+  const tourIndexRef = useRef(-1);
+  const [tourHud, setTourHud] = useState<{ tag: string; timerText: string; progressWidth: string; activeDot: number } | null>(null);
   const statusConsumer = useRef<((value: unknown) => boolean) | undefined>(undefined);
   const liveSnapshotBatcher = useMemo(() => createCoalescedDispatcher<EquipmentStatusSnapshot>((snapshot) => {
     const states = FAB_LAYOUT.map((_, index): FabToolState => {
@@ -141,7 +147,6 @@ function TwinContent() {
   const setInfoDialog = (value: 'architecture' | 'database' | null) => dispatch(twinPageActions.infoDialogSet(value));
   const toggleResearchUtil = () => dispatch(twinPageActions.showResearchUtilToggled());
   const setOnboardingDontShow = (value: boolean) => dispatch(twinPageActions.onboardingDontShowSet(value));
-  const setTourRemainingMs = (value: number) => dispatch(twinPageActions.tourRemainingSet(value));
   const setYmsOpen = (value: boolean) => dispatch(twinPageActions.ymsOpenSet(value));
   const setYmsTab = (value: 'map' | 'yield') => dispatch(twinPageActions.ymsTabSet(value));
   const selectWaferPattern = (value: DefectPattern) => dispatch(twinPageActions.ymsRandomize(value));
@@ -264,11 +269,8 @@ function TwinContent() {
 
   useEffect(() => {
     if (!status.startsWith('WebGPU')) return;
-    if (!ui.tour.active) { scene.current?.setTour(false); return; }
-    scene.current?.setTour(true);
-    const stop = TOUR_STOPS[ui.tour.waypoint];
-    scene.current?.setCameraPose(stop.position, stop.target, stop.durationMs);
-  }, [status, ui.tour.active, ui.tour.waypoint]);
+    scene.current?.setTour(ui.tour.active);
+  }, [status, ui.tour.active]);
 
   useEffect(() => {
     if (!research) return;
@@ -395,15 +397,10 @@ function TwinContent() {
     }
   }, []);
 
-  useEffect(() => {
-    if (tourStep === undefined) return;
-    const stop = TOUR_STOPS[tourStep];
-    const total = stop.durationMs + stop.holdMs;
-    setTourRemainingMs(total);
-    const tick = window.setInterval(() => dispatch(twinPageActions.tourTick()), 250);
-    const timer = window.setTimeout(() => advanceTour(), total);
-    return () => { window.clearTimeout(timer); window.clearInterval(tick); };
-  }, [tourStep]);
+  useEffect(() => () => {
+    if (tourLoopRef.current !== null) cancelAnimationFrame(tourLoopRef.current);
+    tourTimelineRef.current?.stop();
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -565,20 +562,74 @@ function TwinContent() {
     setWaferPlaying(false);
     setWaferIndex(index);
   }
-  function startTour(): void {
-    applyTourStep(0);
+  function syncTourHud(frame: TourFrame): void {
+    setTourHud(previous => previous && previous.tag === frame.hudTag && previous.timerText === frame.timerText
+      && previous.progressWidth === frame.progressWidth && previous.activeDot === frame.activeDot
+      ? previous
+      : { tag: frame.hudTag, timerText: frame.timerText, progressWidth: frame.progressWidth, activeDot: frame.activeDot });
   }
-  function endTour(): void {
+  function finishTour(): void {
+    if (tourLoopRef.current !== null) { cancelAnimationFrame(tourLoopRef.current); tourLoopRef.current = null; }
+    tourTimelineRef.current?.stop();
+    tourTimelineRef.current = null;
+    tourIndexRef.current = -1;
+    setTourHud(null);
     dispatch(twinUiActions.tourStop());
   }
+  function startTour(): void {
+    // The frozen controller tweens from the current camera pose, exactly like
+    // tweenCamera in startCinematicTour.
+    const camera = scene.current?.getCameraPose();
+    const controller = createTourTimeline(buildTourScenario(TOUR_STOPS, language, {
+      camera: camera ? { x: camera.position[0], y: camera.position[1], z: camera.position[2] } : TOUR_INITIAL_CAMERA,
+      target: camera ? { x: camera.target[0], y: camera.target[1], z: camera.target[2] } : TOUR_INITIAL_TARGET,
+    }));
+    tourTimelineRef.current = controller;
+    tourIndexRef.current = -1;
+    controller.start();
+    applyTourStep(0);
+    setTourHud({ tag: TOUR_STOPS[0].tag, timerText: '5s', progressWidth: '100%', activeDot: 0 });
+    const frameMs = 1000 / 60;
+    let lastFrameMs = performance.now();
+    let accumulatedMs = 0;
+    const step = (): void => {
+      const active = tourTimelineRef.current;
+      if (!active) return;
+      // The frozen controller advances on 60 Hz RAF ticks. Under a slower compositor,
+      // catch up the missed virtual frames so the tour keeps source wall-clock timing.
+      const now = performance.now();
+      accumulatedMs += Math.max(0, now - lastFrameMs);
+      lastFrameMs = now;
+      const advanceCount = Math.min(8, Math.floor(accumulatedMs / frameMs));
+      if (advanceCount > 0) {
+        accumulatedMs = Math.max(0, accumulatedMs - advanceCount * frameMs);
+        for (let count = 0; count < advanceCount; count += 1) {
+          active.step();
+          if (!active.readFrame().active) { finishTour(); return; }
+        }
+      }
+      const frame = active.readFrame();
+      if (frame.index !== tourIndexRef.current) {
+        tourIndexRef.current = frame.index;
+        applyTourStep(frame.index);
+      }
+      scene.current?.setCameraPose([frame.camera.x, frame.camera.y, frame.camera.z], [frame.target.x, frame.target.y, frame.target.z], 0);
+      syncTourHud(frame);
+      tourLoopRef.current = requestAnimationFrame(step);
+    };
+    tourLoopRef.current = requestAnimationFrame(step);
+  }
+  function endTour(): void {
+    finishTour();
+  }
   function advanceTour(): void {
-    if (tourStep === undefined) return;
-    if (tourStep >= TOUR_STOPS.length - 1) endTour();
-    else applyTourStep(tourStep + 1);
+    const controller = tourTimelineRef.current;
+    if (!controller) return;
+    if (tourIndexRef.current >= TOUR_STOPS.length - 1) { finishTour(); return; }
+    controller.next();
   }
   function previousTour(): void {
-    if (tourStep === undefined) return;
-    applyTourStep(Math.max(0, tourStep - 1));
+    tourTimelineRef.current?.prev();
   }
   function dismissOnboarding(): void {
     dispatch(twinUiActions.onboardingClose());
@@ -994,15 +1045,16 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
         {tourStep !== undefined && TOUR_STOPS[tourStep] && (
           <section id="cinematic-hud" className="twin-tour-card" aria-label="Cinematic Tour">
             <div className="twin-tour-head">
-              <span>TOUR {tourStep + 1}/{TOUR_STOPS.length} · <b id="tour-hud-timer">{Math.ceil(tourRemainingMs / 1000)}s</b></span>
+              <span id="tour-hud-tag">{tourHud?.tag ?? TOUR_STOPS[tourStep].tag}</span>
+              <b id="tour-hud-timer" title={t("驻留计时")}>{tourHud?.timerText ?? ''}</b>
               <button type="button" onClick={endTour} aria-label={t("关闭导览")}>{t("跳过")}</button>
             </div>
-            <div id="tour-progress-bar" className="twin-tour-progress"><i style={{ width: `${Math.min(100, Math.max(0, 100 - (tourRemainingMs / Math.max(1, TOUR_STOPS[tourStep].durationMs + TOUR_STOPS[tourStep].holdMs)) * 100))}%` }} /></div>
+            <div id="tour-progress-bar" className="twin-tour-progress"><i style={{ width: tourHud?.progressWidth ?? '100%' }} /></div>
             <h3 id="tour-hud-title">{language === 'zh' ? TOUR_STOPS[tourStep].title : TOUR_STOPS[tourStep].titleEn}</h3>
             <p id="tour-hud-desc">{language === 'zh' ? TOUR_STOPS[tourStep].subtitle : TOUR_STOPS[tourStep].subtitleEn}</p>
             <div id="tour-dots-container" className="twin-tour-dots" role="tablist" aria-label={t("导览站点")}>
               {TOUR_STOPS.map((stop, index) => (
-                <button id={`tour-dot-${index}`} type="button" role="tab" aria-selected={index === tourStep} key={stop.title} className={index === tourStep ? 'active' : ''} onClick={() => applyTourStep(index)} aria-label={language === 'zh' ? stop.title : stop.titleEn} />
+                <button id={`tour-dot-${index}`} type="button" role="tab" aria-selected={(tourHud?.activeDot ?? tourStep) === index} key={stop.title} className={(tourHud?.activeDot ?? tourStep) === index ? 'active' : ''} title={language === 'zh' ? stop.title : stop.titleEn} aria-label={language === 'zh' ? stop.title : stop.titleEn} />
               ))}
             </div>
             <div className="twin-tour-actions">

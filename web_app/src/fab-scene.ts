@@ -39,6 +39,7 @@ export interface SceneBackend {
   dispose(): void;
   setView?(preset: SceneViewPreset, fabId?: string): void;
   setCameraPose?(position: readonly [number, number, number], target: readonly [number, number, number], durationMs: number): void;
+  getCameraPose?(): { position: readonly [number, number, number]; target: readonly [number, number, number] } | null;
   zoom?(deltaY: number): void;
   resize?(): void;
   clearSelection?(): void;
@@ -75,6 +76,9 @@ export class SceneFacade {
   }
   setCameraPose(position: readonly [number, number, number], target: readonly [number, number, number], durationMs: number): void {
     if (!this.controller.signal.aborted) this.backend.setCameraPose?.(position, target, durationMs);
+  }
+  getCameraPose(): { position: readonly [number, number, number]; target: readonly [number, number, number] } | null {
+    return this.controller.signal.aborted ? null : this.backend.getCameraPose?.() ?? null;
   }
   zoom(deltaY: number): void {
     if (!this.controller.signal.aborted) this.backend.zoom?.(deltaY);

@@ -27,6 +27,7 @@ export interface FabViewportProps {
 export interface FabViewportHandle {
   setView(preset: SceneViewPreset): void;
   setCameraPose(position: readonly [number, number, number], target: readonly [number, number, number], durationMs: number): void;
+  getCameraPose(): { position: readonly [number, number, number]; target: readonly [number, number, number] } | null;
   zoom(deltaY: number): void;
   resize(): void;
   reload(): void;
@@ -124,6 +125,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
     () => ({
       setView: (preset) => facade.current?.setView(preset),
       setCameraPose: (position, target, durationMs) => facade.current?.setCameraPose(position, target, durationMs),
+      getCameraPose: () => facade.current?.getCameraPose() ?? null,
       zoom: (deltaY) => facade.current?.zoom(deltaY),
       resize: () => facade.current?.resize(),
       reload: () => { dispatch(runtimeActions.viewerReloadRequested()); },

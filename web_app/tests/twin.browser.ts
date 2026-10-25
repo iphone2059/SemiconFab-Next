@@ -194,8 +194,12 @@ async function pressEscape() {
   await evaluate(`document.querySelector('.twin-tour').click()`);
   await until(`!!document.querySelector('.twin-tour-card')`);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-tour-dots button').length`), 5);
-  await evaluate(`document.querySelectorAll('.twin-tour-dots button')[2].click()`);
-  await until(`document.querySelector('.twin-tour-head span')?.textContent?.includes('TOUR 3/5')`);
+  // Frozen tour dots are display-only; advance with the source next-waypoint button.
+  for (let step = 0; step < 2; step += 1) {
+    await evaluate(`[...document.querySelectorAll('.twin-tour-actions button')].find(button => button.textContent.includes('下一站'))?.click()`);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  await until(`document.querySelector('.twin-tour-head span')?.textContent?.includes('WAYPOINT 3/5')`);
   await evaluate(`document.querySelector('.twin-tour-head button').click()`);
   await until(`!document.querySelector('.twin-tour-card')`);
 
