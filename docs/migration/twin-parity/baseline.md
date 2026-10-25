@@ -33,7 +33,7 @@ See [evidence/golden](evidence/golden) and its `comparison.json`. The comparison
 | P0 4. GPU/failure | Real shadow/cut pixels, depth restoration and GPUDevice.destroy recovery; completed-frame/validation gate; preserves manual camera | Instrumented 60-minute run, frame-time/memory records, repeated failure matrix and all mode combinations |
 | P1 5. B01 | DEMO Scenario, Play/Pause, 1600ms tick, per-instance four-state override; towers/counts/inspector derive one authority | Original random-stream/telemetry sequence, list/KPI exactness; backend commands remain separate |
 | P1 6. Research | 27,263 rows; original winning aliases; per-machine states; entering/re-entering replay freezes current DEMO/SSE state | Replay Golden acceptance; no AMHS events exist in JSONL, so AMHS stats are explicitly independent animation |
-| P1 7. X-Ray | System filters, ghost restoration and Cut/level mutual exclusion | WebGPU/WGSL hologram shader implementation (user decision 2026-10-25) with the frozen source material recipes as the reference look; exact six-filter rendering and shadow restoration remain open |
+| P1 7. X-Ray | System filters, ghost restoration and Cut/level mutual exclusion | WGSL hologram shader landed on source PBR equipment/floor/subfab surfaces with six-filter/restore browser evidence; frozen material recipes remain the reference look; exact six-filter Golden rendering, OHT/line shader variant and shadow restoration remain open |
 | P1 8. Facilities/dynamics | Dual OHT/24 cars, personnel, amber ceiling/floor/columns, pressure/laminar display, utility headers/pump stations, original 85×60 m roof/HVAC slab, 3 MAUs, mains/feeders/drops, 5 stacks, 70 exhaust billboards, two source air showers, six tacky mats, 1569-mesh FFU ceiling and the 793-mesh B1 industrial layer | Outer-wall/CAD architecture gaps, exact personnel/airlock/OHT timing and visuals |
 | P1 9. Wafer | A/B/C 120/104/92 steps, seek/play/pause, 1×/4×/16×, camera/trail | Original Bay/final wording and fixed-time seek/speed Golden vectors |
 | P1 10. MES/SPC | Existing local MES actions and SPC; explicit local demonstration boundary | Original inspector layout and sample vectors; no backend production persistence claimed |
@@ -82,7 +82,7 @@ en-US/zh-CN/responsive styling, exact dynamics, production-bundle and
 
 The subsequent [dead-code cleanup](../dead-code-cleanup-2026-10-25.md) retires four
 tests for removed implementations and validates the active RTK transport;
-after the 2026-10-25 locale fix the latest frontend verification is **139/139**, strict unused checks and build pass.
+after the 2026-10-25 locale fix the latest frontend verification is **141/141**, strict unused checks and build pass.
 
 ## 2026-10-25 locale scope and next phases
 
@@ -91,7 +91,7 @@ nine-language coverage is withdrawn. Canonical URL, `documentElement.lang` and
 `semiconfab_lang` values are now the locale tags, while `semicon_lang` keeps the legacy
 `zh`/`en` mirror and old `en`/`zh` URL values keep working. The catalog page no longer
 misreads `?lang=en-US` as Chinese because it reuses the same resolver. Latest frontend
-verification: **139/139 Vitest**, TypeScript and Vite build pass.
+verification: **141/141 Vitest**, TypeScript and Vite build pass.
 
 The frozen original's twin page has no theme toggle: `twin.html` only carries
 `meta[name=theme-color]` and four inert `dark:` utility classes in a decorative control;
@@ -123,6 +123,18 @@ browser evidence (Headless Chrome 155, WebGPU adapter available, 1600×900 DPR 1
 `AMHS OHT` active vehicles rose 00→06/24 within ~12 s with zero console errors or exceptions, and the
 Twin UI acceptance suite passes including a new live AMHS-HUD assertion. This is runtime integration
 evidence only: personnel/air-shower/tour/wafer vectors, Golden keyframes and visual parity remain open.
+
+The WebGPU X-Ray hologram also landed in this increment. `web_app/src/xray-hologram.ts` patches the
+source PBR equipment/floor/subfab materials with WGSL Fresnel rim, scanline modulation, cyan ghost
+tint and filter-highlight uniforms; transparency and depth-write are saved engine state restored
+exactly. The OHT track and catalog wire overlays keep the older alpha/colour path until a WGSL
+line/track variant exists (documented fallback). Local Headless Chrome 155 WebGPU evidence: all six
+filters (All/UPW/Gas/Vac/Exhaust/AMHS) activate, B1+UPW renders the highlighted subfab piping
+hologram, switching X-Ray off restores the normal scene, and the run produced zero console
+warnings/errors, JS/GPU exceptions or WGSL compilation messages. This is runtime evidence, not a
+matched Golden comparison; the frozen material recipes remain the reference look, and the exact
+six-filter pixel comparison, floor/slab/shadow restoration measurements and the OHT/line shader
+variant remain open. Latest frontend verification: **141/141 Vitest**, TypeScript and Vite build pass.
 
 ## Earlier GPU evidence interpretation
 

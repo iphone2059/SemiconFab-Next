@@ -172,6 +172,17 @@ remaining delta. Until then Phase A stays open even if unit tests pass.
   reference captures, restore leaves no residual material/shadow change, and no equipment-alpha
   mutation path remains as the primary effect.
 
+**2026-10-25 shader landing:** `web_app/src/xray-hologram.ts` renders the hologram as a WGSL
+MaterialPlugin fragment patch on the source PBR equipment/floor/subfab materials (Fresnel rim,
+scanline modulation, cyan ghost tint, filter-highlight uniforms; `depthWrite`/transparency are saved
+engine state restored exactly). The source alpha-swap path is gone for those surfaces. OHT track and
+catalog wire overlays keep the older alpha/colour path until a WGSL line/track variant exists
+(documented fallback). Local Headless Chrome 155 WebGPU evidence: all six filters activate, B1+UPW
+shows the highlighted subfab piping hologram, disabling X-Ray restores the normal scene, and the run
+produced zero console warnings/errors, JS/GPU exceptions or WGSL compilation messages. Remaining:
+matched-Golden comparison against the frozen original, floor/slab/shadow restoration measurements,
+and the OHT/line shader variant.
+
 ### B3. Scene combination matrix
 
 - `web_app/tests/scene-combination.browser.ts`: L1 / B1 / DUAL / EXPLODED × Roof / FFU / HVAC /
@@ -289,8 +300,9 @@ remaining delta. Until then Phase A stays open even if unit tests pass.
 
 - [x] Canonical locale normalization (en-US/zh-CN) with unit tests, legacy input compatibility.
 - [x] AMHS source vectors + pure controller port (exact fixture replay) and renderer wiring with browser HUD evidence.
+- [x] First X-Ray WGSL hologram shader pass on PBR equipment/floor/subfab with six-filter and restore browser evidence.
+- [ ] OHT track + catalog wire WGSL variants (remaining alpha/colour fallbacks).
 - [ ] Personnel/air-shower/tour/wafer source vectors.
-- [ ] X-Ray WGSL hologram shader (next user-requested item after AMHS).
 - [ ] B1 exploded pure math and guide-link geometry from source constants.
 - [ ] C1 i18n inventory extractor (en/zh bytes only) before touching copy.
 - [ ] Extend browser evidence and Golden tooling only after the first three artifacts land.
