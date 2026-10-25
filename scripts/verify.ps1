@@ -8,6 +8,16 @@ python -m unittest discover -s tools -p 'test_*.py'
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 python tools/migrate_legacy_data.py --check
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
+# Frozen-original vector drift gates need the read-only reference checkout; CI without it skips them.
+$originalTwin = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../SemiconFab/twin.html'))
+if (Test-Path -LiteralPath $originalTwin) {
+    node tools/build_twin_process_vectors.cjs --check
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    node tools/build_twin_dynamics_vectors.cjs --check
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
+} else {
+    Write-Host 'Skipping frozen-original vector checks: ../SemiconFab/twin.html not present.'
+}
 $fabProjects = @(Get-ChildItem -LiteralPath . -Directory |
     ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Filter *.csproj -File -ErrorAction SilentlyContinue } |
     Sort-Object FullName)
