@@ -7,6 +7,8 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { buildOriginalEquipment } from './original-tool-geometry';
 import { buildSubfabUtilities } from './subfab-utilities';
 import { buildOriginalEnvironment } from './original-environment';
+import { PERSONNEL, type PersonnelFrame } from './personnel-timeline';
+import { buildOriginalPatrolBillboard, type PatrolBillboard } from './original-patrol-status';
 
 export interface ProceduralFab {
   shell: TransformNode;
@@ -15,11 +17,16 @@ export interface ProceduralFab {
   subfab: TransformNode;
   personnel: TransformNode;
   floor: Mesh;
+  applyPersonnelFrame(frame: PersonnelFrame): void;
+  setPersonnelLanguage(language: 'zh' | 'en'): void;
 }
 
 const hex = (value: string) => Color3.FromHexString(value);
 
-function addPersonnel(scene: Scene, parent: TransformNode): void {
+function addPersonnel(scene: Scene, parent: TransformNode): {
+  apply(frame: PersonnelFrame): void;
+  setLanguage(language: 'zh' | 'en'): void;
+} {
   const suit = new StandardMaterial('procedural-suit', scene);
   suit.diffuseColor = hex('#f8fafc');
   suit.specularColor = Color3.Black();
@@ -59,30 +66,26 @@ function addPersonnel(scene: Scene, parent: TransformNode): void {
     return material;
   };
 
-  const configs = [
-    { x: -19, z: -5, rotation: 0.75, badge: '#f59e0b' },
-    { x: 2, z: -4, rotation: -1.1, badge: '#a855f7' },
-    { x: 23, z: -2, rotation: -0.2, badge: '#3b82f6' },
-    { x: 11, z: 4, rotation: Math.PI, badge: '#10b981' },
-    { x: -8, z: 21, rotation: -2.3, badge: '#06b6d4' },
-    { x: -18, z: -3, rotation: 1.4, badge: '#f59e0b', patrol: true },
-  ];
-  const walkers: {
+  // Positions and actor order are the frozen source, not an independent layout.
+  const configs = PERSONNEL;
+  let patrolBillboard: PatrolBillboard | null = null;
+  let personnelLanguage: 'zh' | 'en' = 'zh';
+  let latestPersonnelFrame: PersonnelFrame | null = null;
+  const actors: {
     group: TransformNode;
     leftLeg: TransformNode;
     rightLeg: TransformNode;
     leftArm: TransformNode;
     rightArm: TransformNode;
-    phase: number;
-    from: number;
-    to: number;
+    patrol: boolean;
+    screenMaterial: StandardMaterial | null;
   }[] = [];
   for (let index = 0; index < configs.length; index += 1) {
     const config = configs[index];
     const group = new TransformNode(`operator-${index}`, scene);
     group.parent = parent;
     group.position.set(config.x, 0, config.z);
-    group.rotation.y = config.rotation;
+    group.rotation.y = config.rotY;
 
     const groundShadow = MeshBuilder.CreateDisc(`operator-ground-shadow-${index}`, { radius: 0.46, tessellation: 24 }, scene);
     groundShadow.parent = group;
@@ -102,7 +105,7 @@ function addPersonnel(scene: Scene, parent: TransformNode): void {
     box(scene, `operator-boot-left-${index}`, 0.14, 0.14, 0.26, Vector3(0, -0.75, 0.02), boot, leftLegPivot);
     box(scene, `operator-boot-right-${index}`, 0.14, 0.14, 0.26, Vector3(0, -0.75, 0.02), boot, rightLegPivot);
     box(scene, `operator-torso-${index}`, 0.38, 0.66, 0.24, Vector3(0, 1.15, 0), suit, group);
-    box(scene, `operator-badge-${index}`, 0.08, 0.11, 0.02, Vector3(0.1, 1.32, 0.125), badgeMaterial(config.badge), group);
+    box(scene, `operator-badge-${index}`, 0.08, 0.11, 0.02, Vector3(0.1, 1.32, 0.125), badgeMaterial('#' + config.badgeColor.toString(16).padStart(6, '0')), group);
     box(scene, `operator-visormount-${index}`, 0.22, 0.08, 0.13, Vector3(0, 1.63, 0.1), visor, group);
     box(scene, `operator-mask-${index}`, 0.18, 0.08, 0.11, Vector3(0, 1.54, 0.09), suit, group);
     const hood = MeshBuilder.CreateSphere(`operator-hood-${index}`, { diameter: 0.3, segments: 12 }, scene);
@@ -132,27 +135,52 @@ function addPersonnel(scene: Scene, parent: TransformNode): void {
     handRight.material = glove;
     const tabletMesh = box(scene, `operator-tablet-${index}`, 0.26, 0.18, 0.02, Vector3(0, 1.2, 0.28), tablet, group);
     tabletMesh.rotation.x = -0.55;
-    box(scene, `operator-screen-${index}`, 0.23, 0.15, 0.006, Vector3(0, 1.2, 0.295), screen, group);
-    if ('patrol' in config && config.patrol) {
-      walkers.push({ group, leftLeg: leftLegPivot, rightLeg: rightLegPivot, leftArm: leftArmPivot, rightArm: rightArmPivot, phase: index * 1.7, from: -3, to: 15 });
-    }
+    const screenMaterial = config.isPatrol
+      ? (screen.clone('procedural-patrol-screen') as StandardMaterial | null ?? screen) : screen;
+    box(scene, `operator-screen-${index}`, 0.23, 0.15, 0.006, Vector3(0, 1.2, 0.295), screenMaterial, group);
+    if (config.isPatrol) patrolBillboard = buildOriginalPatrolBillboard(scene, group);
+    actors.push({
+      group, leftLeg: leftLegPivot, rightLeg: rightLegPivot,
+      leftArm: leftArmPivot, rightArm: rightArmPivot, patrol: config.isPatrol,
+      screenMaterial: config.isPatrol ? screenMaterial : null,
+    });
   }
 
-  scene.onBeforeRenderObservable.add(() => {
-    if (!parent.isEnabled()) return;
-    const now = performance.now() / 1000;
-    for (const walker of walkers) {
-      const wave = (Math.sin(now * 0.22 + walker.phase) + 1) / 2;
-      walker.group.position.z = walker.from + (walker.to - walker.from) * wave;
-      walker.group.rotation.y = Math.cos(now * 0.22 + walker.phase) >= 0 ? 0 : Math.PI;
-      walker.group.position.y = Math.abs(Math.sin(now * 3.2 + walker.phase)) * 0.012;
-      const stride = Math.sin(now * 3.2 + walker.phase) * 0.34;
-      walker.leftLeg.rotation.x = stride;
-      walker.rightLeg.rotation.x = -stride;
-      walker.leftArm.rotation.x = -stride * 0.65;
-      walker.rightArm.rotation.x = stride * 0.65;
+  // A single frozen-source timeline owns all six actors. No competing sinusoidal
+  // patrol animation or per-frame React state is allowed.
+  const apply = (frame: PersonnelFrame): void => {
+    latestPersonnelFrame = frame;
+    patrolBillboard?.update(frame.patrol, personnelLanguage);
+    for (let index = 0; index < actors.length; index += 1) {
+      const actor = actors[index];
+      const pose = frame.actors[index];
+      if (!pose) continue;
+      actor.group.position.set(pose.x, pose.y, pose.z);
+      actor.group.rotation.y = pose.rotY;
+      if (actor.patrol) {
+        actor.leftLeg.rotation.x = frame.patrol.legs.left;
+        actor.rightLeg.rotation.x = frame.patrol.legs.right;
+        actor.leftArm.rotation.x = frame.patrol.arms.left;
+        actor.rightArm.rotation.x = frame.patrol.arms.right;
+        if (actor.screenMaterial) {
+          const screenColor = frame.patrol.screenColor;
+          const emissive = frame.patrol.screenEmissive;
+          actor.screenMaterial.diffuseColor = Color3.FromInts(
+            screenColor >>> 16 & 255, screenColor >>> 8 & 255, screenColor & 255);
+          actor.screenMaterial.emissiveColor = Color3.FromInts(
+            emissive >>> 16 & 255, emissive >>> 8 & 255, emissive & 255);
+          actor.screenMaterial.emissiveColor.scaleInPlace(frame.patrol.screenEmissiveIntensity);
+        }
+      }
     }
-  });
+  };
+  return {
+    apply,
+    setLanguage(language) {
+      personnelLanguage = language;
+      if (latestPersonnelFrame) patrolBillboard?.update(latestPersonnelFrame.patrol, language);
+    },
+  };
 }
 
 export function buildProceduralFab(scene: Scene): ProceduralFab {
@@ -263,8 +291,12 @@ export function buildProceduralFab(scene: Scene): ProceduralFab {
 
   buildSubfabUtilities(scene, subfab);
 
-  addPersonnel(scene, personnel);
-  return { shell, equipment, ceiling, subfab, personnel, floor };
+  const personnelAdapter = addPersonnel(scene, personnel);
+  return {
+    shell, equipment, ceiling, subfab, personnel, floor,
+    applyPersonnelFrame: personnelAdapter.apply,
+    setPersonnelLanguage: personnelAdapter.setLanguage,
+  };
 }
 
 function box(

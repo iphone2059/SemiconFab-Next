@@ -23,6 +23,9 @@ import { createNativeStaticShadows } from './native-static-shadows';
 import { createAerodynamics } from './aerodynamics';
 import { advanceAmhsState, AMHS_LED_COLORS, AMHS_TRAFFIC_SEED, createAmhsRandom, createAmhsState, type AmhsStation } from './amhs-timeline';
 import { xraySurfaceState, XrayMaterialPalette, type XraySurfaceRole } from './xray-hologram';
+import { createPersonnelTimeline } from './personnel-timeline';
+import { advanceExplodeFactor, explodedPlacement, originalFloorOpacity } from './twin-spatial';
+import { buildOriginalExplodedLinks } from './original-exploded-links';
 import type { Material } from '@babylonjs/core/Materials/material';
 
 const color = (hex: string) => Color3.FromHexString(hex);
@@ -304,7 +307,7 @@ export type LegacyLayer = 'amhs' | 'ceiling' | 'roof' | 'subfab' | 'heatmap' | '
 export interface LegacyRuntime {
   setLayer(layer: LegacyLayer, visible: boolean): void;
   setToolState(index: number, state: FabToolState): void;
-  setExplodeFactor(factor: number): void;
+  setExplodeFactor(factor: number, modeActive?: boolean): void;
   setBasement(active: boolean): void;
   setDual(active: boolean): void;
   setXRayFilter(filter: XRayFilter | null): void;
@@ -366,15 +369,37 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   scene.environmentIntensity = 0;
 
   const fab = buildProceduralFab(scene);
+  const personnelTimeline = createPersonnelTimeline({
+    seed: 42, dt: 0.016, clockStartMs: 0, clockMsPerTick: 16,
+    ticks: 0, chamberUserDataMode: 'as-built',
+  });
   const roofParent = new TransformNode('roof-hvac-parent', scene);
   const roofHvac = buildOriginalRoofHvac(scene, roofParent);
   const architectureParent = new TransformNode('facility-architecture-parent', scene);
   const architecture = buildOriginalFacilityArchitecture(scene, architectureParent);
   architecture.setVisible(true);
   architecture.setCeilingVisible(false);
+  fab.applyPersonnelFrame(personnelTimeline.readInitialFrame());
+  architecture.applyAirShowerFrames(personnelTimeline.readInitialFrame().airShowers);
+  let personnelRemainder = 0;
+  scene.onBeforeRenderObservable.add(() => {
+    // Fixed 16 ms logical source clock; cap catch-up after tab resume.
+    personnelRemainder = Math.min(0.128,
+      personnelRemainder + Math.max(0, scene.getEngine().getDeltaTime() / 1000));
+    let steps = 0;
+    while (personnelRemainder >= 0.016 && steps < 8) {
+      personnelTimeline.step();
+      personnelRemainder -= 0.016;
+      steps++;
+    }
+    const frame = personnelTimeline.readFrame();
+    fab.applyPersonnelFrame(frame);
+    architecture.applyAirShowerFrames(frame.airShowers);
+  });
   const subfabParent = new TransformNode('subfab-facilities-parent', scene);
   const subfabDense = buildOriginalSubfabFacilities(scene, subfabParent);
   subfabDense.setVisible(false);
+  const explodedLinks = buildOriginalExplodedLinks(scene);
   // Replace the early procedural air-shower approximation with the source airlocks.
   for (const mesh of scene.meshes) if (mesh.name.startsWith('airshower-')) mesh.setEnabled(false);
   scene.onBeforeRenderObservable.add(() => { const now = performance.now(); roofHvac.update(now); architecture.update(now); });
@@ -415,6 +440,8 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   let basementActive = false;
   let dualActive = false;
   let explodeFactor = 0;
+  let targetExplodeFactor = 0;
+  let explodeModeActive = false;
   let xrayFilter: XRayFilter | null = null;
   const isSystemMesh = (mesh: AbstractMesh, filter: XRayFilter): boolean => {
     const name = mesh.name.toLowerCase();
@@ -467,8 +494,9 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     xrayPalette.setLineXray(false);
     xrayPalette.updateShadow(shadows.matrix, shadows.texture, false);
     if (xrayFilter !== null) {
-      fab.subfab.setEnabled(basementActive || dualActive || layerVisibility.subfab);
-      subfabDense.setVisible(basementActive || dualActive);
+      const keepVisible = explodeModeActive || explodeFactor > 0.01 || targetExplodeFactor > 0.01 || basementActive || dualActive;
+      fab.subfab.setEnabled(keepVisible || layerVisibility.subfab);
+      subfabDense.setVisible(keepVisible);
       shadows.invalidate('xray-visibility');
     }
     xrayFilter = null;
@@ -488,24 +516,32 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     updateXrayFrame();
     shadows.invalidate('xray-visibility');
   };
-  const applyExplodeFactor = (factor: number) => {
-    const next = Math.max(0, Math.min(1, factor));
-    if (next === explodeFactor) return;
-    explodeFactor = next;
-    fab.equipment.position.y = 2.4 * explodeFactor;
-    shadows.invalidate('equipment-exploded');
+  const applyExplodeFactor = (factor: number, modeActive?: boolean) => {
+    targetExplodeFactor = Math.max(0, Math.min(1, Number.isFinite(factor) ? factor : 0));
+    explodeModeActive = modeActive ?? targetExplodeFactor > 0;
   };
   const syncLevel = () => {
+    const exploded = explodeModeActive || explodeFactor > 0.01 || targetExplodeFactor > 0.01;
     const cutaway = basementActive || dualActive;
-    fab.floor.setEnabled(!cutaway);
+    // Source floor remains visible with level-specific translucent states.
+    const opacity = originalFloorOpacity(exploded ? 'EXPLODED'
+      : basementActive ? 'B1' : dualActive ? 'DUAL' : 'L1');
+    const floorMaterial = fab.floor.material;
+    if (floorMaterial instanceof PBRMaterial) {
+      floorMaterial.alpha = opacity;
+      floorMaterial.disableDepthWrite = opacity < 1;
+      floorMaterial.transparencyMode = opacity < 1
+        ? PBRMaterial.PBRMATERIAL_ALPHABLEND : PBRMaterial.PBRMATERIAL_OPAQUE;
+    }
+    fab.floor.setEnabled(true);
     fab.shell.setEnabled(!basementActive);
-    fab.subfab.setEnabled(basementActive || dualActive || layerVisibility.subfab);
-    fab.equipment.setEnabled(!basementActive);
+    fab.subfab.setEnabled(exploded || basementActive || dualActive || layerVisibility.subfab || xrayFilter !== null);
+    fab.equipment.setEnabled(exploded || !basementActive);
     fab.personnel.setEnabled(!basementActive);
     architecture.setVisible(!basementActive);
-    architecture.setCeilingVisible(!basementActive && !dualActive && layerVisibility.ceiling);
+    architecture.setCeilingVisible(exploded || (!basementActive && !dualActive && layerVisibility.ceiling));
     roofHvac.setVisible(layerVisibility.roof && !basementActive && !dualActive);
-    subfabDense.setVisible(basementActive || dualActive);
+    subfabDense.setVisible(exploded || basementActive || dualActive || xrayFilter !== null);
     amhsGroup.setEnabled(!basementActive && layerVisibility.amhs);
     heatmap.group.setEnabled(!basementActive && layerVisibility.heatmap);
     airflow.group.setEnabled(!basementActive && layerVisibility.airflow);
@@ -515,6 +551,25 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
       }
     }
   };
+
+  // Original exploded hierarchy animates at 0.08 of the remaining delta per frame.
+  scene.onBeforeRenderObservable.add(() => {
+    const previousVisible = explodeModeActive || explodeFactor > 0.01 || targetExplodeFactor > 0.01;
+    const next = advanceExplodeFactor(explodeFactor, targetExplodeFactor);
+    if (next === explodeFactor) return;
+    explodeFactor = next;
+    const placement = explodedPlacement(explodeFactor);
+    architecture.ceilingGroup.position.y = placement.ceilingY;
+    fab.subfab.position.y = placement.subfabY;
+    subfabDense.group.position.y = placement.subfabY;
+    const visibleNow = explodeModeActive || explodeFactor > 0.01 || targetExplodeFactor > 0.01;
+    // Avoid traversing thousands of meshes on every easing frame.
+    if (previousVisible !== visibleNow) syncLevel();
+    explodedLinks.setFactor(explodeFactor);
+    shadows.invalidate('exploded-hierarchy');
+  });
+  // The original animates interconnect rings even after the eased factor settles.
+  scene.onBeforeRenderObservable.add(() => explodedLinks.update(performance.now()));
 
   return {
     setLayer(layer, visible) {
@@ -545,19 +600,22 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
       }
       if (layer === 'ceiling') {
         layerVisibility.ceiling = visible;
-        architecture.setCeilingVisible(visible && !basementActive && !dualActive);
+        architecture.setCeilingVisible(explodeModeActive || targetExplodeFactor > 0.01 || explodeFactor > 0.01 || (visible && !basementActive && !dualActive));
         shadows.invalidate('ceiling-visibility');
         return;
       }
       layerVisibility.subfab = visible;
-      fab.subfab.setEnabled(visible || basementActive || dualActive);
+      const exploded = explodeModeActive || targetExplodeFactor > 0.01 || explodeFactor > 0.01;
+      fab.subfab.setEnabled(visible || basementActive || dualActive || exploded || xrayFilter !== null);
+      subfabDense.setVisible(exploded || basementActive || dualActive || xrayFilter !== null);
       shadows.invalidate('layer-visibility');
     },
     setToolState(index, state) {
       statusLights.setState(index, state);
     },
-    setExplodeFactor(factor) {
-      applyExplodeFactor(factor);
+    setExplodeFactor(factor, modeActive) {
+      applyExplodeFactor(factor, modeActive);
+      syncLevel();
     },
     setBasement(active) {
       basementActive = active;
@@ -577,6 +635,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     setLanguage(language) {
       roofHvac.setLanguage(language);
       architecture.setLanguage(language);
+      fab.setPersonnelLanguage(language);
     },
   };
 }

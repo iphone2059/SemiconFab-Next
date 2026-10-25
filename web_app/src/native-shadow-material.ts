@@ -14,7 +14,7 @@ export interface NativeShadowBinding {
 /** Key light only: ambient, emissive, environment and other lights remain independent. */
 export class NativeShadowMaterial extends MaterialPluginBase {
   constructor(material: Material, private readonly binding: NativeShadowBinding) {
-    super(material, 'FABNativeDepthShadow', 200, {}, true, true);
+    super(material, 'FABNativeDepthShadow', 200, { FABNATIVEDEPTHSHADOW: true }, true, true);
   }
   override isCompatible(language: ShaderLanguage) { return language === ShaderLanguage.WGSL; }
   override getSamplers(samplers: string[]) { samplers.push('fabShadowDepth'); }

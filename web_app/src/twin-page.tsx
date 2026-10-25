@@ -249,7 +249,7 @@ function TwinContent() {
     scene.current?.setXRayFilter(null);
     scene.current?.setBasement(basement);
     scene.current?.setDual(level === 'DUAL');
-    scene.current?.setExplodeFactor(exploded ? explodePercent / 100 : 0);
+    scene.current?.setExplodeFactor(exploded ? explodePercent / 100 : 0, exploded);
     scene.current?.setCutPlane(cutActive, cutAxis, cutPosition, cutInvert);
     scene.current?.setXRayFilter(xrayFilter);
   }, [status, basement, level, exploded, explodePercent, cutActive, cutAxis, cutPosition, cutInvert, xrayFilter]);
@@ -459,10 +459,23 @@ function TwinContent() {
     const pose = poses[next];
     scene.current?.setCameraPose(pose.position, pose.target, 850);
   }
-  function setL1(): void { dispatch(twinUiActions.levelSet('L1')); flyLevel('L1'); }
-  function setB1(): void { const next = level === 'B1' ? 'L1' : 'B1'; dispatch(twinUiActions.levelSet(next)); flyLevel(next); }
-  function setDual(): void { const next = level === 'DUAL' ? 'L1' : 'DUAL'; dispatch(twinUiActions.levelSet(next)); flyLevel(next); }
-  function toggleExploded(): void { dispatch(twinUiActions.spatialToggle('exploded')); flyLevel(level === 'EXPLODED' ? 'L1' : 'EXPLODED'); }
+  // Frozen switchFabLevel/activateSpatialMode semantics: entering Exploded always targets 100%,
+  // leaving it resets the preset to 0%; any level switch away also closes the exploded mode.
+  function leaveExploded(): void { if (exploded) dispatch(twinUiActions.explodeSet(0)); }
+  function setL1(): void { leaveExploded(); dispatch(twinUiActions.levelSet('L1')); flyLevel('L1'); }
+  function setB1(): void { const next = level === 'B1' ? 'L1' : 'B1'; leaveExploded(); dispatch(twinUiActions.levelSet(next)); flyLevel(next); }
+  function setDual(): void { const next = level === 'DUAL' ? 'L1' : 'DUAL'; leaveExploded(); dispatch(twinUiActions.levelSet(next)); flyLevel(next); }
+  function toggleExploded(): void {
+    if (exploded) {
+      dispatch(twinUiActions.explodeSet(0));
+      dispatch(twinUiActions.spatialToggle('exploded'));
+      flyLevel('L1');
+    } else {
+      dispatch(twinUiActions.spatialToggle('exploded'));
+      flyLevel('EXPLODED');
+      dispatch(twinUiActions.explodeSet(100));
+    }
+  }
   function changeExplode(percent: number): void { dispatch(twinUiActions.explodeSet(percent)); }
   function applyTourStep(index: number): void {
     const stop = TOUR_STOPS[index];
@@ -683,6 +696,7 @@ function TwinContent() {
           getToolStates={getToolStates}
           layers={layers}
           explodeFactor={level === 'EXPLODED' ? explodePercent / 100 : 0}
+          explodeMode={exploded}
           basement={basement}
           dual={level === 'DUAL'}
         />

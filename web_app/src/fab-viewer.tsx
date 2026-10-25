@@ -15,6 +15,7 @@ export interface FabViewportProps {
   onToolChange?: (tool?: PickedTool) => void;
   layers: Record<SceneLayer, boolean>;
   explodeFactor: number;
+  explodeMode?: boolean;
   basement: boolean;
   dual: boolean;
   onStatusChange?: (status: string) => void;
@@ -34,7 +35,7 @@ export interface FabViewportHandle {
   setLayer(layer: SceneLayer, visible: boolean): void;
   setToolState(index: number, state: FabToolState): void;
   setTour(active: boolean): void;
-  setExplodeFactor(factor: number): void;
+  setExplodeFactor(factor: number, modeActive?: boolean): void;
   setBasement(active: boolean): void;
   setDual(active: boolean): void;
   setCutPlane(active: boolean, axis: CutAxis, position: number, invert: boolean): void;
@@ -46,7 +47,7 @@ export interface FabViewportHandle {
 }
 
 export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(function FabViewport(
-  { site, fab, toolStates, onToolChange, layers, explodeFactor, basement, dual, onStatusChange, onAmhsStatsChange, getToolStates },
+  { site, fab, toolStates, onToolChange, layers, explodeFactor, explodeMode, basement, dual, onStatusChange, onAmhsStatsChange, getToolStates },
   ref,
 ) {
   const { t } = useTwinLocale();
@@ -131,7 +132,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
       setLayer: (layer, visible) => facade.current?.setLayer(layer, visible),
       setToolState: (index, state) => facade.current?.setToolState(index, state),
       setTour: (active) => facade.current?.setTour(active),
-      setExplodeFactor: (factor) => facade.current?.setExplodeFactor(factor),
+      setExplodeFactor: (factor, modeActive) => facade.current?.setExplodeFactor(factor, modeActive),
       setBasement: (active) => facade.current?.setBasement(active),
       setDual: (active) => facade.current?.setDual(active),
       setCutPlane: (active, axis, position, invert) => facade.current?.setCutPlane(active, axis, position, invert),
@@ -160,8 +161,8 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
   }, [layers, ready]);
   useEffect(() => {
     if (!ready) return;
-    facade.current?.setExplodeFactor(explodeFactor);
-  }, [explodeFactor, ready]);
+    facade.current?.setExplodeFactor(explodeFactor, explodeMode);
+  }, [explodeFactor, explodeMode, ready]);
   useEffect(() => { if (ready) facade.current?.setBasement(basement); }, [basement, ready]);
   useEffect(() => { if (ready) facade.current?.setDual(dual); }, [dual, ready]);
   const hovered = hoveredTool?.tool;

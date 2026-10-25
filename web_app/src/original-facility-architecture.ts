@@ -10,6 +10,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { ICanvasRenderingContext } from '@babylonjs/core/Engines/ICanvas';
 import type { Scene } from '@babylonjs/core/scene';
 import { OriginalLegacyLightFalloff } from './original-lighting';
+import type { AirShowerFrame } from './personnel-timeline';
 
 // Read-only port of the frozen original page (SemiconFab/twin.html):
 //   * buildFacilityArchitecturalInterfaces (lines 10475-10543): the two air
@@ -221,6 +222,7 @@ export interface OriginalFacilityArchitectureController {
   setCeilingVisible(visible: boolean): void;
   setLanguage(language: FacilityLanguage): void;
   update(timeMs: number): void;
+  applyAirShowerFrames(frames: readonly AirShowerFrame[]): void;
 }
 
 export interface BuildOriginalFacilityArchitectureOptions {
@@ -677,8 +679,29 @@ function buildOriginalFacilityArchitectureInternal(
     }
   };
 
+  let timelineDriven = false;
+  const applyAirShowerFrames = (frames: readonly AirShowerFrame[]): void => {
+    timelineDriven = true;
+    for (const chamber of airShowers) {
+      const frame = frames.find(value => value.id === chamber.config.equipmentId);
+      if (!frame) continue;
+      for (const indicator of chamber.indicators) {
+        materialColor(indicator, frame.indicator.color);
+        indicator.emissiveIntensity = frame.indicator.intensity;
+      }
+      chamber.jets.forEach((jet, index) => {
+        const sample = frame.jets[index];
+        if (!sample) return;
+        jet.material.alpha = sample.opacity;
+        jet.mesh.scaling.set(sample.scale, 1, sample.scale);
+      });
+      chamber.innerLight.intensity = frame.innerLight;
+      chamber.billboard.mesh.position.y = frame.labelSpriteY;
+    }
+  };
   let lastTimeMs: number | null = null;
   const update = (timeMs: number): void => {
+    if (timelineDriven) return;
     if (!Number.isFinite(timeMs)) {
       return;
     }
@@ -725,7 +748,7 @@ function buildOriginalFacilityArchitectureInternal(
     }
   };
 
-  return { group, ceilingGroup, airShowers: airShowers.map(chamber => chamber.group), setVisible, setCeilingVisible, setLanguage, update };
+  return { group, ceilingGroup, airShowers: airShowers.map(chamber => chamber.group), setVisible, setCeilingVisible, setLanguage, update, applyAirShowerFrames };
 }
 
 /** Typed entry point: original facility architecture shell plus the FFU ceiling grid. */

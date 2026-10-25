@@ -406,6 +406,10 @@ export function createWebGpuBackend(): SceneBackend {
           instrumentation.captureRenderTime = true;
           instrumentation.captureActiveMeshesEvaluationTime = true;
           const target = {
+            // Read-only diagnostics for production-bundle acceptance runs (`?perf` only).
+            getScene: () => scene,
+            getEngine: () => engine,
+            getShadow: () => scene?.metadata?.staticShadows ?? null,
             getStats: () => ({
               fps: engine?.getFps() ?? 0,
               frameTimeMs: instrumentation.frameTimeCounter.current,
@@ -454,8 +458,11 @@ export function createWebGpuBackend(): SceneBackend {
       touring = active;
       cameraTransition = undefined;
     },
-    setExplodeFactor(factor: number): void {
-      legacyRuntime?.setExplodeFactor(factor);
+    setExplodeFactor(factor: number, modeActive?: boolean): void {
+      // Exploded mode remains active at a 0% slider setting; camera poses are owned by the page
+      // (flyLevel) so level switches keep their source level pose.
+      const active = modeActive ?? factor > 0;
+      legacyRuntime?.setExplodeFactor(factor, active);
       refreshSelection();
     },
     setBasement(active: boolean): void {
