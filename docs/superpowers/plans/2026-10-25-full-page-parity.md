@@ -73,7 +73,7 @@
 **Files:** focused AMHS/personnel/airlock/wafer controllers, `twin-state.ts`, backend.
 
 - [ ] Extract source timeline vectors for OHT jobs/hoist/LED/FOUP, six people and airshower/patrol; test fixed-seed/keyframe behavior before replacing approximations. (OHT/FOUP vectors, pure port and renderer integration landed 2026-10-25 with browser HUD evidence; personnel/air-shower/tour/wafer still open.)
-- [ ] Complete exploded hierarchy/guide lines, original X-Ray filtering and spatial HUD pressure readouts. (WebGPU hologram shader path landed 2026-10-25 with six-filter/restore browser evidence; matched-Golden visual acceptance and OHT/line shader variant still open.)
+- [ ] Complete exploded hierarchy/guide lines, original X-Ray filtering and spatial HUD pressure readouts. (Single WGSL X-Ray program covers equipment/floor/subfab/OHT/catalog wires with six-filter/restore browser evidence; matched-Golden visual acceptance, hologram shadow sampling and floor/slab/shadow restoration still open.)
 - [ ] Complete original camera paths/presets/deep links, Tour/onboarding copy/countdown/control IDs, Wafer Bay/completion/seek/speed semantics.
 
 ## Task 6 — original industry math and data vectors

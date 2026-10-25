@@ -145,43 +145,44 @@ remaining delta. Until then Phase A stays open even if unit tests pass.
   expressed in shader code.** The frozen original performs a Three.js material swap; its material
   parameters are the reference look, but Next must not fake the hologram with flat alpha/material
   swaps when a shader path is feasible.
-- Shader architecture (must preserve native static shadows and device-loss rebuild):
-  - `web_app/src/xray-hologram.ts`: WGSL fragment injection (MaterialPlugin on PBR materials, or a
-    dedicated WGSL ShaderMaterial for meshes outside the PBR pipeline) rendering ghost glass with
-    Fresnel rim, scanline modulation, cyan ghost tint and an emissive-cylinder variant. Uniforms:
-    enabled, ghost strength, highlight/filter gain. Transparency and `depthWrite` are engine state
-    toggled on activation and restored exactly.
-  - Reuse the `NativeShadowMaterial` depth binding so ghost surfaces still receive native static
-    shadows; shader materials are rebuilt after a GPUDevice replacement.
-  - Subfab utility filters (ALL / UPW / GAS / VAC / EXHAUST / AMHS by original color-hex groups) are
-    applied through shader uniforms per pipe material, not per-frame JS material mutation.
-  - Reference parameters to match: ghost floor opacity 0.12/no depthWrite and slab hidden; equipment
-    ghost color `#0284c7` opacity 0.16 roughness 0.1 metalness 0.85; tall cylinder parts
-    `#38bdf8` color + `#0284c7` emissive intensity 0.95 metalness 0.8; lines `#38bdf8`
-    opacity 0.75; piping highlight opacity 1.0/emissiveIntensity 1.2 vs ghost 0.15/0.1; OHT track
-    AMHS rule.
-  - A material-swap fallback is allowed only for a mesh class where a shader conversion is proven
-    infeasible; document each fallback with evidence. No silent fallback path.
-- Files: `web_app/src/xray-hologram.ts`, `web_app/src/xray-materials.ts` (pure filter→highlight
-  mapping from source hex groups), renderer activation/restore in `legacy-site.ts`,
+- **Single implementation, no fallback path.** One WGSL vertex/fragment program
+  (`XRAY_SHADER_VERTEX`/`XRAY_SHADER_FRAGMENT`) renders every X-Ray surface. A `xrayOptions`
+  uniform selects the line-surface branch; triangle meshes (equipment, floor, subfab piping, OHT) use
+  palette `ShaderMaterial` instances that differ only in uniforms, and the catalog wire meshes keep
+  the same program permanently in `LineListDrawMode` (amber line in normal mode, cyan hologram in
+  X-Ray mode via the same shader). No MaterialPlugin, alpha mutation or side path exists.
+- `web_app/src/xray-hologram.ts` owns the program, the source-derived surface table
+  (`xraySurfaceState(role, filter, matched)`) and the palette. Source rules: equipment ghost 0.16,
+  floor ghost 0.12, subfab matching piping highlighted vs non-matching ghosted 0.15 (meshes stay
+  rendered instead of being hidden), OHT highlight for AMHS / 0.25 ghost otherwise, catalog wires cyan
+  0.75.
+- Activation saves each mesh's original material reference and restores it exactly; camera position
+  and scene time are pushed through the `xrayCamera` uniform each frame. Shader materials rebuild
+  after a GPUDevice replacement.
+- Reference parameters: ghost floor opacity 0.12; equipment ghost color `#0284c7` opacity 0.16; tall
+  cylinder parts `#38bdf8` emissive; lines `#38bdf8` opacity 0.75; piping highlight opacity
+  1.0/emissive 1.2 vs ghost 0.15/0.1; OHT AMHS rule.
+- Files: `web_app/src/xray-hologram.ts`, renderer swap/restore in `legacy-site.ts`,
   `web_app/tests/xray-hologram.test.ts`, browser capture additions.
-- Tests: WGSL source/uniform-contract unit tests; filter mapping table against source hex groups;
-  activation/restore state machine; browser compile-and-render with zero GPU validation errors, six
-  filter captures and shadow restoration; device-loss shader-material rebuild.
-- **Completion:** X-Ray renders through the WebGPU shader in the real scene, all six filters match
-  reference captures, restore leaves no residual material/shadow change, and no equipment-alpha
-  mutation path remains as the primary effect.
+- Tests: shader source/uniform contract; filter/role state table; browser compile-and-render with
+  zero WGSL/GPU validation messages, all six filters, B1+UPW subfab highlight, AMHS OHT highlight and
+  restore; device-loss shader-material rebuild.
+- **Completion:** X-Ray renders through the single WebGPU shader in the real scene for equipment,
+  floor, subfab, OHT and catalog wires; all six filters match reference captures; restore leaves no
+  residual material/shadow change.
 
-**2026-10-25 shader landing:** `web_app/src/xray-hologram.ts` renders the hologram as a WGSL
-MaterialPlugin fragment patch on the source PBR equipment/floor/subfab materials (Fresnel rim,
-scanline modulation, cyan ghost tint, filter-highlight uniforms; `depthWrite`/transparency are saved
-engine state restored exactly). The source alpha-swap path is gone for those surfaces. OHT track and
-catalog wire overlays keep the older alpha/colour path until a WGSL line/track variant exists
-(documented fallback). Local Headless Chrome 155 WebGPU evidence: all six filters activate, B1+UPW
-shows the highlighted subfab piping hologram, disabling X-Ray restores the normal scene, and the run
-produced zero console warnings/errors, JS/GPU exceptions or WGSL compilation messages. Remaining:
-matched-Golden comparison against the frozen original, floor/slab/shadow restoration measurements,
-and the OHT/line shader variant.
+**2026-10-25 single-shader landing:** the effect is now one WGSL program used by both triangle
+surfaces and the catalog wire meshes (`LineListDrawMode`); OHT and wires are part of that same
+program, so no alpha/colour side path remains. Triangle meshes are swapped onto
+`XrayMaterialPalette` materials and their original references restored; wire meshes keep the
+program permanently and only switch uniforms, rendering source amber lines in normal mode and cyan
+lines in X-Ray mode from the same shader. Subfab filters no longer hide meshes: matching piping is
+highlighted and non-matching piping is ghosted, matching the source opacity rules. Local Headless
+Chrome 155 WebGPU evidence: all six filters activate, B1+UPW renders the highlighted subfab hologram,
+AMHS highlights the OHT track, disabling X-Ray restores the normal scene, and the run produced zero
+console warnings/errors, JS/GPU exceptions or WGSL compilation messages. Remaining: matched-Golden
+comparison with the frozen original, hologram shadow sampling and floor/slab/shadow restoration
+measurements.
 
 ### B3. Scene combination matrix
 
@@ -300,8 +301,8 @@ and the OHT/line shader variant.
 
 - [x] Canonical locale normalization (en-US/zh-CN) with unit tests, legacy input compatibility.
 - [x] AMHS source vectors + pure controller port (exact fixture replay) and renderer wiring with browser HUD evidence.
-- [x] First X-Ray WGSL hologram shader pass on PBR equipment/floor/subfab with six-filter and restore browser evidence.
-- [ ] OHT track + catalog wire WGSL variants (remaining alpha/colour fallbacks).
+- [x] Single WGSL X-Ray program for equipment/floor/subfab/OHT/catalog wires (no fallback path) with six-filter, B1+UPW, AMHS and restore browser evidence.
+- [ ] Matched-Golden X-Ray comparison, hologram shadow sampling and floor/slab/shadow restoration measurements.
 - [ ] Personnel/air-shower/tour/wafer source vectors.
 - [ ] B1 exploded pure math and guide-link geometry from source constants.
 - [ ] C1 i18n inventory extractor (en/zh bytes only) before touching copy.
