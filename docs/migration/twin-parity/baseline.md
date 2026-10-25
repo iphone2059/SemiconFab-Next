@@ -82,7 +82,7 @@ en-US/zh-CN/responsive styling, exact dynamics, production-bundle and
 
 The subsequent [dead-code cleanup](../dead-code-cleanup-2026-10-25.md) retires four
 tests for removed implementations and validates the active RTK transport;
-after the 2026-10-25 locale fix and parity increments the latest frontend verification is **156/156**, strict unused checks and build pass.
+after the 2026-10-25 locale fix and parity increments the latest frontend verification is **163/163**, strict unused checks and build pass.
 
 ## 2026-10-25 locale scope and next phases
 
@@ -91,7 +91,7 @@ nine-language coverage is withdrawn. Canonical URL, `documentElement.lang` and
 `semiconfab_lang` values are now the locale tags, while `semicon_lang` keeps the legacy
 `zh`/`en` mirror and old `en`/`zh` URL values keep working. The catalog page no longer
 misreads `?lang=en-US` as Chinese because it reuses the same resolver. Latest frontend
-verification: **156/156 Vitest**, TypeScript and Vite build pass.
+verification: **163/163 Vitest**, TypeScript and Vite build pass.
 
 The frozen original's twin page has no theme toggle: `twin.html` only carries
 `meta[name=theme-color]` and four inert `dark:` utility classes in a decorative control;
@@ -165,7 +165,8 @@ tablet-screen and air-shower material animation references are dropped and the c
 becomes NaN; the `preserved` mode re-attaches the constructor outputs without adding math so the frozen
 animation vectors stay testable. The frozen `PATROL_WAYPOINTS` never resets `stateTimer` on arrival and
 every travel leg exceeds the inspect duration, so no inspect/countdown frame is observable. The
-controller is not yet wired into the renderer; visual keyframe acceptance remains open.
+controller is now wired into the renderer (see the next section); visual keyframe acceptance remains
+open.
 
 ### 2026-10-25 en-US/zh-CN twin string inventory
 
@@ -177,6 +178,39 @@ placeholder; the frozen dictionary lacks `nav_lang_toggle`), extracts 176 dynami
 documented missing strings (1 dictionary key and 5 Chinese-only toast messages) and records 16 skipped
 non-literal branches in `web_app/tests/original-twin-i18n.test.ts` (6 tests, source hashes and coverage
 asserted). The `--check` gate is wired into `scripts/verify.ps1`.
+
+### 2026-10-25 personnel renderer wiring and exploded hierarchy
+
+The repair-files iteration-2 bundle ([TWIN_PARITY_REPAIR_NOTES_2026-10-25.md](../../repair/TWIN_PARITY_REPAIR_NOTES_2026-10-25.md))
+was integrated on top of `6e4cf16` and verified locally. Fixes applied during integration:
+(1) `babylon-webgpu.ts` now forwards the explicit `modeActive` flag to the legacy runtime, so a 0%
+exploded slider keeps the mode instead of leaving it; (2) `twin-page.tsx` follows source
+activate/deactivate semantics (entering Exploded resets the preset to 100%, leaving resets it to 0%,
+level switches close the mode) and owns level camera poses; (3) `native-shadow-material.ts` declares
+the `FABNATIVEDEPTHSHADOW` define so a non-plugin PBR material cannot share a shadow-patched effect and
+emit WebGPU validation errors when new layers appear.
+
+Personnel: `procedural-fab.ts` consumes `createPersonnelTimeline` (six source actors, patrol
+limb/tablet/screen pose, overhead as-built status billboard via `original-patrol-status.ts`);
+`original-facility-architecture.ts` consumes the same frames for air-shower indicators/jets/inner
+lights/labels and disables its independent timekeeper; `legacy-site.ts` steps a fixed 16 ms source
+clock with bounded catch-up. As-built visible behaviour keeps the frozen initial billboard status.
+
+Exploded: source 0.08/frame easing, ceiling +20 m, subfab −18 m, level floor opacity
+L1=1 / B1=0.2 / DUAL=0.35 / EXPLODED=0.55, 12 reference B1→L1 conduits (source radius/height/torus/ring
+sinusoid, stable phases, excluded from static casters) and page-owned entry/exit/level camera poses.
+
+Acceptance evidence (production Vite bundle served with an `/api` proxy, Headless Chrome 155,
+WebGPU, 1600×900 DPR 1): `web_app/tests/twin-exploded.browser.ts` passed with 121 tool identities
+unchanged; 12 links; ceiling/subfab 20/−18 at 100% and 10/−9 at 50%; 0% keeps the mode and entry
+camera; floor alpha 0.55/0.2/0.35/1 across EXPLODED/B1/DUAL/L1; caster count 771→970→771; shadow cache
+settled at 95 passes; X-Ray during exploded kept 2,236 shader surfaces and restored floor alpha 0.55;
+patrol actor moved 1.66 m on the source timeline; 0 console/device errors. Evidence:
+[evidence/twin-exploded-acceptance-2026-10-25.json](evidence/twin-exploded-acceptance-2026-10-25.json)
+plus the adjacent exploded/restored PNGs. Latest frontend verification: **163/163 Vitest**, TypeScript
+and Vite build pass; the native-shadow and X-Ray acceptance suites also still pass. This is runtime
+acceptance, not a matched Golden SSIM comparison against the frozen original; source-exact visual
+parity remains open.
 
 ## Earlier GPU evidence interpretation
 

@@ -125,6 +125,14 @@ no inspect/countdown frame is observable. Renderer wiring of this controller is 
 - Extend `web_app/tests/twin-parity.browser.ts` to capture OHT load/unload, patrol airlock purge and
   air-shower frames at fixed virtual clock + camera; store JSON/PNGs in `.local/evidence/dynamics/`
   for Phase D reuse.
+- **2026-10-25 renderer wiring landing:** `procedural-fab.ts` consumes `personnel-timeline.ts`
+  (`PERSONNEL`/`PersonnelFrame`: six source actors, patrol limb/tablet/screen pose and the overhead
+  source status billboard from `original-patrol-status.ts`). `original-facility-architecture.ts`
+  consumes the same frames for air-shower indicators/jets/inner lights/label sprites and stops its
+  independent timekeeper once bound. `legacy-site.ts` advances the controller on a fixed 16 ms
+  source clock with an 8-step catch-up cap and forwards locale switches. The as-built billboard keeps
+  the frozen initial status (the frozen `userData` overwrite kills live status references); the
+  `preserved` timeline mode remains available for future opt-in Golden review.
 
 **Phase A completion:** `--check` fixtures stable; controller tests replicate the source keyframes;
 no ad-hoc timing literals remain; browser keyframes captured; baseline updated with the actual
@@ -151,6 +159,20 @@ remaining delta. Until then Phase A stays open even if unit tests pass.
   toggle, and restore exactly.
 - Tests: pure math vs source values; link count/colors; material restore invariant; browser toggles
   0/50/100 % + slider + preset + level switch, shadow restoration and no stale meshes.
+- **2026-10-25 landed:** `web_app/src/twin-spatial.ts` (0.08 easing + settle epsilon, ceiling +20 /
+  subfab −18 placement, level floor opacity), `original-exploded-link-data.ts` (12 reference B1→L1
+  pairs, never merged into the 121 layout) and `original-exploded-links.ts` (source conduit radius
+  0.14/height 7 and torus 0.28/0.04 geometry, stable pulse phases, excluded from static casters).
+  `legacy-site.ts` eases the ceiling/subfab hierarchy, applies source floor transparency per
+  L1/B1/DUAL/EXPLODED and keeps X-Ray subfab visibility; `twin-page.tsx` resets the preset to 100 on
+  entry / 0 on exit (source activate/deactivate semantics) and owns level camera poses;
+  `babylon-webgpu.ts` forwards `modeActive` to the legacy runtime. The committed
+  `web_app/tests/twin-exploded.browser.ts` verifies: 121 tool identities unchanged; 12 links with
+  source scale/midpoint/ring sinusoid; ceiling 20/subfab −18; floor alpha 1/0.2/0.35/0.55;
+  camera targets (0,−4,0) at entry and per-level exit; 0% keeps the entry camera; caster count
+  771→970→771; shadow cache settles at 95 passes; X-Ray during exploded keeps 2,236 shader surfaces
+  and restores the exploded floor state; patrol actor moves 1.66 m on the source timeline; production
+  bundle run with 0 console/device errors.
 
 ### B2. X-Ray holographic effect — WebGPU shader (source: `twin.html` 20210–20414)
 
@@ -332,6 +354,8 @@ comparison against the frozen original (Phase D1).
 - [ ] Matched-Golden X-Ray comparison against the frozen original (Phase D1).
 - [x] Personnel/air-shower source vectors + pure controller (as-built/preserved modes, 9 tests).
 - [ ] Tour/wafer source vectors.
-- [ ] B1 exploded pure math and guide-link geometry from source constants.
+- [x] B1 exploded hierarchy/floor/link math plus renderer integration and production-bundle acceptance.
+- [x] Personnel/air-shower renderer wiring (source actors, patrol pose, billboard, air showers).
+- [ ] Exploded/X-Ray/Cut/level combination matrix and matched-Golden visual comparison.
 - [x] C1 i18n inventory extractor (132 static keys, 176 dynamic pairs, 6 documented missing, 16 skipped) with --check gate.
 - [ ] Extend browser evidence and Golden tooling only after the first three artifacts land.

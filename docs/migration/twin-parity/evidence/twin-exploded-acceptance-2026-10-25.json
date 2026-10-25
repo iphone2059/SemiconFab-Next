@@ -1,0 +1,67 @@
+{
+ "capturedAt": "2026-10-25T12:09:08.057Z",
+ "page": "/twin?lang=zh-CN&mode=engineer&perf=1 served from the production Vite build",
+ "viewport": "1600x900 DPR 1",
+ "browser": "Chrome/155.0.8059.86",
+ "test": "web_app/tests/twin-exploded.browser.ts",
+ "screenshots": [
+  "twin-exploded-acceptance-2026-10-25-exploded.png",
+  "twin-exploded-acceptance-2026-10-25-restored.png"
+ ],
+ "assertions": {
+  "initial": {
+   "toolCount": 121,
+   "casterCount": 771,
+   "floorAlpha": 1
+  },
+  "exploded": {
+   "ceilingY": 20,
+   "subfabY": -18,
+   "cameraTargetY": -4,
+   "links": 12,
+   "casterCount": 970,
+   "shadowPasses": 95
+  },
+  "stacked": {
+   "linksEnabled": false,
+   "cameraTargetY": -4,
+   "floorAlpha": 0.55
+  },
+  "half": {
+   "ceilingY": 10,
+   "subfabY": -9,
+   "scaleY": 2.2857142857142856
+  },
+  "levels": {
+   "b1FloorAlpha": 0.2,
+   "b1CameraTargetY": -6,
+   "dualFloorAlpha": 0.35,
+   "dualCameraTargetY": -3
+  },
+  "restored": {
+   "cameraTargetY": 2,
+   "floorAlpha": 1,
+   "casterCount": 771,
+   "toolCount": 121
+  },
+  "patrolMovedMeters": 1.6631998319964443,
+  "xray": {
+   "shaderMeshes": 2236,
+   "floorRestored": "procedural-floor-material",
+   "explodedFloorAlpha": 0.55
+  },
+  "final": {
+   "toolCount": 121,
+   "deviceErrors": 0
+  }
+ },
+ "consoleErrorCount": 0,
+ "exceptionCount": 0,
+ "notes": [
+  "Exploded links are a separate 12-row reference inventory; they never join the 121 layout identities and are excluded from the static shadow caster list.",
+  "The page owns exploded entry/exit and level camera poses (source activateSpatialMode/deactivateSpatialMode): entering resets the preset to 100 mod-% and leaving resets it to 0. The backend forwards modeActive to the legacy runtime and no longer overrides level camera poses.",
+  "NativeShadowMaterial now declares the FABNATIVEDEPTHSHADOW define. Without an effect-isolating define a non-plugin PBR material could share the shadow-patched effect and produce WebGPU validation errors when new layers appeared.",
+  "Caster count is 771 at L1/restored and 970 while exploded because the subfab layer becomes visible; floor opacity follows source L1=1, B1=0.2, DUAL=0.35, EXPLODED=0.55.",
+  "This is runtime acceptance evidence, not a matched Golden SSIM comparison against the frozen original."
+ ]
+}

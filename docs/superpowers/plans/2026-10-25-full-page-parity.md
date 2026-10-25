@@ -72,8 +72,8 @@
 
 **Files:** focused AMHS/personnel/airlock/wafer controllers, `twin-state.ts`, backend.
 
-- [ ] Extract source timeline vectors for OHT jobs/hoist/LED/FOUP, six people and airshower/patrol; test fixed-seed/keyframe behavior before replacing approximations. (OHT/FOUP vectors, pure port and renderer integration landed 2026-10-25 with browser HUD evidence; personnel/air-shower vectors landed as fixtures + pure controller; tour/wafer vectors and personnel renderer wiring still open.)
-- [ ] Complete exploded hierarchy/guide lines, original X-Ray filtering and spatial HUD pressure readouts. (Single WGSL X-Ray program covers equipment/floor/subfab/OHT/catalog wires with native static shadow sampling and six-filter/restore browser acceptance; only matched-Golden visual acceptance remains open.)
+- [ ] Extract source timeline vectors for OHT jobs/hoist/LED/FOUP, six people and airshower/patrol; test fixed-seed/keyframe behavior before replacing approximations. (OHT/FOUP vectors, pure port and renderer integration landed 2026-10-25 with browser HUD evidence; personnel/air-shower vectors, their renderer wiring and the source status billboard landed too; tour/wafer vectors still open.)
+- [ ] Complete exploded hierarchy/guide lines, original X-Ray filtering and spatial HUD pressure readouts. (Single WGSL X-Ray program covers equipment/floor/subfab/OHT/catalog wires with native static shadow sampling and six-filter/restore browser acceptance; source-exact Exploded hierarchy, 12 reference conduits and level floor opacity landed and passed production-bundle acceptance; matched-Golden visual acceptance and the full combination matrix remain open.)
 - [ ] Complete original camera paths/presets/deep links, Tour/onboarding copy/countdown/control IDs, Wafer Bay/completion/seek/speed semantics.
 
 ## Task 6 — original industry math and data vectors
