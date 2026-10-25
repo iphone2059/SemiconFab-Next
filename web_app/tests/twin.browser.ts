@@ -40,6 +40,13 @@ async function pressEscape() {
   // Source-exact AMHS controller must dispatch jobs and report active vehicles in the live HUD.
   await until(`!!document.querySelector('.twin-bottom')`);
   await until(`(() => { const text = document.querySelector('.twin-bottom')?.textContent ?? ''; const hit = text.indexOf('AMHS OHT '); return hit >= 0 && Number(text.slice(hit + 9, hit + 11)) > 0; })()`, 30000);
+  // WebGPU holographic X-Ray: enable the shader path, cycle a utility filter and restore.
+  await evaluate(`document.querySelector('#btn-toggle-xray').click()`);
+  await until(`document.querySelector('#btn-toggle-xray').getAttribute('aria-pressed') === 'true' && !!document.querySelector('.twin-xray')`);
+  await evaluate(`[...document.querySelectorAll('.twin-xray button')].find(button => button.textContent?.trim() === 'UPW')?.click()`);
+  await until(`[...document.querySelectorAll('.twin-xray button')].some(button => button.className.includes('active') && button.textContent?.trim() === 'UPW')`);
+  await evaluate(`document.querySelector('#btn-toggle-xray').click()`);
+  await until(`document.querySelector('#btn-toggle-xray').getAttribute('aria-pressed') === 'false' && !document.querySelector('.twin-xray')`);
   assert.equal(await evaluate(`document.querySelectorAll('#left-sidebar').length`), 1);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-levels button').length`), 4);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-cameras button').length`), 5);

@@ -22,6 +22,8 @@ import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine';
 import { createNativeStaticShadows } from './native-static-shadows';
 import { createAerodynamics } from './aerodynamics';
 import { advanceAmhsState, AMHS_LED_COLORS, AMHS_TRAFFIC_SEED, createAmhsRandom, createAmhsState, type AmhsStation } from './amhs-timeline';
+import { createXrayHologramState, XrayHologramMaterial, xraySurfaceState, type XrayHologramState, type XraySurfaceRole } from './xray-hologram';
+import { Material } from '@babylonjs/core/Materials/material';
 
 const color = (hex: string) => Color3.FromHexString(hex);
 
@@ -416,6 +418,43 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   let xrayFilter: XRayFilter | null = null;
   const xrayMaterialAlpha = new Map<number, number>();
   const xrayVisibility = new Map<AbstractMesh, boolean>();
+  type XrayMaterialEntry = {
+    material: PBRMaterial;
+    role: XraySurfaceRole;
+    state: XrayHologramState;
+    saved: { transparencyMode: number | null; alpha: number; disableDepthWrite: boolean; forceDepthWrite: boolean };
+  };
+  const xrayMaterials: XrayMaterialEntry[] = [];
+  const xrayRoleFor = (material: PBRMaterial): XraySurfaceRole | null => {
+    if (material.name.startsWith('original-tool-material-')) return 'equipment';
+    if (material.name === 'procedural-floor-material') return 'floor';
+    if (material.name.startsWith('subfab-')) return 'subfab';
+    return null;
+  };
+  // The hologram is a WGSL fragment patch on the source PBR surfaces; attaching before the first
+  // render keeps shader compilation and plugin ordering deterministic.
+  for (const material of scene.materials) {
+    if (!(material instanceof PBRMaterial)) continue;
+    const role = xrayRoleFor(material);
+    if (!role) continue;
+    const state = createXrayHologramState();
+    new XrayHologramMaterial(material, state);
+    xrayMaterials.push({
+      material,
+      role,
+      state,
+      saved: {
+        transparencyMode: material.transparencyMode,
+        alpha: material.alpha,
+        disableDepthWrite: material.disableDepthWrite,
+        forceDepthWrite: material.forceDepthWrite,
+      },
+    });
+  }
+  scene.onBeforeRenderObservable.add(() => {
+    const time = performance.now() / 1000;
+    for (const entry of xrayMaterials) entry.state.time = time;
+  });
   const isSystemMesh = (mesh: AbstractMesh, filter: XRayFilter): boolean => {
     const name = mesh.name.toLowerCase();
     if (filter === 'amhs') return name.includes('oht') || name.includes('amhs');
@@ -426,36 +465,56 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     return name.includes('foreline') || name.includes('heated') || name.includes('exhaust');
   };
   const restoreXRay = () => {
+    for (const entry of xrayMaterials) {
+      entry.state.enabled = false;
+      entry.material.transparencyMode = entry.saved.transparencyMode;
+      entry.material.alpha = entry.saved.alpha;
+      entry.material.disableDepthWrite = entry.saved.disableDepthWrite;
+      entry.material.forceDepthWrite = entry.saved.forceDepthWrite;
+    }
+    // OHT/line materials outside the PBR plugin keep the original alpha fallback (documented delta).
     for (const material of scene.materials) {
       const alpha = xrayMaterialAlpha.get(material.uniqueId);
       if (alpha !== undefined) material.alpha = alpha;
     }
-    for (const [mesh, visible] of xrayVisibility) mesh.isVisible = visible;
     xrayMaterialAlpha.clear();
+    for (const [mesh, visible] of xrayVisibility) mesh.isVisible = visible;
     xrayVisibility.clear();
-    if (xrayFilter !== null) fab.subfab.setEnabled(basementActive || dualActive || layerVisibility.subfab);
+    if (xrayFilter !== null) {
+      fab.subfab.setEnabled(basementActive || dualActive || layerVisibility.subfab);
+      shadows.invalidate('xray-visibility');
+    }
     xrayFilter = null;
   };
   const applyXRay = (filter: XRayFilter | null) => {
     restoreXRay();
     if (!filter) return;
     xrayFilter = filter;
+    for (const entry of xrayMaterials) {
+      const surface = xraySurfaceState(entry.role, filter);
+      entry.state.enabled = surface.enabled;
+      entry.state.ghost = surface.ghost;
+      entry.state.highlight = surface.highlight;
+      entry.state.ghostAlpha = surface.ghostAlpha;
+      if (!surface.enabled) continue;
+      entry.material.transparencyMode = Material.MATERIAL_ALPHABLEND;
+      entry.material.alpha = 1;
+      entry.material.disableDepthWrite = true;
+      entry.material.forceDepthWrite = false;
+    }
     for (const material of scene.materials) {
+      if (!material.name.startsWith('native-oht-')) continue;
       xrayMaterialAlpha.set(material.uniqueId, material.alpha);
-      if (material.name.startsWith('original-tool-material-') || material.name.startsWith('subfab-')) {
-        material.alpha = filter === 'all' ? 0.18 : 0.12;
-      }
-      if (material.name.startsWith('native-oht-') && filter !== 'amhs') material.alpha = 0.18;
+      if (filter !== 'amhs') material.alpha = 0.18;
     }
     if (filter !== 'all' && filter !== 'amhs') {
       fab.subfab.setEnabled(true);
       for (const mesh of fab.subfab.getChildMeshes()) {
         xrayVisibility.set(mesh, mesh.isVisible);
-        const matches = isSystemMesh(mesh, filter);
-        mesh.isVisible = matches;
-        if (matches && mesh.material) mesh.material.alpha = 1;
+        mesh.isVisible = isSystemMesh(mesh, filter);
       }
     }
+    shadows.invalidate('xray-visibility');
   };
   const applyExplodeFactor = (factor: number) => {
     const next = Math.max(0, Math.min(1, factor));
