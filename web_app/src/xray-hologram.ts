@@ -1,119 +1,161 @@
-// WebGPU holographic X-Ray effect. The frozen original (twin.html 20210-20414) swaps
-// Three.js materials for translucent/emissive ones; Next keeps the source look but renders it
-// through a WGSL fragment patch instead of per-frame JS material swaps.
-import { MaterialPluginBase } from '@babylonjs/core/Materials/materialPluginBase';
+// Single WebGPU/WGSL implementation of the X-Ray holographic effect.
+//
+// The frozen original (twin.html 20210-20414) swaps Three.js materials per mesh class.
+// Next renders every X-Ray surface through ONE WGSL shader program: the same sources are used
+// by triangle meshes (equipment, floor, subfab piping, OHT) and by the catalog wire meshes
+// (LineListDrawMode). There is no alpha/colour material-mutation fallback left.
+import { ShaderMaterial } from '@babylonjs/core/Materials/shaderMaterial';
 import { ShaderLanguage } from '@babylonjs/core/Materials/shaderLanguage';
-import type { Material } from '@babylonjs/core/Materials/material';
-import type { UniformBuffer } from '@babylonjs/core/Materials/uniformBuffer';
-import { Color3 } from '@babylonjs/core/Maths/math.color';
+import type { Scene } from '@babylonjs/core/scene';
+import { Material } from '@babylonjs/core/Materials/material';
+import { Vector4 } from '@babylonjs/core/Maths/math.vector';
 
 export type XrayFilterName = 'all' | 'upw' | 'gas' | 'vac' | 'exhaust' | 'amhs';
 export type XraySurfaceRole = 'equipment' | 'floor' | 'subfab' | 'oht';
 
-export interface XrayHologramState {
-  enabled: boolean;
-  /** 0 = keep lit surface, 1 = full holographic ghost. */
-  ghost: number;
-  /** 0 = ghost tint, 1 = filter-highlighted utility. */
-  highlight: number;
-  tint: Color3;
-  glow: Color3;
-  ghostAlpha: number;
-  rimPower: number;
-  scanFrequency: number;
-  time: number;
-}
-
 export interface XraySurfaceState {
-  enabled: boolean;
-  ghost: number;
-  highlight: number;
+  /** Final fragment alpha in the ghost branch (0..1). */
   ghostAlpha: number;
+  /** 0 = ghost glass, 1 = filter-highlighted utility. */
+  highlight: number;
+  /** Fresnel exponent. */
+  rimPower: number;
 }
 
-export function createXrayHologramState(): XrayHologramState {
-  return {
-    enabled: false,
-    ghost: 1,
-    highlight: 0,
-    tint: Color3.FromHexString('#0284c7'),
-    glow: Color3.FromHexString('#38bdf8'),
-    ghostAlpha: 0.16,
-    rimPower: 2.2,
-    scanFrequency: 26,
-    time: 0,
-  };
-}
+export const XRAY_SURFACE_TINT = '#0284c7';
+export const XRAY_SURFACE_GLOW = '#38bdf8';
 
 /**
  * Source-derived surface modes (twin.html applyXRayGhostMaterials / applyXRayFilter):
- * equipment shells are cyan ghost glass, the cleanroom floor drops to opacity 0.12,
- * utility piping is highlighted per filter (AMHS hides it), OHT keeps the track rule.
- * The OHT rule stays on the existing alpha fallback until a WGSL line/track path exists.
+ * equipment shells are cyan ghost glass, the cleanroom floor drops to opacity 0.12, utility piping
+ * is highlighted per filter, OHT is highlighted for the AMHS filter and ghosted otherwise.
  */
-export function xraySurfaceState(role: XraySurfaceRole, filter: XrayFilterName): XraySurfaceState {
-  if (role === 'equipment') return { enabled: true, ghost: 1, highlight: 0, ghostAlpha: 0.16 };
-  if (role === 'floor') return { enabled: true, ghost: 1, highlight: 0, ghostAlpha: 0.12 };
+export function xraySurfaceState(role: XraySurfaceRole, filter: XrayFilterName, matched = true): XraySurfaceState {
+  if (role === 'equipment') return { ghostAlpha: 0.16, highlight: 0, rimPower: 2.2 };
+  if (role === 'floor') return { ghostAlpha: 0.12, highlight: 0, rimPower: 1.6 };
   if (role === 'subfab') {
-    if (filter === 'amhs') return { enabled: false, ghost: 0, highlight: 0, ghostAlpha: 0 };
-    return filter === 'all'
-      ? { enabled: true, ghost: 0.25, highlight: 1, ghostAlpha: 0.55 }
-      : { enabled: true, ghost: 0.25, highlight: 1, ghostAlpha: 0.22 };
+    if (filter === 'amhs') return { ghostAlpha: 0.15, highlight: 0, rimPower: 1.8 };
+    if (filter === 'all') return { ghostAlpha: 0.55, highlight: 1, rimPower: 1.8 };
+    return matched
+      ? { ghostAlpha: 1, highlight: 1, rimPower: 1.8 }
+      : { ghostAlpha: 0.15, highlight: 0, rimPower: 1.8 };
   }
-  return { enabled: false, ghost: 0, highlight: 0, ghostAlpha: 0 };
+  return filter === 'amhs'
+    ? { ghostAlpha: 0.9, highlight: 1, rimPower: 1.8 }
+    : { ghostAlpha: 0.25, highlight: 0, rimPower: 2.0 };
 }
 
-export const XRAY_HOLOGRAM_HOOKS = {
-  alpha: 'CUSTOM_FRAGMENT_UPDATE_ALPHA',
-  color: 'CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR',
-} as const;
+export const XRAY_SHADER_VERTEX = `attribute position: vec3f;
+uniform world: mat4x4f;
+uniform worldViewProjection: mat4x4f;
+varying vPositionW: vec3f;
+@vertex
+fn main(input : VertexInputs) -> FragmentInputs {
+  let worldPos = uniforms.world * vec4f(vertexInputs.position, 1.0);
+  vertexOutputs.vPositionW = worldPos.xyz;
+  vertexOutputs.position = uniforms.worldViewProjection * vec4f(vertexInputs.position, 1.0);
+}`;
 
-export function xrayHologramCustomCode(shaderType: string): Record<string, string> | null {
-  if (shaderType !== 'fragment') return null;
-  return {
-    [XRAY_HOLOGRAM_HOOKS.alpha]: `
-if (uniforms.xrayHologramParams.x > 0.5) {
-  alpha = mix(alpha, uniforms.xrayHologramTint.w, uniforms.xrayHologramParams.y);
-}`,
-    [XRAY_HOLOGRAM_HOOKS.color]: `
-if (uniforms.xrayHologramParams.x > 0.5) {
-  let xrayRim = pow(1.0 - abs(dot(normalize(normalW), normalize(viewDirectionW))), max(uniforms.xrayHologramParams.w, 0.001));
-  let xrayScan = 0.5 + 0.5 * sin(fragmentInputs.vPositionW.y * uniforms.xrayHologramGlow.w + uniforms.xrayHologramTime.x);
-  if (uniforms.xrayHologramParams.z > 0.5) {
-    finalColor.rgb += uniforms.xrayHologramGlow.rgb * (0.35 + 0.25 * xrayScan);
-    finalColor.a = 1.0;
+export const XRAY_SHADER_FRAGMENT = `varying vPositionW: vec3f;
+uniform xrayParams: vec4f;      // enabled, ghostAlpha, highlight, rimPower
+uniform xrayTint: vec4f;        // ghost rgb, scan frequency
+uniform xrayGlow: vec4f;        // glow rgb, scan strength
+uniform xrayCamera: vec4f;      // camera xyz, time
+uniform xrayOptions: vec4f;     // isLine, 0, 0, 0
+uniform xrayNormalColor: vec4f; // non-X-Ray appearance (line meshes)
+@fragment
+fn main(input : FragmentInputs) -> FragmentOutputs {
+  if (uniforms.xrayParams.x < 0.5) {
+    fragmentOutputs.color = uniforms.xrayNormalColor;
   } else {
-    let xrayGhost = uniforms.xrayHologramTint.rgb;
-    let xrayGlow = uniforms.xrayHologramGlow.rgb;
-    let xrayHolo = mix(xrayGhost, xrayGlow, 0.25 + 0.65 * xrayRim) + xrayGlow * ((0.06 + 0.1 * xrayScan) * uniforms.xrayHologramParams.y);
-    finalColor.rgb = mix(finalColor.rgb, xrayHolo, uniforms.xrayHologramParams.y);
-    finalColor.a = mix(finalColor.a, uniforms.xrayHologramTint.w, uniforms.xrayHologramParams.y);
+    let viewDir = normalize(uniforms.xrayCamera.xyz - fragmentInputs.vPositionW);
+    let scan = 0.5 + 0.5 * sin(fragmentInputs.vPositionW.y * uniforms.xrayTint.w + uniforms.xrayCamera.w);
+    var rim: f32 = 0.0;
+    if (uniforms.xrayOptions.x < 0.5) {
+      let normalW = normalize(cross(dpdx(fragmentInputs.vPositionW), dpdy(fragmentInputs.vPositionW)));
+      rim = pow(1.0 - abs(dot(normalW, viewDir)), max(uniforms.xrayParams.w, 0.001));
+    }
+    let glow = uniforms.xrayGlow.rgb;
+    let tint = uniforms.xrayTint.rgb;
+    if (uniforms.xrayParams.z > 0.5) {
+      fragmentOutputs.color = vec4f(tint * (0.45 + 0.2 * scan) + glow * (0.35 + 0.35 * rim), 1.0);
+    } else {
+      let holo = mix(tint, glow, 0.2 + 0.7 * rim) + glow * ((0.05 + 0.1 * scan) * uniforms.xrayGlow.w);
+      fragmentOutputs.color = vec4f(holo, uniforms.xrayParams.y);
+    }
   }
-}`,
-  };
-}
+}`;
 
-export class XrayHologramMaterial extends MaterialPluginBase {
-  constructor(material: Material, private readonly state: XrayHologramState) {
-    super(material, 'FABXrayHologram', 200, {}, true, true);
+const TINT = new Vector4(2 / 255, 132 / 255, 199 / 255, 26);
+const GLOW = new Vector4(56 / 255, 189 / 255, 248 / 255, 1);
+const NORMAL_LINE_COLOR = new Vector4(217 / 255, 119 / 255, 6 / 255, 0.75);
+
+/** One WGSL program, material instances only vary uniforms and line topology. */
+export class XrayMaterialPalette {
+  readonly line: ShaderMaterial;
+  private readonly materials = new Map<string, ShaderMaterial>();
+  private readonly camera = new Vector4(0, 0, 0, 0);
+
+  constructor(private readonly scene: Scene) {
+    this.line = this.createMaterial('fab-xray-line', true);
+    this.line.setVector4('xrayParams', new Vector4(0, 0, 0, 0));
+    this.line.setVector4('xrayNormalColor', NORMAL_LINE_COLOR);
+    this.line.setVector4('xrayTint', TINT);
+    this.line.setVector4('xrayGlow', GLOW);
+    this.line.setVector4('xrayCamera', this.camera);
+    this.line.setVector4('xrayOptions', new Vector4(1, 0, 0, 0));
   }
-  override isCompatible(language: ShaderLanguage) { return language === ShaderLanguage.WGSL; }
-  override getUniforms() {
-    return {
-      ubo: [
-        { name: 'xrayHologramParams', size: 4, type: 'vec4' },
-        { name: 'xrayHologramTint', size: 4, type: 'vec4' },
-        { name: 'xrayHologramGlow', size: 4, type: 'vec4' },
-        { name: 'xrayHologramTime', size: 4, type: 'vec4' },
-      ],
-    };
+
+  /** Triangle-surface material for one ghost/highlight state. */
+  meshMaterial(state: XraySurfaceState): ShaderMaterial {
+    const key = state.highlight + ':' + state.ghostAlpha + ':' + state.rimPower;
+    let material = this.materials.get(key);
+    if (!material) {
+      material = this.createMaterial('fab-xray-' + this.materials.size, false);
+      material.setVector4('xrayParams', new Vector4(1, state.ghostAlpha, state.highlight, state.rimPower));
+      material.setVector4('xrayTint', TINT);
+      material.setVector4('xrayGlow', GLOW);
+      material.setVector4('xrayCamera', this.camera);
+      material.setVector4('xrayOptions', new Vector4(0, 0, 0, 0));
+      material.setVector4('xrayNormalColor', new Vector4(0, 0, 0, 0));
+      material.disableDepthWrite = state.highlight < 0.5;
+      this.materials.set(key, material);
+    }
+    return material;
   }
-  override bindForSubMesh(buffer: UniformBuffer) {
-    const state = this.state;
-    buffer.updateFloat4('xrayHologramParams', state.enabled ? 1 : 0, state.ghost, state.highlight, state.rimPower);
-    buffer.updateFloat4('xrayHologramTint', state.tint.r, state.tint.g, state.tint.b, state.ghostAlpha);
-    buffer.updateFloat4('xrayHologramGlow', state.glow.r, state.glow.g, state.glow.b, state.scanFrequency);
-    buffer.updateFloat4('xrayHologramTime', state.time, 0, 0, 0);
+
+  setLineXray(enabled: boolean): void {
+    this.line.setVector4('xrayParams', enabled ? new Vector4(1, 0.75, 0, 1.4) : new Vector4(0, 0, 0, 0));
   }
-  override getCustomCode(type: string) { return xrayHologramCustomCode(type); }
+
+  updateCamera(time: number): void {
+    const activeCamera = this.scene.activeCamera;
+    if (activeCamera) this.camera.set(activeCamera.globalPosition.x, activeCamera.globalPosition.y, activeCamera.globalPosition.z, time);
+    else this.camera.w = time;
+    this.line.setVector4('xrayCamera', this.camera);
+    for (const material of this.materials.values()) material.setVector4('xrayCamera', this.camera);
+  }
+
+  dispose(): void {
+    this.line.dispose();
+    for (const material of this.materials.values()) material.dispose();
+    this.materials.clear();
+  }
+
+  private createMaterial(name: string, line: boolean): ShaderMaterial {
+    const material = new ShaderMaterial(name, this.scene, {
+      vertexSource: XRAY_SHADER_VERTEX,
+      fragmentSource: XRAY_SHADER_FRAGMENT,
+    }, {
+      attributes: ['position'],
+      uniforms: ['world', 'worldViewProjection', 'xrayParams', 'xrayTint', 'xrayGlow', 'xrayCamera', 'xrayOptions', 'xrayNormalColor'],
+      needAlphaBlending: true,
+      shaderLanguage: ShaderLanguage.WGSL,
+    });
+    material.backFaceCulling = false;
+    material.disableDepthWrite = true;
+    material.alpha = 1;
+    if (line) material.fillMode = Material.LineListDrawMode;
+    return material;
+  }
 }
