@@ -8,7 +8,8 @@ import { ShaderMaterial } from '@babylonjs/core/Materials/shaderMaterial';
 import { ShaderLanguage } from '@babylonjs/core/Materials/shaderLanguage';
 import type { Scene } from '@babylonjs/core/scene';
 import { Material } from '@babylonjs/core/Materials/material';
-import { Vector4 } from '@babylonjs/core/Maths/math.vector';
+import { Vector4, type Matrix } from '@babylonjs/core/Maths/math.vector';
+import type { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture';
 
 export type XrayFilterName = 'all' | 'upw' | 'gas' | 'vac' | 'exhaust' | 'amhs';
 export type XraySurfaceRole = 'equipment' | 'floor' | 'subfab' | 'oht';
@@ -63,6 +64,28 @@ uniform xrayGlow: vec4f;        // glow rgb, scan strength
 uniform xrayCamera: vec4f;      // camera xyz, time
 uniform xrayOptions: vec4f;     // isLine, 0, 0, 0
 uniform xrayNormalColor: vec4f; // non-X-Ray appearance (line meshes)
+uniform xrayLightVP: mat4x4f;   // native static shadow light view-projection
+uniform xrayShadowEnabled: f32; // 1 when the native depth texture is bound
+var xrayShadowDepth: texture_depth_2d;
+var xrayShadowDepthSampler: sampler_comparison;
+
+fn xrayShadowVisibility(worldPosition: vec3f) -> f32 {
+  if (uniforms.xrayShadowEnabled < 0.5) { return 1.0; }
+  let clip = uniforms.xrayLightVP * vec4f(worldPosition, 1.0);
+  let ndc = clip.xyz / clip.w;
+  let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+  let texel = 1.0 / vec2f(textureDimensions(xrayShadowDepth));
+  var visible = 0.0;
+  for (var y = -1; y <= 1; y = y + 1) {
+    for (var x = -1; x <= 1; x = x + 1) {
+      visible += textureSampleCompare(xrayShadowDepth, xrayShadowDepthSampler,
+        uv + vec2f(f32(x), f32(y)) * texel, ndc.z - 0.00015);
+    }
+  }
+  let inside = all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0)) && ndc.z >= 0.0 && ndc.z <= 1.0;
+  return select(1.0, visible / 9.0, inside);
+}
+
 @fragment
 fn main(input : FragmentInputs) -> FragmentOutputs {
   if (uniforms.xrayParams.x < 0.5) {
@@ -77,10 +100,12 @@ fn main(input : FragmentInputs) -> FragmentOutputs {
     }
     let glow = uniforms.xrayGlow.rgb;
     let tint = uniforms.xrayTint.rgb;
+    let shadow = xrayShadowVisibility(fragmentInputs.vPositionW);
+    let lit = 0.35 + 0.65 * shadow;
     if (uniforms.xrayParams.z > 0.5) {
-      fragmentOutputs.color = vec4f(tint * (0.45 + 0.2 * scan) + glow * (0.35 + 0.35 * rim), 1.0);
+      fragmentOutputs.color = vec4f((tint * (0.45 + 0.2 * scan) + glow * (0.35 + 0.35 * rim)) * lit, 1.0);
     } else {
-      let holo = mix(tint, glow, 0.2 + 0.7 * rim) + glow * ((0.05 + 0.1 * scan) * uniforms.xrayGlow.w);
+      let holo = (mix(tint, glow, 0.2 + 0.7 * rim) + glow * ((0.05 + 0.1 * scan) * uniforms.xrayGlow.w)) * lit;
       fragmentOutputs.color = vec4f(holo, uniforms.xrayParams.y);
     }
   }
@@ -95,6 +120,7 @@ export class XrayMaterialPalette {
   readonly line: ShaderMaterial;
   private readonly materials = new Map<string, ShaderMaterial>();
   private readonly camera = new Vector4(0, 0, 0, 0);
+  private readonly shadowBindings = new Map<ShaderMaterial, BaseTexture | undefined>();
 
   constructor(private readonly scene: Scene) {
     this.line = this.createMaterial('fab-xray-line', true);
@@ -128,6 +154,19 @@ export class XrayMaterialPalette {
     this.line.setVector4('xrayParams', enabled ? new Vector4(1, 0.75, 0, 1.4) : new Vector4(0, 0, 0, 0));
   }
 
+  /** The same hologram program samples the native static depth pass instead of running unshadowed. */
+  updateShadow(matrix: Matrix, texture: BaseTexture | undefined, enabled: boolean): void {
+    const materials = [this.line, ...this.materials.values()];
+    for (const material of materials) {
+      material.setMatrix('xrayLightVP', matrix);
+      material.setFloat('xrayShadowEnabled', texture && enabled ? 1 : 0);
+      if (this.shadowBindings.get(material) !== texture) {
+        this.shadowBindings.set(material, texture);
+        if (texture) material.setTexture('xrayShadowDepth', texture);
+      }
+    }
+  }
+
   updateCamera(time: number): void {
     const activeCamera = this.scene.activeCamera;
     if (activeCamera) this.camera.set(activeCamera.globalPosition.x, activeCamera.globalPosition.y, activeCamera.globalPosition.z, time);
@@ -140,6 +179,7 @@ export class XrayMaterialPalette {
     this.line.dispose();
     for (const material of this.materials.values()) material.dispose();
     this.materials.clear();
+    this.shadowBindings.clear();
   }
 
   private createMaterial(name: string, line: boolean): ShaderMaterial {
@@ -148,7 +188,7 @@ export class XrayMaterialPalette {
       fragmentSource: XRAY_SHADER_FRAGMENT,
     }, {
       attributes: ['position'],
-      uniforms: ['world', 'worldViewProjection', 'xrayParams', 'xrayTint', 'xrayGlow', 'xrayCamera', 'xrayOptions', 'xrayNormalColor'],
+      uniforms: ['world', 'worldViewProjection', 'xrayParams', 'xrayTint', 'xrayGlow', 'xrayCamera', 'xrayOptions', 'xrayNormalColor', 'xrayLightVP', 'xrayShadowEnabled'],
       needAlphaBlending: true,
       shaderLanguage: ShaderLanguage.WGSL,
     });

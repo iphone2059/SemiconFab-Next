@@ -1,0 +1,85 @@
+{
+ "capturedAt": "2026-10-25T04:17:49.820Z",
+ "page": "/twin?lang=zh-CN&mode=engineer",
+ "viewport": "1600x900 DPR 1",
+ "browser": "Chrome/155.0.8059.86",
+ "test": "web_app/tests/xray-acceptance.browser.ts",
+ "screenshot": "xray-acceptance-2026-10-25-all.png",
+ "assertions": {
+  "singleProgram": "2,236 X-Ray surfaces use fab-xray-* ShaderMaterial instances (4 triangle palette states + fab-xray-line for catalog wires)",
+  "nativeShadowSampling": "hologram material binds the native depth texture and light matrix; shadow enabled uniform = 1",
+  "shadowPixelDelta": {
+   "mean": 9.250323660714285,
+   "changedFraction": 0.2731622023809524
+  },
+  "animationControlDelta": {
+   "mean": 0.18721602182539682,
+   "changedFraction": 0.0004439484126984127
+  },
+  "filters": [
+   "All",
+   "UPW",
+   "Gas",
+   "Vac",
+   "Exhaust",
+   "AMHS"
+  ],
+  "restore": {
+   "meshes": 2236,
+   "rootsBefore": {
+    "procedural-equipment": true,
+    "procedural-subfab": false,
+    "native-amhs": true,
+    "floor": true
+   },
+   "rootsAfter": {
+    "procedural-equipment": true,
+    "procedural-subfab": false,
+    "native-amhs": true,
+    "floor": true
+   }
+  },
+  "shadowCache": {
+   "initial": {
+    "passes": 1,
+    "casterCount": 771,
+    "triangleCount": 12310,
+    "lastReason": "dual-visibility",
+    "size": 2048,
+    "format": "depth32float",
+    "clipPlane": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "final": {
+    "passes": 10,
+    "casterCount": 771,
+    "triangleCount": 12310,
+    "lastReason": "dual-visibility",
+    "size": 2048,
+    "format": "depth32float",
+    "clipPlane": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "casterCountRestored": true
+  },
+  "consoleErrorCount": 0,
+  "exceptionCount": 0,
+  "finalState": {
+   "xray": "false",
+   "panel": false
+  }
+ },
+ "notes": [
+  "Shadow pixel delta compares CDP screenshots with the native static shadow pass enabled vs disabled while X-Ray is active; the moving OHT layer is hidden so the control delta reflects residual scene animation only.",
+  "Restore comparison covers every X-Ray target mesh material reference, the xrayCaster metadata flag and the equipment/subfab/AMHS/floor visibility state.",
+  "This is runtime acceptance evidence, not a matched Golden comparison against the frozen original (Phase D1)."
+ ]
+}

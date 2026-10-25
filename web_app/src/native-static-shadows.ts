@@ -17,10 +17,12 @@ import type { Plane } from '@babylonjs/core/Maths/math.plane';
 const SIZE = 2048;
 
 function isCaster(mesh: AbstractMesh): boolean {
+  if (mesh.getClassName() === 'LinesMesh' || !mesh.isEnabled() || !mesh.isVisible || mesh.visibility !== 1) return false;
+  // X-Ray swaps surfaces onto the single hologram ShaderMaterial but keeps casting into the native
+  // static depth pass, so the hologram itself can be sampled as shadowed by the same program.
+  if ((mesh.metadata as { xrayCaster?: boolean } | null)?.xrayCaster === true) return true;
   const material = mesh.material;
-  return mesh.getClassName() !== 'LinesMesh' &&
-    mesh.isEnabled() && mesh.isVisible && mesh.visibility === 1 &&
-    (material?.alpha ?? 1) === 1 &&
+  return (material?.alpha ?? 1) === 1 &&
     !material?.needAlphaBlending() && !material?.needAlphaTesting();
 }
 
@@ -222,6 +224,8 @@ export function createNativeStaticShadows(scene: Scene, engine: WebGPUEngine, li
     get readyForCurrentDevice() { return !disposed && device === engine._device && !dirty; },
     get enabled() { return binding.enabled; },
     set enabled(value: boolean) { binding.enabled = value; },
+    get matrix() { return binding.matrix; },
+    get texture() { return binding.texture; },
     get stats() { return { passes, casterCount, triangleCount, lastReason, size: SIZE, format: 'depth32float', clipPlane: shadowClipParameters(scene.clipPlane) }; },
     invalidate(reason: string) { dirty = true; lastReason = reason; },
     dispose() {

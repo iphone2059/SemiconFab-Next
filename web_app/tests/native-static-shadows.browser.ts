@@ -57,7 +57,9 @@ export async function runNativeShadowAcceptance(command) {
     assert.equal(moved.restored, initial.passes + 2);
     const layer = await evaluate(`(async () => {
       const t = __fabShadowAcceptance;
-      const root = t.scene.getTransformNodeByName('procedural-ceiling');
+      // The static caster set is built from the equipment/shell/subfab/roof layers; the optional
+      // ceiling layer is not a caster by design, so visibility invalidation is exercised on the shell.
+      const root = t.scene.getTransformNodeByName('procedural-shell');
       const enabled = root.isEnabled();
       root.setEnabled(!enabled); await t.frames();
       const changed = t.shadow.stats.passes;

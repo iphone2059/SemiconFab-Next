@@ -46,6 +46,13 @@ it('ships one WGSL program that drives both triangle and line surfaces', () => {
   ]) {
     expect(XRAY_SHADER_FRAGMENT).toContain(token);
   }
+  for (const token of [
+    'uniform xrayLightVP', 'uniform xrayShadowEnabled', 'var xrayShadowDepth: texture_depth_2d',
+    'var xrayShadowDepthSampler: sampler_comparison', 'textureSampleCompare',
+    'xrayShadowVisibility(fragmentInputs.vPositionW)', 'let lit = 0.35 + 0.65 * shadow',
+  ]) {
+    expect(XRAY_SHADER_FRAGMENT).toContain(token);
+  }
   // The line branch is driven by the same options uniform, not by a second shader program.
   expect(XRAY_SHADER_FRAGMENT).toContain('uniforms.xrayOptions.x < 0.5');
 });

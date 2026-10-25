@@ -435,18 +435,37 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   const xrayFloor = scene.meshes.filter((mesh) => mesh.material?.name === 'procedural-floor-material');
   const xraySubfab = [...fab.subfab.getChildMeshes(), ...subfabDense.group.getChildMeshes()];
   const xrayOht = amhsGroup.getChildMeshes().filter((mesh) => !mesh.name.includes('-shadow'));
-  const xraySavedMaterials = new Map<AbstractMesh, Material | null>();
+  type XrayMeshSave = { material: Material | null; xrayCaster?: boolean };
+  const xraySavedMaterials = new Map<AbstractMesh, XrayMeshSave>();
   const applyXrayMaterial = (mesh: AbstractMesh, role: XraySurfaceRole, matched = true) => {
-    if (!xraySavedMaterials.has(mesh)) xraySavedMaterials.set(mesh, mesh.material);
+    let saved = xraySavedMaterials.get(mesh);
+    if (!saved) {
+      saved = { material: mesh.material, xrayCaster: (mesh.metadata as { xrayCaster?: boolean } | null)?.xrayCaster };
+      xraySavedMaterials.set(mesh, saved);
+    }
     mesh.material = xrayPalette.meshMaterial(xraySurfaceState(role, xrayFilter as XRayFilter, matched));
+    mesh.metadata = { ...mesh.metadata, xrayCaster: true };
+  };
+  const updateXrayFrame = () => {
+    const time = performance.now() / 1000;
+    xrayPalette.updateCamera(time);
+    // Native static depth is sampled by the same hologram program; rebinding survives device loss.
+    xrayPalette.updateShadow(shadows.matrix, shadows.texture, shadows.enabled && shadows.readyForCurrentDevice);
   };
   scene.onBeforeRenderObservable.add(() => {
-    if (xrayFilter !== null) xrayPalette.updateCamera(performance.now() / 1000);
+    if (xrayFilter !== null) updateXrayFrame();
   });
   const restoreXRay = () => {
-    for (const [mesh, material] of xraySavedMaterials) mesh.material = material;
+    for (const [mesh, saved] of xraySavedMaterials) {
+      mesh.material = saved.material;
+      const metadata = (mesh.metadata ?? {}) as Record<string, unknown>;
+      if (saved.xrayCaster === undefined) delete metadata.xrayCaster;
+      else metadata.xrayCaster = saved.xrayCaster;
+      mesh.metadata = metadata;
+    }
     xraySavedMaterials.clear();
     xrayPalette.setLineXray(false);
+    xrayPalette.updateShadow(shadows.matrix, shadows.texture, false);
     if (xrayFilter !== null) {
       fab.subfab.setEnabled(basementActive || dualActive || layerVisibility.subfab);
       subfabDense.setVisible(basementActive || dualActive);
@@ -466,7 +485,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     fab.subfab.setEnabled(true);
     subfabDense.setVisible(true);
     xrayPalette.setLineXray(true);
-    xrayPalette.updateCamera(performance.now() / 1000);
+    updateXrayFrame();
     shadows.invalidate('xray-visibility');
   };
   const applyExplodeFactor = (factor: number) => {
