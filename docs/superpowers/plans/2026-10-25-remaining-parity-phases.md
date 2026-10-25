@@ -317,6 +317,10 @@ comparison against the frozen original (Phase D1).
 
 ### D4. 60-minute and device-loss matrix
 
+**User decision 2026-10-25:** do not run the 60-minute soak or the repeated device-loss matrix in this
+iteration. They remain open release gates and are never claimed as passed; the focused device-loss
+recovery test from the earlier API/frame gate is the only executed subset.
+
 - Instrument frame time, GPU memory/resource proxies and JS heap for a 60-minute run in the main
   modes; record trend and limits. Repeat `GPUDevice.destroy()` ≥3 consecutive times in L1/B1/DUAL/
   EXPLODED/X-Ray/Cut: require new device, new native pass, completed WebGPU status, unchanged manual
@@ -356,6 +360,11 @@ comparison against the frozen original (Phase D1).
 - [ ] Tour/wafer source vectors.
 - [x] B1 exploded hierarchy/floor/link math plus renderer integration and production-bundle acceptance.
 - [x] Personnel/air-shower renderer wiring (source actors, patrol pose, billboard, air showers).
-- [ ] Exploded/X-Ray/Cut/level combination matrix and matched-Golden visual comparison.
+- [x] Personnel renderer keyframe acceptance against the frozen frame (5 patrol phases, actor/limb/screen/billboard/air-shower mapping, 0 mismatches).
+- [x] Exploded guide-link rows validated against the frozen FAB_EQUIPMENT table (12 pairs, generated fixture + `--check` gate).
+- [x] C2 frozen-copy replacement: generated en map (281 entries, 9 collisions) merged with frozen-wins precedence; audit 178 literal pairs / 0 contradictions / 0 missing English.
+- [x] Tour/wafer fixed-time vectors: frozen source ranges, 5 tour waypoints (849 frames/378 events), 5 wafer traces (364 frames, 1x/4x/16x, controls, dt-clamp), pinned route/layout hashes, pure `tour-wafer-timeline.ts`, 11 exact-replay tests, `--check` gate.
+- [ ] Tour/wafer renderer wiring against the new pure controllers (camera/timer/countdown/HUD).
+- [ ] Exploded/X-Ray/Cut/level combination matrix and matched-Golden visual comparison: 19 paired cases captured (full SSIM 44.6–73.7%, ROI 45.4–80.1%, 0 console errors) but appearance is not matched; close the visual gap worst-case first.
 - [x] C1 i18n inventory extractor (132 static keys, 176 dynamic pairs, 6 documented missing, 16 skipped) with --check gate.
 - [ ] Extend browser evidence and Golden tooling only after the first three artifacts land.

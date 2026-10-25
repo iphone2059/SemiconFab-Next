@@ -1,0 +1,652 @@
+{
+  "method": "Gaussian luminance SSIM 11x11 sigma=1.5; population covariance; RGB threshold=8",
+  "status": "NOT_PARITY_VERIFIED",
+  "cases": [
+    {
+      "case": "b1",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-b1": "66175160ab183e9f4cb0734eb7d4ccb8cf73e95709cc0d271c0ddcdb62897ad4",
+        "next-b1": "fb0a820853910ab493fd4373f67703f582680b2ef7b1be31a507521cf44b57bc"
+      },
+      "full_frame": {
+        "ssim": 0.5657213421871151,
+        "mae_rgb": 65.92656626452664,
+        "changed_fraction_gt8": 0.7352636497307257
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.6001860205079433,
+        "mae_rgb": 70.65326583191913,
+        "changed_fraction_gt8": 0.7646112549497411
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "cut",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-cut": "1f0825b40a00aca535006de6769c4b511d8a51cc87eab12d7e425dd5ce695a65",
+        "next-cut": "863db691646bca92165932e7472ce2448d5c15aa864554762f1309eeac5c682c"
+      },
+      "full_frame": {
+        "ssim": 0.7370927319481402,
+        "mae_rgb": 19.67427521789966,
+        "changed_fraction_gt8": 0.3552552791950113
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.8014749185273391,
+        "mae_rgb": 17.268364808610013,
+        "changed_fraction_gt8": 0.3331774074235238
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "dual",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-dual": "c0ba93c7c30683c5da1b6f2709dd262d14fcaa2f1c397765142d079c79a0415b",
+        "next-dual": "f598d0b59fb597d893cb4a0c1b34ce8f9d0bd4c1d41eaf6db752c4303dd483ee"
+      },
+      "full_frame": {
+        "ssim": 0.5987975182491586,
+        "mae_rgb": 38.59234059075019,
+        "changed_fraction_gt8": 0.632582420989229
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.6355206160313611,
+        "mae_rgb": 38.9343395993792,
+        "changed_fraction_gt8": 0.6618660523911057
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "exploded-0",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-exploded-0": "215bd554974bb1fdf40d46e6849294f312b99f3f7c5dd07b3999d30e8f2779b9",
+        "next-exploded-0": "d86b87b4355d74bc82aa5e63831026a83fa4424e5510edffa053eea77bef313b"
+      },
+      "full_frame": {
+        "ssim": 0.6999641678560854,
+        "mae_rgb": 26.174841225552722,
+        "changed_fraction_gt8": 0.49784314767573695
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.7581445627445952,
+        "mae_rgb": 24.754023795019073,
+        "changed_fraction_gt8": 0.5049094904486314
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "exploded-100",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-exploded-100": "d7640135a7dfb4d29d2473122e614efff7fc9a4fa7e333a3d4fe64c89498592e",
+        "next-exploded-100": "c729e8aa55f751de1727f2408f77a6fc904312048a439815e8de72a05cedeaf5"
+      },
+      "full_frame": {
+        "ssim": 0.6745549093749492,
+        "mae_rgb": 32.21944813515684,
+        "changed_fraction_gt8": 0.5941151590844671
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.7277589018186961,
+        "mae_rgb": 31.94671639977953,
+        "changed_fraction_gt8": 0.6208963382794482
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "exploded-50",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-exploded-50": "8dde9a4a74f04c68da1808ec314a8760d06547f40d1b9004e2da9824840ec1c1",
+        "next-exploded-50": "2eea5199b02ed126a6c87e9ea63183a90266431887983bad47f462e70e4dc5bc"
+      },
+      "full_frame": {
+        "ssim": 0.6834360165931568,
+        "mae_rgb": 30.261409985000945,
+        "changed_fraction_gt8": 0.5676939395549887
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.7380510842134976,
+        "mae_rgb": 29.63135044529539,
+        "changed_fraction_gt8": 0.5900058744179975
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "iso",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-iso": "4bcb9d7b516a9161652fe1acea382d784d91543cbef02479fa16137bf320eefd",
+        "next-iso": "ef47597db69d4bca395bbb3fcfac240d119c7ff87afa02ecc1513667b0cf9e29"
+      },
+      "full_frame": {
+        "ssim": 0.6917824126648646,
+        "mae_rgb": 23.091988865858845,
+        "changed_fraction_gt8": 0.5154498387896825
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.7476459231412226,
+        "mae_rgb": 21.362415509913987,
+        "changed_fraction_gt8": 0.5271708150211044
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "iso-en",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-iso-en": "73482cf661663cf56896c8c6495bb64ebae157438011a25b0495b5a45061e7a2",
+        "next-iso-en": "e906e4a8fa701493b176fbfe14dc150dbe42ffdae7720841b47b4506f1955987"
+      },
+      "full_frame": {
+        "ssim": 0.6926740387799247,
+        "mae_rgb": 23.024375162391344,
+        "changed_fraction_gt8": 0.5177391138747166
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.7481111277955024,
+        "mae_rgb": 21.349595952453477,
+        "changed_fraction_gt8": 0.5301683999825944
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "litho",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-litho": "a2a40e1d69c6eaafebf086c5e8403a26d7bed8b823a4b4f69493ee31e5d04647",
+        "next-litho": "f50d8e4cc61efdf9101214201175696e6e22801f819ae175019cbaa29373a896"
+      },
+      "full_frame": {
+        "ssim": 0.6378359504804715,
+        "mae_rgb": 52.96175661670918,
+        "changed_fraction_gt8": 0.7343792074121315
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.6935887272755801,
+        "mae_rgb": 55.40247187894347,
+        "changed_fraction_gt8": 0.758740100517819
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "mes",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-mes": "6a587cdcced1b1a6836f4434a76ecd959956d1dfe5adcde9c7ba8023800c86bb",
+        "next-mes": "1d423dfe666e2b5ebe6895d2bb033f2e808d6deb7cde07c45ee0e2c3c1a88ec6"
+      },
+      "full_frame": {
+        "ssim": 0.6212291985526727,
+        "mae_rgb": 25.092662494685374,
+        "changed_fraction_gt8": 0.5109507865646259
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.6609034142293667,
+        "mae_rgb": 23.81965337307631,
+        "changed_fraction_gt8": 0.5216436947913494
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "patrol",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-patrol": "05358a3c8dd017eca2ef0f47067da128143079a45e48f461a0efbaff0dccf428",
+        "next-patrol": "c899ef91e26a61f943f6acecfb7b8796de41153811289f28abbaf555c5b38686"
+      },
+      "full_frame": {
+        "ssim": 0.6919427492366989,
+        "mae_rgb": 23.075831738945578,
+        "changed_fraction_gt8": 0.5151942938633787
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.7478350731859464,
+        "mae_rgb": 21.34256061166471,
+        "changed_fraction_gt8": 0.5268569688003133
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "patrol-purge",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-patrol-purge": "7f99dcfc1a90a335658c35b87d0c283cdd95185b49dd7ccc9ca5f23239282c90",
+        "next-patrol-purge": "29cc37a2c4d4bb6f209d006fa11ec05889c8ba90a13fa2c7a0ad4017c142e7f9"
+      },
+      "full_frame": {
+        "ssim": 0.6920515740932738,
+        "mae_rgb": 23.10082708864796,
+        "changed_fraction_gt8": 0.5153958067602041
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.7479665982255409,
+        "mae_rgb": 21.372883577738133,
+        "changed_fraction_gt8": 0.52706719681476
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "research",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-research": "da4a1f66cf57e5547e85b55eb16f60215fa0e2b64bfbb6ce9415aecda7b4e7ee",
+        "next-research": "0ac91db2a1bb6a0d6f5c787ffe88083e2b19bc3fc016f23db5febd65678c0a4d"
+      },
+      "full_frame": {
+        "ssim": 0.6545086692116568,
+        "mae_rgb": 35.91783979650888,
+        "changed_fraction_gt8": 0.6222935267857143
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.6812031358276065,
+        "mae_rgb": 38.229602896595736,
+        "changed_fraction_gt8": 0.6147600191462512
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "spc",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-spc": "ed6602a43e7cafadebb599ea605ef85ab1bf74c6a7b6fb043f750883d01a7e86",
+        "next-spc": "895eb12129b11b83ef31209a3a008869dc54cacff4753ecc27f0e5234a6e82b0"
+      },
+      "full_frame": {
+        "ssim": 0.616386753852283,
+        "mae_rgb": 25.75142395065665,
+        "changed_fraction_gt8": 0.5243970114087302
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.6549501081149419,
+        "mae_rgb": 24.62870650392353,
+        "changed_fraction_gt8": 0.5381576084591619
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "top",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-top": "698a868c5c0e0fdd0a18c90b10215cbb1da6f1586b8413df668f1c484a53372d",
+        "next-top": "a5538524ed1b7d81ab265540a6396aa6c6c390532a959c4f0edca9c816d072f1"
+      },
+      "full_frame": {
+        "ssim": 0.6817905123622017,
+        "mae_rgb": 23.05165373441043,
+        "changed_fraction_gt8": 0.5420183177437642
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.7336702388337004,
+        "mae_rgb": 21.4378133022932,
+        "changed_fraction_gt8": 0.5566718158478743
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "tour",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-tour": "e49494ec40606a9cbd872a6de6b017fc4e078851db75b5523df7d82684c6128e",
+        "next-tour": "fdd9f3afd58c7d4bdab62778299b9e68251a9247ea4ec873de9c1e6e117bfd73"
+      },
+      "full_frame": {
+        "ssim": 0.4458863230497904,
+        "mae_rgb": 87.65503841293462,
+        "changed_fraction_gt8": 0.7825494260204081
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.45368102689385564,
+        "mae_rgb": 98.1426615102331,
+        "changed_fraction_gt8": 0.8164644162569079
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "wafer",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-wafer": "15a514863ae63607e9a30a365a2d1c948e527d80a03354f0da90aee214ca0198",
+        "next-wafer": "f9ad60ae366a6917c58ce487427bd966eceb944b28da884edbfdc502ff77f239"
+      },
+      "full_frame": {
+        "ssim": 0.4995997398573497,
+        "mae_rgb": 74.37269219753874,
+        "changed_fraction_gt8": 0.8158158836451247
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.5197915515528295,
+        "mae_rgb": 82.52834461076542,
+        "changed_fraction_gt8": 0.8663809233714808
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "xray",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-xray": "a981c501981508eb2682a9db35e94ed436fde2a6d5d6c70465ae6c9f1718454d",
+        "next-xray": "97234d6045d842870ab18df65382d3f3368d38a1923aede64fdd58fefdf77ff2"
+      },
+      "full_frame": {
+        "ssim": 0.6057186852661508,
+        "mae_rgb": 39.28236474277211,
+        "changed_fraction_gt8": 0.6317978493480726
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.6432276122162319,
+        "mae_rgb": 40.90329094324297,
+        "changed_fraction_gt8": 0.6591534854880118
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    },
+    {
+      "case": "yms",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 2
+      },
+      "png_size": [
+        3072,
+        1470
+      ],
+      "sha256": {
+        "original-yms": "d2ddbad0ebc16a577e3694f2c547f3c5ed7e487f04b5bd440b3701de7d691c74",
+        "next-yms": "5e195bf7df77f6aca12b8a7f394f50c92bc22100d39f45bf7b1fa42f24d09a26"
+      },
+      "full_frame": {
+        "ssim": 0.6160386812917603,
+        "mae_rgb": 51.568435920375094,
+        "changed_fraction_gt8": 0.7122384761196145
+      },
+      "scene_roi": {
+        "rect": [
+          328,
+          82,
+          3072,
+          1422
+        ],
+        "ssim": 0.5805128927029212,
+        "mae_rgb": 54.76194319945462,
+        "changed_fraction_gt8": 0.6901241786693355
+      },
+      "status": "REVIEW_REQUIRED",
+      "threshold_approved": false
+    }
+  ]
+}

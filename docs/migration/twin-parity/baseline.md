@@ -78,11 +78,12 @@ validation errors, unchanged camera, and 16,384 bytes of readback. Recovery took
 also visibly recovered; this is not a complete repeated-loss matrix. Current
 frontend verification at that increment was 138/138 Vitest, TypeScript and Vite build. Full Golden,
 en-US/zh-CN/responsive styling, exact dynamics, production-bundle and
-60-minute acceptance remain pending. Status stays **NOT PARITY_VERIFIED**.
+60-minute acceptance are user-deferred for this iteration (see 2026-10-25 decision) and remain open
+release gates. Status stays **NOT PARITY_VERIFIED**.
 
 The subsequent [dead-code cleanup](../dead-code-cleanup-2026-10-25.md) retires four
 tests for removed implementations and validates the active RTK transport;
-after the 2026-10-25 locale fix and parity increments the latest frontend verification is **163/163**, strict unused checks and build pass.
+after the 2026-10-25 locale fix and parity increments the latest frontend verification is **181/181**, strict unused checks and build pass.
 
 ## 2026-10-25 locale scope and next phases
 
@@ -91,7 +92,7 @@ nine-language coverage is withdrawn. Canonical URL, `documentElement.lang` and
 `semiconfab_lang` values are now the locale tags, while `semicon_lang` keeps the legacy
 `zh`/`en` mirror and old `en`/`zh` URL values keep working. The catalog page no longer
 misreads `?lang=en-US` as Chinese because it reuses the same resolver. Latest frontend
-verification: **163/163 Vitest**, TypeScript and Vite build pass.
+verification: **181/181 Vitest**, TypeScript and Vite build pass.
 
 The frozen original's twin page has no theme toggle: `twin.html` only carries
 `meta[name=theme-color]` and four inert `dark:` utility classes in a decorative control;
@@ -100,7 +101,8 @@ original light-only Twin styling, not a new control. Remaining work is staged in
 [2026-10-25-remaining-parity-phases.md](../../superpowers/plans/2026-10-25-remaining-parity-phases.md):
 source-exact dynamic timing vectors, Exploded hierarchy/guide lines and a WebGPU-shader X-Ray hologram,
 en-US/zh-CN copy/tooltips and responsive rules, then full Golden, control matrix, production-bundle,
-60-minute and repeated device-loss acceptance. Full-scene random initialization is still not
+60-minute and repeated device-loss acceptance (user-deferred in this iteration; open gates).
+Full-scene random initialization is still not
 equivalent and remains an explicit Phase D gate.
 
 ### 2026-10-25 AMHS timing vectors
@@ -167,6 +169,72 @@ animation vectors stay testable. The frozen `PATROL_WAYPOINTS` never resets `sta
 every travel leg exceeds the inspect duration, so no inspect/countdown frame is observable. The
 controller is now wired into the renderer (see the next section); visual keyframe acceptance remains
 open.
+
+### 2026-10-25 C2 frozen copy, personnel keyframes and exploded source verification
+
+C2 replacement: `tools/build_twin_translations.cjs` emits `web_app/src/twin-translations.generated.ts`
+from the frozen en/zh inventory (308 pairs -> 281 unique zh entries, 9 genuine source collisions, only
+en/zh bytes serialized) and `tools/audit_twin_i18n_coverage.mjs` scans all `web_app/src` twin copy
+(178 literal `t()` pairs, 0 English contradictions, 0 missing English, 41 documented Next-only catalog
+labels). `twin-i18n.tsx` merges the generated map with frozen-wins precedence, so the three legacy
+labels that differed (`爆炸解构` Explode, `气流热力图` Heatmap, `开放软件架构` Open Architecture) now
+match the source; a unit test pins the precedence and the Twin UI browser acceptance still passes.
+Both tools are in `scripts/verify.ps1` as drift gates.
+
+Personnel renderer keyframes: `web_app/tests/personnel-keyframes.browser.ts` samples the live Babylon
+scene against the single frozen `PersonnelFrame` and compares six actor positions/rotations, patrol
+limb pivots, patrol tablet screen colors, the as-built status billboard parent/visibility and both air
+showers (indicator color/intensity, jet opacity/scale, inner light, billboard height). The production
+build run recorded **43 samples, 5 keyframes** (approach, airlock entry, purge, airlock exit,
+PATROL_WAYPOINTS), **0 mapping mismatches, 0 console/device errors**. As in the frozen runtime the
+as-built `userData` overwrite leaves air-shower jets closed (`jetMax = 0`); the page mirrors that
+instead of inventing a purge animation. Evidence:
+[evidence/personnel-keyframes-2026-10-25.json](evidence/personnel-keyframes-2026-10-25.json) and the
+five adjacent PNGs.
+
+Exploded source verification: `tools/build_twin_exploded_links.cjs` executes the frozen
+`FAB_EQUIPMENT` table (lines 5061-7482, 69 records), derives the 12 B1->L1 pairs with the source
+conduit-color map and writes `web_app/tests/fixtures/original-exploded-links.json`; the link-data unit
+test now compares row-for-row (sub/host ids, svg types, coordinates, colors) and `--check` is a gate.
+
+**Matched-Golden capture is in progress** for all prior cases plus the new dual/exploded 0-50-100/
+patrol/purge/tour/en views; results and the SSIM/ROI report will be recorded after capture. Per the
+user's 2026-10-25 decision the 60-minute soak and repeated device-loss matrix are not executed in this
+iteration and remain open release gates.
+
+### 2026-10-25 frozen Tour and Wafer fixed-time vectors
+
+`tools/build_twin_motion_vectors.cjs` executes character-exact frozen Tour/Wafer slices in a
+`node:vm` with a declared deterministic event loop (16 ms RAF grid, 100 ms tour countdown interval,
+`performance.now` clock, ordered timer queue) and pins the source SHA, every line range and the
+`benchmark/routes.json` + `twin/layout-default.json` hashes. Tour fixture: 5 source waypoints
+(tween 2200/2000/2000/2000/2200 ms, hold 5000 ms, L1×4 + B1), 849 sampled frames and 378 events over
+54,216 ms including two starts, user stop, three next/two prev and auto-stop. Wafer fixture: the full
+pinned routes are 120/104/92 steps; five declared 5-step-prefix traces (364 frames, 77 events) cover
+1x (10,000 ms completion), 4x (2,560 ms), 16x (640 ms), play/pause/replay/speed/product-change and the
+frozen 0.1 s dt clamp, with the 30-point trail cap exercised. `web_app/src/tour-wafer-timeline.ts` is
+a zero-import pure controller (`createTourTimeline`, `createWaferTimeline`) and the 11 exact-replay
+tests are wired as a `--check` drift gate. The frozen source has **no seek/scrub**: fast-forward is
+`setWaferSpeed` scaling `dur = 2.0 / speed`, reset is `replayWaferRoute`/product change, and Tour
+advances via next/prev plus timer callbacks — recorded, not invented. Stub boundaries (virtual
+scheduler, 5-step route prefix, guarded tour/wafer mutual exclusion, en HUD text) are declared in the
+fixture. Renderer wiring against these controllers remains open.
+
+### 2026-10-25 matched Golden refresh (19 cases)
+
+A fresh paired capture now exists for every prior case plus dual / exploded 0-50-100 / patrol /
+patrol-purge / tour / English HUD, using the declared virtual clock on both the frozen original and
+Next (1536x735 DPR2, 180+180 frames per case, 19/19 captured, 0 console errors). The honest result is
+**appearance is not yet matched**: full-frame SSIM ranges **44.6%-73.7%** and scene-ROI SSIM
+**45.4%-80.1%**. Best: cut 73.7%/80.1%; exploded 67.5%-70.0%; personnel/ISO 69.2%; English HUD 69.3%;
+worst: tour 44.6%/45.4%, wafer 50.0%/52.0%, B1 56.6%/60.0%. The visual diffs show remaining HUD
+chrome/typography/layout, camera framing, rail/status-bar composition, exploded-panel styling and
+depth/shadow contrast differences. Evidence and the full table:
+[evidence/golden-2026-10-25b/README.md](evidence/golden-2026-10-25b/README.md) (+ comparison.json and
+10 representative JPEG pairs). Thresholds stay unapproved; status remains **NOT PARITY_VERIFIED** and
+visual matching is the next working target (worst cases first). The capture runs both sides under the
+declared virtual clock; original real-time timers are only approximated, so no real-time equivalence
+claim follows.
 
 ### 2026-10-25 en-US/zh-CN twin string inventory
 
