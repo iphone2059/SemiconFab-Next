@@ -33,7 +33,7 @@ See [evidence/golden](evidence/golden) and its `comparison.json`. The comparison
 | P0 4. GPU/failure | Real shadow/cut pixels, depth restoration and GPUDevice.destroy recovery; completed-frame/validation gate; preserves manual camera | Instrumented 60-minute run, frame-time/memory records, repeated failure matrix and all mode combinations |
 | P1 5. B01 | DEMO Scenario, Play/Pause, 1600ms tick, per-instance four-state override; towers/counts/inspector derive one authority | Original random-stream/telemetry sequence, list/KPI exactness; backend commands remain separate |
 | P1 6. Research | 27,263 rows; original winning aliases; per-machine states; entering/re-entering replay freezes current DEMO/SSE state | Replay Golden acceptance; no AMHS events exist in JSONL, so AMHS stats are explicitly independent animation |
-| P1 7. X-Ray | System filters, ghost restoration and Cut/level mutual exclusion | Original material-swap behavior and exact rendering/shadow restoration; frozen source uses material recipes, not a custom shader program |
+| P1 7. X-Ray | System filters, ghost restoration and Cut/level mutual exclusion | WebGPU/WGSL hologram shader implementation (user decision 2026-10-25) with the frozen source material recipes as the reference look; exact six-filter rendering and shadow restoration remain open |
 | P1 8. Facilities/dynamics | Dual OHT/24 cars, personnel, amber ceiling/floor/columns, pressure/laminar display, utility headers/pump stations, original 85×60 m roof/HVAC slab, 3 MAUs, mains/feeders/drops, 5 stacks, 70 exhaust billboards, two source air showers, six tacky mats, 1569-mesh FFU ceiling and the 793-mesh B1 industrial layer | Outer-wall/CAD architecture gaps, exact personnel/airlock/OHT timing and visuals |
 | P1 9. Wafer | A/B/C 120/104/92 steps, seek/play/pause, 1×/4×/16×, camera/trail | Original Bay/final wording and fixed-time seek/speed Golden vectors |
 | P1 10. MES/SPC | Existing local MES actions and SPC; explicit local demonstration boundary | Original inspector layout and sample vectors; no backend production persistence claimed |
@@ -82,7 +82,7 @@ en-US/zh-CN/responsive styling, exact dynamics, production-bundle and
 
 The subsequent [dead-code cleanup](../dead-code-cleanup-2026-10-25.md) retires four
 tests for removed implementations and validates the active RTK transport;
-after the 2026-10-25 locale fix the latest frontend verification is **137/137**, strict unused checks and build pass.
+after the 2026-10-25 locale fix the latest frontend verification is **139/139**, strict unused checks and build pass.
 
 ## 2026-10-25 locale scope and next phases
 
@@ -91,17 +91,29 @@ nine-language coverage is withdrawn. Canonical URL, `documentElement.lang` and
 `semiconfab_lang` values are now the locale tags, while `semicon_lang` keeps the legacy
 `zh`/`en` mirror and old `en`/`zh` URL values keep working. The catalog page no longer
 misreads `?lang=en-US` as Chinese because it reuses the same resolver. Latest frontend
-verification: **137/137 Vitest**, TypeScript and Vite build pass.
+verification: **139/139 Vitest**, TypeScript and Vite build pass.
 
 The frozen original's twin page has no theme toggle: `twin.html` only carries
 `meta[name=theme-color]` and four inert `dark:` utility classes in a decorative control;
 the shared `js/i18n.js` `#theme-label` path serves other site pages. Parity therefore means the
 original light-only Twin styling, not a new control. Remaining work is staged in
 [2026-10-25-remaining-parity-phases.md](../../superpowers/plans/2026-10-25-remaining-parity-phases.md):
-source-exact dynamic timing vectors, Exploded hierarchy/guide lines and X-Ray material recipes,
+source-exact dynamic timing vectors, Exploded hierarchy/guide lines and a WebGPU-shader X-Ray hologram,
 en-US/zh-CN copy/tooltips and responsive rules, then full Golden, control matrix, production-bundle,
 60-minute and repeated device-loss acceptance. Full-scene random initialization is still not
 equivalent and remains an explicit Phase D gate.
+
+### 2026-10-25 AMHS timing vectors
+
+The first Phase A artifact is in. `tools/build_twin_dynamics_vectors.cjs` executes the frozen
+`updateAmhsSimulation` / `setVehicleLedColor` source in a `node:vm` with a declared seed and writes
+`web_app/tests/fixtures/original-dynamics-vectors.json`: 32 generated tasks, 14 completed deliveries,
+548 discrete transition events and 121 sampled frames over a declared 120 s scenario, with the
+source SHA and function line ranges recorded in the fixture. `web_app/src/amhs-timeline.ts`
+reproduces that trace exactly (stats, every event and every sampled frame) and the vector test
+passes; the declared scenario proves the port, not the original fleet's long-run distribution. The
+renderer still uses the previous AMHS approximation until the Phase A integration step, so no visual
+parity follows from this artifact.
 
 ## Earlier GPU evidence interpretation
 

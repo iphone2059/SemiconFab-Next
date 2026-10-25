@@ -14,7 +14,7 @@
    53–56); its nine-language dictionary is site-wide and out of scope. Canonical locale tag goes into
    the URL, `documentElement.lang` and `semiconfab_lang`; `semicon_lang` keeps its legacy
    `zh`/`en` mirror; old `en`/`zh`/`zh-TW` inputs are normalized, never stored as canonical.
-2. **Theme: source has no Twin theme control.** Evidence: `twin.html` line 28 only carries
+2. **Theme: source has no Twin theme control; align to the original (user confirmed 2026-10-25).** Evidence: `twin.html` line 28 only carries
    `meta[name=theme-color]`; four `dark:` utility classes (lines 1518–1535) sit in a decorative
    control with no runtime class switching; the `#theme-label` handling in shared `js/i18n.js`
    (lines 118–123) serves other site pages. Parity therefore means the original **light-only**
@@ -48,6 +48,12 @@ implementations: `legacy-site.ts` (OHT hoist/load constants around lines 216–3
 `procedural-fab.ts` (personnel meshes), `aerodynamics.ts` (laminar/airlock visuals).
 
 ### A1. Extract and freeze timing vectors
+
+**2026-10-25 progress:** the AMHS slice is landed — `tools/build_twin_dynamics_vectors.cjs`,
+`web_app/tests/fixtures/original-dynamics-vectors.json` and the exact
+`web_app/src/amhs-timeline.ts` port with `web_app/tests/amhs-timeline.test.ts` (548 transition events,
+121 sampled frames, 32 tasks / 14 deliveries over a declared 120 s scenario). Personnel, air-shower and
+tour/wafer vectors are still open; the renderer still uses the previous AMHS approximation until A3.
 
 - New tool `tools/build_twin_dynamics_vectors.cjs`, modelled on
   `tools/build_twin_process_vectors.cjs`: verify `twin.html` SHA against
@@ -128,23 +134,38 @@ remaining delta. Until then Phase A stays open even if unit tests pass.
 - Tests: pure math vs source values; link count/colors; material restore invariant; browser toggles
   0/50/100 % + slider + preset + level switch, shadow restoration and no stale meshes.
 
-### B2. X-Ray material recipe (source: `twin.html` 20210–20414)
+### B2. X-Ray holographic effect — WebGPU shader (source: `twin.html` 20210–20414)
 
-- Evidence: the original X-Ray is a **material-swap effect**, not a custom shader program. Port the
-  actual recipes: ghost floor opacity 0.12/no depthWrite and slab hidden; equipment shells —
-  cylinder parts above y > 1.0 become emissive cyan standard material (`#38bdf8` color,
-  `#0284c7` emissive, intensity 0.95, metalness 0.8), other meshes become physical ghost material
-  (`#0284c7`, opacity 0.16, roughness 0.1, metalness 0.85, no depthWrite); line/wireframe meshes
-  become `#38bdf8` opacity 0.75; subfab piping forced visible; filters ALL / UPW / GAS / VAC /
-  EXHAUST / AMHS select by the source color-hex groups and set opacity/emissive per rule; OHT track
-  material rules; restore maps material references, wireframes, floor/slab state, piping opacities
-  and control active state. Where our WGSL PBR patch is needed to keep the original surface range,
-  document it as material equivalence, not “original shader”.
-- Implementation: new `web_app/src/xray-materials.ts` (pure filter→highlight mapping + material
-  recipe) and renderer registry in `legacy-site.ts`; invalidate shadow cache on every entry/exit.
-- Tests: filter color-group mapping; restore invariant after on/off/filter/level/cut/roof changes
-  (pixel compare before vs after equals baseline); browser captures of all six filters + shadow and
-  GPU-validation checks.
+- **User decision 2026-10-25: implement X-Ray with a WebGPU/WGSL shader wherever the effect can be
+  expressed in shader code.** The frozen original performs a Three.js material swap; its material
+  parameters are the reference look, but Next must not fake the hologram with flat alpha/material
+  swaps when a shader path is feasible.
+- Shader architecture (must preserve native static shadows and device-loss rebuild):
+  - `web_app/src/xray-hologram.ts`: WGSL fragment injection (MaterialPlugin on PBR materials, or a
+    dedicated WGSL ShaderMaterial for meshes outside the PBR pipeline) rendering ghost glass with
+    Fresnel rim, scanline modulation, cyan ghost tint and an emissive-cylinder variant. Uniforms:
+    enabled, ghost strength, highlight/filter gain. Transparency and `depthWrite` are engine state
+    toggled on activation and restored exactly.
+  - Reuse the `NativeShadowMaterial` depth binding so ghost surfaces still receive native static
+    shadows; shader materials are rebuilt after a GPUDevice replacement.
+  - Subfab utility filters (ALL / UPW / GAS / VAC / EXHAUST / AMHS by original color-hex groups) are
+    applied through shader uniforms per pipe material, not per-frame JS material mutation.
+  - Reference parameters to match: ghost floor opacity 0.12/no depthWrite and slab hidden; equipment
+    ghost color `#0284c7` opacity 0.16 roughness 0.1 metalness 0.85; tall cylinder parts
+    `#38bdf8` color + `#0284c7` emissive intensity 0.95 metalness 0.8; lines `#38bdf8`
+    opacity 0.75; piping highlight opacity 1.0/emissiveIntensity 1.2 vs ghost 0.15/0.1; OHT track
+    AMHS rule.
+  - A material-swap fallback is allowed only for a mesh class where a shader conversion is proven
+    infeasible; document each fallback with evidence. No silent fallback path.
+- Files: `web_app/src/xray-hologram.ts`, `web_app/src/xray-materials.ts` (pure filter→highlight
+  mapping from source hex groups), renderer activation/restore in `legacy-site.ts`,
+  `web_app/tests/xray-hologram.test.ts`, browser capture additions.
+- Tests: WGSL source/uniform-contract unit tests; filter mapping table against source hex groups;
+  activation/restore state machine; browser compile-and-render with zero GPU validation errors, six
+  filter captures and shadow restoration; device-loss shader-material rebuild.
+- **Completion:** X-Ray renders through the WebGPU shader in the real scene, all six filters match
+  reference captures, restore leaves no residual material/shadow change, and no equipment-alpha
+  mutation path remains as the primary effect.
 
 ### B3. Scene combination matrix
 
@@ -262,7 +283,8 @@ remaining delta. Until then Phase A stays open even if unit tests pass.
 ## Immediate next actions
 
 - [x] Canonical locale normalization (en-US/zh-CN) with unit tests, legacy input compatibility.
-- [ ] A1 dynamics extractor + fixture drift gate (first implementation step).
+- [x] AMHS source vectors + pure controller port (exact fixture replay); personnel/air-shower and tour/wafer vectors still pending.
+- [ ] Wire the AMHS controller into `legacy-site.ts` behind the existing scene tick and capture browser keyframes.
 - [ ] B1 exploded pure math and guide-link geometry from source constants.
 - [ ] C1 i18n inventory extractor (en/zh bytes only) before touching copy.
 - [ ] Extend browser evidence and Golden tooling only after the first three artifacts land.
