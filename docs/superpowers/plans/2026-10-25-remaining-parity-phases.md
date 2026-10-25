@@ -60,6 +60,19 @@ feeds the AMHS HUD. Local Headless Chrome 155 WebGPU evidence: active vehicles r
 ~12 s, zero console errors/exceptions, and the Twin UI acceptance (with a new AMHS-HUD assertion)
 passes. Personnel, air-shower and tour/wafer vectors plus pixel-Golden acceptance remain open.
 
+**2026-10-25 personnel/air-shower landing:** `tools/build_twin_personnel_vectors.cjs` executes the
+frozen patrol behavior tree, `createBunnySuitOperator`/`buildCleanroomPersonnel`, both air-shower
+chambers, vortex particles and the two anonymous `animate()` blocks (breathing + 12 s standby cycle)
+in `node:vm` with a declared 16 ms frame clock and seed 42. `web_app/tests/fixtures/original-personnel-vectors.json`
+(813 KB) records 6 actors, the six-phase patrol trace (purge 282 ticks = 4.512 s), 27 as-built /
+46 preserved events, 176 sampled frames per mode, purge and vortex samples and zh/en status text.
+`web_app/src/personnel-timeline.ts` + `web_app/tests/personnel-timeline.test.ts` reproduce both
+declared modes exactly (9 tests). Encoded parity findings: the frozen builders overwrite
+`userData`, so as-built branch/status/air-shower animation references are dead and the chamber timer
+becomes NaN; the `preserved` mode re-attaches the constructor outputs without adding math to expose
+the frozen animation vectors. The frozen `PATROL_WAYPOINTS` never resets `stateTimer` on arrival, so
+no inspect/countdown frame is observable. Renderer wiring of this controller is still open.
+
 - New tool `tools/build_twin_dynamics_vectors.cjs`, modelled on
   `tools/build_twin_process_vectors.cjs`: verify `twin.html` SHA against
   `source-manifest.json`, execute only extracted frozen functions in `node:vm` with minimal THREE
@@ -180,9 +193,17 @@ lines in X-Ray mode from the same shader. Subfab filters no longer hide meshes: 
 highlighted and non-matching piping is ghosted, matching the source opacity rules. Local Headless
 Chrome 155 WebGPU evidence: all six filters activate, B1+UPW renders the highlighted subfab hologram,
 AMHS highlights the OHT track, disabling X-Ray restores the normal scene, and the run produced zero
-console warnings/errors, JS/GPU exceptions or WGSL compilation messages. Remaining: matched-Golden
-comparison with the frozen original, hologram shadow sampling and floor/slab/shadow restoration
-measurements.
+console warnings/errors, JS/GPU exceptions or WGSL compilation messages.
+
+**2026-10-25 shadow + acceptance landing:** the same program now samples the native static depth pass
+(bound depth texture and light matrix, 3×3 compare PCF) and X-Ray surfaces continue to cast into that
+same pass through a shared caster flag, so holograms darken under the source key light instead of
+rendering unshadowed. `web_app/tests/xray-acceptance.browser.ts` verifies: single-program assignment
+across 2,236 surfaces (4 triangle palette states + 1 line class), bound shadow texture/uniforms equal
+to the native pass, shadow-on vs shadow-off pixel delta (mean 9.25 vs 0.19 animation control), all six
+filters, exact material-reference and scene-visibility restore, caster-count restoration (771→771), a
+stable shadow cache after restore, and zero device/console errors. Remaining: matched-Golden
+comparison against the frozen original (Phase D1).
 
 ### B3. Scene combination matrix
 
@@ -204,6 +225,11 @@ measurements.
   toasts); write `web_app/assets/original-twin-i18n.json` with source hashes and a `--check` gate.
 - Wire into `scripts/verify.ps1`; test `web_app/tests/original-twin-i18n.test.ts` (coverage,
   no missing/extra keys, provenance).
+- **2026-10-25 inventory landing:** `tools/build_twin_i18n_vectors.cjs --check` is wired into
+  `scripts/verify.ps1`; the fixture pins 132 resolved static keys (133 references; the frozen
+  dictionary lacks `nav_lang_toggle`), 176 dynamic zh/en pairs and records 6 missing strings
+  (1 dictionary key + 5 Chinese-only toast copy) plus 16 skipped non-literal branches. Only
+  `en`/`zh-CN` bytes are serialized. C2 copy conversion remains open.
 
 ### C2. Complete en/zh copy and tooltips
 
@@ -302,8 +328,10 @@ measurements.
 - [x] Canonical locale normalization (en-US/zh-CN) with unit tests, legacy input compatibility.
 - [x] AMHS source vectors + pure controller port (exact fixture replay) and renderer wiring with browser HUD evidence.
 - [x] Single WGSL X-Ray program for equipment/floor/subfab/OHT/catalog wires (no fallback path) with six-filter, B1+UPW, AMHS and restore browser evidence.
-- [ ] Matched-Golden X-Ray comparison, hologram shadow sampling and floor/slab/shadow restoration measurements.
-- [ ] Personnel/air-shower/tour/wafer source vectors.
+- [x] X-Ray native static shadow sampling plus complete material/visibility/shadow-cache restore acceptance.
+- [ ] Matched-Golden X-Ray comparison against the frozen original (Phase D1).
+- [x] Personnel/air-shower source vectors + pure controller (as-built/preserved modes, 9 tests).
+- [ ] Tour/wafer source vectors.
 - [ ] B1 exploded pure math and guide-link geometry from source constants.
-- [ ] C1 i18n inventory extractor (en/zh bytes only) before touching copy.
+- [x] C1 i18n inventory extractor (132 static keys, 176 dynamic pairs, 6 documented missing, 16 skipped) with --check gate.
 - [ ] Extend browser evidence and Golden tooling only after the first three artifacts land.

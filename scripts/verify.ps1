@@ -15,6 +15,10 @@ if (Test-Path -LiteralPath $originalTwin) {
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
     node tools/build_twin_dynamics_vectors.cjs --check
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    node tools/build_twin_i18n_vectors.cjs --check
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    node tools/build_twin_personnel_vectors.cjs --check
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
 } else {
     Write-Host 'Skipping frozen-original vector checks: ../SemiconFab/twin.html not present.'
 }

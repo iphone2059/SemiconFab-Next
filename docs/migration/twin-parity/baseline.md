@@ -33,7 +33,7 @@ See [evidence/golden](evidence/golden) and its `comparison.json`. The comparison
 | P0 4. GPU/failure | Real shadow/cut pixels, depth restoration and GPUDevice.destroy recovery; completed-frame/validation gate; preserves manual camera | Instrumented 60-minute run, frame-time/memory records, repeated failure matrix and all mode combinations |
 | P1 5. B01 | DEMO Scenario, Play/Pause, 1600ms tick, per-instance four-state override; towers/counts/inspector derive one authority | Original random-stream/telemetry sequence, list/KPI exactness; backend commands remain separate |
 | P1 6. Research | 27,263 rows; original winning aliases; per-machine states; entering/re-entering replay freezes current DEMO/SSE state | Replay Golden acceptance; no AMHS events exist in JSONL, so AMHS stats are explicitly independent animation |
-| P1 7. X-Ray | System filters, ghost restoration and Cut/level mutual exclusion | Single WGSL hologram program covers equipment/floor/subfab/OHT/catalog wire surfaces (no fallback path) with six-filter/B1+UPW/AMHS/restore browser evidence; hologram shadow sampling, exact six-filter Golden rendering and floor/slab/shadow restoration remain open |
+| P1 7. X-Ray | System filters, ghost restoration and Cut/level mutual exclusion | Single WGSL hologram program covers equipment/floor/subfab/OHT/catalog wire surfaces (no fallback path) with native shadow sampling, six-filter/B1+UPW/AMHS, exact material/visibility restore and stable shadow cache measured in the browser; only matched-Golden rendering against the frozen original remains open |
 | P1 8. Facilities/dynamics | Dual OHT/24 cars, personnel, amber ceiling/floor/columns, pressure/laminar display, utility headers/pump stations, original 85×60 m roof/HVAC slab, 3 MAUs, mains/feeders/drops, 5 stacks, 70 exhaust billboards, two source air showers, six tacky mats, 1569-mesh FFU ceiling and the 793-mesh B1 industrial layer | Outer-wall/CAD architecture gaps, exact personnel/airlock/OHT timing and visuals |
 | P1 9. Wafer | A/B/C 120/104/92 steps, seek/play/pause, 1×/4×/16×, camera/trail | Original Bay/final wording and fixed-time seek/speed Golden vectors |
 | P1 10. MES/SPC | Existing local MES actions and SPC; explicit local demonstration boundary | Original inspector layout and sample vectors; no backend production persistence claimed |
@@ -82,7 +82,7 @@ en-US/zh-CN/responsive styling, exact dynamics, production-bundle and
 
 The subsequent [dead-code cleanup](../dead-code-cleanup-2026-10-25.md) retires four
 tests for removed implementations and validates the active RTK transport;
-after the 2026-10-25 locale fix the latest frontend verification is **141/141**, strict unused checks and build pass.
+after the 2026-10-25 locale fix and parity increments the latest frontend verification is **156/156**, strict unused checks and build pass.
 
 ## 2026-10-25 locale scope and next phases
 
@@ -91,7 +91,7 @@ nine-language coverage is withdrawn. Canonical URL, `documentElement.lang` and
 `semiconfab_lang` values are now the locale tags, while `semicon_lang` keeps the legacy
 `zh`/`en` mirror and old `en`/`zh` URL values keep working. The catalog page no longer
 misreads `?lang=en-US` as Chinese because it reuses the same resolver. Latest frontend
-verification: **141/141 Vitest**, TypeScript and Vite build pass.
+verification: **156/156 Vitest**, TypeScript and Vite build pass.
 
 The frozen original's twin page has no theme toggle: `twin.html` only carries
 `meta[name=theme-color]` and four inert `dark:` utility classes in a decorative control;
@@ -133,10 +133,50 @@ X-Ray cyan lines. OHT is part of the same shader path; no alpha/colour mutation 
 Subfab filters highlight matching piping and ghost the rest instead of hiding meshes. Local Headless
 Chrome 155 WebGPU evidence: all six filters activate, B1+UPW renders the highlighted subfab hologram,
 AMHS highlights the OHT track, switching X-Ray off restores the normal scene, and the run produced
-zero console warnings/errors, JS/GPU exceptions or WGSL compilation messages. This is runtime
-evidence, not a matched Golden comparison; the frozen material recipes remain the reference look, and
-hologram shadow sampling, the exact six-filter pixel comparison and floor/slab/shadow restoration
-measurements remain open. Latest frontend verification: **141/141 Vitest**, TypeScript and Vite build pass.
+zero console warnings/errors, JS/GPU exceptions or WGSL compilation messages.
+
+The single program now also samples the native static shadow depth pass: the depth texture and light
+matrix are bound into the hologram shader with a 3×3 compare PCF, and X-Ray surfaces keep casting into
+the same pass through a shared caster flag, so ghosts darken under the source key light. The committed
+`web_app/tests/xray-acceptance.browser.ts` measured: 2,236 X-Ray surfaces on the single program; bound
+shadow texture and matrix equal to the native pass; shadow-on vs shadow-off pixel delta mean 9.25 vs
+0.19 animation control; all six filters; exact material-reference and scene-visibility restore; caster
+count restored 771→771; shadow cache stable after restore; zero device/console errors. The native
+static-shadow acceptance test was corrected to exercise visibility invalidation on the shell layer
+(the optional ceiling is not a static caster by design); it passes with 771 casters and 79,280
+darkened pixels. Remaining: matched-Golden comparison against the frozen original (Phase D1), not an
+implementation gap.
+
+### 2026-10-25 personnel and air-shower timing vectors
+
+`tools/build_twin_personnel_vectors.cjs` executes the frozen patrol behavior tree,
+`createBunnySuitOperator`/`buildCleanroomPersonnel`, both air-shower chambers, vortex particles and
+the two anonymous `animate()` blocks (breathing and the 12 s standby cycle) in `node:vm` with a
+declared 16 ms frame clock and LCG seed 42; source SHA and every line range are asserted and the
+`--check` gate is wired into `scripts/verify.ps1`. The 813 KB fixture
+`web_app/tests/fixtures/original-personnel-vectors.json` declares 6 actors, the six-phase patrol trace
+(purge 282 ticks = 4.512 s; phase ticks 366/104/282/254/2022/472), 27 as-built and 46 preserved events,
+176 sampled frames per mode, purge/vortex samples and zh/en status text.
+`web_app/src/personnel-timeline.ts` is a pure clock-injected port (no DOM/THREE/Date.now/Math.random)
+and `web_app/tests/personnel-timeline.test.ts` reproduces both declared modes exactly (9 tests).
+
+Encoded parity findings: the frozen builders overwrite `userData`, so as-built limb, status-board,
+tablet-screen and air-shower material animation references are dropped and the chamber purge timer
+becomes NaN; the `preserved` mode re-attaches the constructor outputs without adding math so the frozen
+animation vectors stay testable. The frozen `PATROL_WAYPOINTS` never resets `stateTimer` on arrival and
+every travel leg exceeds the inspect duration, so no inspect/countdown frame is observable. The
+controller is not yet wired into the renderer; visual keyframe acceptance remains open.
+
+### 2026-10-25 en-US/zh-CN twin string inventory
+
+`tools/build_twin_i18n_vectors.cjs` pins `twin.html`, `js/translations.js` and `js/i18n.js` against
+the source manifest, executes the dictionary in `node:vm` and serializes only `en`/`zh-CN` bytes into
+`web_app/assets/original-twin-i18n.json` (other locales are recorded as excluded, never serialized).
+The fixture resolves 132 static keys from 133 `data-i18n*` references (105 body, 26 title, 2
+placeholder; the frozen dictionary lacks `nav_lang_toggle`), extracts 176 dynamic zh/en pairs plus 6
+documented missing strings (1 dictionary key and 5 Chinese-only toast messages) and records 16 skipped
+non-literal branches in `web_app/tests/original-twin-i18n.test.ts` (6 tests, source hashes and coverage
+asserted). The `--check` gate is wired into `scripts/verify.ps1`.
 
 ## Earlier GPU evidence interpretation
 
