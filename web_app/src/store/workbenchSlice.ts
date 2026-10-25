@@ -24,7 +24,17 @@ export const workbenchSlice = createSlice({
   name: 'workbench',
   initialState: initial,
   reducers: {
-    siteIdSet(state, action: PayloadAction<string>) { state.siteId = action.payload; },
+    siteIdSet(state, action: PayloadAction<string>) {
+      if (state.siteId === action.payload) return;
+      state.siteId = action.payload;
+      state.runId = '';
+      state.submitError = '';
+    },
+    runsReceived(state, action: PayloadAction<{ siteId: string; runIds: string[] }>) {
+      // Polling initializes an empty selection. A stale list must never replace
+      // an explicit selection or the run just returned by createRun.
+      if (state.siteId === action.payload.siteId && !state.runId) state.runId = action.payload.runIds[0] ?? '';
+    },
     runIdSet(state, action: PayloadAction<string>) { state.runId = action.payload; state.submitError = ''; },
     formFieldSet(state, action: PayloadAction<{ field: keyof WorkbenchFormState; value: string }>) { state.form[action.payload.field] = action.payload.value; },
     submitErrorSet(state, action: PayloadAction<string>) { state.submitError = action.payload; },

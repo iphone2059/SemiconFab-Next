@@ -45,9 +45,8 @@ function Workbench({ site }: { site: SiteDto }) {
   const submitting = createRunState.isLoading;
   useEffect(() => () => submissionScope.dispose(), [submissionScope]);
   useEffect(() => {
-    if (scopedRuns.length === 0) return;
-    if (!scopedRuns.some((value) => value.runId === runId)) dispatch(workbenchActions.runIdSet(scopedRuns[0].runId));
-  }, [scopedRuns, runId, dispatch]);
+    dispatch(workbenchActions.runsReceived({ siteId: site.siteId, runIds: scopedRuns.map((value) => value.runId) }));
+  }, [scopedRuns, site.siteId, dispatch]);
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -83,8 +82,8 @@ function Workbench({ site }: { site: SiteDto }) {
 
 
   const setField = (field: 'lotCount' | 'processTimeUs' | 'durationUs' | 'warmupUs' | 'masterSeed', value: string) => dispatch(workbenchActions.formFieldSet({ field, value }));
-  const displayedRun = run?.runId === runId ? run : undefined;
-  const displayedResult = result?.runId === runId ? result : undefined;
+  const displayedRun = run?.runId === runId && run.siteId === site.siteId ? run : undefined;
+  const displayedResult = displayedRun && result?.runId === runId ? result : undefined;
   const completedLots = displayedResult?.fabs.reduce(
     (sum, resultFab) => sum + BigInt(resultFab.completedLots),
     0n,
