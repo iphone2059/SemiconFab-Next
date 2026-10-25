@@ -19,6 +19,7 @@ Captured after the personnel renderer / exploded hierarchy / C2 copy / Tour-Wafe
 | case | full SSIM | ROI SSIM | RGB MAE | changed >8 |
 | --- | --- | --- | --- | --- |
 | cut | 73.7% | 80.1% | 19.7 | 35.5% |
+| tour | 71.4% | 77.4% | 23.4 | 40.4% |
 | exploded-0 | 70.0% | 75.8% | 26.2 | 49.8% |
 | iso-en | 69.3% | 74.8% | 23.0 | 51.8% |
 | patrol-purge | 69.2% | 74.8% | 23.1 | 51.5% |
@@ -36,16 +37,18 @@ Captured after the personnel renderer / exploded hierarchy / C2 copy / Tour-Wafe
 | dual | 59.9% | 63.6% | 38.6 | 63.3% |
 | b1 | 56.6% | 60.0% | 65.9 | 73.5% |
 | wafer | 50.0% | 52.0% | 74.4 | 81.6% |
-| tour | 44.6% | 45.4% | 87.7 | 78.3% |
 
 Full PNGs (3072x1470) stay in the local capture directory; the committed JPEGs are 1600px downscales of
 10 representative pairs. `comparison.json` hashes refer to the uncommitted full-resolution PNG names.
 
 ## Honest interpretation
 
-- Best case `cut` 73.7% full / 80.1% ROI; worst cases `tour` 44.6% / 45.4%, `wafer` 50.0% / 52.0%,
-  `b1` 56.6% / 60.0%.
+- Best case `cut` 73.7% full / 80.1% ROI; after the Tour renderer wiring the same capture improved
+  from 44.6% / 45.4% to **71.4% / 77.4%** (tour now near the top). Worst remaining: `wafer` 50.0% /
+  52.0%, `b1` 56.6% / 60.0%, `dual` 59.9% / 63.3%.
 - Exploded cases 67.5-70.0% full; personnel/ISO 69.2%; English HUD 69.3%.
+- The tour improvement is real because the page now applies the frozen controller's camera/HUD per
+  frame (source tween + 100 ms countdown + waypoint advance); wafer still uses its old renderer.
 - The captures show real remaining appearance differences: HUD chrome/layout and typography, camera
   baseline framing, left rail composition, bottom status bar, exploded panel styling, and some depth /
   shadow contrast. These are **not** acceptable as parity and the status stays IMPLEMENTING /

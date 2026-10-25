@@ -364,7 +364,8 @@ recovery test from the earlier API/frame gate is the only executed subset.
 - [x] Exploded guide-link rows validated against the frozen FAB_EQUIPMENT table (12 pairs, generated fixture + `--check` gate).
 - [x] C2 frozen-copy replacement: generated en map (281 entries, 9 collisions) merged with frozen-wins precedence; audit 178 literal pairs / 0 contradictions / 0 missing English.
 - [x] Tour/wafer fixed-time vectors: frozen source ranges, 5 tour waypoints (849 frames/378 events), 5 wafer traces (364 frames, 1x/4x/16x, controls, dt-clamp), pinned route/layout hashes, pure `tour-wafer-timeline.ts`, 11 exact-replay tests, `--check` gate.
-- [ ] Tour/wafer renderer wiring against the new pure controllers (camera/timer/countdown/HUD).
+- [x] Tour renderer wiring against the frozen controller (current-camera start, per-frame camera/HUD, 100 ms countdown, 7.10 s auto-advance, non-clickable source dots, 0 errors; Golden tour 44.6%→71.4%).
+- [ ] Wafer renderer wiring against the new pure controller (camera follow/trail/completion/HUD; remove the invented seek control).
 - [ ] Exploded/X-Ray/Cut/level combination matrix and matched-Golden visual comparison: 19 paired cases captured (full SSIM 44.6–73.7%, ROI 45.4–80.1%, 0 console errors) but appearance is not matched; close the visual gap worst-case first.
 - [x] C1 i18n inventory extractor (132 static keys, 176 dynamic pairs, 6 documented missing, 16 skipped) with --check gate.
 - [ ] Extend browser evidence and Golden tooling only after the first three artifacts land.

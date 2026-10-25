@@ -83,7 +83,7 @@ release gates. Status stays **NOT PARITY_VERIFIED**.
 
 The subsequent [dead-code cleanup](../dead-code-cleanup-2026-10-25.md) retires four
 tests for removed implementations and validates the active RTK transport;
-after the 2026-10-25 locale fix and parity increments the latest frontend verification is **181/181**, strict unused checks and build pass.
+after the 2026-10-25 locale fix and parity increments the latest frontend verification is **183/183**, strict unused checks and build pass.
 
 ## 2026-10-25 locale scope and next phases
 
@@ -92,7 +92,7 @@ nine-language coverage is withdrawn. Canonical URL, `documentElement.lang` and
 `semiconfab_lang` values are now the locale tags, while `semicon_lang` keeps the legacy
 `zh`/`en` mirror and old `en`/`zh` URL values keep working. The catalog page no longer
 misreads `?lang=en-US` as Chinese because it reuses the same resolver. Latest frontend
-verification: **181/181 Vitest**, TypeScript and Vite build pass.
+verification: **183/183 Vitest**, TypeScript and Vite build pass.
 
 The frozen original's twin page has no theme toggle: `twin.html` only carries
 `meta[name=theme-color]` and four inert `dark:` utility classes in a decorative control;
@@ -220,14 +220,39 @@ advances via next/prev plus timer callbacks — recorded, not invented. Stub bou
 scheduler, 5-step route prefix, guarded tour/wafer mutual exclusion, en HUD text) are declared in the
 fixture. Renderer wiring against these controllers remains open.
 
+### 2026-10-25 Tour renderer wired to the frozen controller
+
+The Cinematic Tour now consumes `createTourTimeline` instead of independent React timers.
+`web_app/src/tour-scenario.ts` maps the frozen `CINEMATIC_WAYPOINTS` literal onto the controller
+scenario and a unit test compares it field-for-field with the frozen fixture (5 waypoints, tween
+2200/2000/2000/2000/2200 ms, 5000 ms holds, L1×4 + B1, English/zh HUD locales). `twin-page.tsx`
+starts from the **current** camera pose (`getCameraPose` added through the scene facade), advances the
+controller each composited frame with wall-clock catch-up (the pure controller ticks on a 60 Hz grid;
+8-frame catch-up cap), applies `frame.camera`/`frame.target` per frame, mirrors the frozen
+`tour-hud-tag`/`tour-hud-timer`/`tour-progress-bar`/`tour-dot-N` HUD and keeps the source dots
+non-clickable. Next/prev and skip drive `controller.next/prev/stop`.
+
+A scheduler defect surfaced during wiring: floating-point frame boundaries could make a rescheduled
+RAF due exactly at `clockMs`, so `advanceTo` processed it forever inside one step and froze the page
+(~1 s after tour start). `scheduleRaf` now guarantees a strictly future due and the frozen-vector
+tests plus a 2,000-step smoke run stay green.
+
+Browser acceptance (production build, 93 in-page samples): first waypoint tag and `5s` countdown,
+frozen waypoint-1 camera `(70,50,75)`/target origin, auto-advance to waypoint 2 at **7.10 s**
+(source 2.2 s tween + 5 s hold), countdown 5s→1s, progress 100%→90%, exactly one active dot, dots do
+not jump, next/prev work, skip closes the HUD; 0 console/device errors. A fresh matched-Golden tour
+capture improved from **44.6%/45.4%** to **71.4%/77.4%** SSIM (full/ROI vs the frozen original).
+Wafer renderer wiring remains open.
+
 ### 2026-10-25 matched Golden refresh (19 cases)
 
 A fresh paired capture now exists for every prior case plus dual / exploded 0-50-100 / patrol /
 patrol-purge / tour / English HUD, using the declared virtual clock on both the frozen original and
 Next (1536x735 DPR2, 180+180 frames per case, 19/19 captured, 0 console errors). The honest result is
-**appearance is not yet matched**: full-frame SSIM ranges **44.6%-73.7%** and scene-ROI SSIM
-**45.4%-80.1%**. Best: cut 73.7%/80.1%; exploded 67.5%-70.0%; personnel/ISO 69.2%; English HUD 69.3%;
-worst: tour 44.6%/45.4%, wafer 50.0%/52.0%, B1 56.6%/60.0%. The visual diffs show remaining HUD
+**appearance is not yet matched**: full-frame SSIM ranges **50.0%-73.7%** and scene-ROI SSIM
+**52.0%-80.1%** after the Tour wiring (Tour improved 44.6%/45.4% → 71.4%/77.4%). Best: cut 73.7%/80.1%;
+exploded 67.5%-70.0%; personnel/ISO 69.2%; English HUD 69.3%; worst: wafer 50.0%/52.0%, B1 56.6%/60.0%,
+dual 59.9%/63.3%. The visual diffs show remaining HUD
 chrome/typography/layout, camera framing, rail/status-bar composition, exploded-panel styling and
 depth/shadow contrast differences. Evidence and the full table:
 [evidence/golden-2026-10-25b/README.md](evidence/golden-2026-10-25b/README.md) (+ comparison.json and

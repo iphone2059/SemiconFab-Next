@@ -525,12 +525,12 @@
       ],
       "sha256": {
         "original-tour": "e49494ec40606a9cbd872a6de6b017fc4e078851db75b5523df7d82684c6128e",
-        "next-tour": "fdd9f3afd58c7d4bdab62778299b9e68251a9247ea4ec873de9c1e6e117bfd73"
+        "next-tour": "090360f432c7506adeb20fac5944fa5ede3b391c2c90c0779107f89a71a4abd5"
       },
       "full_frame": {
-        "ssim": 0.4458863230497904,
-        "mae_rgb": 87.65503841293462,
-        "changed_fraction_gt8": 0.7825494260204081
+        "ssim": 0.7140032998474396,
+        "mae_rgb": 23.35545745642007,
+        "changed_fraction_gt8": 0.4038097009637188
       },
       "scene_roi": {
         "rect": [
@@ -539,9 +539,9 @@
           3072,
           1422
         ],
-        "ssim": 0.45368102689385564,
-        "mae_rgb": 98.1426615102331,
-        "changed_fraction_gt8": 0.8164644162569079
+        "ssim": 0.773933712464093,
+        "mae_rgb": 21.695698076672034,
+        "changed_fraction_gt8": 0.39254057699838996
       },
       "status": "REVIEW_REQUIRED",
       "threshold_approved": false
