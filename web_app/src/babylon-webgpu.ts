@@ -9,6 +9,7 @@ import '@babylonjs/core/Culling/ray';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { Constants } from '@babylonjs/core/Engines/constants';
 import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import type { AmhsStats, CutAxis, FabPlacement, HoveredTool, PickedTool, SceneBackend, SceneLayer, SceneViewPreset, XRayFilter } from './fab-scene';
 import { InitializationDisposal, RecoveryFirstFrame } from './babylon-lifecycle';
@@ -55,6 +56,7 @@ export function createWebGpuBackend(): SceneBackend {
   let dualEnabled = false;
   let waferMarker: ReturnType<typeof MeshBuilder.CreateBox> | undefined;
   let waferTrail: ReturnType<typeof MeshBuilder.CreateLines> | undefined;
+  let waferTrailKey = '';
   const fabTargets = new Map<string, Vector3>();
   let cleanup = () => {};
   let perfBridge: { dispose: () => void } | undefined;
@@ -100,6 +102,7 @@ export function createWebGpuBackend(): SceneBackend {
     camera.beta = pose.beta;
     camera.radius = pose.radius;
     camera.target.copyFrom(pose.target);
+    camera.getViewMatrix(true);
   };
   const stopCameraTransition = () => { cameraTransition = undefined; };
   return {
@@ -187,7 +190,7 @@ export function createWebGpuBackend(): SceneBackend {
       waferMarkerMaterial.specularColor = new Color3(0.3, 0.2, 0.05);
       waferMarker.material = waferMarkerMaterial;
       waferMarker.isPickable = false;
-      waferMarker.isVisible = false;
+      waferMarker.setEnabled(false);
       const waferFlangeMaterial = new StandardMaterial('wafer-follow-flange', scene);
       waferFlangeMaterial.diffuseColor = new Color3(0.2, 0.27, 0.35);
       waferFlangeMaterial.specularColor = new Color3(0.4, 0.4, 0.4);
@@ -502,11 +505,12 @@ export function createWebGpuBackend(): SceneBackend {
     setXRayFilter(filter: XRayFilter | null): void {
       legacyRuntime?.setXRayFilter(filter);
     },
-    setWaferPoint(x: number, y: number, z: number, visible: boolean, focus: boolean): void {
+    setWaferPoint(x: number, y: number, z: number, visible: boolean, focus: boolean, rotationY?: number): void {
       if (!waferMarker) return;
       const dx = x - waferMarker.position.x;
       const dz = z - waferMarker.position.z;
-      if (visible && dx * dx + dz * dz > 0.00001) waferMarker.rotation.y = Math.atan2(dx, dz);
+      if (rotationY !== undefined) waferMarker.rotation.y = rotationY;
+      else if (visible && dx * dx + dz * dz > 0.00001) waferMarker.rotation.y = Math.atan2(dx, dz);
       waferMarker.position.set(x, y, z);
       waferMarker.setEnabled(visible);
       if (visible && focus && camera) {
@@ -518,17 +522,24 @@ export function createWebGpuBackend(): SceneBackend {
       }
     },
     setWaferTrail(points: readonly (readonly [number, number, number])[]): void {
-      waferTrail?.dispose();
-      waferTrail = undefined;
-      if (points.length < 2 || !scene) return;
+      if (points.length < 2 || !scene) { waferTrail?.setEnabled(false); waferTrailKey = ''; return; }
+      const count = Math.min(30, points.length);
+      const key = count + ':' + points[count - 1].join(',');
+      if (key === waferTrailKey) return;
+      waferTrailKey = key;
+      // Allocate a bounded, updatable line once. Paused/dwell frames upload nothing.
       waferTrail = MeshBuilder.CreateLines('wafer-follow-trail', {
-        points: points.map(([x, y, z]) => new Vector3(x, y, z)),
-        colors: points.map((_, index) => {
+        points: Array.from({ length: 30 }, (_, i) => Vector3.FromArray(points[Math.min(i, count - 1)])),
+        colors: Array.from({ length: 30 }, (_, index) => {
           const f = (index + 1) / points.length;
           return new Color4(0.96 * f, (0.6 + 0.3 * f) * f, 0.05 * f, 0.9);
         }),
+        updatable: true, instance: waferTrail,
       }, scene);
       waferTrail.isPickable = false;
+      waferTrail.setEnabled(true);
+      if (waferTrail.material) waferTrail.material.alphaMode = Constants.ALPHA_ADD;
+      if (waferTrail.subMeshes[0]) waferTrail.subMeshes[0].indexCount = (count - 1) * 2;
     },
     setLanguage(language: 'zh' | 'en'): void {
       legacyRuntime?.setLanguage?.(language);

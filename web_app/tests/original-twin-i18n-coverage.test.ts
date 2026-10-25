@@ -134,7 +134,7 @@ it('consumes the declared frozen fixture provenance and counts', () => {
   expect(coverage.generated.entries.sourcePairs).toBe(fixture.counts.keys + fixture.counts.dynamic);
   expect(coverage.source.generatedMapEntries).toBe(Object.keys(GENERATED_TWIN_EN).length);
   expect(coverage.source.twinEnEntries).toBe(Object.keys(TWIN_EN).length);
-  expect(coverage.totals.nonLiteralFirstArgumentCalls).toBe(11);
+  expect(coverage.totals.nonLiteralFirstArgumentCalls).toBe(12);
   expect(coverage.files.length).toBeGreaterThan(0);
 });
 
@@ -176,12 +176,12 @@ it('reports same-zh/different-en collisions instead of silently dropping them', 
 
 it('keeps the coverage audit totals self-consistent with no empty English arguments', () => {
   const { totals, findings } = coverage;
-  expect(totals.literalPairs).toBe(178);
+  expect(totals.literalPairs).toBe(182);
   expect(totals.explicitPairs).toBe(41);
-  expect(totals.frozenMappedPairs).toBe(20);
-  expect(totals.twinEnOnlyPairs).toBe(117);
+  expect(totals.frozenMappedPairs).toBe(26);
+  expect(totals.twinEnOnlyPairs).toBe(115);
   expect(totals.absentFromBothMaps).toBe(41);
-  expect(totals.twinUiPairs).toBe(137);
+  expect(totals.twinUiPairs).toBe(141);
   expect(totals.otherUiPairs).toBe(41);
   expect(totals.matchedFrozen).toBe(0);
   expect(totals.frozenContradictions).toBe(0);

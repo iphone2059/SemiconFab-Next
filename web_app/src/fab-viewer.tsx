@@ -41,7 +41,7 @@ export interface FabViewportHandle {
   setDual(active: boolean): void;
   setCutPlane(active: boolean, axis: CutAxis, position: number, invert: boolean): void;
   setXRayFilter(filter: XRayFilter | null): void;
-  setWaferPoint(x: number, y: number, z: number, visible: boolean, focus: boolean): void;
+  setWaferPoint(x: number, y: number, z: number, visible: boolean, focus: boolean, rotationY?: number): void;
   setWaferTrail(points: readonly (readonly [number, number, number])[]): void;
   focusPatrol(): void;
   setLanguage(language: 'zh' | 'en'): void;
@@ -139,7 +139,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
       setDual: (active) => facade.current?.setDual(active),
       setCutPlane: (active, axis, position, invert) => facade.current?.setCutPlane(active, axis, position, invert),
       setXRayFilter: (filter) => facade.current?.setXRayFilter(filter),
-      setWaferPoint: (x, y, z, visible, focus) => facade.current?.setWaferPoint(x, y, z, visible, focus),
+      setWaferPoint: (x, y, z, visible, focus, rotationY) => facade.current?.setWaferPoint(x, y, z, visible, focus, rotationY),
       setWaferTrail: (points) => facade.current?.setWaferTrail(points),
       focusPatrol: () => facade.current?.focusPatrol(),
       setLanguage: (language) => facade.current?.setLanguage(language),

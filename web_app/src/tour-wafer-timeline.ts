@@ -604,6 +604,9 @@ export interface WaferTimeline {
   setSpeed(speed: number): void;
   replay(): void;
   setProduct(product: string): void;
+  setLanguage(language: 'en' | 'zh-CN'): void;
+  open(): void;
+  close(): void;
   readFrame(): WaferFrame;
   readInitialFrame(): WaferFrame;
   readEvents(): WaferEvent[];
@@ -662,7 +665,7 @@ const FOLLOW_CAMERA_OFFSET = { x: 0, y: 6.0, z: -8.0 } as const;
 export function createWaferTimeline(scenario: WaferScenario): WaferTimeline {
   const clockStartMs = scenario.clockStartMs;
   const hudLanguage = scenario.hudLanguage;
-  const isZh = hudLanguage.startsWith('zh');
+  let isZh = hudLanguage.startsWith('zh');
 
   let clockMs = clockStartMs;
   let tick = 0;
@@ -945,6 +948,8 @@ export function createWaferTimeline(scenario: WaferScenario): WaferTimeline {
     },
     replay(): void {
       const before = snapshot();
+      completed = false;
+      completionTimeMs = null;
       index = 0;
       stepTimer = 0;
       clearTrail();
@@ -958,6 +963,8 @@ export function createWaferTimeline(scenario: WaferScenario): WaferTimeline {
     },
     setProduct(nextProduct: string): void {
       const before = snapshot();
+      completed = false;
+      completionTimeMs = null;
       product = nextProduct;
       route = scenario.products[nextProduct];
       index = 0;
@@ -970,6 +977,24 @@ export function createWaferTimeline(scenario: WaferScenario): WaferTimeline {
       const after = snapshot();
       applyAction({ timeMs: clockMs, tick, type: 'action', action: 'product', arg: nextProduct });
       emitDiff(before, after);
+    },
+    setLanguage(language): void {
+      const before = snapshot();
+      isZh = language.startsWith('zh');
+      hud = computeHud();
+      emitDiff(before, snapshot());
+    },
+    open(): void {
+      if (index >= route.length - 1) { this.replay(); return; }
+      playing = true;
+      const point = route[index];
+      if (point) position = { x: point.x, y: 2.5, z: point.z };
+      hud = computeHud();
+    },
+    close(): void {
+      playing = false;
+      clearTrail();
+      hud = computeHud();
     },
     readFrame,
     readInitialFrame(): WaferFrame {

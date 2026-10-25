@@ -1,6 +1,7 @@
 // Original labels use SemiconFab translations.js where an exact pair exists.
 // Additional Next-specific data-boundary labels retain explicit bilingual copy.
 export const TWIN_EN: Readonly<Record<string, string>> = {
+  '驻留计时': 'Hold countdown',
   "爆炸解构": "Exploded",
   "气流热力图": "Airflow Heatmap",
   "全息透视": "X-Ray",

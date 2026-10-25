@@ -5,7 +5,10 @@ import { twinPageSlice, twinPageActions, twinUiActions } from '../src/store/twin
 import { catalogSlice, catalogActions } from '../src/store/catalogSlice';
 import { workbenchSlice, workbenchActions } from '../src/store/workbenchSlice';
 import { localeSlice, localeActions } from '../src/store/localeSlice';
-import type { WaferWaypoint } from '../src/wafer-route';
+import { createWaferTimeline } from '../src/tour-wafer-timeline';
+import { buildWaferScenario } from '../src/wafer-scenario';
+import { parseWaferRoutes } from '../src/wafer-route';
+import { readFileSync } from 'node:fs';
 
 it('owns viewer lifecycle and hover in Redux and ignores callbacks from replaced scenes', () => {
   const store = configureStore({ reducer: runtimeSlice.reducer });
@@ -21,21 +24,16 @@ it('owns viewer lifecycle and hover in Redux and ignores callbacks from replaced
   expect(store.getState().viewer.hover).toBeUndefined();
 });
 
-it('owns wafer progress and bounded trail, and clears them on seek, product change and close', () => {
+it('projects controller HUD into Redux and clears the panel on close', () => {
   const store = configureStore({ reducer: twinPageSlice.reducer });
-  const waypoints: WaferWaypoint[] = Array.from({ length: 4 }, (_, index) => ({ step: index + 1, toolGroup: 'TG', category: 'other', x: index * 10, y: 2.5, z: 0 }));
-  for (let i = 0; i < 5; i++) store.dispatch(twinPageActions.waferFrameAdvanced({ deltaSec: 0.1, speed: 4, waypoints }));
-  expect(store.getState().wafer.index).toBe(1);
-  expect(store.getState().wafer.trail.length).toBeGreaterThan(0);
-  store.dispatch(twinPageActions.waferIndexSet(2));
-  expect(store.getState().wafer.progress).toBe(0);
-  store.dispatch(twinPageActions.waferFrameAdvanced({ deltaSec: 0.1, speed: 1, waypoints }));
-  expect(store.getState().wafer.progress).toBeCloseTo(0.05);
-  store.dispatch(twinPageActions.waferProductSet('B'));
-  expect(store.getState().wafer).toMatchObject({ product: 'B', index: 0, progress: 0, trail: [] });
-  store.dispatch(twinPageActions.waferFrameAdvanced({ deltaSec: 0.1, speed: 1, waypoints }));
+  const routes = parseWaferRoutes(JSON.parse(readFileSync(new URL('../public/twin/routes.json', import.meta.url), 'utf8')));
+  const timeline = createWaferTimeline(buildWaferScenario(routes, 'en'));
+  timeline.setProduct('B');
+  const frame = timeline.readFrame();
+  store.dispatch(twinPageActions.waferFrameReceived({ product: 'B', index: frame.index, hud: frame.hud, completed: false }));
+  expect(store.getState().wafer).toMatchObject({ product: 'B', index: 0, hud: { step: 'Step 1/104', status: 'Navigating...' } });
   store.dispatch(twinUiActions.waferClose());
-  expect(store.getState().wafer).toMatchObject({ progress: 0, trail: [] });
+  expect(store.getState().wafer.hud).toBeUndefined();
   expect(() => JSON.stringify(store.getState())).not.toThrow();
 });
 

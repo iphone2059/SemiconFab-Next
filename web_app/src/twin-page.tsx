@@ -11,7 +11,8 @@ import { OriginalInspector } from './twin-inspector';
 import { TwinInfoDialog } from './twin-dialogs';
 import { ORIGINAL_TWIN_UI, type TwinSelection } from './original-twin-data';
 import { ResearchReplay, researchClock } from './research-replay';
-import { buildWaferWaypoints, type WaferProduct } from './wafer-route';
+import type { WaferProduct } from './wafer-route';
+import { buildWaferScenario } from './wafer-scenario';
 import { applyMesAction, buildTelemetry, computeSpc, createMesJob, type MesAction, type MesJob } from './process-control';
 import { BIN_COLORS, BIN_LABELS, WM811K_DEFECT_METADATA, generateWaferMap, stdfSummary, theoreticalYieldModels, waferMetrics, type BinCode, type DefectPattern } from './wafer-map';
 import { computeFabYield, DEFAULT_YIELD_INPUT, scenarioStates, YIELD_SCENARIOS, type YieldInput } from './fab-yield';
@@ -20,7 +21,7 @@ import { DEMO_TICK_MS, projectReplayStates, resolveScenario, TWIN_LAYOUT_IDENTIT
 import { cleanroomPressureField } from './cleanroom-pressure';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from './original-tour';
 import { buildTourScenario, TOUR_INITIAL_CAMERA, TOUR_INITIAL_TARGET } from './tour-scenario';
-import { createTourTimeline, type TourFrame, type TourTimeline } from './tour-wafer-timeline';
+import { createTourTimeline, createWaferTimeline, type TourFrame, type TourTimeline, type WaferTimeline, type WaferHud } from './tour-wafer-timeline';
 import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
 import { useGetSitesQuery, useGetEquipmentStatusQuery, useGetResearchEventsQuery, useGetWaferRoutesQuery } from './store/api';
 import { twinUiActions, twinPageActions } from './store/twinUiSlice';
@@ -50,13 +51,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: '其他设备',
 };
 
-const CATEGORY_BAYS: Record<string, [string, string]> = {
-  lithography: ['光刻曝光区', 'Lithography Bay'], resist_track: ['涂胶显影区', 'Track Bay'], dry_etch: ['等离子刻蚀区', 'Etch Bay'],
-  thin_film_deposition: ['薄膜沉积区', 'Deposition Bay'], cmp: ['CMP 研磨区', 'CMP Bay'], wet_clean: ['湿法清洗区', 'Wet Clean Bay'],
-  ion_implantation: ['离子注入区', 'Implant Bay'], thermal_processing: ['扩散/热处理区', 'Diffusion Bay'], metrology: ['量测区', 'Metrology Bay'],
-  inspection: ['检测区', 'Inspection Bay'], packaging: ['先进封装区', 'Packaging Bay'], test: ['测试区', 'Test Bay'], other: ['其他设备区', 'Other Bay'],
-};
-
 const LAYER_LABELS: { layer: SceneLayer; label: string }[] = [
   { layer: 'amhs', label: 'AMHS' },
   { layer: 'ceiling', label: 'FFU' },
@@ -66,12 +60,12 @@ const LAYER_LABELS: { layer: SceneLayer; label: string }[] = [
   { layer: 'airflow', label: 'Airflow' },
 ];
 const XRAY_FILTERS: { filter: XRayFilter; label: string }[] = [
-  { filter: 'all', label: 'All' },
-  { filter: 'upw', label: 'UPW' },
-  { filter: 'gas', label: 'Gas' },
-  { filter: 'vac', label: 'Vac' },
-  { filter: 'exhaust', label: 'Exhaust' },
-  { filter: 'amhs', label: 'AMHS' },
+  { filter: 'all', label: 'ALL' },
+  { filter: 'upw', label: 'UPW Water' },
+  { filter: 'gas', label: 'GAS Specialty' },
+  { filter: 'vac', label: 'VAC Vacuum' },
+  { filter: 'exhaust', label: 'EXHAUST' },
+  { filter: 'amhs', label: 'AMHS Track' },
 ];
 
 function TwinContent() {
@@ -105,7 +99,8 @@ function TwinContent() {
   const researchSpeed = ui.research.speed;
   const { siteId, siteError: error, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, amhs, infoDialog, showResearchUtil, onboardingDontShow } = page;
   const waferProduct = useAppSelector(state => state.twinPage.wafer.product);
-  const waferIndex = useAppSelector(state => state.twinPage.wafer.index);
+  const waferHud = useAppSelector(state => state.twinPage.wafer.hud);
+  const waferCompleted = useAppSelector(state => state.twinPage.wafer.completed);
   const waferFollow = useAppSelector(state => state.twinPage.wafer.follow);
   const { open: ymsOpen, tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, yieldInput, yieldScenario, stdfCopied } = page.yms;
 
@@ -127,6 +122,8 @@ function TwinContent() {
     [layerPreferences, projected.airflow, projected.heatmap, projected.xray]);
   const appliedCameraView = useRef<CameraView | undefined>(undefined);
   const tourTimelineRef = useRef<TourTimeline | null>(null);
+  const waferTimelineRef = useRef<WaferTimeline | null>(null);
+  const waferHudRef = useRef<WaferHud | null>(null);
   const tourLoopRef = useRef<number | null>(null);
   const tourIndexRef = useRef(-1);
   const [tourHud, setTourHud] = useState<{ tag: string; timerText: string; progressWidth: string; activeDot: number } | null>(null);
@@ -160,8 +157,6 @@ function TwinContent() {
   };
   const setYieldScenario = (value: string) => dispatch(twinPageActions.ymsYieldScenarioSet(value));
   const setStdfCopied = (value: boolean) => dispatch(twinPageActions.ymsStdfCopiedSet(value));
-  const setWaferProduct = (value: WaferProduct) => dispatch(twinPageActions.waferProductSet(value));
-  const setWaferIndex = (value: number) => dispatch(twinPageActions.waferIndexSet(value));
   const setWaferFollow = (value: boolean) => dispatch(twinPageActions.waferFollowSet(value));
   const setMesJobs = (updater: (current: Record<number, MesJob>) => Record<number, MesJob>) => {
     const next = updater(mesJobs);
@@ -172,7 +167,10 @@ function TwinContent() {
     for (const layer of Object.keys(next) as SceneLayer[]) if (next[layer] !== layerPreferences[layer]) dispatch(twinPageActions.layerToggled(layer));
   };
   const setWaferPlaying = (playing: boolean) => dispatch(twinUiActions.waferPlay(playing));
-  const setWaferSpeed = (speed: 1 | 4 | 16) => dispatch(twinUiActions.waferSpeedSet(speed));
+  const setWaferSpeed = (speed: 1 | 4 | 16) => {
+    waferTimelineRef.current?.setSpeed(speed);
+    dispatch(twinUiActions.waferSpeedSet(speed));
+  };
   const setResearchPlaying = (playing: boolean) => dispatch(twinUiActions.researchPlay(playing));
   const setResearchTime = (timeSec: number) => dispatch(twinUiActions.researchSeek(timeSec));
   const setResearchSpeed = (speed: 1 | 10 | 100 | 500) => dispatch(twinUiActions.researchSpeedSet(speed));
@@ -270,6 +268,9 @@ function TwinContent() {
   useEffect(() => {
     if (!status.startsWith('WebGPU')) return;
     scene.current?.setTour(ui.tour.active);
+    // Escape/mode/level actions can stop Tour through Redux without clicking
+    // its Stop button. Cancel the controller too, or its next waypoint revives UI.
+    if (!ui.tour.active && tourTimelineRef.current) finishTour();
   }, [status, ui.tour.active]);
 
   useEffect(() => {
@@ -307,8 +308,6 @@ function TwinContent() {
     return state.twinUi.statusSource === 'demo' ? state.twinDemo.states : state.twinPage.liveToolStates;
   }, []);
 
-  const waferWaypoints = useMemo(() => waferRoutes ? buildWaferWaypoints(waferRoutes[waferProduct]) : [], [waferRoutes, waferProduct]);
-  const waferPoint = waferWaypoints[waferIndex];
   const selectedTelemetry = useMemo(() => selected ? buildTelemetry(FAB_LAYOUT[selected.index], selected.index) : undefined, [selected?.index]);
   const selectedSpc = useMemo(() => selectedTelemetry ? computeSpc(selectedTelemetry.history, selectedTelemetry.sensors[0], toolStates[selected?.index ?? 0] === 'down') : undefined, [selectedTelemetry, toolStates, selected?.index]);
   const selectedMes = selected ? mesJobs[selected.index] ?? createMesJob(FAB_LAYOUT[selected.index], selected.index) : undefined;
@@ -357,36 +356,48 @@ function TwinContent() {
   })() : undefined;
 
   useEffect(() => {
-    if (!waferActive || !waferPoint || waferPlaying) {
-      if (!waferActive) {
-        scene.current?.setWaferPoint(0, 0, 0, false, false);
-        scene.current?.setWaferTrail([]);
-      }
-      return;
+    if (!waferActive || !waferRoutes) return;
+    // Keep one controller and one RAF across play/pause, speed, follow and locale
+    // changes. Paused frames still apply the source camera, never a waypoint snap.
+    let controller = waferTimelineRef.current;
+    if (!controller) {
+      controller = createWaferTimeline(buildWaferScenario(waferRoutes, store.getState().locale.language));
+      controller.setSpeed(store.getState().twinUi.wafer.speed);
+      waferTimelineRef.current = controller;
     }
-    scene.current?.setWaferPoint(waferPoint.x, waferPoint.y, waferPoint.z, true, waferFollow);
-    scene.current?.setWaferTrail(store.getState().twinPage.wafer.trail);
-  }, [waferActive, waferPoint, waferFollow, waferPlaying]);
-
-  useEffect(() => {
-    if (!waferPlaying || !waferActive || waferWaypoints.length === 0) return;
+    controller.open();
+    const initial = controller.readFrame();
+    scene.current?.setWaferPoint(initial.position.x, initial.position.y, initial.position.z, true, false, initial.rotationY);
+    waferHudRef.current = null;
+    syncWaferHud();
     let frame = 0;
     let last = performance.now();
-    let running = true;
     const tick = (now: number) => {
-      if (!running) return;
-      const dt = Math.min((now - last) / 1000, 0.1);
+      controller.step(Math.max(0, now - last));
       last = now;
-      dispatch(twinPageActions.waferFrameAdvanced({ deltaSec: dt, speed: waferSpeed, waypoints: waferWaypoints }));
-      const wafer = store.getState().twinPage.wafer;
-      if (wafer.point) scene.current?.setWaferPoint(wafer.point.x, wafer.point.y, wafer.point.z, true, waferFollow);
-      scene.current?.setWaferTrail(wafer.trail);
-      if (wafer.progress >= 1 && wafer.index >= waferWaypoints.length - 1) { setWaferPlaying(false); return; }
+      const current = controller.readFrame();
+      const { x, y, z } = current.position;
+      scene.current?.setWaferPoint(x, y, z, true, false, current.rotationY);
+      if (store.getState().twinPage.wafer.follow) {
+        scene.current?.setCameraPose([current.camera.x, current.camera.y, current.camera.z], [x, y, z], 0);
+      }
+      scene.current?.setWaferTrail(controller.readTrailPoints().map(point => [point.x, point.y, point.z]));
+      syncWaferHud();
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
-    return () => { running = false; cancelAnimationFrame(frame); };
-  }, [waferPlaying, waferActive, waferWaypoints, waferSpeed, waferFollow]);
+    return () => {
+      cancelAnimationFrame(frame);
+      controller.close();
+      scene.current?.setWaferPoint(0, 0, 0, false, false);
+      scene.current?.setWaferTrail([]);
+    };
+  }, [waferActive, waferRoutes]);
+
+  useEffect(() => {
+    waferTimelineRef.current?.setLanguage(language === 'zh' ? 'zh-CN' : 'en');
+    syncWaferHud();
+  }, [language]);
 
   useEffect(() => {
     try {
@@ -529,16 +540,20 @@ function TwinContent() {
     setYieldScenario('live');
     setYieldInput({ purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime });
   }
-  function clearWaferTrail(): void {
-    dispatch(twinPageActions.waferTrailCleared());
-    scene.current?.setWaferTrail([]);
+  function syncWaferHud(): void {
+    const controller = waferTimelineRef.current;
+    if (!controller) return;
+    const frame = controller.readFrame();
+    if (frame.hud !== waferHudRef.current) {
+      waferHudRef.current = frame.hud;
+      dispatch(twinPageActions.waferFrameReceived({ product: frame.product as WaferProduct, index: frame.index,
+        hud: frame.hud, completed: controller.readStats().completed }));
+    }
+    if (frame.playing !== store.getState().twinUi.wafer.playing) setWaferPlaying(frame.playing);
   }
   function startWafer(): void {
+    finishTour();
     dispatch(twinUiActions.waferOpen());
-    setWaferIndex(0);
-    setWaferPlaying(false);
-    setWaferProduct('A');
-    clearWaferTrail();
   }
   function closeWafer(): void {
     dispatch(twinUiActions.waferClose());
@@ -548,19 +563,16 @@ function TwinContent() {
     scene.current?.setView('iso');
   }
   function replayWafer(): void {
-    clearWaferTrail();
-    setWaferIndex(0);
-    setWaferPlaying(true);
+    waferTimelineRef.current?.replay();
+    syncWaferHud();
   }
   function changeWaferProduct(product: WaferProduct): void {
-    setWaferProduct(product);
-    setWaferIndex(0);
-    setWaferPlaying(false);
-    clearWaferTrail();
+    waferTimelineRef.current?.setProduct(product);
+    syncWaferHud();
   }
-  function seekWafer(index: number): void {
-    setWaferPlaying(false);
-    setWaferIndex(index);
+  function toggleWaferPlay(): void {
+    waferTimelineRef.current?.togglePlay();
+    syncWaferHud();
   }
   function syncTourHud(frame: TourFrame): void {
     setTourHud(previous => previous && previous.tag === frame.hudTag && previous.timerText === frame.timerText
@@ -895,34 +907,34 @@ function TwinContent() {
 
         {waferActive && (
           <section id="wafer-follow-panel" className="twin-wafer" aria-label="Wafer Follow">
-            <div className="twin-wafer-head"><span>WAFER FOLLOW</span><button type="button" onClick={closeWafer} aria-label={t("关闭晶圆跟随")}>×</button></div>
+            <div className="twin-wafer-head"><div><OriginalIcon name="wafer" /><strong>{t('跟随晶圆漫游')}</strong><span id="wafer-route-badge">{waferHud?.badge}</span></div><button type="button" onClick={closeWafer} aria-label={t("关闭晶圆跟随")}>×</button></div>
             {waferError && <p className="twin-wafer-error">{t("路线加载失败：")}{waferError}</p>}
             {!waferRoutes && !waferError && <p className="twin-wafer-error">{t("正在加载 A/B/C 路线…")}</p>}
-            {waferRoutes && (
+            {waferRoutes && waferHud && (
               <>
                 <div className="twin-wafer-row">
-                  <label>Product
-                    <select value={waferProduct} onChange={(event) => changeWaferProduct(event.target.value as WaferProduct)} aria-label={t("晶圆产品")}>
-                      <option value="A">A · 120 Steps</option>
-                      <option value="B">B · 104 Steps</option>
-                      <option value="C">C · 92 Steps</option>
+                  <label>{t('产品:')}
+                    <select id="wafer-product-select" value={waferProduct} onChange={(event) => changeWaferProduct(event.target.value as WaferProduct)} aria-label={t("晶圆产品")}>
+                      <option value="A">Product A (120 Steps)</option>
+                      <option value="B">Product B (104 Steps)</option>
+                      <option value="C">Product C (92 Steps)</option>
                     </select>
                   </label>
-                  <b>{String(waferIndex + 1).padStart(3, '0')} / {String(waferWaypoints.length).padStart(3, '0')}</b>
+                  <div className="twin-wafer-actions">
+                    <button id="wafer-play-btn" type="button" onClick={toggleWaferPlay} title="Play / Pause" aria-label={waferPlaying ? t('暂停') : t('播放')}><OriginalIcon name={waferPlaying ? 'pause' : 'play'} /></button>
+                    <div className="twin-wafer-speeds">{([1, 4, 16] as const).map((speed) => <button id={`wafer-speed-${speed}`} type="button" key={speed} className={waferSpeed === speed ? 'active' : ''} onClick={() => setWaferSpeed(speed)}>{speed}x</button>)}</div>
+                    <button id="wafer-cam-toggle-btn" type="button" className={waferFollow ? 'active' : ''} aria-pressed={waferFollow} onClick={() => setWaferFollow(!waferFollow)}><span id="wafer-cam-text">{waferFollow ? t('跟随视角') : t('自由视角')}</span></button>
+                    <button id="wafer-replay-btn" hidden={!waferCompleted} type="button" onClick={replayWafer}>{t('重播')}</button>
+                  </div>
                 </div>
+                <div className="twin-wafer-readouts"><b id="wafer-step-readout">{waferHud.step}</b><span id="wafer-status-readout">{waferHud.status}</span></div>
+                <div className="twin-wafer-progress"><div id="wafer-progress-bar" style={{ width: waferHud.width }} /></div>
                 <div className="twin-wafer-step">
-                  <strong>{waferPoint?.tool?.model ?? '—'}</strong>
-                  <span>{waferPoint?.toolGroup ?? ''} · {waferPoint?.recipe ?? 'no recipe'}</span>
-                  <small>{waferPoint ? (language === 'zh' ? CATEGORY_BAYS[waferPoint.category]?.[0] : CATEGORY_BAYS[waferPoint.category]?.[1]) ?? waferPoint.category : ''}</small>
-                  <em className="twin-wafer-status">{waferIndex >= waferWaypoints.length - 1 && !waferPlaying ? t('路线完成') : waferPlaying ? t('晶圆流转中…') : t('已暂停')}</em>
+                  <div><span>TOOL GROUP</span><strong id="wafer-tg-val">{waferHud.toolGroup}</strong></div>
+                  <div><span>RECIPE</span><strong id="wafer-recipe-val">{waferHud.recipe}</strong></div>
+                  <div><span>BAY LOCATION</span><strong id="wafer-bay-val">{waferHud.bay}</strong></div>
                 </div>
-                <input className="twin-wafer-scrubber" type="range" min={0} max={Math.max(0, waferWaypoints.length - 1)} step={1} value={waferIndex} onChange={(event) => seekWafer(Number(event.target.value))} aria-label={t("晶圆路线步骤")} />
-                <div className="twin-wafer-actions">
-                  <button type="button" onClick={() => setWaferPlaying(!waferPlaying)}>{waferPlaying ? t("暂停") : t("播放")}</button>
-                  <button type="button" onClick={replayWafer}>{t("重播")}</button>
-                  {([1, 4, 16] as const).map((speed) => <button type="button" key={speed} className={waferSpeed === speed ? 'active' : ''} onClick={() => setWaferSpeed(speed)}>{speed}×</button>)}
-                  <label><input type="checkbox" checked={waferFollow} onChange={(event) => setWaferFollow(event.target.checked)} />{t("跟随")}</label>
-                </div>
+                <p className="twin-wafer-disclosure">{t('示意：晶圆访问每类设备的代表性机台，不代表实际派工。')}</p>
               </>
             )}
           </section>
@@ -1033,11 +1045,15 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
 
 
         {xrayFilter && (
-          <div className="twin-xray" role="group" aria-label={t("X-Ray 过滤")}>
-            <span>X-RAY</span>
-            {XRAY_FILTERS.map(({ filter, label }) => (
-              <button type="button" key={filter} className={xrayFilter === filter ? 'active' : ''} onClick={() => applyXRayFilter(filter)}>{label}</button>
-            ))}
+          <div id="hud-panel-xray" className="twin-xray" role="group" aria-label={t("X-Ray 过滤")}>
+            <OriginalIcon name="eye" />
+            <div className="twin-xray-content">
+              <strong>{t('全息 MEP 动力管网与系统 X-Ray')} <span>{t('全息幽灵外壳生效中')}</span></strong>
+              <div>{XRAY_FILTERS.map(({ filter, label }) => (
+                <button id={`xray-btn-${filter}`} type="button" key={filter} className={xrayFilter === filter ? 'active' : ''} onClick={() => applyXRayFilter(filter)}>{t(label)}</button>
+              ))}</div>
+              <p>{t('设备外壳全息半透 · 高亮流光穿透华夫板与机电管网 · 实时追踪动力介质拓扑')}</p>
+            </div>
             <button type="button" className="close" onClick={() => applyXRayFilter(null)} aria-label={t("关闭 X-Ray")}>×</button>
           </div>
         )}

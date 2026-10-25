@@ -9,7 +9,7 @@
     "twinTranslations": "web_app/src/twin-translations.ts",
     "generatedMapEntries": 281,
     "generatedCollisions": 9,
-    "twinEnEntries": 175
+    "twinEnEntries": 176
   },
   "generated": {
     "entries": {
@@ -111,6 +111,8 @@
       "web_app/src/store/twinUiSlice.ts",
       "web_app/src/store/workbenchSlice.ts",
       "web_app/src/subfab-utilities.ts",
+      "web_app/src/tour-scenario.ts",
+      "web_app/src/tour-wafer-timeline.ts",
       "web_app/src/twin-dialogs.tsx",
       "web_app/src/twin-elevation.tsx",
       "web_app/src/twin-equipment.ts",
@@ -126,6 +128,7 @@
       "web_app/src/viewer-zoom.ts",
       "web_app/src/wafer-map.ts",
       "web_app/src/wafer-route.ts",
+      "web_app/src/wafer-scenario.ts",
       "web_app/src/widgets.tsx",
       "web_app/src/workbench.tsx",
       "web_app/src/xray-hologram.ts"
@@ -140,14 +143,14 @@
     ]
   },
   "totals": {
-    "literalPairs": 178,
-    "twinUiPairs": 137,
+    "literalPairs": 182,
+    "twinUiPairs": 141,
     "otherUiPairs": 41,
     "explicitPairs": 41,
-    "oneArgPairs": 136,
+    "oneArgPairs": 140,
     "parameterizedPairs": 1,
-    "frozenMappedPairs": 20,
-    "twinEnOnlyPairs": 117,
+    "frozenMappedPairs": 26,
+    "twinEnOnlyPairs": 115,
     "absentFromBothMaps": 41,
     "matchedFrozen": 0,
     "frozenContradictions": 0,
@@ -156,18 +159,18 @@
     "absentExplicitPairs": 41,
     "emptyEnglishArguments": 0,
     "nonStringEnglishArguments": 0,
-    "nonLiteralFirstArgumentCalls": 11
+    "nonLiteralFirstArgumentCalls": 12
   },
   "surfaces": {
     "twin-ui": {
-      "literalPairs": 137,
-      "twinUiPairs": 137,
+      "literalPairs": 141,
+      "twinUiPairs": 141,
       "otherUiPairs": 0,
       "explicitPairs": 0,
-      "oneArgPairs": 136,
+      "oneArgPairs": 140,
       "parameterizedPairs": 1,
-      "frozenMappedPairs": 20,
-      "twinEnOnlyPairs": 115,
+      "frozenMappedPairs": 26,
+      "twinEnOnlyPairs": 113,
       "absentFromBothMaps": 2,
       "matchedFrozen": 0,
       "frozenContradictions": 0,
@@ -286,14 +289,14 @@
     {
       "path": "web_app/src/twin-page.tsx",
       "surface": "twin-ui",
-      "literalPairs": 99,
+      "literalPairs": 103,
       "twinUiPairs": 0,
       "otherUiPairs": 0,
       "explicitPairs": 0,
-      "oneArgPairs": 98,
+      "oneArgPairs": 102,
       "parameterizedPairs": 1,
-      "frozenMappedPairs": 19,
-      "twinEnOnlyPairs": 80,
+      "frozenMappedPairs": 25,
+      "twinEnOnlyPairs": 78,
       "absentFromBothMaps": 0,
       "matchedFrozen": 0,
       "frozenContradictions": 0,
@@ -657,7 +660,7 @@
       },
       {
         "file": "web_app/src/fab-viewer.tsx",
-        "line": 107,
+        "line": 108,
         "surface": "twin-ui",
         "zhCN": "场景初始化失败",
         "explicitEn": null,
@@ -665,7 +668,7 @@
       },
       {
         "file": "web_app/src/fab-viewer.tsx",
-        "line": 171,
+        "line": 173,
         "surface": "twin-ui",
         "zhCN": "FAB WebGPU 场景",
         "explicitEn": null,
@@ -673,7 +676,7 @@
       },
       {
         "file": "web_app/src/fab-viewer.tsx",
-        "line": 176,
+        "line": 178,
         "surface": "twin-ui",
         "zhCN": "重新加载",
         "explicitEn": null,
@@ -937,7 +940,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 121,
+        "line": 118,
         "surface": "twin-ui",
         "zhCN": "回放数据加载失败",
         "explicitEn": null,
@@ -945,7 +948,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 122,
+        "line": 119,
         "surface": "twin-ui",
         "zhCN": "路线加载失败",
         "explicitEn": null,
@@ -953,7 +956,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 182,
+        "line": 185,
         "surface": "twin-ui",
         "zhCN": "指定的 FAB 站点不存在：{0}",
         "explicitEn": null,
@@ -961,7 +964,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 182,
+        "line": 185,
         "surface": "twin-ui",
         "zhCN": "没有可用的 FAB 站点",
         "explicitEn": null,
@@ -969,7 +972,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 183,
+        "line": 186,
         "surface": "twin-ui",
         "zhCN": "当前产品必须只有一个 FAB",
         "explicitEn": null,
@@ -977,7 +980,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 191,
+        "line": 194,
         "surface": "twin-ui",
         "zhCN": "FAB 数据加载失败",
         "explicitEn": null,
@@ -985,7 +988,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 593,
+        "line": 656,
         "surface": "twin-ui",
         "zhCN": "无法加载 FAB",
         "explicitEn": null,
@@ -993,7 +996,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 593,
+        "line": 656,
         "surface": "twin-ui",
         "zhCN": "返回工作台",
         "explicitEn": null,
@@ -1001,7 +1004,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 596,
+        "line": 659,
         "surface": "twin-ui",
         "zhCN": "正在加载 FAB…",
         "explicitEn": null,
@@ -1009,7 +1012,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 611,
+        "line": 674,
         "surface": "twin-ui",
         "zhCN": "楼层",
         "explicitEn": null,
@@ -1017,7 +1020,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 619,
+        "line": 682,
         "surface": "twin-ui",
         "zhCN": "相机预设",
         "explicitEn": null,
@@ -1025,7 +1028,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 624,
+        "line": 687,
         "surface": "twin-ui",
         "zhCN": "跟踪巡检工程师",
         "explicitEn": null,
@@ -1033,7 +1036,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 624,
+        "line": 687,
         "surface": "twin-ui",
         "zhCN": "跟踪巡检工程师",
         "explicitEn": null,
@@ -1041,7 +1044,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 627,
+        "line": 690,
         "surface": "twin-ui",
         "zhCN": "图层",
         "explicitEn": null,
@@ -1049,7 +1052,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 641,
+        "line": 704,
         "surface": "twin-ui",
         "zhCN": "B01 场景控制",
         "explicitEn": null,
@@ -1057,7 +1060,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 642,
+        "line": 705,
         "surface": "twin-ui",
         "zhCN": "请选择本地 DEMO 状态来源",
         "explicitEn": null,
@@ -1065,7 +1068,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 650,
+        "line": 713,
         "surface": "twin-ui",
         "zhCN": "状态来源",
         "explicitEn": null,
@@ -1073,7 +1076,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 657,
+        "line": 720,
         "surface": "twin-ui",
         "zhCN": "爆炸视图",
         "explicitEn": null,
@@ -1081,7 +1084,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 659,
+        "line": 722,
         "surface": "twin-ui",
         "zhCN": "爆炸视图比例",
         "explicitEn": null,
@@ -1089,7 +1092,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 665,
+        "line": 728,
         "surface": "twin-ui",
         "zhCN": "剖切平面",
         "explicitEn": null,
@@ -1097,7 +1100,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 667,
+        "line": 730,
         "surface": "twin-ui",
         "zhCN": "剖切轴",
         "explicitEn": null,
@@ -1105,7 +1108,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 670,
+        "line": 733,
         "surface": "twin-ui",
         "zhCN": "剖切位置",
         "explicitEn": null,
@@ -1113,7 +1116,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 676,
+        "line": 739,
         "surface": "twin-ui",
         "zhCN": "屋顶与 HVAC：示意图",
         "explicitEn": null,
@@ -1121,7 +1124,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 680,
+        "line": 743,
         "surface": "twin-ui",
         "zhCN": "AERODYNAMICS · 层流与压差",
         "explicitEn": null,
@@ -1129,7 +1132,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 681,
+        "line": 744,
         "surface": "twin-ui",
         "zhCN": "黄光区 +30 Pa → 主工艺区 +15 Pa → 灰区 0 Pa",
         "explicitEn": null,
@@ -1137,7 +1140,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 682,
+        "line": 745,
         "surface": "twin-ui",
         "zhCN": "主工艺区",
         "explicitEn": null,
@@ -1145,7 +1148,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 683,
+        "line": 746,
         "surface": "twin-ui",
         "zhCN": "压差热力图",
         "explicitEn": null,
@@ -1153,7 +1156,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 684,
+        "line": 747,
         "surface": "twin-ui",
         "zhCN": "1500 层流粒子 · 原版示意压差场",
         "explicitEn": null,
@@ -1161,7 +1164,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 684,
+        "line": 747,
         "surface": "twin-ui",
         "zhCN": "B1 隐藏洁净室粒子",
         "explicitEn": null,
@@ -1169,7 +1172,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 684,
+        "line": 747,
         "surface": "twin-ui",
         "zhCN": "；非实测 CFD",
         "explicitEn": null,
@@ -1177,7 +1180,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 716,
+        "line": 779,
         "surface": "twin-ui",
         "zhCN": "设备详情",
         "explicitEn": null,
@@ -1185,7 +1188,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 717,
+        "line": 780,
         "surface": "twin-ui",
         "zhCN": "关闭设备详情",
         "explicitEn": null,
@@ -1193,7 +1196,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 723,
+        "line": 786,
         "surface": "twin-ui",
         "zhCN": "FAB 实例",
         "explicitEn": null,
@@ -1201,7 +1204,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 724,
+        "line": 787,
         "surface": "twin-ui",
         "zhCN": "实例标识",
         "explicitEn": null,
@@ -1209,7 +1212,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 725,
+        "line": 788,
         "surface": "twin-ui",
         "zhCN": " · 原版别名被覆盖",
         "explicitEn": null,
@@ -1217,7 +1220,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 725,
+        "line": 788,
         "surface": "twin-ui",
         "zhCN": "回放别名",
         "explicitEn": null,
@@ -1225,7 +1228,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 726,
+        "line": 789,
         "surface": "twin-ui",
         "zhCN": "尺寸 (mm)",
         "explicitEn": null,
@@ -1233,7 +1236,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 727,
+        "line": 790,
         "surface": "twin-ui",
         "zhCN": "位置 (m)",
         "explicitEn": null,
@@ -1241,7 +1244,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 728,
+        "line": 791,
         "surface": "twin-ui",
         "zhCN": "本地布局 / OEM 目录",
         "explicitEn": null,
@@ -1249,7 +1252,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 728,
+        "line": 791,
         "surface": "twin-ui",
         "zhCN": "来源",
         "explicitEn": null,
@@ -1257,7 +1260,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 730,
+        "line": 793,
         "surface": "twin-ui",
         "zhCN": "在场景中定位",
         "explicitEn": null,
@@ -1265,7 +1268,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 731,
+        "line": 794,
         "surface": "twin-ui",
         "zhCN": "设备状态干预",
         "explicitEn": null,
@@ -1273,7 +1276,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 734,
+        "line": 797,
         "surface": "twin-ui",
         "zhCN": "状态干预限本地 DEMO；MES / SPC 为页面演示，不持久化、不发送后端制造命令。",
         "explicitEn": null,
@@ -1281,7 +1284,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 798,
+        "line": 861,
         "surface": "twin-ui",
         "zhCN": "正在载入 27,263 行展示事件…",
         "explicitEn": null,
@@ -1289,7 +1292,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 799,
+        "line": 862,
         "surface": "twin-ui",
         "zhCN": "回放加载失败：",
         "explicitEn": null,
@@ -1297,7 +1300,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 815,
+        "line": 878,
         "surface": "twin-ui",
         "zhCN": "回放时间轴",
         "explicitEn": null,
@@ -1305,7 +1308,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 818,
+        "line": 881,
         "surface": "twin-ui",
         "zhCN": "播放",
         "explicitEn": null,
@@ -1313,7 +1316,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 818,
+        "line": 881,
         "surface": "twin-ui",
         "zhCN": "暂停",
         "explicitEn": null,
@@ -1321,7 +1324,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 828,
+        "line": 891,
         "surface": "twin-ui",
         "zhCN": "利用率热力图",
         "explicitEn": null,
@@ -1329,7 +1332,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 839,
+        "line": 902,
         "surface": "twin-ui",
         "zhCN": "/121 台；未映射设备保留进入回放前的状态。217 台仿真设备与布局不是一一对应。AMHS 为独立动画时钟，JSONL 无运输事件。",
         "explicitEn": null,
@@ -1337,7 +1340,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 839,
+        "line": 902,
         "surface": "twin-ui",
         "zhCN": "只读展示事件流，不是 Checkpoint/WAL。原版别名命中",
         "explicitEn": null,
@@ -1345,7 +1348,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 847,
+        "line": 910,
         "surface": "twin-ui",
         "zhCN": "关闭晶圆跟随",
         "explicitEn": null,
@@ -1353,7 +1356,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 848,
+        "line": 911,
         "surface": "twin-ui",
         "zhCN": "路线加载失败：",
         "explicitEn": null,
@@ -1361,7 +1364,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 849,
+        "line": 912,
         "surface": "twin-ui",
         "zhCN": "正在加载 A/B/C 路线…",
         "explicitEn": null,
@@ -1369,7 +1372,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 854,
+        "line": 917,
         "surface": "twin-ui",
         "zhCN": "晶圆产品",
         "explicitEn": null,
@@ -1377,23 +1380,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 866,
-        "surface": "twin-ui",
-        "zhCN": "晶圆流转中…",
-        "explicitEn": null,
-        "twinEn": "Navigating…"
-      },
-      {
-        "file": "web_app/src/twin-page.tsx",
-        "line": 868,
-        "surface": "twin-ui",
-        "zhCN": "晶圆路线步骤",
-        "explicitEn": null,
-        "twinEn": "Wafer route step"
-      },
-      {
-        "file": "web_app/src/twin-page.tsx",
-        "line": 870,
+        "line": 924,
         "surface": "twin-ui",
         "zhCN": "播放",
         "explicitEn": null,
@@ -1401,7 +1388,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 870,
+        "line": 924,
         "surface": "twin-ui",
         "zhCN": "暂停",
         "explicitEn": null,
@@ -1409,7 +1396,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 871,
+        "line": 927,
         "surface": "twin-ui",
         "zhCN": "重播",
         "explicitEn": null,
@@ -1417,15 +1404,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 873,
-        "surface": "twin-ui",
-        "zhCN": "跟随",
-        "explicitEn": null,
-        "twinEn": "Follow"
-      },
-      {
-        "file": "web_app/src/twin-page.tsx",
-        "line": 889,
+        "line": 952,
         "surface": "twin-ui",
         "zhCN": "关闭 YMS",
         "explicitEn": null,
@@ -1433,7 +1412,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 902,
+        "line": 965,
         "surface": "twin-ui",
         "zhCN": "随机模式",
         "explicitEn": null,
@@ -1441,7 +1420,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 949,
+        "line": 1012,
         "surface": "twin-ui",
         "zhCN": "此原版场景的旧设备 ID 不在当前布局中，未施加类别级 DOWN：",
         "explicitEn": null,
@@ -1449,7 +1428,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 973,
+        "line": 1036,
         "surface": "twin-ui",
         "zhCN": "网格: 6m × 6m · Subfab: -7.0m",
         "explicitEn": null,
@@ -1457,7 +1436,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 977,
+        "line": 1040,
         "surface": "twin-ui",
         "zhCN": "FAB-01 · 单 FAB",
         "explicitEn": null,
@@ -1465,7 +1444,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 978,
+        "line": 1041,
         "surface": "twin-ui",
         "zhCN": "工艺分区图例",
         "explicitEn": null,
@@ -1473,7 +1452,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 985,
+        "line": 1048,
         "surface": "twin-ui",
         "zhCN": "X-Ray 过滤",
         "explicitEn": null,
@@ -1481,7 +1460,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 990,
+        "line": 1057,
         "surface": "twin-ui",
         "zhCN": "关闭 X-Ray",
         "explicitEn": null,
@@ -1489,7 +1468,15 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 998,
+        "line": 1065,
+        "surface": "twin-ui",
+        "zhCN": "驻留计时",
+        "explicitEn": null,
+        "twinEn": "Hold countdown"
+      },
+      {
+        "file": "web_app/src/twin-page.tsx",
+        "line": 1066,
         "surface": "twin-ui",
         "zhCN": "关闭导览",
         "explicitEn": null,
@@ -1497,7 +1484,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 998,
+        "line": 1066,
         "surface": "twin-ui",
         "zhCN": "跳过",
         "explicitEn": null,
@@ -1505,7 +1492,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 1003,
+        "line": 1071,
         "surface": "twin-ui",
         "zhCN": "导览站点",
         "explicitEn": null,
@@ -1513,7 +1500,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 1010,
+        "line": 1078,
         "surface": "twin-ui",
         "zhCN": "下一站",
         "explicitEn": null,
@@ -1521,7 +1508,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 1010,
+        "line": 1078,
         "surface": "twin-ui",
         "zhCN": "完成",
         "explicitEn": null,
@@ -1529,7 +1516,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 1024,
+        "line": 1092,
         "surface": "twin-ui",
         "zhCN": "首次引导",
         "explicitEn": null,
@@ -1537,7 +1524,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 1026,
+        "line": 1094,
         "surface": "twin-ui",
         "zhCN": "跳过引导",
         "explicitEn": null,
@@ -1545,7 +1532,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 1026,
+        "line": 1094,
         "surface": "twin-ui",
         "zhCN": "首次进入 ·",
         "explicitEn": null,
@@ -1553,7 +1540,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 1031,
+        "line": 1099,
         "surface": "twin-ui",
         "zhCN": "跳过",
         "explicitEn": null,
@@ -1561,7 +1548,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 1033,
+        "line": 1101,
         "surface": "twin-ui",
         "zhCN": "下一步",
         "explicitEn": null,
@@ -1569,7 +1556,7 @@
       },
       {
         "file": "web_app/src/twin-page.tsx",
-        "line": 1033,
+        "line": 1101,
         "surface": "twin-ui",
         "zhCN": "开始导览",
         "explicitEn": null,

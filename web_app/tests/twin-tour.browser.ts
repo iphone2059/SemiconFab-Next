@@ -1,7 +1,28 @@
 // @ts-nocheck — executable CDP acceptance, using a supplied browser transport.
 import assert from 'node:assert/strict';
+import { GOLDEN_CLOCK, goldenEvaluate, waitForGoldenReady } from './twin-goldens.browser.ts';
 
-const PAGE_SETUP = "(async () => {\n  const deadline = performance.now() + 30000;\n  while (!window.__SEMICONFAB_PERF__?.getCameraPose) {\n    if (performance.now() > deadline) throw new Error('tour diagnostics not available');\n    await new Promise(requestAnimationFrame);\n  }\n  const engine = window.__SEMICONFAB_PERF__.getEngine();\n  const errors = [];\n  const onError = event => errors.push(event.error.message);\n  engine._device.addEventListener('uncapturederror', onError);\n  const read = () => {\n    const tag = document.querySelector('#tour-hud-tag')?.textContent ?? null;\n    const timer = document.querySelector('#tour-hud-timer')?.textContent ?? null;\n    const width = document.querySelector('#tour-progress-bar i')?.style.width ?? null;\n    const camera = window.__SEMICONFAB_PERF__.getCameraPose();\n    const dots = [...document.querySelectorAll('#tour-dots-container button')].map(dot => dot.className.includes('active'));\n    return { at: performance.now(), tag, timer, width, camera, dots, active: tag !== null };\n  };\n  window.__tourAcceptance = {\n    read,\n    recordTour: (ms) => new Promise(resolve => {\n      const samples = [];\n      document.querySelector('#btn-cinematic-tour').click();\n      const timer = setInterval(() => samples.push(read()), 100);\n      setTimeout(() => { clearInterval(timer); resolve(samples); }, ms);\n    }),\n    errors: () => errors.length,\n    dispose: () => engine._device.removeEventListener('uncapturederror', onError),\n  };\n})()";
+export async function runTourInterruptionAcceptance(command, baseUrl = 'http://127.0.0.1:4173') {
+  const evaluate = expression => goldenEvaluate(command, expression);
+  const injection = await command('Page.addScriptToEvaluateOnNewDocument', { source: GOLDEN_CLOCK });
+  try {
+    await command('Page.navigate', { url: baseUrl + '/twin?lang=zh-CN&mode=engineer&perf=1' });
+    await waitForGoldenReady(command, 'next');
+    await evaluate("document.querySelector('#btn-cinematic-tour').click();__twinGoldenClock.step(30)");
+    assert.equal(await evaluate("!!document.querySelector('#cinematic-hud')"), true);
+    await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));__twinGoldenClock.step(3)");
+    assert.equal(await evaluate("!!document.querySelector('#cinematic-hud')"), false);
+    await evaluate("document.querySelector('button[aria-label=Top]').click();__twinGoldenClock.step(90)");
+    const camera = await evaluate('__SEMICONFAB_PERF__.getCameraPose()');
+    assert.ok(Math.abs(camera.position[1] - 95) < 0.01, 'Escape cancels Tour RAF so manual camera stays in control');
+    await evaluate('__twinGoldenClock.step(500)');
+    assert.equal(await evaluate("!!document.querySelector('#cinematic-hud')"), false, 'cancelled Tour must not resurrect at its next waypoint');
+    assert.deepEqual(await evaluate('__SEMICONFAB_PERF__.getCameraPose()'), camera);
+    return { camera, framesAfterEscape: 593 };
+  } finally { await command('Page.removeScriptToEvaluateOnNewDocument', { identifier: injection.identifier }); }
+}
+
+const PAGE_SETUP = "(async () => {\n  const deadline = performance.now() + 30000;\n  while (!window.__SEMICONFAB_PERF__?.getCameraPose) {\n    if (performance.now() > deadline) throw new Error('tour diagnostics not available');\n    await new Promise(requestAnimationFrame);\n  }\n  const engine = window.__SEMICONFAB_PERF__.getEngine();\n  const errors = [];\n  const onError = event => errors.push(event.error.message);\n  engine._device.addEventListener('uncapturederror', onError);\n  const read = () => {\n    const tag = document.querySelector('#tour-hud-tag')?.textContent ?? null;\n    const timer = document.querySelector('#tour-hud-timer')?.textContent ?? null;\n    const width = document.querySelector('#tour-progress-bar i')?.style.width ?? null;\n    const camera = window.__SEMICONFAB_PERF__.getCameraPose();\n    const dots = [...document.querySelectorAll('#tour-dots-container button')].map(dot => dot.className.includes('active'));\n    return { at: performance.now(), tag, timer, width, camera, dots, active: tag !== null };\n  };\n  window.__tourAcceptance = {\n    read,\n    recordTour: (ms) => new Promise(resolve => {\n      const startedAt = performance.now();\n      const samples = [];\n      document.querySelector('#btn-cinematic-tour').click();\n      const timer = setInterval(() => samples.push(read()), 100);\n      setTimeout(() => { clearInterval(timer); resolve({ startedAt, samples }); }, ms);\n    }),\n    errors: () => errors.length,\n    dispose: () => engine._device.removeEventListener('uncapturederror', onError),\n  };\n})()";
 
 export async function runTourAcceptance(command, baseUrl = 'http://127.0.0.1:5173') {
   const evaluate = async expression => {
@@ -28,7 +49,7 @@ export async function runTourAcceptance(command, baseUrl = 'http://127.0.0.1:517
 
   // One evaluate records the whole first waypoint + auto-advance window inside the page,
   // avoiding a CDP round-trip per sample while SwiftShader renders the tour.
-  const samples = await evaluate('window.__tourAcceptance.recordTour(9600)');
+  const { startedAt, samples } = await evaluate('window.__tourAcceptance.recordTour(9600)');
   assert.ok(Array.isArray(samples) && samples.length > 40, 'tour must produce samples');
   const first = samples[0];
   assert.ok(first.active, 'tour HUD must open');
@@ -39,7 +60,7 @@ export async function runTourAcceptance(command, baseUrl = 'http://127.0.0.1:517
   assert.ok(firstTween.camera.target.every(value => Math.abs(value) < 0.5), 'waypoint 1 lookAt');
   const advance = samples.find(sample => sample.tag?.includes('WAYPOINT 2/5'));
   assert.ok(advance, 'auto-advance to waypoint 2');
-  const advanceAt = advance.at - samples[0].at;
+  const advanceAt = advance.at - startedAt;
   assert.ok(advanceAt >= 6500 && advanceAt <= 9000, 'auto-advance after frozen 2.2s tween + 5s hold, got ' + advanceAt);
   const afterAdvance = samples.filter(sample => sample.at > advance.at + 2200);
   const secondPose = afterAdvance.find(sample => sample.camera && Math.abs(sample.camera.position[0] + 20) < 2 && Math.abs(sample.camera.position[1] - 3.8) < 2 && Math.abs(sample.camera.position[2] - 12) < 2);

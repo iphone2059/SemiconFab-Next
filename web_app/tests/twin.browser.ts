@@ -43,8 +43,8 @@ async function pressEscape() {
   // WebGPU holographic X-Ray: enable the shader path, cycle a utility filter and restore.
   await evaluate(`document.querySelector('#btn-toggle-xray').click()`);
   await until(`document.querySelector('#btn-toggle-xray').getAttribute('aria-pressed') === 'true' && !!document.querySelector('.twin-xray')`);
-  await evaluate(`[...document.querySelectorAll('.twin-xray button')].find(button => button.textContent?.trim() === 'UPW')?.click()`);
-  await until(`[...document.querySelectorAll('.twin-xray button')].some(button => button.className.includes('active') && button.textContent?.trim() === 'UPW')`);
+  await evaluate(`document.querySelector('#xray-btn-upw').click()`);
+  await until(`document.querySelector('#xray-btn-upw').className.includes('active')`);
   await evaluate(`document.querySelector('#btn-toggle-xray').click()`);
   await until(`document.querySelector('#btn-toggle-xray').getAttribute('aria-pressed') === 'false' && !document.querySelector('.twin-xray')`);
   assert.equal(await evaluate(`document.querySelectorAll('#left-sidebar').length`), 1);
@@ -152,7 +152,7 @@ async function pressEscape() {
   await evaluate(`document.querySelector('#btn-toggle-xray').click()`);
   await until(`!!document.querySelector('.twin-xray')`);
   assert.equal(await evaluate(`document.querySelectorAll('.twin-xray button').length`), 7);
-  await evaluate(`Array.from(document.querySelectorAll('.twin-xray button')).find((button) => button.textContent === 'UPW').click()`);
+  await evaluate(`document.querySelector('#xray-btn-upw').click()`);
   await until(`document.querySelectorAll('.twin-levels button')[0].getAttribute('class')?.includes('active')`);
   await evaluate(`Array.from(document.querySelectorAll('.twin-xray button')).find((button) => button.textContent === '×').click()`);
   await until(`!document.querySelector('.twin-xray')`);
@@ -182,12 +182,11 @@ async function pressEscape() {
   await until(`!!document.querySelector('#left-sidebar')`);
 
   await evaluate(`document.querySelector('.twin-wafer-toggle').click()`);
-  await until(`document.querySelector('.twin-wafer-row b')?.textContent?.includes('001 / 120')`);
-  await evaluate(`document.querySelector('.twin-wafer-actions button').click()`);
+  await until(`document.querySelector('#wafer-step-readout')?.textContent?.includes('1/120')`);
   await new Promise((resolve) => setTimeout(resolve, 2300));
-  await until(`document.querySelector('.twin-wafer-row b')?.textContent?.includes('002 / 120')`);
+  await until(`document.querySelector('#wafer-step-readout')?.textContent?.includes('2/120')`);
   await evaluate(`(() => { const select = document.querySelector('.twin-wafer-row select'); const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(select, 'C'); select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  await until(`document.querySelector('.twin-wafer-row b')?.textContent?.includes('/ 092')`);
+  await until(`document.querySelector('#wafer-step-readout')?.textContent?.includes('/92')`);
   await evaluate(`document.querySelector('.twin-wafer-head button').click()`);
   await until(`!document.querySelector('.twin-wafer')`);
 

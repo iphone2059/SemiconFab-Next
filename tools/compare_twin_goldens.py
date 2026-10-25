@@ -49,7 +49,13 @@ def compare_pair(root: Path, case: str):
     height, width = arrays[0].shape[:2]
     # Common visible scene excludes the left rail and top/bottom HUD. Full-frame
     # metrics remain mandatory, so this ROI cannot conceal a HUD mismatch.
-    x0, y0, x1, y1 = 328, 82, width, height - 48
+    viewport = records[0]['viewport']
+    scale_x, scale_y = width / viewport['width'], height / viewport['height']
+    # DOM bounds are CSS pixels; captured PNGs are device pixels (DPR=2 in Goldens).
+    # Using raw 328/82/48 at DPR=2 accidentally measured half the sidebar and HUD.
+    x0, y0, x1, y1 = round(328 * scale_x), round(82 * scale_y), width, round((viewport['height'] - 48) * scale_y)
+    if x0 >= x1 or y0 >= y1:
+        raise ValueError(f'{case}: viewport has no scene ROI')
     scene = image_metrics(*(array[y0:y1, x0:x1] for array in arrays))
     magnitude = np.abs(arrays[0].astype('int16') - arrays[1].astype('int16')).max(axis=2)
     heat = np.zeros_like(arrays[0]); heat[:, :, 0] = np.minimum(255, magnitude * 4)

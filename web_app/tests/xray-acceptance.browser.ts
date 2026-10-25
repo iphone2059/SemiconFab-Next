@@ -60,6 +60,11 @@ function imageDiff(a: ReturnType<typeof decodePng>, b: ReturnType<typeof decodeP
 }
 
 const PAGE_SETUP = `(async () => {
+  const perf = window.__SEMICONFAB_PERF__;
+  let scene;
+  if (perf?.getScene) {
+    scene = perf.getScene();
+  } else {
   const quote = String.fromCharCode(34);
   const entry = performance.getEntriesByType('resource').findLast(r => r.name.includes('/@babylonjs_core_Engines_webgpuEngine.js')).name;
   const source = await (await fetch(entry)).text();
@@ -74,7 +79,8 @@ const PAGE_SETUP = `(async () => {
     if (performance.now() > deadline) throw new Error('X-Ray scene did not become ready');
     await new Promise(requestAnimationFrame);
   }
-  const scene = store.LastCreatedScene;
+  scene = store.LastCreatedScene;
+  }
   const engine = scene.getEngine();
   const shadow = scene.metadata.staticShadows;
   const errors = [];
@@ -159,14 +165,17 @@ export async function runXrayAcceptance(command, baseUrl = 'http://127.0.0.1:517
     throw new Error('Browser condition timed out: ' + expression);
   }
   const clickXray = () => evaluate("document.querySelector('#btn-toggle-xray').click()");
-  const clickFilter = label => evaluate("[...document.querySelectorAll('.twin-xray button')].find(button => button.textContent?.trim() === " + JSON.stringify(label) + ")?.click()");
+  const clickFilter = label => evaluate("document.getElementById('xray-btn-' + " + JSON.stringify(label.toLowerCase()) + ")?.click()");
 
-  await command('Page.navigate', { url: baseUrl + '/twin?lang=zh-CN&mode=engineer' });
+  await command('Page.navigate', { url: baseUrl + '/twin?lang=zh-CN&mode=engineer&perf=1' });
   await until("!!document.querySelector('.twin-page')");
   await evaluate("localStorage.setItem('semicon_twin_onboarding_dismissed','1')");
   await command('Page.reload', { ignoreCache: false });
   await until("!!document.querySelector('.twin-page')");
   await until("document.querySelector('.twin-status')?.getAttribute('title')?.startsWith('WebGPU ·')", 60000);
+  // Material identity checks require a stable SEMI E10 state. Demo ticks otherwise
+  // legitimately replace status-LED materials while the shader test is running.
+  await evaluate("if (document.querySelector('#btn-sim-play')?.getAttribute('aria-pressed') === 'true') document.querySelector('#btn-sim-play').click()");
   await evaluate(PAGE_SETUP);
   await evaluate('__fabXrayAcceptance.frames(10)');
   const initialShadow = await evaluate('__fabXrayAcceptance.shadowInfo()');
@@ -225,9 +234,9 @@ export async function runXrayAcceptance(command, baseUrl = 'http://127.0.0.1:517
   for (const label of ['All', 'UPW', 'Gas', 'Vac', 'Exhaust', 'AMHS']) {
     await clickFilter(label);
     await evaluate('__fabXrayAcceptance.frames(4)');
-    filters.push(await evaluate("[...document.querySelectorAll('.twin-xray button')].filter(button => button.className.includes('active')).map(button => button.textContent?.trim())"));
+    filters.push(await evaluate("[...document.querySelectorAll('.twin-xray button')].filter(button => button.className.includes('active')).map(button => button.id.replace('xray-btn-',''))"));
   }
-  assert.deepEqual(filters.map(active => active[0]), ['All', 'UPW', 'Gas', 'Vac', 'Exhaust', 'AMHS']);
+  assert.deepEqual(filters.map(active => active[0]), ['all', 'upw', 'gas', 'vac', 'exhaust', 'amhs']);
 
   await clickXray();
   await until("document.querySelector('#btn-toggle-xray').getAttribute('aria-pressed') === 'false'");

@@ -47,6 +47,19 @@ function createSubfab(): SubfabFixture {
   return { engine, scene, root, controller };
 }
 
+it('renders the frozen industrial B1 floor at -7m with its slate PBR material', () => {
+  const fixture = createSubfab();
+  try {
+    const floor = mesh(fixture.scene, 'subfab-floor');
+    expect(floor.position.y).toBe(-7);
+    const material = floor.material as PBRMaterial;
+    expect(material.albedoColor.toHexString()).toBe('#1E293B');
+    expect(material.roughness).toBe(0.75);
+    expect(material.metallic).toBe(0.15);
+    expect(floor.metadata.staticShadowCaster).toBe(false);
+  } finally { closeSubfab(fixture); }
+});
+
 function closeSubfab(fixture: SubfabFixture): void {
   fixture.scene.dispose();
   fixture.engine.dispose();
@@ -144,8 +157,8 @@ describe('original B1 subfab industrial facilities', () => {
       expect(display.emissiveColor.b).toBeCloseTo(0xc7 / 255, 10);
       expect(display.emissiveIntensity).toBeCloseTo(ORIGINAL_SUBFAB_CHILLER.display.emissiveIntensity, 10);
 
-      // 13 shared + 5 secondary pipe + 30 valve wheel + 4 louver + 4 display materials.
-      expect(scene.materials).toHaveLength(56);
+      // 13 shared + 5 secondary pipe + 30 valve wheel + 4 louver + 4 display + floor.
+      expect(scene.materials).toHaveLength(57);
       expect(scene.materials.every(material => material instanceof PBRMaterial && material.usePhysicalLightFalloff === false)).toBe(true);
     } finally {
       closeSubfab(fixture);
@@ -395,14 +408,14 @@ describe('original B1 subfab industrial facilities', () => {
       const { scene, controller } = fixture;
       expect(controller.group.isEnabled()).toBe(true);
       expect(controller.group.getChildMeshes()).toHaveLength(ORIGINAL_SUBFAB_COUNTS.meshes);
-      expect(ORIGINAL_SUBFAB_COUNTS.meshes).toBe(793);
-      expect(scene.meshes).toHaveLength(793);
+      expect(ORIGINAL_SUBFAB_COUNTS.meshes).toBe(794);
+      expect(scene.meshes).toHaveLength(794);
 
       // Only the three source castShadow ducts are shadow casters.
       const casters = controller.group.getChildMeshes().filter(candidate => (candidate.metadata as { staticShadowCaster?: boolean } | null)?.staticShadowCaster !== false);
       expect(casters.map(candidate => candidate.name)).toEqual(['subfab-duct-0', 'subfab-duct-1', 'subfab-duct-2']);
       const nonCasters = controller.group.getChildMeshes().filter(candidate => (candidate.metadata as { staticShadowCaster?: boolean } | null)?.staticShadowCaster === false);
-      expect(nonCasters).toHaveLength(790);
+      expect(nonCasters).toHaveLength(791);
 
       controller.setVisible(false);
       expect(controller.group.isEnabled()).toBe(false);

@@ -113,7 +113,7 @@ export function twinUiReducer(state: TwinUiState, event: TwinUiEvent): TwinUiSta
     case 'wafer/open': return {
       ...stopTour(state), entryMode: state.entryMode === 'research' ? 'engineer' : state.entryMode,
       level: 'L1', spatialMode: null, aeroHeatmap: false, statusSource: state.preferredStatusSource,
-      wafer: { ...state.wafer, active: true, playing: false },
+      wafer: { ...state.wafer, active: true, playing: true },
       onboarding: { ...state.onboarding, open: false }, research: { ...state.research, playing: false },
     };
     case 'wafer/close': return { ...state, view: 'iso', wafer: { ...state.wafer, active: false, playing: false } };

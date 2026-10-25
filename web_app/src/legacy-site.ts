@@ -502,6 +502,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
       shadows.invalidate('xray-visibility');
     }
     xrayFilter = null;
+    syncLevel();
   };
   const applyXRay = (filter: XRayFilter | null) => {
     restoreXRay();
@@ -514,6 +515,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     // The source X-Ray forces subfab piping visible and highlights/filters it; no mesh is hidden.
     fab.subfab.setEnabled(true);
     subfabDense.setVisible(true);
+    scene.getMeshByName('procedural-slab')?.setEnabled(false);
     xrayPalette.setLineXray(true);
     updateXrayFrame();
     shadows.invalidate('xray-visibility');
@@ -536,22 +538,19 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
         ? PBRMaterial.PBRMATERIAL_ALPHABLEND : PBRMaterial.PBRMATERIAL_OPAQUE;
     }
     fab.floor.setEnabled(true);
-    fab.shell.setEnabled(!basementActive);
+    fab.shell.setEnabled(true);
     fab.subfab.setEnabled(exploded || basementActive || dualActive || layerVisibility.subfab || xrayFilter !== null);
-    fab.equipment.setEnabled(exploded || !basementActive);
-    fab.personnel.setEnabled(!basementActive);
-    architecture.setVisible(!basementActive);
-    architecture.setCeilingVisible(exploded || (!basementActive && !dualActive && layerVisibility.ceiling));
-    roofHvac.setVisible(layerVisibility.roof && !basementActive && !dualActive);
+    // Frozen level switching changes floor alpha/slab only, retaining L1 objects.
+    fab.equipment.setEnabled(true);
+    fab.personnel.setEnabled(true);
+    architecture.setVisible(true);
+    architecture.setCeilingVisible(exploded || layerVisibility.ceiling);
+    roofHvac.setVisible(layerVisibility.roof);
     subfabDense.setVisible(exploded || basementActive || dualActive || xrayFilter !== null);
-    amhsGroup.setEnabled(!basementActive && layerVisibility.amhs);
+    amhsGroup.setEnabled(layerVisibility.amhs);
     heatmap.group.setEnabled(!basementActive && layerVisibility.heatmap);
     airflow.group.setEnabled(!basementActive && layerVisibility.airflow);
-    for (const mesh of scene.meshes) {
-      if (/^(procedural-slab|native-zone|native-zone-border|native-floor-grid|zone-label|perimeter-wall|perimeter-glass|perimeter-kick|perimeter-door|native-oht-shadow|operator-ground-shadow|procedural-shadow-ground)/.test(mesh.name)) {
-        mesh.setEnabled(!cutaway);
-      }
-    }
+    scene.getMeshByName('procedural-slab')?.setEnabled(!cutaway && !exploded && xrayFilter === null);
   };
 
   // Original exploded hierarchy animates at 0.08 of the remaining delta per frame.
@@ -577,7 +576,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     setLayer(layer, visible) {
       if (layer === 'amhs') {
         layerVisibility.amhs = visible;
-        amhsGroup.setEnabled(visible && !basementActive);
+        amhsGroup.setEnabled(visible);
         return;
       }
       if (layer === 'heatmap') {
@@ -596,13 +595,13 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
       }
       if (layer === 'roof') {
         layerVisibility.roof = visible;
-        roofHvac.setVisible(visible && !basementActive && !dualActive);
+        roofHvac.setVisible(visible);
         shadows.invalidate('roof-visibility');
         return;
       }
       if (layer === 'ceiling') {
         layerVisibility.ceiling = visible;
-        architecture.setCeilingVisible(explodeModeActive || targetExplodeFactor > 0.01 || explodeFactor > 0.01 || (visible && !basementActive && !dualActive));
+        architecture.setCeilingVisible(explodeModeActive || targetExplodeFactor > 0.01 || explodeFactor > 0.01 || visible);
         shadows.invalidate('ceiling-visibility');
         return;
       }

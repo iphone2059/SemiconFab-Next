@@ -274,7 +274,6 @@ export function buildProceduralFab(scene: Scene): ProceduralFab {
   const tankMaterial = new StandardMaterial('procedural-tank-material', scene);
   tankMaterial.diffuseColor = hex('#9db3c4');
   tankMaterial.specularColor = new Color3(0.25, 0.27, 0.3);
-  box(scene, 'procedural-subfab-slab', 114, 0.3, 84, Vector3(0, -7.15, 0), tankMaterial, subfab);
   for (let index = 0; index < 10; index += 1) {
     const x = -38 + index * 8.4;
     cylinder(scene, `subfab-riser-${index}`, 0.32, 2.7, Vector3(x, -1.35, 18), pipeMaterial, subfab);

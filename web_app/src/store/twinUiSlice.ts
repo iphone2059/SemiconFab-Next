@@ -6,7 +6,8 @@ import type { TwinSelection } from '../original-twin-data';
 import type { MesJob } from '../process-control';
 import { DEFAULT_YIELD_INPUT, type YieldInput } from '../fab-yield';
 import type { DefectPattern } from '../wafer-map';
-import { waferTransitPoint, type WaferProduct, type WaferWaypoint } from '../wafer-route';
+import type { WaferProduct } from '../wafer-route';
+import type { WaferHud } from '../tour-wafer-timeline';
 
 function initialUi(): TwinUiState {
   const requested = typeof location === 'undefined' ? null : new URL(location.href).searchParams.get('mode');
@@ -51,9 +52,8 @@ export type WaferUiState = {
   product: WaferProduct;
   index: number;
   follow: boolean;
-  progress: number;
-  trail: [number, number, number][];
-  point?: { x: number; y: number; z: number };
+  hud?: WaferHud;
+  completed: boolean;
 };
 export type YmsUiState = {
   open: boolean;
@@ -107,7 +107,7 @@ const initialPageState: TwinPageState = {
   showResearchUtil: true,
   tourRemainingMs: 0,
   onboardingDontShow: true,
-  wafer: { product: 'A', index: 0, follow: true, progress: 0, trail: [] },
+  wafer: { product: 'A', index: 0, follow: true, completed: false },
   yms: { open: false, tab: 'map', pattern: 'clean', seed: 811, dieArea: 100, defectD0: 0.15, clusterAlpha: 3, yieldInput: DEFAULT_YIELD_INPUT, yieldScenario: 'live', stdfCopied: false },
   sidebar: { tab: 'fab', query: '', category: 'ALL', segment: 'ALL', stateFilter: 'ALL', switched: false },
   inspectorMes: {},
@@ -137,27 +137,8 @@ export const twinPageSlice = createSlice({
     tourRemainingSet(state, action: PayloadAction<number>) { state.tourRemainingMs = Math.max(0, action.payload); },
     tourTick(state) { state.tourRemainingMs = Math.max(0, state.tourRemainingMs - 250); },
     onboardingDontShowSet(state, action: PayloadAction<boolean>) { state.onboardingDontShow = action.payload; },
-    waferProductSet(state, action: PayloadAction<WaferProduct>) {
-      state.wafer = { ...state.wafer, product: action.payload, index: 0, progress: 0, trail: [], point: undefined };
-    },
-    waferIndexSet(state, action: PayloadAction<number>) {
-      state.wafer = { ...state.wafer, index: Math.max(0, Math.floor(action.payload)), progress: 0, trail: [], point: undefined };
-    },
-    waferTrailCleared(state) { state.wafer = { ...state.wafer, index: 0, progress: 0, trail: [], point: undefined }; },
-    waferFrameAdvanced(state, action: PayloadAction<{ deltaSec: number; speed: 1 | 4 | 16; waypoints: readonly WaferWaypoint[] }>) {
-      const { waypoints, speed, deltaSec } = action.payload;
-      if (!waypoints.length || !Number.isFinite(deltaSec) || deltaSec <= 0) return;
-      const wafer = state.wafer;
-      wafer.index = Math.min(wafer.index, waypoints.length - 1);
-      wafer.progress = Math.min(1, wafer.progress + Math.min(deltaSec, 0.1) / (2 / speed));
-      const point = waferTransitPoint(waypoints, wafer.index, wafer.progress);
-      wafer.point = point;
-      const previous = wafer.trail.at(-1);
-      if (!previous || Math.hypot(point.x - previous[0], point.z - previous[2]) > 0.25) {
-        wafer.trail.push([point.x, point.y, point.z]);
-        if (wafer.trail.length > 30) wafer.trail.shift();
-      }
-      if (wafer.progress >= 1 && wafer.index < waypoints.length - 1) { wafer.index++; wafer.progress = 0; }
+    waferFrameReceived(state, action: PayloadAction<{ product: WaferProduct; index: number; hud: WaferHud; completed: boolean }>) {
+      Object.assign(state.wafer, action.payload);
     },
     waferFollowSet(state, action: PayloadAction<boolean>) { state.wafer.follow = action.payload; },
     ymsOpenSet(state, action: PayloadAction<boolean>) { state.yms.open = action.payload; },
@@ -182,7 +163,7 @@ export const twinPageSlice = createSlice({
     archQuerySet(state, action: PayloadAction<string>) { state.archQuery = action.payload; },
   },
   extraReducers: builder => {
-    builder.addCase(twinUiSlice.actions.waferClose, state => { state.wafer.progress = 0; state.wafer.trail = []; state.wafer.point = undefined; });
+    builder.addCase(twinUiSlice.actions.waferClose, state => { state.wafer.hud = undefined; state.wafer.completed = false; });
   },
 });
 

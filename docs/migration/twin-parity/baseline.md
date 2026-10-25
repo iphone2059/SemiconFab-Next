@@ -1,6 +1,6 @@
 # Twin parity baseline
 
-Updated: 2026-10-25. Status: **IMPLEMENTING / NOT PARITY_VERIFIED**.
+Updated: 2026-10-26. Status: **IMPLEMENTING / NOT PARITY_VERIFIED**.
 
 The user selected the final construction loaded by `../SemiconFab/twin.html`, with `?layout=/twin/layout-default.json&mode=engineer`. The frozen original is `jinjiefan2020/SemiconFab@b3666132e5d8cab2cebe4c4227fc04c52242eb28`. Next started this increment at `060957d`. Original source bytes are unchanged; hashes and inputs are in [source-manifest.json](source-manifest.json). See [attribution.md](attribution.md) for original PolyForm and icon notices.
 
@@ -304,6 +304,37 @@ plus the adjacent exploded/restored PNGs. Latest frontend verification: **163/16
 and Vite build pass; the native-shadow and X-Ray acceptance suites also still pass. This is runtime
 acceptance, not a matched Golden SSIM comparison against the frozen original; source-exact visual
 parity remains open.
+
+## 2026-10-26 Wafer renderer and targeted Golden repairs
+
+Wafer now consumes `createWaferTimeline` for full A/B/C routes, source position/tangent rotation,
+camera offset, bounded additive trail, HUD and completion/replay. Opening/product changes auto-play;
+pause retains the interpolated pose. Seek and the duplicate Redux integrator are removed. Close/reopen,
+speed/follow/locale changes and Tour exclusion retain the controller lifecycle. Fixed invisible FOUP,
+per-frame trail reconstruction, stale replay completion bookkeeping, and Tour RAF surviving Escape.
+
+B1/Dual now retain L1 equipment/architecture/personnel/OHT as the source does. The B1 floor is the
+source slate PBR plane at -7 m; level/X-Ray/exploded slab and material restore are checked in browser.
+Wafer/X-Ray HUD geometry and dynamic pause glyph match measured source DOM; the frozen global 12px
+font floor is retained. The Golden comparator now scales the CSS scene ROI into device pixels.
+
+Production browser acceptance passes for Wafer, level/FFU combinations, Twin UI, Tour, Tour Escape,
+Exploded and X-Ray, with zero console/runtime errors and zero recorded GPU errors. 121 identities,
+12 exploded links and 771 -> 969 -> 771 casters restore (removed the old extra subfab slab caster).
+Tour auto-advance is 7.214 s measured from the click. Current checks: **187/187 Vitest**, TypeScript,
+production build, architecture/source drift gates and **16/16 Python tooling tests** pass.
+
+Fresh 19-pair production Golden full-frame SSIM range: **56.7%-73.7%**. Wafer **50.0% -> 58.5%**,
+Dual **59.9% -> 63.6%**, X-Ray **60.6% -> 61.4%**. B1 stays **56.7%** structurally while RGB MAE
+falls **65.9 -> 51.1**. Corrected ROI values are not comparable to the earlier DPR-bugged ROI table;
+full-frame metrics remain comparable. Material/light/specular response, sidebar/top/footer/AMHS layout,
+basement detail and X-Ray appearance still prevent parity. The capture procedure also retains declared
+React setup clock offsets and non-equivalent random-consumption order. No visual threshold is approved.
+
+Evidence and exact scope/limitations: [2026-10-26 README](evidence/golden-2026-10-26/README.md),
+[comparison](evidence/golden-2026-10-26/comparison.json),
+[production acceptance](evidence/golden-2026-10-26/acceptance.json).
+**60-minute soak and device-loss matrix remain skipped by user decision.**
 
 ## Earlier GPU evidence interpretation
 

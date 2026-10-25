@@ -261,6 +261,7 @@ export const ORIGINAL_SUBFAB_COUNTS = {
   bollards: ORIGINAL_SUBFAB_BOLLARDS.length,
   lights: ORIGINAL_SUBFAB_LIGHTS.length,
   meshes:
+    1 + // Industrial floor (twin.html:8741-8752).
     ORIGINAL_SUBFAB_DUCTS.length * (1 + DUCT_RING_COUNT + DUCT_HANGER_COUNT * 3 + DUCT_BRANCH_COUNT * 2) +
     ORIGINAL_SUBFAB_SECONDARY_PIPES.length * (1 + VALVE_COUNT * 2) +
     ORIGINAL_SUBFAB_PUMPS.length * PUMP_MESH_COUNT +
@@ -319,6 +320,13 @@ export function buildOriginalSubfabFacilities(
   const greenLed = emissive(shaded('subfab-green-led-material', 0x10b981), 0x10b981, 0.9);
 
   const noCaster = { staticShadowCaster: false } as const;
+  // twin.html:8741-8752: industrial slate plane, not the old tank-coloured slab.
+  const floor = MeshBuilder.CreateGround('subfab-floor', { width: 114, height: 84 }, scene);
+  floor.parent = group;
+  floor.position.y = -7;
+  floor.material = shaded('subfab-floor-material', 0x1e293b, 0.15, 0.75);
+  floor.metadata = noCaster;
+  floor.isPickable = false;
   const addBox = (
     name: string,
     size: readonly [number, number, number],
