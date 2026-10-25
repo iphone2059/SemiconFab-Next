@@ -1,16 +1,11 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTwinLocale } from './twin-i18n';
 import { useAppDispatch, useAppSelector } from './store/hooks';
 import { twinPageActions } from './store/twinUiSlice';
 import { ORIGINAL_TWIN_UI, localizedEquipment, type TwinSelection } from './original-twin-data';
-import type { FabLayoutTool, FabToolState } from './fab-layout';
+import type { FabToolState } from './fab-layout';
 import { OriginalElevation } from './twin-elevation';
-import { applyMesAction, buildTelemetry, computeSpc, createMesJob, type MesAction, type MesJob } from './process-control';
-
-const CATEGORY: Record<string, FabLayoutTool['category']> = {
-  litho:'lithography', etch:'dry_etch', depo:'thin_film_deposition', imp_therm:'ion_implantation',
-  wet_cmp:'cmp', metro:'metrology', subfab:'other', facility:'other', amhs:'other', pkg:'packaging', test:'test',
-};
+import { applyMesAction, computeSpc, createProcessMesJob, type MesAction, type MesJob } from './process-control';
 const STATE_LABEL: Record<FabToolState,{zh:string;en:string;className:string}> = {
   running:{zh:'运行中',en:'Running',className:'state-running'}, idle:{zh:'待料',en:'Idle',className:'state-idle'},
   down:{zh:'告警',en:'Down',className:'state-down'}, maint:{zh:'维保',en:'PM',className:'state-maint'},
@@ -22,13 +17,6 @@ function findSourceUrl(value: unknown, depth=0): string | undefined {
   if(typeof value==='object'){for(const [key,item] of Object.entries(value)){if(/source|url/i.test(key)){const found=findSourceUrl(item,depth+1);if(found)return found;} } for(const item of Object.values(value)){const found=findSourceUrl(item,depth+1);if(found)return found;}}
   return undefined;
 }
-function pseudoTool(id:string, row: NonNullable<ReturnType<typeof localizedEquipment>>): FabLayoutTool {
-  return { recordId:id, rotationDegrees:row.position.rotY??0, originalKind:row.catalogRecord?'catalog':'draft',
-    dimensionTier:'reference', x:row.position.x??0, z:row.position.z??0, width:row.dimensions.width??0,
-    depth:row.dimensions.length??0, height:row.dimensions.height??0, category:CATEGORY[row.category??'']??'other',
-    vendor:row.brand??'', model:row.model??'' };
-}
-
 export function OriginalInspector({selection,states,onClose,onManualKey,onSelectReference,onSelectOem}:{
   selection:TwinSelection; states:Readonly<Record<string,FabToolState>>; onClose:()=>void;
   onManualKey:(key:string,state:FabToolState)=>void; onSelectReference?:(id:string)=>void; onSelectOem?:(id:string)=>void;
@@ -36,12 +24,15 @@ export function OriginalInspector({selection,states,onClose,onManualKey,onSelect
   const {language,t}=useTwinLocale(); const zh=language==='zh';
   const equipment = selection.kind==='reference' ? localizedEquipment(selection.id,language) ?? ORIGINAL_TWIN_UI.equipment.find(row=>row.id===selection.id) : undefined;
   const oem = selection.kind==='oem' ? ORIGINAL_TWIN_UI.oem.find(row=>row.id===selection.id) : undefined;
-  const tool = useMemo(()=>equipment?pseudoTool(equipment.id,equipment):undefined,[equipment]);
-  const telemetry = useMemo(()=>tool?buildTelemetry(tool,0):undefined,[tool]);
+  const processEquipment = selection.kind==='reference' ? ORIGINAL_TWIN_UI.equipment.find(row=>row.id===selection.id) : undefined;
+  const telemetry = useAppSelector(state=>processEquipment ? state.twinDemo.telemetry[processEquipment.id] : undefined);
   const spc = useMemo(()=>telemetry?computeSpc(telemetry.history,telemetry.sensors[0],(states[equipment?.id??'']??'running')==='down'):undefined,[telemetry,states,equipment?.id]);
   const dispatch=useAppDispatch();
-  const mes=useAppSelector(state=>equipment ? state.twinPage.inspectorMes[equipment.id] : undefined) ?? (tool?createMesJob(tool,0):undefined);
-  const setMes=(update:(current:MesJob|undefined)=>MesJob|undefined)=>dispatch(twinPageActions.inspectorMesSet({id:equipment?.id??'unknown',job:update(mes)??mes??createMesJob(tool!,0)}));
+  const storedMes=useAppSelector(state=>equipment ? state.twinPage.inspectorMes[equipment.id] : undefined);
+  const initialMes=useMemo(()=>processEquipment?createProcessMesJob(processEquipment):undefined,[processEquipment]);
+  const mes=storedMes??initialMes;
+  useEffect(()=>{if(processEquipment&&initialMes&&!storedMes)dispatch(twinPageActions.inspectorMesSet({id:processEquipment.id,job:initialMes}));},[processEquipment,initialMes,storedMes,dispatch]);
+  const setMes=(update:(current:MesJob|undefined)=>MesJob|undefined)=>{const job=update(mes)??mes;if(equipment&&job)dispatch(twinPageActions.inspectorMesSet({id:equipment.id,job}));};
   if(selection.kind==='layout')return null;
   if(selection.kind==='oem'&&oem) {
     return <aside className="twin-inspector original-inspector" aria-label={t('设备详情')}>

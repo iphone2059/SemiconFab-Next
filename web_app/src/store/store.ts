@@ -5,6 +5,7 @@ import { twinPageSlice, twinUiSlice } from './twinUiSlice';
 import { workbenchSlice } from './workbenchSlice';
 import { catalogSlice } from './catalogSlice';
 import { localeSlice } from './localeSlice';
+import { runtimeSlice } from './runtimeSlice';
 
 const HIGH_FREQUENCY_ACTIONS = [
   'twinPage/tourTick',
@@ -12,6 +13,8 @@ const HIGH_FREQUENCY_ACTIONS = [
   'twinPage/amhsSet',
   'twinUi/researchAdvance',
   'twinDemo/tick',
+  'runtime/viewerHoverReceived',
+  'twinPage/waferFrameAdvanced',
 ];
 const devtoolsEnabled = (import.meta as { env?: { DEV?: boolean } }).env?.DEV !== false;
 
@@ -24,6 +27,7 @@ export const store = configureStore({
     workbench: workbenchSlice.reducer,
     catalog: catalogSlice.reducer,
     locale: localeSlice.reducer,
+    runtime: runtimeSlice.reducer,
   },
   // Scene objects and frame-frequency telemetry never enter the store. Large,
   // serializable arrays are skipped by the development-only immutable check.
@@ -43,3 +47,4 @@ export const store = configureStore({
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
+export type AppStore = typeof store;

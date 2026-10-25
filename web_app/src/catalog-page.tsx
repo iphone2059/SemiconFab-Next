@@ -6,8 +6,9 @@ import {
   type ChangeEvent,
   type MouseEvent,
 } from 'react';
-import { useAppDispatch, useAppSelector } from './store/hooks';
+import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
 import { catalogActions } from './store/catalogSlice';
+import { localeActions } from './store/localeSlice';
 import { useGetCatalogQuery } from './store/api';
 import type { CatalogEntryDto } from './contracts';
 import {
@@ -316,11 +317,12 @@ function initialPreferences(): Preferences {
 
 export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare' }) {
   const dispatch = useAppDispatch();
-  const initial = useMemo(() => readCatalogRoute(new URL(location.href)), []);
+  const store = useAppStore();
   const {
-    view, preferences, domain, category, query, hideDrafts, selected,
-    detailId, page, localEntries, localImportId, importError,
+    view, domain, category, query, hideDrafts, selected,
+    detailId, page, localEntries, localImportId, importError, hydrated,
   } = useAppSelector((state) => state.catalog);
+  const preferences = useAppSelector(state => state.locale);
   const language = preferences.language;
   const t = (zh: string, en: string) => text(language, zh, en);
   const catalogQuery = useGetCatalogQuery();
@@ -333,8 +335,6 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
   const error = importError || (catalogQuery.error ? 'Catalog request failed' : '');
   const loading = catalogQuery.isLoading && !localEntries;
   const detail = entries.find((entry) => entry.recordId === detailId);
-  const generation = useRef(0);
-  const hydrated = useRef(false);
   const deferredQuery = useDeferredValue(query);
   const filtered = useMemo(
     () => filterCatalog(entries, domain, category, deferredQuery, hideDrafts),
@@ -356,12 +356,12 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
   const currentPage = Math.min(page, pageCount - 1);
 
   useEffect(() => {
-    if (hydrated.current) return;
-    hydrated.current = true;
+    // StrictMode replays this setup before a new render. Read the current store
+    // instead of the first render's hydrated=false closure.
+    if (store.getState().catalog.hydrated) return;
     const route = readCatalogRoute(new URL(location.href));
     dispatch(catalogActions.hydrate({
       view: initialView,
-      preferences: initialPreferences(),
       domain: route.domain,
       category: route.category,
       query: route.query,
@@ -369,7 +369,8 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
       selected: [...route.compare],
       page: 0,
     }));
-  }, [dispatch, initialView]);
+    dispatch(localeActions.preferencesSet(initialPreferences()));
+  }, [dispatch, initialView, hydrated, store]);
 
   useEffect(() => {
     if (view !== 'compare' || selected.length > 0 || entries.length === 0) return;
@@ -384,8 +385,8 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
       dispatch(catalogActions.hydrate({
         view: route.view, domain: route.domain, category: route.category, query: route.query,
         hideDrafts: route.hideDrafts, selected: [...route.compare], page: 0,
-        preferences: initialPreferences(),
       }));
+      dispatch(localeActions.preferencesSet(initialPreferences()));
     };
     window.addEventListener('popstate', restore);
     return () => window.removeEventListener('popstate', restore);
@@ -436,18 +437,17 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
     if (!file) return;
+    const requestId = crypto.randomUUID();
+    dispatch(catalogActions.importStarted(requestId));
     if (file.size > 10 * 1024 * 1024) {
-      dispatch(catalogActions.importErrorSet(t('文件超过 10 MiB。', 'File exceeds 10 MiB.')));
+      dispatch(catalogActions.importFailed({ requestId, error: t('文件超过 10 MiB。', 'File exceeds 10 MiB.') }));
       return;
     }
-    const current = ++generation.current;
     try {
       const parsed = parseCatalogEntries(JSON.parse(await file.text()));
-      if (current !== generation.current) return;
-      dispatch(catalogActions.localImportApplied({ entries: parsed, importId: file.name }));
+      dispatch(catalogActions.localImportApplied({ requestId, entries: parsed, importId: file.name }));
     } catch (reason: unknown) {
-      if (current === generation.current)
-        dispatch(catalogActions.importErrorSet(reason instanceof Error ? reason.message : t('导入失败', 'Import failed')));
+      dispatch(catalogActions.importFailed({ requestId, error: reason instanceof Error ? reason.message : t('导入失败', 'Import failed') }));
     }
   }
 
@@ -478,7 +478,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
         <div className="catalog-preferences">
           <button
             onClick={() =>
-              dispatch(catalogActions.languageToggled())
+              dispatch(localeActions.languageToggled())
             }
           >
             {language === 'zh' ? 'EN' : '中文'}
@@ -486,7 +486,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
           <button
             aria-label={t('切换主题', 'Toggle theme')}
             onClick={() =>
-              dispatch(catalogActions.themeToggled())
+              dispatch(localeActions.themeToggled())
             }
           >
             {preferences.theme === 'light' ? '◐' : '☀'}

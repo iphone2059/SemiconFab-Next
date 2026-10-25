@@ -1,5 +1,8 @@
 import { useTwinLocale } from './twin-i18n';
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { useAppDispatch, useAppSelector } from './store/hooks';
+import { runtimeActions } from './store/runtimeSlice';
+import { createCoalescedDispatcher } from './store/telemetry-buffer';
 import type { FabDto, SiteDto } from './contracts';
 import { bindViewerZoom } from './viewer-zoom';
 import { SceneFacade, type AmhsStats, type CutAxis, type HoveredTool, type PickedTool, type SceneLayer, type SceneViewPreset, type XRayFilter } from './fab-scene';
@@ -67,10 +70,11 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
   const canvas = useRef<HTMLCanvasElement>(null);
   const surface = useRef<HTMLDivElement>(null);
   const facade = useRef<SceneFacade | undefined>(undefined);
-  const [ready, setReady] = useState(false);
-  const [status, setStatus] = useState(t("准备 WebGPU 视图…"));
-  const [generation, setGeneration] = useState(0);
-  const [hoveredTool, setHoveredTool] = useState<HoveredTool>();
+  const dispatch = useAppDispatch();
+  const status = useAppSelector(state => state.runtime.viewer.status);
+  const generation = useAppSelector(state => state.runtime.viewer.generation);
+  const hoveredTool = useAppSelector(state => state.runtime.viewer.hover);
+  const ready = status.startsWith('WebGPU ·') || status.startsWith('WebGPU 设备');
 
   useEffect(() => {
     const root = surface.current;
@@ -81,6 +85,18 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
     const element = canvas.current;
     if (!element) return;
     const controller = new AbortController();
+    const epoch = crypto.randomUUID();
+    dispatch(runtimeActions.viewerMounted(epoch));
+    const hoverBatcher = createCoalescedDispatcher<HoveredTool | undefined>(hover => {
+      dispatch(runtimeActions.viewerHoverReceived({ epoch, hover }));
+    }, 50);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      hoverBatcher.cancel();
+      facade.current?.clearSelection();
+      dispatch(runtimeActions.viewerHoverCleared());
+    };
+    window.addEventListener('keydown', onKeyDown);
     let scene: SceneFacade | undefined;
     void import('./babylon-webgpu')
       .then(({ createWebGpuBackend }) => {
@@ -92,24 +108,28 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
           element,
           [{ fabId: fab.fabId, code: fab.code, position: [0, 0, 0] }],
           (value) => {
-            setStatus(value);
+            if (controller.signal.aborted) return;
+            dispatch(runtimeActions.viewerStatusReceived({ epoch, status: value }));
             onStatusChange?.(value);
-            setReady(value.startsWith('WebGPU ·') || value.startsWith('WebGPU 设备'));
           },
           (tool) => { onToolChange?.(tool ?? undefined); },
           (stats) => { onAmhsStatsChange?.(stats); },
-          (hover) => setHoveredTool(hover ?? undefined),
+          (hover) => hoverBatcher.push(hover ?? undefined),
           getToolStates,
         );
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
-          setReady(false);
-          setStatus(error instanceof Error ? error.message : t("场景初始化失败"));
+          const status = error instanceof Error ? error.message : t("场景初始化失败");
+          dispatch(runtimeActions.viewerStatusReceived({ epoch, status }));
+          onStatusChange?.(status);
         }
       });
     return () => {
       controller.abort();
+      hoverBatcher.cancel();
+      window.removeEventListener('keydown', onKeyDown);
+      dispatch(runtimeActions.viewerUnmounted(epoch));
       if (facade.current === scene) facade.current = undefined;
       scene?.dispose();
     };
@@ -122,7 +142,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
       setCameraPose: (position, target, durationMs) => facade.current?.setCameraPose(position, target, durationMs),
       zoom: (deltaY) => facade.current?.zoom(deltaY),
       resize: () => facade.current?.resize(),
-      reload: () => { setReady(false); setStatus(t("准备 WebGPU 视图…")); setGeneration((value) => value + 1); },
+      reload: () => { dispatch(runtimeActions.viewerReloadRequested()); },
       selectTool: (index, focus) => facade.current?.selectTool(index, focus),
       clearSelection: () => facade.current?.clearSelection(),
       setLayer: (layer, visible) => facade.current?.setLayer(layer, visible),
@@ -162,16 +182,6 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
   }, [explodeFactor, ready]);
   useEffect(() => { if (ready) facade.current?.setBasement(basement); }, [basement, ready]);
   useEffect(() => { if (ready) facade.current?.setDual(dual); }, [dual, ready]);
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
-      facade.current?.clearSelection();
-      setHoveredTool(undefined);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
   const hovered = hoveredTool?.tool;
   return (
     <div ref={surface} className="scene twin-canvas">
@@ -180,7 +190,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
         <strong>{hovered.vendor} {hovered.model}</strong>
         <span>{t(FAB_TOOL_STATE_META[toolStates[hovered.index] ?? hovered.state].label)} · #{hovered.index + 1}</span>
       </div>}
-      {!ready && <div className="twin-render-status" role="status">{status}<button type="button" onClick={() => { setReady(false); setGeneration((value) => value + 1); }}>{t("重新加载")}</button></div>}
+      {!ready && <div className="twin-render-status" role="status">{status}<button type="button" onClick={() => dispatch(runtimeActions.viewerReloadRequested())}>{t("重新加载")}</button></div>}
     </div>
   );
 });

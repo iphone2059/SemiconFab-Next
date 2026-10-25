@@ -5,10 +5,11 @@ import { twinUiActions, twinPageActions } from '../src/store/twinUiSlice';
 import { twinDemoActions } from '../src/store/twinDemoSlice';
 import { workbenchActions } from '../src/store/workbenchSlice';
 import { catalogActions } from '../src/store/catalogSlice';
+import { runtimeActions } from '../src/store/runtimeSlice';
 
 it('configures Redux Toolkit, RTK Query middleware and domain slices', () => {
   const state = store.getState();
-  expect(Object.keys(state).sort()).toEqual(['catalog', 'locale', 'twinApi', 'twinDemo', 'twinPage', 'twinUi', 'workbench']);
+  expect(Object.keys(state).sort()).toEqual(['catalog', 'locale', 'runtime', 'twinApi', 'twinDemo', 'twinPage', 'twinUi', 'workbench']);
   expect(state.twinApi).toBeDefined();
   expect(typeof store.dispatch).toBe('function');
   expect(twinApi.reducerPath).toBe('twinApi');
@@ -33,7 +34,8 @@ it('routes all Twin mode changes through typed slice actions', () => {
 });
 
 it('keeps page, demo and workbench state serializable and action-owned', () => {
-  store.dispatch(twinPageActions.statusSet('WebGPU · test'));
+  store.dispatch(runtimeActions.viewerMounted('test'));
+  store.dispatch(runtimeActions.viewerStatusReceived({ epoch: 'test', status: 'WebGPU · test' }));
   store.dispatch(twinPageActions.siteIdSet('site-test'));
   store.dispatch(twinPageActions.layerToggled('roof'));
   store.dispatch(twinDemoActions.playingSet(false));
@@ -41,7 +43,7 @@ it('keeps page, demo and workbench state serializable and action-owned', () => {
   store.dispatch(catalogActions.domainSet('FAB'));
   store.dispatch(catalogActions.selectedToggled('record-a'));
   const state = store.getState();
-  expect(state.twinPage.status).toBe('WebGPU · test');
+  expect(state.runtime.viewer.status).toBe('WebGPU · test');
   expect(state.twinPage.siteId).toBe('site-test');
   expect(state.twinPage.layerPreferences.roof).toBe(true);
   expect(state.twinDemo.playing).toBe(false);

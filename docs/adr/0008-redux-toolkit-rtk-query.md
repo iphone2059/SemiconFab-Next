@@ -18,21 +18,24 @@ That made ownership clear locally but produced three problems:
 
 ## Decision
 
-All durable application state is owned by Redux Toolkit. Server state is owned by
-RTK Query. React components keep only ephemeral, non-serializable or
-frame-frequency state (WebGPU handles, DOM refs, hover coordinates, canvas
-objects, animation scratch data).
+All serializable application state is owned by Redux Toolkit. Server state is
+owned by RTK Query. This includes transient interaction state: viewer readiness,
+reload generation, hover, wafer playback progress/trail, import request identity
+and submission idempotency. React keeps DOM/WebGPU handles, subscriptions and
+derived render caches. ErrorBoundary retains only React's required private
+capture latch; its displayed error belongs to Redux.
 
 ### Redux slices
 
 | Slice | Owns |
 | --- | --- |
 | `twinUi` | entry mode, level/view, exclusive spatial mode, cut/xray/explode, Tour, onboarding, wafer/research clocks, status source |
-| `twinDemo` | deterministic demo states, original signal keys, reference lamps, seed, scenario, cycle |
+| `twinDemo` | deterministic demo states, original signal keys, reference lamps, 18-row telemetry/history, yield jitter, seed, scenario, cycle |
 | `twinPage` | site identity, live equipment states, status feed, selection, layers, MES jobs, YMS/wafer panels, research/Tour/onboarding UI, sidebar filters, inspector MES |
-| `workbench` | selected site, selected run, simulation form fields and submission error |
-| `catalog` | catalog route filters, compare selection, preferences, detail/import state, local import overlay |
-| `locale` | Twin language, restored from `lang`, both original preference keys and browser locale |
+| `workbench` | selected site/run, form, submission error, pending request JSON and retry idempotency key |
+| `catalog` | route filters, compare selection, detail/import state, hydration and active import request ID |
+| `locale` | shared Catalog/Twin language and theme; no parallel catalog preferences |
+| `runtime` | viewer epoch/status/reload/hover/selection synchronization and application fatal error |
 
 ### RTK Query endpoints
 
@@ -65,7 +68,12 @@ validated by `createOrderedEquipmentStatusConsumer` and dispatched into
    that calls `store.getState()` inside the Babylon `onBeforeRenderObservable`
    loop. Demo/live transitions therefore reach meshes without a React prop pass;
    research replay falls back to its derived ref while its query snapshot is loading.
-4. **Store filtering:** high-frequency actions are denied from DevTools, large
+4. **Wafer frame state:** progress, point and the bounded trail enter Redux in one
+   frame action. The full Twin page excludes this frame object from its shallow
+   subscription and separately observes product/index/follow; the scene reads
+   the current frame directly. Frame actions are excluded from DevTools and
+   serializability traversal; they still carry ordinary serializable DTOs.
+5. **Store filtering:** high-frequency actions are denied from DevTools, large
    arrays are skipped by the serializable check, and the immutable check is off
    for the 121-tool scene. DevTools remains available for durable transitions.
 
@@ -73,7 +81,11 @@ validated by `createOrderedEquipmentStatusConsumer` and dispatched into
 
 - Redux DevTools can capture every durable transition without attaching to Babylon.
 - Tests assert the store shape and typed actions directly (`tests/redux-store.test.ts`).
-- The WebGPU engine lifecycle and pointer-hover state stay local on purpose: they
-  are non-serializable or update above frame frequency and must not be replayed.
+- WebGPU objects remain outside Redux. Viewer lifecycle/hover DTOs are store-owned;
+  epoch checks reject callbacks from replaced scenes, and hover is coalesced.
+- Catalog hydration reads the Provider's current store during effect execution,
+  so StrictMode replay cannot reread a URL already changed by persistence effects.
+- Imports and submissions retain request identity in Redux; late results cannot
+  restore a cleared import or select a run belonging to a former site.
 - `api-client.ts` remains a small standalone transport used by its contract tests;
   application pages no longer construct it.

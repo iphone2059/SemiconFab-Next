@@ -1,6 +1,7 @@
 import { OriginalIcon } from './original-icons';
 import { useTwinLocale, TwinLocaleProvider } from './twin-i18n';
 import { useEffect, useMemo, useRef } from 'react';
+import { shallowEqual } from 'react-redux';
 import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus, type EquipmentStatusSnapshot } from './equipment-status';
 import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
 import type { AmhsStats, CutAxis, PickedTool, SceneLayer, XRayFilter } from './fab-scene';
@@ -10,7 +11,7 @@ import { OriginalInspector } from './twin-inspector';
 import { TwinInfoDialog } from './twin-dialogs';
 import { ORIGINAL_TWIN_UI, type TwinSelection } from './original-twin-data';
 import { ResearchReplay, researchClock } from './research-replay';
-import { buildWaferWaypoints, waferTransitPoint, type WaferProduct } from './wafer-route';
+import { buildWaferWaypoints, type WaferProduct } from './wafer-route';
 import { applyMesAction, buildTelemetry, computeSpc, createMesJob, type MesAction, type MesJob } from './process-control';
 import { BIN_COLORS, BIN_LABELS, WM811K_DEFECT_METADATA, generateWaferMap, stdfSummary, theoreticalYieldModels, waferMetrics, type BinCode, type DefectPattern } from './wafer-map';
 import { computeFabYield, DEFAULT_YIELD_INPUT, scenarioStates, YIELD_SCENARIOS, type YieldInput } from './fab-yield';
@@ -18,11 +19,11 @@ import { projectTwinSceneState, type EntryMode, type TwinView as CameraView } fr
 import { DEMO_TICK_MS, projectReplayStates, resolveScenario, TWIN_LAYOUT_IDENTITIES } from './twin-equipment';
 import { cleanroomPressureField } from './cleanroom-pressure';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from './original-tour';
-import { useAppDispatch, useAppSelector } from './store/hooks';
-import { store } from './store/store';
+import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
 import { twinApi, useGetSitesQuery, useGetEquipmentStatusQuery, useGetResearchEventsQuery, useGetWaferRoutesQuery } from './store/api';
 import { twinUiActions, twinPageActions, type TwinPageState } from './store/twinUiSlice';
 import { twinDemoActions } from './store/twinDemoSlice';
+import { runtimeActions } from './store/runtimeSlice';
 import { createCoalescedDispatcher } from './store/telemetry-buffer';
 const ONBOARDING_KEY = 'semicon_twin_onboarding_dismissed';
 const ONBOARDING_STEPS = [
@@ -75,9 +76,13 @@ function TwinContent() {
   const { t, language, toggleLanguage } = useTwinLocale();
   const scene = useRef<FabViewportHandle>(null);
   const dispatch = useAppDispatch();
+  const store = useAppStore();
   const ui = useAppSelector((state) => state.twinUi);
   const demo = useAppSelector((state) => state.twinDemo);
-  const page = useAppSelector((state) => state.twinPage);
+  // Playback progress/trail are store-owned, but do not rerender the full HUD
+  // every frame. Subscribe only to the control values below.
+  const page = useAppSelector((state) => { const { wafer: _wafer, ...page } = state.twinPage; return page; }, shallowEqual);
+  const status = useAppSelector(state => state.runtime.viewer.status);
   const mode = ui.entryMode;
   const view = ui.view;
   const level = ui.level;
@@ -96,8 +101,10 @@ function TwinContent() {
   const researchTime = ui.research.timeSec;
   const researchPlaying = ui.research.playing;
   const researchSpeed = ui.research.speed;
-  const { siteId, siteError: error, status, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, amhs, infoDialog, showResearchUtil, tourRemainingMs, onboardingDontShow } = page;
-  const { product: waferProduct, index: waferIndex, follow: waferFollow } = page.wafer;
+  const { siteId, siteError: error, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, amhs, infoDialog, showResearchUtil, tourRemainingMs, onboardingDontShow } = page;
+  const waferProduct = useAppSelector(state => state.twinPage.wafer.product);
+  const waferIndex = useAppSelector(state => state.twinPage.wafer.index);
+  const waferFollow = useAppSelector(state => state.twinPage.wafer.follow);
   const { open: ymsOpen, tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, yieldInput, yieldScenario, stdfCopied } = page.yms;
 
   const sitesQuery = useGetSitesQuery();
@@ -118,10 +125,6 @@ function TwinContent() {
     [layerPreferences, projected.airflow, projected.heatmap, projected.xray]);
   const appliedCameraView = useRef<CameraView | undefined>(undefined);
   const statusConsumer = useRef<((value: unknown) => boolean) | undefined>(undefined);
-  const waferIndexRef = useRef(0);
-  const waferProgressRef = useRef(0);
-  const waferTrailRef = useRef<[number, number, number][]>([]);
-  const suppressToolSelectionRef = useRef(false);
   const liveSnapshotBatcher = useMemo(() => createCoalescedDispatcher<EquipmentStatusSnapshot>((snapshot) => {
     const states = FAB_LAYOUT.map((_, index): FabToolState => {
       const value = snapshot.tools[index]?.state;
@@ -135,7 +138,6 @@ function TwinContent() {
   const setSelected = (value?: PickedTool) => dispatch(twinPageActions.selectedSet(value));
   const setSelection = (value?: TwinSelection) => dispatch(twinPageActions.selectionSet(value));
   const setReplayBase = (value: readonly FabToolState[]) => dispatch(twinPageActions.replayBaseSet(value));
-  const setStatus = (value: string) => dispatch(twinPageActions.statusSet(value));
   const setLiveToolStates = (value: FabToolState[]) => dispatch(twinPageActions.liveStatesSet(value));
   const setStatusFeed = (value: { updatedAt: string; stale: boolean } | undefined) => dispatch(twinPageActions.statusFeedSet(value));
   const setAmhs = (value: AmhsStats | undefined) => dispatch(twinPageActions.amhsSet(value));
@@ -341,8 +343,9 @@ function TwinContent() {
   }, [yieldScenario]);
   const fabYield = useMemo(() => computeFabYield(yieldStates, yieldInput, {
     directoryStates: yieldDirectoryStates,
-    scenarioId: yieldScenario === 'live' ? undefined : yieldScenario,
-  }), [yieldStates, yieldInput, yieldDirectoryStates, yieldScenario]);
+    scenarioId: yieldScenario === 'live' ? demo.scenarioId : yieldScenario,
+    jitter: demo.yieldJitter,
+  }), [yieldStates, yieldInput, yieldDirectoryStates, yieldScenario, demo.scenarioId, demo.yieldJitter]);
   const spcPlot = selectedTelemetry ? (() => {
     const values = selectedTelemetry.history;
     const low = Math.min(...values);
@@ -367,6 +370,7 @@ function TwinContent() {
       return;
     }
     scene.current?.setWaferPoint(waferPoint.x, waferPoint.y, waferPoint.z, true, waferFollow);
+    scene.current?.setWaferTrail(store.getState().twinPage.wafer.trail);
   }, [waferActive, waferPoint, waferFollow, waferPlaying]);
 
   useEffect(() => {
@@ -378,27 +382,11 @@ function TwinContent() {
       if (!running) return;
       const dt = Math.min((now - last) / 1000, 0.1);
       last = now;
-      const index = waferIndexRef.current;
-      waferProgressRef.current = Math.min(1, waferProgressRef.current + dt / (2 / waferSpeed));
-      const progress = waferProgressRef.current;
-      const point = waferTransitPoint(waferWaypoints, index, progress);
-      scene.current?.setWaferPoint(point.x, point.y, point.z, true, waferFollow);
-      const trail = waferTrailRef.current;
-      const previous = trail[trail.length - 1];
-      if (!previous || Math.hypot(point.x - previous[0], point.z - previous[2]) > 0.25) {
-        trail.push([point.x, point.y, point.z]);
-        if (trail.length > 30) trail.shift();
-        scene.current?.setWaferTrail(trail);
-      }
-      if (progress >= 1) {
-        if (index >= waferWaypoints.length - 1) {
-          setWaferPlaying(false);
-          return;
-        }
-        waferIndexRef.current = index + 1;
-        waferProgressRef.current = 0;
-        setWaferIndex(index + 1);
-      }
+      dispatch(twinPageActions.waferFrameAdvanced({ deltaSec: dt, speed: waferSpeed, waypoints: waferWaypoints }));
+      const wafer = store.getState().twinPage.wafer;
+      if (wafer.point) scene.current?.setWaferPoint(wafer.point.x, wafer.point.y, wafer.point.z, true, waferFollow);
+      scene.current?.setWaferTrail(wafer.trail);
+      if (wafer.progress >= 1 && wafer.index >= waferWaypoints.length - 1) { setWaferPlaying(false); return; }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -499,7 +487,12 @@ function TwinContent() {
       const row = ORIGINAL_TWIN_UI.equipment.find((item) => item.id === next.id);
       const catalogIndex = FAB_LAYOUT.findIndex((tool) => tool.originalKind === 'catalog' && tool.recordId === next.id);
       setSelected(undefined);
-      if (catalogIndex >= 0) { suppressToolSelectionRef.current = true; scene.current?.selectTool(catalogIndex, false); window.setTimeout(() => { suppressToolSelectionRef.current = false; }, 0); }
+      if (catalogIndex >= 0) {
+        const token = crypto.randomUUID();
+        dispatch(runtimeActions.viewerSelectionSyncStarted(token));
+        scene.current?.selectTool(catalogIndex, false);
+        window.setTimeout(() => dispatch(runtimeActions.viewerSelectionSyncFinished(token)), 0);
+      }
       else scene.current?.clearSelection();
       if (row?.level === 'B1') { dispatch(twinUiActions.levelSet('B1')); flyLevel('B1'); scene.current?.setDual(false); scene.current?.setBasement(true); }
     } else if (next.kind === 'oem') {
@@ -509,7 +502,8 @@ function TwinContent() {
   }
   function handleToolChange(tool?: PickedTool): void {
     setSelected(tool);
-    if (suppressToolSelectionRef.current) { suppressToolSelectionRef.current = false; return; }
+    const sync = store.getState().runtime.viewer.selectionSync;
+    if (sync) { dispatch(runtimeActions.viewerSelectionSyncFinished(sync)); return; }
     if (tool && selection?.kind === 'reference' && FAB_LAYOUT[tool.index]?.recordId === selection.id) return;
     if (tool) setSelection({ kind: 'layout', index: tool.index });
     else if (selection?.kind === 'layout') setSelection(undefined);
@@ -534,9 +528,7 @@ function TwinContent() {
     setYieldInput({ purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime });
   }
   function clearWaferTrail(): void {
-    waferIndexRef.current = 0;
-    waferProgressRef.current = 0;
-    waferTrailRef.current = [];
+    dispatch(twinPageActions.waferTrailCleared());
     scene.current?.setWaferTrail([]);
   }
   function startWafer(): void {
@@ -566,8 +558,6 @@ function TwinContent() {
   }
   function seekWafer(index: number): void {
     setWaferPlaying(false);
-    waferIndexRef.current = index;
-    waferProgressRef.current = 0;
     setWaferIndex(index);
   }
   function startTour(): void {
@@ -697,7 +687,6 @@ function TwinContent() {
           fab={fab}
           toolStates={toolStates}
           onToolChange={handleToolChange}
-          onStatusChange={setStatus}
           onAmhsStatsChange={amhsBatcher.push}
           getToolStates={getToolStates}
           layers={layers}

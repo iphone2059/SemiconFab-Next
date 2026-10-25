@@ -18,6 +18,8 @@ export interface FabYieldOptions {
   /** Source 18-row directory lights. When present, down counts use FAB_EQUIPMENT, not the 121 layout. */
   directoryStates?: Readonly<Record<string, FabToolState>>;
   scenarioId?: string;
+  /** Per-module source jitter, sampled once by the DEMO clock, before clamping. */
+  jitter?: readonly number[];
 }
 
 export const CORE_PROCESS_MODULES: readonly ProcessModule[] = [
@@ -151,7 +153,7 @@ export function computeFabYield(states: readonly string[], input: YieldInput = D
   let cumulative = 1;
   let bottleneck: ProcessModule = CORE_PROCESS_MODULES[0];
   let minimum = 1;
-  const modules: ModuleYield[] = CORE_PROCESS_MODULES.map((module) => {
+  const modules: ModuleYield[] = CORE_PROCESS_MODULES.map((module, index) => {
     // The source KPI counts DOWN rows in the final FAB_EQUIPMENT directory and
     // compares against its bay ids, even though the rendered layout has 121
     // draft instances. Keep that boundary explicit instead of substituting a
@@ -160,7 +162,7 @@ export function computeFabYield(states: readonly string[], input: YieldInput = D
       ? ORIGINAL_TWIN_UI.equipment.filter((row) => module.sourceBays.includes(row.category) && directoryStates[row.id] === 'down').length
       : module.categories.reduce((sum, category) => sum + (layoutDownByCategory.get(category) ?? 0), 0);
     const downPenalty = downCount > 0 ? 1 - 0.08 * downCount : 1;
-    const stepYield = Math.max(0.6, Math.min(0.999, module.baseYield * purityFactor * healthFactor * lagFactor * downPenalty));
+    const stepYield = Math.max(0.6, Math.min(0.999, module.baseYield * purityFactor * healthFactor * lagFactor * downPenalty + (options.jitter?.[index] ?? 0)));
     cumulative *= stepYield;
     if (stepYield < minimum) {
       minimum = stepYield;

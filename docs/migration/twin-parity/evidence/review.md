@@ -50,3 +50,20 @@ banner, and modal focus trapping/restoration is pending Task 3. Full original
 telemetry/MES, Golden acceptance and the 60-minute/repeated-loss GPU gates remain
 outside this incremental integration verdict. Status is still
 **IMPLEMENTING / NOT PARITY_VERIFIED**.
+
+## State/process continuation review — 2026-10-25
+
+A separate read-only reviewer inspected the continuation after `aee986d`. Its
+two Important findings were corrected: the Redux initializer no longer applies
+an extra startup Scenario/random draw (fixture regression RED to GREEN), and
+Catalog hydration checks the current Provider store rather than a stale render
+closure (actual StrictMode browser deep-link assertion RED to GREEN). The same
+review identified pending-hover restoration after Escape and an uncleared scene
+trail after seek; pending hover is now cancelled and paused scene projection
+uses the current Redux trail. No Critical issue was reported.
+
+Final frontend verification passes 138 tests, typecheck and production build.
+The frozen-vector regeneration, architecture/source checks and 15 Python tests
+also pass. Actual development-browser results are in
+`state-management-2026-10-25.json`. Full Golden, production-bundle, nine-language,
+60-minute and complete repeated-loss acceptance were not judged by this review.

@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, type FormEvent } from 'react';
+import { useEffect, useMemo, type FormEvent } from 'react';
 import type { CreateRunRequest, RunResult, RunSummary, SiteDto } from './contracts';
 import { Panel, StatusPill } from './ui';
 import { Metric } from './widgets';
 import { CompletionBar } from './charting';
 import { ScopeGate } from './state-sync';
 import { validateScenario } from './scenario';
-import { useAppDispatch, useAppSelector } from './store/hooks';
+import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
 import { useCreateRunMutation, useGetRunQuery, useGetRunResultsQuery, useGetRunsQuery, useGetSitesQuery } from './store/api';
 import { workbenchActions } from './store/workbenchSlice';
 const message = (error: unknown): string => {
@@ -27,11 +27,11 @@ const count = (value: string) => BigInt(value).toLocaleString('zh-CN');
 
 function Workbench({ site }: { site: SiteDto }) {
   const dispatch = useAppDispatch();
+  const store = useAppStore();
   const { runId, form, submitError } = useAppSelector((state) => state.workbench);
   const { lotCount, processTimeUs, durationUs, warmupUs, masterSeed } = form;
   const fab = site.fabs[0];
   const submissionScope = useMemo(() => new ScopeGate(), []);
-  const pendingSubmission = useRef<{ json: string; key: string } | undefined>(undefined);
   const runsQuery = useGetRunsQuery(undefined, { pollingInterval: 1500 });
   const scopedRuns = useMemo(() => (runsQuery.data ?? []).filter((value) => value.siteId === site.siteId), [runsQuery.data, site.siteId]);
   const runs = scopedRuns;
@@ -67,13 +67,13 @@ function Workbench({ site }: { site: SiteDto }) {
       },
     };
     const json = JSON.stringify(request);
-    if (pendingSubmission.current?.json !== json) pendingSubmission.current = { json, key: crypto.randomUUID() };
+    dispatch(workbenchActions.submissionPrepared({ json, key: crypto.randomUUID() }));
+    const key = store.getState().workbench.pendingSubmission!.key;
     const token = submissionScope.begin(site.siteId);
     try {
-      const created = await createRun({ request, idempotencyKey: pendingSubmission.current.key }).unwrap();
+      const created = await createRun({ request, idempotencyKey: key }).unwrap();
       if (submissionScope.accepts(token)) {
-        pendingSubmission.current = undefined;
-        dispatch(workbenchActions.runIdSet(created.runId));
+        dispatch(workbenchActions.submissionCompleted({ siteId: site.siteId, key, runId: created.runId }));
       }
     } catch (error: unknown) {
       if (submissionScope.accepts(token)) dispatch(workbenchActions.submitErrorSet(message(error)));

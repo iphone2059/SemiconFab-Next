@@ -51,7 +51,36 @@ See [evidence/golden](evidence/golden) and its `comparison.json`. The comparison
 5. **Scenarios:** source fe.* overrides absent from the selected 121-tool layout are disclosed as unresolved. Category-wide DOWN substitution has been removed.
 6. **Aerodynamics:** original pressure-field branch order (including Litho/airlock overlap), drift and nominal per-frame motion remain. Obstacles use the final 121-tool layout; original builds its old obstacle list before async replacement. This deliberate delta is not particle-exact parity.
 
-## GPU evidence interpretation
+## 2026-10-25 state and process continuation
+
+The current increment is integrated on `main`; other local/remote branches were
+deleted after verifying their commits were included. Application state now also
+owns viewer status/reload/hover, wafer progress/point/trail, import request
+identity/hydration, pending submission idempotency and the shared language/theme.
+DOM/GPU handles and derived scene caches remain runtime objects; React's error
+capture latch is the sole component-local state required by its boundary API.
+
+`tools/build_twin_process_vectors.cjs --check` executes extracted frozen-source
+functions only in a test VM. Checked-in process fixtures cover all source sensor
+categories, directory/recipe ticks, MES actions and slot wrap, SPC edge cases,
+six Scenarios and every die/bin/STDF field of seven defect patterns. The DEMO
+clock consumes telemetry noise first, optional third-cycle Andon mutation second,
+and eight yield jitter inputs last. Inspectors read its live cached telemetry;
+Scenario WPM retains `etch_down` even when the Yield panel is in LIVE mode.
+These are process vectors with explicit input, not equivalence to the original
+scene's global random initialization or an assertion of backend persistence.
+
+`evidence/state-management-2026-10-25.json` records actual Chrome/Windows dev
+browser checks: StrictMode deep-link hydration, clock/FDC update and pause,
+wafer speed/product/seek, and a completed real GPUDevice replacement with zero
+validation errors, unchanged camera, and 16,384 bytes of readback. Recovery took
+4,380 ms. An earlier capture exceeded its 3-second transport deadline but the UI
+also visibly recovered; this is not a complete repeated-loss matrix. Current
+frontend verification is 138/138 Vitest, TypeScript and Vite build. Full Golden,
+nine-language/responsive/theme styling, exact dynamics, production-bundle and
+60-minute acceptance remain pending. Status stays **NOT PARITY_VERIFIED**.
+
+## Earlier GPU evidence interpretation
 
 `evidence/native-shadow-acceptance.json` measures cache behavior, visible shadow contrast, ambient isolation and validation errors. `cut-shadow-acceptance.json` measures clipped depth coverage and exact restoration. `device-loss-acceptance.json` requires a new device, a new native pass, the **completed** WebGPU status, unchanged manual camera and no new-device validation errors. Waiting text does not qualify. Readback acquires the current presentation frame; a previously presented swap texture must not be reused.
 

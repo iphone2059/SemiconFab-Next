@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-25",
+  "surface": "Chrome / Windows, Vite development build",
+  "environment": {
+    "dpr": 2,
+    "height": 735,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+    "width": 1536
+  },
+  "catalog": {
+    "strictModeDeepLink": true,
+    "query": "NXT:2050i"
+  },
+  "clock": {
+    "before": {
+      "cycle": "#28",
+      "telemetry": "FDC TELEMETRY\n97.9% SOH\nPrimary Output\n32.37 kW\nCooling Water Flow\n239.13 L/min\nUtility Header Pressure\n6.20 bar\nAbatement Efficiency\n99.99 %"
+    },
+    "after": {
+      "cycle": "#29",
+      "telemetry": "FDC TELEMETRY\n97.9% SOH\nPrimary Output\n32.38 kW\nCooling Water Flow\n238.89 L/min\nUtility Header Pressure\n6.20 bar\nAbatement Efficiency\n99.99 %"
+    },
+    "pause": "false"
+  },
+  "wafer": {
+    "start": "001 / 120",
+    "advanced": "003 / 120",
+    "productB": "001 / 104",
+    "end": "104 / 104",
+    "home": "001 / 104"
+  },
+  "deviceLoss": {
+    "after": {
+      "casterCount": 771,
+      "clipPlane": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "format": "depth32float",
+      "lastReason": "dual-visibility",
+      "passes": 7,
+      "size": 2048,
+      "triangleCount": 12310
+    },
+    "before": 5,
+    "cameraDelta": 0,
+    "completedStatus": "WebGPU 设备和清洁室视图已重建 · 首帧完成 · 估算几何",
+    "elapsedMs": 4380,
+    "errors": [],
+    "history": [
+      {
+        "status": "GPU 设备已丢失，正在重建设备和静态场景。若未恢复，请重新加载视图。",
+        "t": 173245
+      },
+      {
+        "status": "GPU 设备已重建，等待恢复首帧完成…",
+        "t": 173983.6000000015
+      },
+      {
+        "status": "WebGPU 设备和清洁室视图已重建 · 首帧完成 · 估算几何",
+        "t": 176009.70000000298
+      }
+    ],
+    "newDevice": true,
+    "readbackBytes": 16384,
+    "recovered": true
+  },
+  "consoleErrors": [],
+  "limitations": [
+    "Development module surface; production-bundle acceptance pending",
+    "One recorded completed recovery; an earlier 3-second transport timeout also visibly recovered",
+    "Not a 60-minute run or complete repeated-loss/mode/browser matrix",
+    "Not visual parity acceptance"
+  ]
+}

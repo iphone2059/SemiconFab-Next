@@ -15,7 +15,7 @@
 - One `/twin` product page; no independent preview, original-page iframe, Three runtime, glTF/GLB or WebGL fallback.
 - Preserve all 121 instance identities, dimensions, transforms and existing native shadow/cut/recovery evidence.
 - Original commit remains `b3666132e5d8cab2cebe4c4227fc04c52242eb28`; starting Next commit `6ed8a579329099f0cf9f503c2675d46decab5806`.
-- Work in the existing checkout on `feat/twin-full-parity`, preserving `main` and existing dependency/server installation. No second worktree or website is necessary for this continuation.
+- Per the user's 2026-10-25 instruction, merge the verified increment into `main`, push GitHub, delete other local/remote branches, then continue in this existing checkout on `main` only. Preserve existing dependencies/servers; no second worktree or website.
 - Do not equate an implemented/tested control with visual acceptance. Keep unresolved differences explicit.
 - The full parity scope includes complete controls, inspector, modals, original timing/data, facilities, i18n/theme, and GPU/browser acceptance. Do not stop merely after the first task.
 
@@ -75,8 +75,8 @@
 
 **Files:** `fab-yield.ts`, `process-control.ts`, reference demo state; data/vector tests.
 
-- [ ] Port source directory-based KPI/yield, Scenario and telemetry update order, random input as explicit deterministic test input.
-- [ ] Compare MES/SPC (including insufficient-sample constants) and Yield/Map/STDF vectors; retain local demo vs backend boundary.
+- [x] Port source directory-based KPI/yield, Scenario and telemetry update order, random input as explicit deterministic test input. Process-only stream verified; full scene random initialization is still a Golden gate.
+- [x] Compare MES/SPC (including insufficient-sample constants) and Yield/Map/STDF vectors; retain local demo vs backend boundary. Frozen source vectors cover 15 initial profiles, 29 directory ticks, 26 recipe ticks, 28 MES actions, 14 SPC cases, six Scenarios and seven complete die/bin/STDF maps.
 - [ ] Test replay/live/demo transitions and every selection type without inventing mappings for obsolete source IDs.
 
 ## Task 7 — complete differential and release gates

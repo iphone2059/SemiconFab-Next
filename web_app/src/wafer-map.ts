@@ -48,8 +48,8 @@ function seeded(seed: number): () => number {
   };
 }
 
-export function generateWaferMap(pattern: DefectPattern, seed = 811): WaferDie[] {
-  const random = seeded(seed + pattern.length * 977);
+export function generateWaferMap(pattern: DefectPattern, seed: number | (() => number) = 811): WaferDie[] {
+  const random = typeof seed === 'function' ? seed : seeded(seed + pattern.length * 977);
   const gridSize = 26;
   const step = 11.5;
   const waferRadius = 145;

@@ -1,5 +1,6 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { TwinLanguage } from '../twin-i18n';
+import { readPreferences, type Preferences } from '../preferences';
 
 function initialLanguage(): TwinLanguage {
   if (typeof window === 'undefined') return 'zh';
@@ -17,10 +18,18 @@ function initialLanguage(): TwinLanguage {
 }
 export const localeSlice = createSlice({
   name: 'locale',
-  initialState: { language: initialLanguage() as TwinLanguage },
+  initialState: (): Preferences => {
+    let theme: Preferences['theme'] = 'light';
+    if (typeof window !== 'undefined') {
+      try { theme = readPreferences(localStorage, location.search).theme; } catch { /* storage denied */ }
+    }
+    return { language: initialLanguage(), theme };
+  },
   reducers: {
+    preferencesSet(_state, action: PayloadAction<Preferences>) { return action.payload; },
     languageSet(state, action: PayloadAction<TwinLanguage>) { state.language = action.payload; },
     languageToggled(state) { state.language = state.language === 'zh' ? 'en' : 'zh'; },
+    themeToggled(state) { state.theme = state.theme === 'light' ? 'dark' : 'light'; },
   },
 });
 export const localeActions = localeSlice.actions;

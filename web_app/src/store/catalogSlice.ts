@@ -1,11 +1,9 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { CatalogEntryDto } from '../contracts';
 import type { CatalogDomain } from '../catalog-data';
-import type { Preferences } from '../preferences';
 
 export interface CatalogState {
   view: 'catalog' | 'compare';
-  preferences: Preferences;
   domain: CatalogDomain;
   category: string;
   query: string;
@@ -16,10 +14,12 @@ export interface CatalogState {
   localEntries: CatalogEntryDto[] | null;
   localImportId: string;
   importError: string;
+  importRequestId?: string;
+  importPending: boolean;
+  hydrated: boolean;
 }
 const initial: CatalogState = {
   view: 'catalog',
-  preferences: { language: 'zh', theme: 'light' },
   domain: 'ALL',
   category: '',
   query: '',
@@ -29,6 +29,8 @@ const initial: CatalogState = {
   localEntries: null,
   localImportId: '',
   importError: '',
+  importPending: false,
+  hydrated: false,
 };
 
 export const catalogSlice = createSlice({
@@ -36,9 +38,6 @@ export const catalogSlice = createSlice({
   initialState: initial,
   reducers: {
     viewSet(state, action: PayloadAction<'catalog' | 'compare'>) { state.view = action.payload; },
-    preferencesSet(state, action: PayloadAction<Preferences>) { state.preferences = action.payload; },
-    languageToggled(state) { state.preferences = { ...state.preferences, language: state.preferences.language === 'zh' ? 'en' : 'zh' }; },
-    themeToggled(state) { state.preferences = { ...state.preferences, theme: state.preferences.theme === 'light' ? 'dark' : 'light' }; },
     domainSet(state, action: PayloadAction<CatalogDomain>) { state.domain = action.payload; },
     categorySet(state, action: PayloadAction<string>) { state.category = action.payload; },
     querySet(state, action: PayloadAction<string>) { state.query = action.payload; },
@@ -52,16 +51,27 @@ export const catalogSlice = createSlice({
     },
     detailIdSet(state, action: PayloadAction<string | undefined>) { state.detailId = action.payload; },
     pageSet(state, action: PayloadAction<number>) { state.page = Math.max(0, action.payload); },
-    localImportApplied(state, action: PayloadAction<{ entries: CatalogEntryDto[]; importId: string }>) {
+    importStarted(state, action: PayloadAction<string>) { state.importRequestId = action.payload; state.importPending = true; state.importError = ''; },
+    importFailed(state, action: PayloadAction<{ requestId: string; error: string }>) {
+      if (state.importRequestId !== action.payload.requestId) return;
+      state.importError = action.payload.error;
+      state.importPending = false;
+    },
+    localImportApplied(state, action: PayloadAction<{ requestId: string; entries: CatalogEntryDto[]; importId: string }>) {
+      if (state.importRequestId !== action.payload.requestId) return;
       state.localEntries = action.payload.entries;
       state.localImportId = action.payload.importId;
       state.detailId = undefined;
       state.importError = '';
       state.page = 0;
+      state.importPending = false;
     },
-    localImportCleared(state) { state.localEntries = null; state.localImportId = ''; },
+    localImportCleared(state) {
+      state.localEntries = null; state.localImportId = ''; state.importError = '';
+      state.importRequestId = undefined; state.importPending = false;
+    },
     importErrorSet(state, action: PayloadAction<string>) { state.importError = action.payload; },
-    hydrate(state, action: PayloadAction<Partial<CatalogState>>) { Object.assign(state, action.payload); },
+    hydrate(state, action: PayloadAction<Partial<CatalogState>>) { Object.assign(state, action.payload); state.hydrated = true; },
   },
 });
 export const catalogActions = catalogSlice.actions;

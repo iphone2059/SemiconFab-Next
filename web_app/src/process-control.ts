@@ -12,6 +12,13 @@ export interface MesJob {
 
 export type MesAction = 'track-in' | 'track-out' | 'hold';
 
+export interface ProcessEquipment {
+  id: string;
+  category: string;
+  name: string;
+  position: { x: number };
+}
+
 function stableNumber(value: string): number {
   let hash = 0;
   for (let index = 0; index < value.length; index++) hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
@@ -19,24 +26,29 @@ function stableNumber(value: string): number {
 }
 
 export function createMesJob(tool: FabLayoutTool, index: number, now = Date.now()): MesJob {
-  const lotNum = ((stableNumber(tool.recordId || String(index)) * 17) % 8000) + 1000;
+  return createProcessMesJob({ id: tool.recordId || String(index), category: tool.category, name: tool.model, position: { x: tool.x } }, now);
+}
+
+export function createProcessMesJob(equipment: ProcessEquipment, now = Date.now()): MesJob {
+  const lotNum = ((equipment.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0) * 17) % 8000) + 1000;
   const foupNum = (lotNum % 24) + 1;
-  const category = tool.category.toUpperCase().slice(0, 4);
+  const category = (equipment.category || 'PROC').toUpperCase().slice(0, 4);
   return {
     lotId: `LOT-300-${lotNum}`,
     carrierId: `FOUP-AMHS-${String(foupNum).padStart(2, '0')}`,
     recipeId: `RCP-${category}-2NM-V${(lotNum % 5) + 1}.0`,
     state: 'TRACKED_IN',
-    stepName: tool.model,
+    stepName: equipment.name,
     waferSlot: 14,
     updatedAt: now,
   };
 }
 
-export function applyMesAction(job: MesJob, action: MesAction, now = Date.now()): MesJob {
-  if (action === 'track-in') return { ...job, state: 'TRACKED_IN', updatedAt: now };
-  if (action === 'track-out') return { ...job, state: 'TRACKED_OUT', waferSlot: (job.waferSlot % 25) + 1, updatedAt: now };
-  return { ...job, state: 'HOLD_MRB', updatedAt: now };
+export function applyMesAction(job: MesJob, action: MesAction, _now = Date.now()): MesJob {
+  // Source actions retain the initialization timestamp.
+  if (action === 'track-in') return { ...job, state: 'TRACKED_IN' };
+  if (action === 'track-out') return { ...job, state: 'TRACKED_OUT', waferSlot: (job.waferSlot % 25) + 1 };
+  return { ...job, state: 'HOLD_MRB' };
 }
 
 export interface SensorDefinition {
@@ -53,6 +65,9 @@ export interface Telemetry {
   waferIdx: number;
   sensors: SensorDefinition[];
   history: number[];
+  primaryName: string;
+  primaryUnit: string;
+  baseVal: number;
 }
 
 const SENSOR_SETS: Record<string, SensorDefinition[]> = {
@@ -100,38 +115,90 @@ const SENSOR_SETS: Record<string, SensorDefinition[]> = {
   ],
 };
 
-function sensorSetFor(tool: FabLayoutTool): SensorDefinition[] {
-  if (tool.category === 'lithography' || tool.category === 'resist_track') return SENSOR_SETS.litho;
-  if (tool.category === 'dry_etch') return SENSOR_SETS.etch;
-  if (tool.category === 'thin_film_deposition') return SENSOR_SETS.depo;
-  if (tool.category === 'ion_implantation') return SENSOR_SETS.imp_therm;
-  if (tool.category === 'thermal_processing') {
-    return SENSOR_SETS.imp_therm.map((sensor, index) => index === 0
-      ? { ...sensor, name: 'Furnace Thermal Energy', unit: '°C', value: 1050, min: 1029, max: 1071 }
-      : { ...sensor });
+function processProfile(equipment: ProcessEquipment) {
+  const { id, category } = equipment;
+  let sensors = SENSOR_SETS[category] ?? SENSOR_SETS.other;
+  let baseVal = sensors[0].value;
+  let primaryName = sensors[0].name;
+  let primaryUnit = sensors[0].unit;
+  if (category === 'subfab') {
+    primaryName = 'Subfab Operating Telemetry';
+    primaryUnit = id.includes('laser') ? 'kW' : id.includes('pump') ? 'm³/h' : id.includes('scrubber') ? '°C' : 'MΩ·cm';
+    baseVal = id.includes('laser') ? 32.5 : id.includes('pump') ? 4500 : id.includes('scrubber') ? 1200 : 18.2;
+    sensors = [
+      { name: 'Primary Output', value: baseVal, unit: primaryUnit, min: baseVal * 0.95, max: baseVal * 1.05 },
+      { name: 'Cooling Water Flow', value: 240, unit: 'L/min', min: 230, max: 250 },
+      { name: 'Utility Header Pressure', value: 6.2, unit: 'bar', min: 6, max: 6.5 },
+      { name: 'Abatement Efficiency', value: 99.99, unit: '%', min: 99.95, max: 100 },
+    ];
+  } else if (category === 'imp_therm') {
+    primaryName = 'Beam Current / Tube Temp';
+    primaryUnit = id.includes('furnace') ? '°C' : 'keV';
+    baseVal = id.includes('furnace') ? 1050 : 40;
+    sensors = sensors.map((sensor, index) => index === 0 ? { ...sensor, value: baseVal, unit: primaryUnit, min: baseVal * 0.98, max: baseVal * 1.02 } : sensor);
+  } else if (category === 'metro') {
+    primaryName = 'E-Beam HV';
+  } else if (category === 'amhs') {
+    primaryName = 'AMHS Transfer Efficiency'; primaryUnit = 's'; baseVal = 12.5;
+    sensors = [
+      { name: 'Handshake Transfer Time', value: 12.5, unit: 's', min: 11, max: 14 },
+      { name: 'Buffered FOUP Count', value: 246, unit: 'ea', min: 200, max: 300 },
+      { name: 'Main Track Network Load', value: 42, unit: '%', min: 35, max: 55 },
+      { name: 'OHT Dispatch Latency', value: 1.8, unit: 'ms', min: 1.2, max: 2.5 },
+    ];
+  } else if (category === 'facility' || id.startsWith('fac.airshower')) {
+    primaryName = 'Nozzle Air Velocity'; primaryUnit = 'm/s'; baseVal = 28.5;
+    sensors = [
+      { name: 'Nozzle Jet Velocity', value: 28.5, unit: 'm/s', min: 25, max: 30 },
+      { name: 'Chamber Differential Pressure', value: 18.5, unit: 'Pa', min: 15, max: 22 },
+      { name: 'ULPA Filter Efficiency', value: 99.999, unit: '%', min: 99.998, max: 100 },
+      { name: 'Blower Motor RPM', value: 2850, unit: 'RPM', min: 2800, max: 2900 },
+    ];
+  } else if (!['litho', 'etch', 'depo', 'wet_cmp'].includes(category)) {
+    // The original history starts at bond load, even though sensor 0 is spindle RPM.
+    primaryName = 'Dicing / Bond Load'; primaryUnit = 'N'; baseVal = 15.2;
   }
-  if (tool.category === 'cmp' || tool.category === 'wet_clean') return SENSOR_SETS.wet_cmp;
-  if (tool.category === 'metrology' || tool.category === 'inspection') return SENSOR_SETS.metro;
-  return SENSOR_SETS.other;
+  return { sensors, baseVal, primaryName, primaryUnit };
+}
+
+export function createProcessTelemetry(equipment: ProcessEquipment, random: () => number): Telemetry {
+  const { sensors, baseVal, primaryName, primaryUnit } = processProfile(equipment);
+  const history = Array.from({ length: 20 }, () => baseVal + (random() - 0.5) * (baseVal * 0.04));
+  return { soh: Number((96 + random() * 3.5).toFixed(1)), lotId: `LOT-300-${Math.floor(8800 + random() * 200)}`,
+    waferIdx: Math.floor(1 + random() * 24), primaryName, primaryUnit, baseVal,
+    sensors: sensors.map(sensor => ({ ...sensor })), history };
+}
+
+export function advanceProcessTelemetry(telemetry: Telemetry, equipment: ProcessEquipment, cycle: number, down: boolean, random: () => number): Telemetry {
+  const { id, category } = equipment;
+  const phase = (cycle + equipment.position.x * 3) % 20;
+  const sensors = telemetry.sensors.map((sensor, index) => {
+    let target = sensor.value;
+    if ((category === 'etch' || id.includes('etch')) && index === 0) {
+      target = phase < 3 ? sensor.min * 0.2 : phase === 3 ? sensor.max * 1.06 : phase < 14 ? (sensor.min + sensor.max) * 0.52 : phase < 18 ? sensor.min * 0.45 : sensor.min * 0.15;
+    } else if ((category === 'litho' || id.includes('euv') || id.includes('arfi')) && index === 1) {
+      target = 0.95 + Math.sin(cycle * 0.25 + index) * 0.22;
+    } else if ((category === 'wet_cmp' || id.includes('cmp')) && index === 0) {
+      target = phase > 4 && phase < 16 ? 3.45 : 0.2;
+    } else if (id.includes('furnace') && index === 0) {
+      target = 1050 + Math.sin(cycle * 0.08) * 1.5;
+    }
+    const noise = (random() - 0.5) * ((sensor.max - sensor.min) * 0.025);
+    return { ...sensor, value: Math.max(0.001, (target + noise) * (down ? 0.52 : 1)) };
+  });
+  return { ...telemetry, sensors, history: [...telemetry.history, sensors[0].value].slice(-25) };
 }
 
 export function buildTelemetry(tool: FabLayoutTool, index: number): Telemetry {
-  const sensors = sensorSetFor(tool).map((sensor) => ({ ...sensor }));
-  const primary = sensors[0];
   const seed = stableNumber(tool.recordId || String(index));
   let state = seed || 1;
   const random = () => {
     state = (state * 1664525 + 1013904223) >>> 0;
     return state / 0x100000000;
   };
-  const history = Array.from({ length: 20 }, () => primary.value + (random() - 0.5) * primary.value * 0.04);
-  return {
-    soh: 96 + random() * 3.5,
-    lotId: `LOT-300-${Math.floor(8800 + random() * 200)}`,
-    waferIdx: Math.floor(1 + random() * 24),
-    sensors,
-    history,
-  };
+  const category = ({ lithography: 'litho', resist_track: 'litho', dry_etch: 'etch', thin_film_deposition: 'depo',
+    ion_implantation: 'imp_therm', thermal_processing: 'imp_therm', cmp: 'wet_cmp', wet_clean: 'wet_cmp', metrology: 'metro', inspection: 'metro' } as Record<string, string>)[tool.category] ?? 'other';
+  return createProcessTelemetry({ id: tool.recordId || String(index), category, name: tool.model, position: { x: tool.x } }, random);
 }
 
 export interface SpcResult {

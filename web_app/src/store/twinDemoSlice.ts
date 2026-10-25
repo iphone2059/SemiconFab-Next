@@ -4,7 +4,8 @@ import { YIELD_SCENARIOS } from '../fab-yield';
 import type { FabToolState } from '../fab-layout';
 
 const baseline = YIELD_SCENARIOS[0];
-const initialDemo = demoReducer(createDemoState(42), { type: 'scenario', scenario: baseline });
+// initDigitalTwinEngine initializes once; selecting a Scenario is a later event.
+const initialDemo = createDemoState(42);
 
 function reduce(state: DemoState, event: Parameters<typeof demoReducer>[1]): DemoState {
   return demoReducer(state, event);
