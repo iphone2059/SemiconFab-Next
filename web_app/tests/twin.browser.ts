@@ -201,12 +201,12 @@ async function pressEscape() {
   await until(`!document.querySelector('.twin-tour-card')`);
 
   await evaluate(`document.querySelector('#lang-toggle-btn').click()`);
-  await until(`document.documentElement.lang === 'en' && document.querySelector('.twin-brand').textContent.includes('Semiconductor')`);
-  assert.equal(await evaluate(`localStorage.getItem('semiconfab_lang')`), 'en');
+  await until(`document.documentElement.lang === 'en-US' && document.querySelector('.twin-brand').textContent.includes('Semiconductor')`);
+  assert.equal(await evaluate(`localStorage.getItem('semiconfab_lang')`), 'en-US');
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('#lang-toggle-btn')).fontSize`), '12px');
   assert.equal(await evaluate(`!![...document.querySelectorAll('button,label,option,dt,small')].find(e=>e.getClientRects().length && /[\\u3400-\\u9fff]/.test(e.textContent))`), false);
   await command('Page.navigate', { url: baseUrl + '/twin?mode=engineer' });
-  await until(`document.documentElement.lang === 'en' && document.querySelector('#lang-toggle-btn')?.textContent === 'English'`);
+  await until(`document.documentElement.lang === 'en-US' && document.querySelector('#lang-toggle-btn')?.textContent === 'English'`);
   await until(`document.querySelector('.twin-status')?.getAttribute('title')?.startsWith('WebGPU ·')`);
   await evaluate(`(()=>{const input=document.querySelector('#search-input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Lithography');input.dispatchEvent(new Event('input',{bubbles:true}))})()`);
   await until(`document.querySelectorAll('#equipment-list [data-equipment-id]').length > 0 && document.querySelectorAll('#equipment-list [data-equipment-id]').length < 18`);

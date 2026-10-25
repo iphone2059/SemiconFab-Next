@@ -17,6 +17,11 @@ it('reads both legacy language keys and lets an explicit URL override them', () 
     theme: 'dark',
   });
 });
+it('accepts en-US and zh-CN in URLs and saved preferences', () => {
+  expect(readPreferences(storage({ semiconfab_lang: 'zh-CN' }), '?lang=en-US').language).toBe('en');
+  expect(readPreferences(storage({ semiconfab_lang: 'en-US' }), '').language).toBe('en');
+  expect(readPreferences(storage({ semiconfab_lang: 'en-US' }), '?lang=zh-CN').language).toBe('zh');
+});
 it('remains usable when browser storage is denied', () => {
   expect(
     readPreferences(

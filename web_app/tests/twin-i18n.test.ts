@@ -16,6 +16,8 @@ it('persists both original language keys and remains usable if storage is blocke
   const saved: Record<string, string> = {};
   persistTwinLanguage({ setItem: (key, value) => { saved[key] = value; } }, 'zh');
   expect(saved).toEqual({ semiconfab_lang: 'zh-CN', semicon_lang: 'zh' });
+  persistTwinLanguage({ setItem: (key, value) => { saved[key] = value; } }, 'en');
+  expect(saved).toEqual({ semiconfab_lang: 'en-US', semicon_lang: 'en' });
   expect(() => persistTwinLanguage({ setItem: () => { throw new Error('blocked'); } }, 'en')).not.toThrow();
 });
 

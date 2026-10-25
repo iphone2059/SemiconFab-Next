@@ -2,6 +2,7 @@ export interface Preferences {
   language: 'zh' | 'en';
   theme: 'light' | 'dark';
 }
+export const languageTag = (language: Preferences['language']): 'en-US' | 'zh-CN' => language === 'en' ? 'en-US' : 'zh-CN';
 export function readTwinLanguage(storage: Pick<Storage, 'getItem'>, search: string, browserLanguage: string): Preferences['language'] {
   const normalize = (value: string | null): Preferences['language'] | undefined => value === 'en' || value === 'en-US' ? 'en'
     : value === 'zh' || value === 'zh-CN' || value === 'zh-TW' ? 'zh' : undefined;
@@ -22,9 +23,7 @@ export function readPreferences(storage: Pick<Storage, 'getItem'>, search: strin
       return null;
     }
   };
-  const language =
-    new URLSearchParams(search).get('lang') ?? get('semiconfab_lang') ?? get('semicon_lang');
   const override = new URLSearchParams(search).get('theme');
   const theme = override === 'dark' || override === 'light' ? override : get('semicon_theme');
-  return { language: language === 'en' ? 'en' : 'zh', theme: theme === 'dark' ? 'dark' : 'light' };
+  return { language: readTwinLanguage(storage, search, 'zh-CN'), theme: theme === 'dark' ? 'dark' : 'light' };
 }

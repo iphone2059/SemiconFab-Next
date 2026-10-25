@@ -19,7 +19,7 @@ import {
   safeExternalUrl,
   type CatalogField,
 } from './catalog-data';
-import { readPreferences, type Preferences } from './preferences';
+import { languageTag, readPreferences, type Preferences } from './preferences';
 import '../assets/catalog.css';
 import legacyLicenseUrl from '../assets/legacy-LICENSE.txt?url';
 
@@ -392,10 +392,10 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
   }, [dispatch]);
 
   useEffect(() => {
-    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+    document.documentElement.lang = languageTag(language);
     document.title = `${t(view === 'compare' ? '设备对比' : '设备目录', view === 'compare' ? 'Equipment comparison' : 'Equipment catalog')} · SemiconFab Next`;
     try {
-      localStorage.setItem('semiconfab_lang', language);
+      localStorage.setItem('semiconfab_lang', languageTag(language));
       localStorage.setItem('semicon_lang', language);
       localStorage.setItem('semicon_theme', preferences.theme);
     } catch {
@@ -408,7 +408,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
       q: query,
       hideDrafts: hideDrafts ? '1' : '',
       compare: selected.join(','),
-      lang: language,
+      lang: languageTag(language),
       theme: preferences.theme,
     }))
       if (value) url.searchParams.set(key, value);
@@ -461,14 +461,14 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
           <a href="/">{t('基地工作台', 'Workbench')}</a>
           <a
             className={view === 'catalog' ? 'active' : ''}
-            href={`/catalog?lang=${language}`}
+            href={`/catalog?lang=${languageTag(language)}`}
             onClick={(event) => navigate(event, 'catalog')}
           >
             {t('设备目录', 'Catalog')}
           </a>
           <a
             className={view === 'compare' ? 'active' : ''}
-            href={`/compare?compare=${selected.join(',')}&lang=${language}`}
+            href={`/compare?compare=${selected.join(',')}&lang=${languageTag(language)}`}
             onClick={(event) => navigate(event, 'compare')}
           >
             {t('设备对比', 'Compare')}

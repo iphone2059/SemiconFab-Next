@@ -2,11 +2,12 @@ import { createContext, useContext, useEffect, useMemo, type PropsWithChildren }
 import { useAppDispatch, useAppSelector } from './store/hooks';
 import { localeActions } from './store/localeSlice';
 import { TWIN_EN } from './twin-translations';
+import { languageTag } from './preferences';
 
 export type TwinLanguage = 'zh' | 'en';
 export function persistTwinLanguage(storage: Pick<Storage, 'setItem'>, language: TwinLanguage): void {
   try {
-    storage.setItem('semiconfab_lang', language === 'zh' ? 'zh-CN' : 'en');
+    storage.setItem('semiconfab_lang', languageTag(language));
     storage.setItem('semicon_lang', language);
   } catch { /* The current page can still switch language. */ }
 }
@@ -27,10 +28,10 @@ export function TwinLocaleProvider({ children }: PropsWithChildren) {
   const language = useAppSelector((state) => state.locale.language);
   useEffect(() => {
     try { persistTwinLanguage(localStorage, language); } catch { /* Storage getter can also be denied. */ }
-    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+    document.documentElement.lang = languageTag(language);
     document.documentElement.dataset.lang = language;
     const url = new URL(location.href);
-    url.searchParams.set('lang', language === 'zh' ? 'zh-CN' : 'en');
+    url.searchParams.set('lang', languageTag(language));
     history.replaceState({}, '', url);
   }, [language]);
   const value = useMemo(() => ({ language, t: twinTranslator(language), toggleLanguage: () => dispatch(localeActions.languageToggled()) }), [language, dispatch]);
