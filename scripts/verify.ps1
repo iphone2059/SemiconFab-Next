@@ -19,6 +19,14 @@ if (Test-Path -LiteralPath $originalTwin) {
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
     node tools/build_twin_personnel_vectors.cjs --check
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    node tools/build_twin_exploded_links.cjs --check
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    node tools/build_twin_translations.cjs --check
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    node tools/audit_twin_i18n_coverage.mjs --check
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    node tools/build_twin_motion_vectors.cjs --check
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
 } else {
     Write-Host 'Skipping frozen-original vector checks: ../SemiconFab/twin.html not present.'
 }
