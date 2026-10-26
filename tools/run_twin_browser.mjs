@@ -3,8 +3,9 @@
 // node tools/run_twin_browser.mjs wafer 9487 http://127.0.0.1:4173 .local/wafer.json
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-const [suite = 'wafer', port = '9487', baseUrl = 'http://127.0.0.1:4173', output] = process.argv.slice(2);
+const [suite = 'wafer', port = '9487', baseUrl = 'http://127.0.0.1:4173', output, screenshotOutput] = process.argv.slice(2);
 const suites = {
+  lite: ['lite-runtime.browser.ts', 'runLiteRuntimeAcceptance'],
   wafer: ['twin-wafer.browser.ts', 'runWaferAcceptance'],
   level: ['twin-level.browser.ts', 'runLevelAcceptance'],
   tour: ['twin-tour.browser.ts', 'runTourAcceptance'],
@@ -26,7 +27,7 @@ socket.addEventListener('message', event => {
   const message = JSON.parse(String(event.data));
   if (message.method === 'Runtime.exceptionThrown') errors.push(message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text);
   if (message.method === 'Runtime.consoleAPICalled' && ['error', 'warning'].includes(message.params.type)) errors.push(message.params.args.map(value => value.value ?? value.description).join(' '));
-  if (message.method === 'Log.entryAdded' && message.params.entry.level === 'error') errors.push(message.params.entry.text);
+  if (message.method === 'Log.entryAdded' && message.params.entry.level === 'error') errors.push(message.params.entry.text + (message.params.entry.url ? ' (' + message.params.entry.url + ')' : ''));
   const handler = pending.get(message.id);
   if (!handler) return;
   pending.delete(message.id);
@@ -55,6 +56,10 @@ try {
   const evidence = { suite, result, errors, browser: await (await fetch(`http://127.0.0.1:${port}/json/version`)).json() };
   if (output) fs.writeFileSync(output, JSON.stringify(evidence, null, 2) + '\n');
   assert.deepEqual(errors, [], 'Console/runtime errors');
+  if (screenshotOutput) {
+    const screenshot = await command('Page.captureScreenshot', { format: 'png' });
+    fs.writeFileSync(screenshotOutput, Buffer.from(screenshot.data, 'base64'));
+  }
   console.log(JSON.stringify({ suite, status: 'PASS', errors: errors.length, output }));
 } finally {
   socket.close();

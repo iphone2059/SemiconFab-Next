@@ -1,0 +1,14 @@
+npm notice run web_app@0.1.0 test
+npm notice run vitest run
+
+ RUN  v5.0.5 C:/Users/han_qingyu/SemiconFab-Next/web_app
+
+
+ Test Files  49 passed (49)
+      Tests  190 passed (190)
+   Start at  10:31:55
+   Duration  2.54s (import 43%, tests 40%, transform 15%, worker 3%)
+
+    Isolate  49 workers spawned · ~324ms startup each (spawn + environment, per file)
+             at least ~511ms faster with isolate: false — reuses workers across files instead of one per file
+

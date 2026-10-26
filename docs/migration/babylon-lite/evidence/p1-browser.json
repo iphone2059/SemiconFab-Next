@@ -1,0 +1,186 @@
+{
+  "suite": "lite",
+  "result": {
+    "status": "PASS",
+    "scope": "P1 cube lifecycle only; FAB parity NOT_RUN",
+    "gpu": {
+      "secure": true,
+      "vendor": "nvidia",
+      "architecture": "ampere",
+      "device": "",
+      "description": "",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "initial": {
+      "status": "ready",
+      "states": [
+        "initializing",
+        "ready"
+      ],
+      "gpuErrors": [],
+      "frames": 6,
+      "drawCalls": 1,
+      "registeredContexts": 1,
+      "surfaces": 1,
+      "meshes": 1,
+      "width": 1536,
+      "height": 735
+    },
+    "recoveries": [
+      {
+        "status": "ready",
+        "states": [
+          "initializing",
+          "ready",
+          "lost",
+          "ready"
+        ],
+        "gpuErrors": [],
+        "frames": 7,
+        "drawCalls": 1,
+        "registeredContexts": 1,
+        "surfaces": 1,
+        "meshes": 1,
+        "width": 1536,
+        "height": 735
+      },
+      {
+        "status": "ready",
+        "states": [
+          "initializing",
+          "ready",
+          "lost",
+          "ready",
+          "lost",
+          "ready"
+        ],
+        "gpuErrors": [],
+        "frames": 12,
+        "drawCalls": 1,
+        "registeredContexts": 1,
+        "surfaces": 1,
+        "meshes": 1,
+        "width": 1536,
+        "height": 735
+      },
+      {
+        "status": "ready",
+        "states": [
+          "initializing",
+          "ready",
+          "lost",
+          "ready",
+          "lost",
+          "ready",
+          "lost",
+          "ready"
+        ],
+        "gpuErrors": [],
+        "frames": 17,
+        "drawCalls": 1,
+        "registeredContexts": 1,
+        "surfaces": 1,
+        "meshes": 1,
+        "width": 1536,
+        "height": 735
+      }
+    ],
+    "resized": {
+      "status": "ready",
+      "states": [
+        "initializing",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "gpuErrors": [],
+      "frames": 24,
+      "drawCalls": 1,
+      "registeredContexts": 1,
+      "surfaces": 1,
+      "meshes": 1,
+      "width": 1024,
+      "height": 640
+    },
+    "disposed": {
+      "status": "disposed",
+      "states": [
+        "initializing",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "gpuErrors": [],
+      "frames": 24,
+      "drawCalls": 1,
+      "registeredContexts": 0,
+      "surfaces": 0,
+      "meshes": 0,
+      "width": 1024,
+      "height": 640
+    },
+    "aborted": {
+      "status": "disposed",
+      "states": [
+        "initializing",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "initializing"
+      ],
+      "gpuErrors": [],
+      "frames": 24,
+      "drawCalls": 1,
+      "registeredContexts": 0,
+      "surfaces": 0,
+      "meshes": 0,
+      "width": 1024,
+      "height": 640
+    },
+    "remounted": {
+      "status": "ready",
+      "states": [
+        "initializing",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "initializing",
+        "initializing",
+        "ready"
+      ],
+      "gpuErrors": [],
+      "frames": 25,
+      "drawCalls": 1,
+      "registeredContexts": 1,
+      "surfaces": 1,
+      "meshes": 1,
+      "width": 1024,
+      "height": 640
+    }
+  },
+  "errors": [],
+  "browser": {
+    "Browser": "Chrome/155.0.8059.86",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+    "V8-Version": "15.5.35.25",
+    "WebKit-Version": "537.36 (@804d6b05f089b27af8342622a36558c49401a1d4)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9491/devtools/browser/3d4bf208-b980-40d1-b3cc-c7e2363f6fd2"
+  }
+}
