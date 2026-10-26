@@ -1,23 +1,23 @@
 {
   "minutes": 1,
-  "startedAt": "2026-10-26T16:21:35.444Z",
-  "finishedAt": "2026-10-26T16:22:35.482Z",
+  "startedAt": "2026-10-26T16:39:09.618Z",
+  "finishedAt": "2026-10-26T16:40:09.648Z",
   "summary": {
-    "frames": 3471,
-    "meanFrameMs": 17.26917314894843,
-    "fps": 57.90665200788105,
-    "p95FrameMs": 33.30000000000291,
+    "frames": 3128,
+    "meanFrameMs": 19.17621483375959,
+    "fps": 52.14793475506475,
+    "p95FrameMs": 33.400000000001455,
     "p99FrameMs": 33.5,
     "longTasks": 0,
     "longTaskMaxMs": 0,
-    "elapsedMs": 60027.300000000745
+    "elapsedMs": 60024.800000000745
   },
   "finalState": {
     "status": "WebGPU · 程序化 FAB · 121 台设备",
-    "heap": 85665997,
+    "heap": 32946177,
     "gpu": 0,
     "lifecycle": {
-      "backendId": "cf46a33f-6113-4acf-9100-90b7e341980d",
+      "backendId": "ec33c97b-08c0-463b-8e14-7decefe51782",
       "statuses": [
         "initializing",
         "ready"
@@ -31,12 +31,12 @@
   "polls": [
     {
       "status": "WebGPU · 程序化 FAB · 121 台设备",
-      "heap": 85665997,
+      "heap": 32946177,
       "gpu": 0,
-      "frames": 3472,
+      "frames": 3129,
       "longTasks": 0,
       "lifecycle": {
-        "backendId": "cf46a33f-6113-4acf-9100-90b7e341980d",
+        "backendId": "ec33c97b-08c0-463b-8e14-7decefe51782",
         "statuses": [
           "initializing",
           "ready"
@@ -46,7 +46,7 @@
         "lastStatus": "WebGPU · 程序化 FAB · 121 台设备",
         "status": "ready"
       },
-      "elapsedMs": 60002
+      "elapsedMs": 60012
     }
   ],
   "consoleErrors": []

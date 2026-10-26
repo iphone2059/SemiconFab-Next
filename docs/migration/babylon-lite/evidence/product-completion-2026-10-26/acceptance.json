@@ -1,7 +1,7 @@
 {
   "suite": "lite-product",
   "baseUrl": "http://127.0.0.1:5178",
-  "capturedAt": "2026-10-26T16:15:52.606Z",
+  "capturedAt": "2026-10-26T16:34:31.417Z",
   "viewport": "1536x735 DPR1 foreground tab",
   "result": {
     "steps": [
@@ -82,8 +82,8 @@
         "name": "level-EXPLODED",
         "ok": true,
         "value": {
-          "ceilingOffset": 19.853946553719965,
-          "b1Offset": -17.868551898347967
+          "ceilingOffset": 19.895368339301243,
+          "b1Offset": -17.90583150537112
         }
       },
       {
@@ -122,14 +122,14 @@
         "name": "wafer",
         "ok": true,
         "value": {
-          "trailIndexCount": 2
+          "trailIndexCount": 8
         }
       },
       {
         "name": "tour-patrol",
         "ok": true,
         "value": {
-          "distinct": 8
+          "distinct": 9
         }
       },
       {
@@ -168,7 +168,7 @@
       "gpuErrors": 0
     },
     "lifecycle": {
-      "backendId": "e54389bb-ed91-45d1-9095-bec50edafa42",
+      "backendId": "1159fd09-f2bf-4615-8fc0-0e45276b25e3",
       "statuses": [
         "initializing",
         "ready",
@@ -193,6 +193,6 @@
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
     "V8-Version": "15.5.35.25",
     "WebKit-Version": "537.36 (@804d6b05f089b27af8342622a36558c49401a1d4)",
-    "webSocketDebuggerUrl": "ws://127.0.0.1:9490/devtools/browser/c82feb26-30d4-4c3e-bea5-bbf51452c779"
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9490/devtools/browser/94c97929-8026-48f0-a75d-8678ee34bf05"
   }
 }

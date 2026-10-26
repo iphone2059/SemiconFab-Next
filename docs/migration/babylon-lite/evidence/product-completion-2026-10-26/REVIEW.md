@@ -241,3 +241,23 @@ residual risks, not merge blockers.
   (including the three real device losses with the CSM-bound palette), production perf A/B 57.9/53.9
   vs 15.8/14.0 fps, 1-minute soak 57.9 fps / 0 long tasks / 0 GPU+console errors. X-Ray remains a
   documented visual gap (product hologram still lighter than the source custom depth pass).
+
+## Post-review delta (round 4): restore race, perf methodology, X-Ray residual analysis
+
+- Camera restore after a replacement-device rebuild is applied twice (0 ms and 300 ms) so the React
+  status-effect `setView(preset)` can no longer win the ordering race (M-7 hardened). Acceptance still
+  asserts the preserved pose after each of the three losses.
+- **Performance evidence corrected**: the earlier A/B (Lite 57.9/53.9 vs legacy 15.8/14.0 fps) was
+  captured in a stale multi-window CDP browser where the legacy tab was occlusion-throttled. With a
+  single fresh fully-visible window (three repeats): Lite 52.8/46.0 vs legacy 39.2/38.9 fps
+  (~1.2–1.35x). Updated in README/VALIDATION/MIGRATION_PLAN/FEATURE_GAPS; the old numbers are marked
+  withdrawn rather than silently edited.
+- X-Ray residual root-cause narrowed with a temporary pure-red highlight marker (since reverted): the
+  highlight branch and its ~20% canvas coverage are correct on both sides; inside that mask the legacy
+  median luminance is 117 vs the product's 164. The remaining gap is the palette's shadow/lit response
+  (legacy sampled its own static depth pass; the product samples camera-fitted CSM cascades whose lit
+  is ~1 for most subfab surfaces), not geometry or palette coverage.
+- Acceptance environment note: accumulated CDP windows/tabs can leave the acceptance window occluded,
+  which stalls demo timers (wafer-follow step timed out until the CDP browser was restarted fresh).
+  All final gates were re-run after the restart: Chrome 155 + Edge 156 product/UI PASS (0 errors),
+  1-minute soak 52.1 fps / 0 long tasks / 0 GPU+console errors.

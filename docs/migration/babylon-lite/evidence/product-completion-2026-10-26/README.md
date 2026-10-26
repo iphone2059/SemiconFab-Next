@@ -76,6 +76,14 @@ from 43.860 (no shadow sampling) to **34.976**. X-Ray remains a **known visual g
 hologram is still lighter than the frozen source's custom depth-pass hologram — and is recorded as a
 limitation, not a pass.
 
+Residual analysis (round 4, debug-marker experiment): a temporary pure-red highlight marker proved
+the highlighted-subfab branch renders over ~20% of the canvas on both sides, so coverage is right;
+inside that mask the reference's median luminance is 117 vs the product's 164 (mean RGB (65,136,167)
+vs (125,185,201)). The residual is therefore the *shadow/lit response* of the palette: the source
+hologram sampled its own static depth pass, while the product samples camera-fitted CSM cascades
+whose `lit` is ~1 for most subfab surfaces. The marker experiment was reverted; no debug code
+remains in the tree.
+
 This is a **frozen-clock comparison, not a Golden PASS**: the migration guide does not define a
 whole-product golden threshold and the X-Ray gap is visible. Whole-product Golden remains NOT_RUN.
 
@@ -87,10 +95,14 @@ Method: 5 s warmup, 8 s idle + 6 s orbit sampling of rAF deltas, same Chrome/vie
 
 | Renderer | idle fps | orbit fps |
 |---|---|---|
-| Native Lite (production) | 57.9 | 53.9 |
-| Frozen Next 0b35ca5 (production) | 15.8 | 14.0 |
+| Native Lite (production) | 52.8 | 46.0 |
+| Frozen Next 0b35ca5 (production) | 39.2 | 38.9 |
 
-Both runs 0 console errors. Raw JS payload: Lite `gpu` chunk 396,492 B (Lite engine only;
+Both runs 0 console errors. **Methodology correction**: earlier A/B numbers (Lite 57.9/53.9 vs legacy
+15.8/14.0) were captured in a stale multi-window CDP browser in which the legacy tab was
+occlusion-throttled; they are withdrawn. In a single fresh fully-visible Chrome window, repeated
+three times, the legacy renderer runs 38–39 fps and Lite runs 46–54 fps (≈1.2–1.35× faster), which is
+the recorded result. Raw JS payload: Lite `gpu` chunk 396,492 B (Lite engine only;
 `lite-backend` 2,359,121 B includes the 2.28 MB frozen static-structure data) vs frozen old renderer
 `gpu` chunk 2,528,822 B (old core). No old-engine symbols in the Lite dist; gzip sizes are not
 asserted here.
@@ -98,8 +110,8 @@ asserted here.
 ## 5. Soak (user-directed 1-minute run; 60-minute NOT_RUN)
 
 The session owner explicitly replaced the planned 60-minute soak with a 1-minute soak. Final-build
-result: 3,471 frames, mean frame 17.27 ms (**57.9 fps**), p95 33.3 ms, p99 33.5 ms, **0 long tasks**,
-heap 85.7 MB, 0 GPU validation errors, 0 console errors, status stable at
+result: 3,128 frames, mean frame 19.18 ms (**52.1 fps**), p95 33.4 ms, p99 33.5 ms, **0 long tasks**,
+heap 32.9 MB, 0 GPU validation errors, 0 console errors, status stable at
 `WebGPU · 程序化 FAB · 121 台设备`. Raw: [soak.json](./soak.json).
 A 60-minute soak remains **NOT_RUN** by instruction; it is not reported as passed.
 

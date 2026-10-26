@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-10-26T16:21:32.944Z",
+  "capturedAt": "2026-10-26T16:39:01.900Z",
   "mode": "production-preview",
   "liteUrl": "http://127.0.0.1:5178",
   "refUrl": "http://127.0.0.1:5179",
@@ -7,40 +7,40 @@
   "lite": {
     "tag": "lite",
     "idle": {
-      "frames": 463,
-      "fps": 57.87644691117277,
-      "meanFrameMs": 17.27818574514039,
-      "p50": 16.69999999999891,
-      "p95": 33.30000000000018,
+      "frames": 423,
+      "fps": 52.82151821280953,
+      "meanFrameMs": 18.931678486997637,
+      "p50": 16.700000000000728,
+      "p95": 33.399999999999636,
       "longTasks": 0,
       "stats": {
-        "fps": 58.46813486654021,
-        "frameTimeMs": 17.103333333320915,
+        "fps": 52.7363184079602,
+        "frameTimeMs": 18.962264150943398,
         "renderTimeMs": 0,
         "drawCalls": 903,
         "activeMeshes": 916,
-        "frames": 777,
-        "heapBytes": 44513205
+        "frames": 697,
+        "heapBytes": 30443712
       }
     },
     "orbit": {
-      "frames": 324,
-      "fps": 53.924505692031154,
-      "meanFrameMs": 18.544444444444444,
-      "p50": 16.700000000000728,
-      "p95": 33.39999999999782,
+      "frames": 276,
+      "fps": 46.00306687112476,
+      "meanFrameMs": 21.737681159420283,
+      "p50": 24.899999999997817,
+      "p95": 33.5,
       "longTasks": 0,
       "stats": {
-        "fps": 54.682839530681306,
-        "frameTimeMs": 18.287272727286275,
+        "fps": 48.742444921001834,
+        "frameTimeMs": 20.516000000014902,
         "renderTimeMs": 0,
         "drawCalls": 903,
         "activeMeshes": 916,
-        "frames": 1102,
-        "heapBytes": 44501473
+        "frames": 974,
+        "heapBytes": 39089929
       }
     },
-    "heap": 44501473,
+    "heap": 39089929,
     "adapter": {
       "vendor": "intel",
       "architecture": "gen-12lp",
@@ -52,42 +52,42 @@
   "ref": {
     "tag": "ref",
     "idle": {
-      "frames": 127,
-      "fps": 15.760343501030006,
-      "meanFrameMs": 63.45039370078741,
-      "p50": 66.59999999999854,
-      "p95": 83.39999999999964,
-      "longTasks": 90,
+      "frames": 313,
+      "fps": 39.16563434563359,
+      "meanFrameMs": 25.532587859424922,
+      "p50": 25,
+      "p95": 33.400000000001455,
+      "longTasks": 0,
       "stats": {
-        "fps": 16.95969246425762,
-        "frameTimeMs": 63.899999998509884,
-        "renderTimeMs": 51.599999997764826,
-        "activeMeshesEvaluationMs": 6.800000000745058,
+        "fps": 41.43074161018964,
+        "frameTimeMs": 23.5,
+        "renderTimeMs": 15.899999998509884,
+        "activeMeshesEvaluationMs": 3.600000001490116,
         "drawCalls": 1714,
         "activeMeshes": 1714,
         "totalVertices": 197186,
-        "heapBytes": 129486587
+        "heapBytes": 146128061
       }
     },
     "orbit": {
-      "frames": 85,
-      "fps": 14.011142979593185,
-      "meanFrameMs": 71.37176470588234,
-      "p50": 66.79999999999927,
-      "p95": 91.70000000000073,
-      "longTasks": 68,
+      "frames": 234,
+      "fps": 38.89239769969752,
+      "meanFrameMs": 25.711965811965804,
+      "p50": 25,
+      "p95": 33.400000000001455,
+      "longTasks": 0,
       "stats": {
-        "fps": 14.679976512026888,
-        "frameTimeMs": 40.100000001490116,
-        "renderTimeMs": 29.600000001490116,
-        "activeMeshesEvaluationMs": 5.699999999254942,
-        "drawCalls": 1736,
-        "activeMeshes": 1736,
+        "fps": 38.358266206477175,
+        "frameTimeMs": 20.300000000745058,
+        "renderTimeMs": 14.5,
+        "activeMeshesEvaluationMs": 3.100000001490116,
+        "drawCalls": 1737,
+        "activeMeshes": 1737,
         "totalVertices": 197186,
-        "heapBytes": 148220885
+        "heapBytes": 160095169
       }
     },
-    "heap": 148220885,
+    "heap": 160095169,
     "adapter": {
       "vendor": "intel",
       "architecture": "gen-12lp",

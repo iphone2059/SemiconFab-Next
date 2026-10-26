@@ -116,12 +116,15 @@ export function createLiteBackend(): SceneBackend {
           if (pendingPose) {
             const pose = pendingPose, selection = pendingSelection;
             pendingPose = null; pendingSelection = null;
-            // Run after React's status effects apply the requested view/layers to the new scene.
-            window.setTimeout(() => {
+            // The status-effect setView(preset) runs after this callback; re-apply once more after it
+            // has settled so the preserved pose cannot lose the ordering race with the preset.
+            const applyRestoredState = () => {
               if (disposed || !world) return;
               world.setCameraPose(pose.position, pose.target, 0);
               if (selection !== null) world.selectTool(selection, false);
-            }, 0);
+            };
+            window.setTimeout(applyRestoredState, 0);
+            window.setTimeout(applyRestoredState, 300);
           }
         } else if (status === 'failed') {
           console.error('[lite] runtime failed', error, (error as { cause?: { stack?: string } } | undefined)?.cause?.stack ?? '');

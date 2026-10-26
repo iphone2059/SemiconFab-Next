@@ -30,6 +30,7 @@ P4/P5 审查修复另证实 [LITE-GAP-RECOVERY-002](./LITE-GAP-RECOVERY-002.md)�
 4. **X-Ray/剖切互斥与楼层/爆炸组合** 沿用冻结 `spatialState` 语义（单一 spatialMode），产品验收已覆盖。
 5. **旧引擎验收套件清退**：删除 `twin-wafer/level/exploded/parity/goldens/tour/xray-acceptance/original-lighting/native-static-shadows` 等依赖旧 Scene 内部结构或已删除构建器的套件；产品行为由 `tests/twin-lite.browser.ts`（真实 /twin）覆盖，DOM 回归保留 `twin.browser.ts`。冻结时钟的 tour 时序 Golden 因此 NOT_RUN。
 6. **跨浏览器矩阵 PARTIAL**：Chrome 155 与 Edge 156（Chromium/WebGPU 实测）产品验收与 UI 回归均 PASS；非 Chromium WebGPU 浏览器本机不可用且未下载，NOT_RUN。
-7. **整产品 Golden NOT_RUN**：已用参考 golden 的 GOLDEN_CLOCK 手动步进做冻结时钟 7 视角比较（证据包 §3：ISO 9.83 / TOP 13.40 / B1 17.67 / DUAL 19.83 / EXPLODED 8.18 / CUT 5.11 / X-RAY 34.98），但迁移指南未定义整产品 Golden 阈值且 X-Ray 缺口可见，不能当 Golden PASS；生产构建验收、性能 A/B、三次恢复已通过。按用户指示以 1 分钟 soak 替代 60 分钟（最终生产构建 57.9 fps、0 long task、0 GPU/console 错误、heap 85.7 MB）；60 分钟 soak 因此 NOT_RUN。
-8. **独立审查**：无 Critical/阻塞缺陷；1 项 docs-only Important（文档与冻结证据口径，本轮已修）与 10 项 Minor 残留风险（camera 恢复计时顺序、restartPending 无自动化覆盖、gpuErrors 订阅时机、cut 无像素断言、decodePng 无单测等）记录于 [REVIEW.md](./evidence/product-completion-2026-10-26/REVIEW.md)。
+7. **整产品 Golden NOT_RUN**：已用参考 golden 的 GOLDEN_CLOCK 手动步进做冻结时钟 7 视角比较（证据包 §3：ISO 9.83 / TOP 13.40 / B1 17.67 / DUAL 19.83 / EXPLODED 8.18 / CUT 5.11 / X-RAY 34.98），但迁移指南未定义整产品 Golden 阈值且 X-Ray 缺口可见，不能当 Golden PASS；生产构建验收、性能 A/B、三次恢复已通过。按用户指示以 1 分钟 soak 替代 60 分钟（最终生产构建 52.1 fps、0 long task、0 GPU/console 错误、heap 32.9 MB）；60 分钟 soak 因此 NOT_RUN。
+8. **性能口径**：早期 A/B（Lite 57.9/53.9 vs 旧 15.8/14.0）因 legacy tab 被遮挡节流而撤回；全新单一前台浏览器重复三次的诚实结果是 Lite 52.8/46.0 vs 旧 39.2/38.9 fps（≈1.2–1.35×），仍为 PASS 但优势有限。
+9. **独立审查**：无 Critical/阻塞缺陷；1 项 docs-only Important（文档与冻结证据口径，本轮已修）与 10 项 Minor 残留风险（camera 恢复计时顺序、restartPending 无自动化覆盖、gpuErrors 订阅时机、cut 无像素断言、decodePng 无单测等）记录于 [REVIEW.md](./evidence/product-completion-2026-10-26/REVIEW.md)。
 
