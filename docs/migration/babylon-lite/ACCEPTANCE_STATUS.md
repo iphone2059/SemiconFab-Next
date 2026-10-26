@@ -25,7 +25,7 @@
 1. **X-Ray 视觉差距**：冻结时钟均值差 28.69（从 43.86 收敛）。根因是冻结产品全息使用其自有 static
    depth pass，其亮度分布与原生 CSM 不同；产品保留 CSM 调制并按冻结产品可见亮度做 legibility-floor
    近似（`XRAY_LIT_FLOOR`/`XRAY_SHADOW_CONTRAST`，见 [FEATURE_GAPS.md](./FEATURE_GAPS.md) 第 2 条）。
-2. **整产品冻结时钟 Golden**：迁移指南未定义整产品 Golden 阈值，且受第 1 条影响，仍 NOT_RUN。
+2. **整产品冻结时钟 Golden**：迁移指南未定义整产品 Golden 阈值，且受第 1 条影响，仍 NOT_RUN。X-Ray 残余分析显示差异主要是色相/叠层合成（高亮区参考均值 (65,135,166) vs 产品 (117,166,179)；非高亮区中位差仅 6；全局亮度对齐后差反而升到 35），说明继续调 lit 无法闭合；要完全复刻源自有 static depth pass 与合成，需要新增自定义固定光深 pass/材质叠层，属于迁移指南要求单独立项的新渲染器工作，超出本次迁移范围。
 3. **非 Chromium 浏览器**：本机与下载策略下不可用，NOT_RUN。
 4. **60 分钟 soak**：用户指示取消，NOT_RUN（1 分钟结果已记录）。
 5. 审查残留 Minor（相机恢复计时、cascading-loss 无自动化覆盖、cut 无像素断言、gpuErrors 订阅时机等）
@@ -45,3 +45,13 @@ cd web_app; npx tsc --noEmit; npx vitest run; npx vite build
 
 > 隐藏/被遮挡的标签页会暂停 requestAnimationFrame 并卡住 Lite 启动；验收必须使用前台可见窗口。
 > 累积的多窗口 CDP 浏览器会造成 demo 定时器节流（曾导致 wafer 步骤超时），必要时用干净 profile 重启。
+
+## 本机无法继续闭合的门禁（具体条件）
+
+- **X-Ray 完全视觉对齐**：需要复刻源自有 static depth pass 与合成（自定义固定光深 pass/材质叠层），
+  这是迁移指南要求单独立项的新渲染器工作；现有 Lite 1.36 公开 API 只提供透视 CSM，无法作为其等价物。
+  已把差异量化到色相/叠层层面（见上），继续调亮度/lit 无收益。
+- **整产品 Golden**：迁移指南未定义整产品 Golden 阈值（“现有 Golden 尚未全部通过，不可宣布 1:1”）。
+- **非 Chromium 浏览器**：本机仅 Chrome 155 / Edge 156（Chromium），未安装也未下载 Firefox/Safari 等
+  WebGPU 浏览器，NOT_RUN。
+- **60 分钟 soak**：用户明确指示以 1 分钟替代（已记录 1 分钟结果），60 分钟门禁按指示不再执行。
