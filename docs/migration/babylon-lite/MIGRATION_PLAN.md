@@ -1,6 +1,6 @@
 # Babylon Lite 原生迁移进度
 
-状态：`IMPLEMENTING / NOT_PARITY_VERIFIED`。正式 `/twin` 已由原生 Lite 后端承载并通过生产构建产品验收（功能矩阵、三次设备丢失、同机性能 A/B）；旧 Babylon 源码与 `@babylonjs/core` 依赖已删除。仍缺完整冻结时钟 Golden、非 Chromium 浏览器矩阵、用户指示替代的 60 分钟 soak 与独立审查（进行中），因此不是完整 parity 通过。
+状态：`IMPLEMENTING / NOT_PARITY_VERIFIED`。逐门禁状态见 [ACCEPTANCE_STATUS.md](./ACCEPTANCE_STATUS.md)；正式 `/twin` 已由原生 Lite 后端承载并通过生产构建产品验收（功能矩阵、三次设备丢失、同机性能 A/B）；旧 Babylon 源码与 `@babylonjs/core` 依赖已删除。仍缺完整冻结时钟 Golden、非 Chromium 浏览器矩阵、用户指示替代的 60 分钟 soak 与独立审查（进行中），因此不是完整 parity 通过。
 
 规范：[2026-10-26 迁移指南](../../SemiconFab-Next_Babylon-Lite_Native-Migration_Guide_2026-10-26.md)。保留原文，阶段进度在此维护。
 

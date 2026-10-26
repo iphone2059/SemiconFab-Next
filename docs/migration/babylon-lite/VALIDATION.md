@@ -85,7 +85,7 @@
 
 ## 2026-10-26 产品完成阶段验证（正式 /twin 原生 Lite）
 
-状态：**IMPLEMENTING / NOT_PARITY_VERIFIED**。产品功能/生产构建验收、三次设备恢复、性能 A/B、1 分钟 soak（用户指示替代 60 分钟）与 Chrome+Edge 矩阵已通过，独立审查无 Critical/阻塞缺陷；仍缺完整冻结时钟 Golden、非 Chromium 浏览器、60 分钟 soak，故不宣布完整 parity。
+状态：**IMPLEMENTING / NOT_PARITY_VERIFIED**。逐门禁状态与证据索引见 [ACCEPTANCE_STATUS.md](./ACCEPTANCE_STATUS.md)。产品功能/生产构建验收、三次设备恢复、性能 A/B、1 分钟 soak（用户指示替代 60 分钟）与 Chrome+Edge 矩阵已通过，独立审查无 Critical/阻塞缺陷；仍缺完整冻结时钟 Golden、非 Chromium 浏览器、60 分钟 soak，故不宣布完整 parity。
 证据包：[evidence/product-completion-2026-10-26/README.md](./evidence/product-completion-2026-10-26/README.md)。
 
 | 检查 | 结果 | 证据 |

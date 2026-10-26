@@ -1,5 +1,7 @@
 # Native Lite product completion evidence — 2026-10-26 (final build)
 
+Gate summary: [../ACCEPTANCE_STATUS.md](../ACCEPTANCE_STATUS.md).
+
 Status: **IMPLEMENTING / NOT_PARITY_VERIFIED**. This package records product-level evidence for the
 **/twin** page running the native Babylon Lite 1.36 renderer. The recorded build is the final code
 freeze after the P11 cleanup, the device-loss disposal/queue fixes, the GPU-error subscription move,
