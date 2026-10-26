@@ -9,7 +9,7 @@
 | 仓库总验证（修复后） | PASS：Python 16、.NET 67、前端 207；3 个 .NET 项目 Release 构建、类型检查、冻结锁文件安装、生产构建通过 | [verify.txt](./evidence/verify.txt) |
 | 独立 Lite 构建 | PASS | [lite-build.txt](./evidence/lite-build.txt) |
 | 初版真实 WebGPU：首帧、resize、卸载/重挂载、中止、3 次设备丢失恢复 | PASS（仅初版 `c00f1e0`，不覆盖审查后的修复）；Chrome 155.0.8059.86 / NVIDIA Ampere，GPU/console 错误均为 0 | [p1-browser.json](./evidence/p1-browser.json)、[p1-cube.png](./evidence/p1-cube.png) |
-| 修复后的扩展原生 GPU 回归 | FAIL：包含恢复中卸载/首帧丢失的整组测试在 Runtime.evaluate 挂起超时，尚未隔离触发阶段；后续复跑 BLOCKED：requestAdapter 返回 null | [browser-timeout.txt](./evidence/browser-timeout.txt)、[browser-gpu-unavailable.txt](./evidence/browser-gpu-unavailable.txt)；P1 保持 REVIEW_REQUIRED |
+| 修复后的扩展原生 GPU 回归 | PASS（2026-10-26 恢复执行）：新专用 Chrome 155 / NVIDIA Ampere；三次恢复、恢复中卸载、初始 RAF 丢失、中止、重挂载、resize；GPU/console 错误 0 | [p1-browser-resumed.json](./evidence/p1-browser-resumed.json)、[p1-cube-resumed.png](./evidence/p1-cube-resumed.png)。保留历史 [超时](./evidence/browser-timeout.txt) / [adapter 不可用](./evidence/browser-gpu-unavailable.txt) 证据；旧会话根因未认定。 |
 | 8 组原版冻结向量/翻译检查 | PASS：手动完整执行；新增 runtime 文件后重新生成 i18n 源码清单（只增加文件名） | [frozen-vectors.txt](./evidence/frozen-vectors.txt) |
 | 12 个冻结源码/fixture 文件散列 | PASS：0 变化 | [BASELINE.json](./BASELINE.json) |
 | 121 台 Lite 几何、拾取、FAB 页面功能、阴影、模式组合 | NOT_RUN | P2–P9 后续门禁 |
@@ -37,7 +37,7 @@
 
 审查中未判定的范围为 P2–P11/整 FAB/Golden/性能（本轮明确只开始迁移），以及初始化通知中止仍短暂获取设备（已顺带由同一取消检查和回归测试消除）。这些不是已完成的产品门禁。
 
-## 当前阻碍
+## 历史阻碍（当前 P1 cube 已复验通过）
 
 挂起测试的专用 Chrome GPU 进程持续占用 CPU，页面调试求值不再响应；通过 Browser.close 关闭后，另一已有 Chrome 会话无法获取 adapter（Lite `#50`，在安装包源码中是 `requestAdapter()` 返回 null）。未认定是驱动、浏览器还是测试/Lite 路径的根因。
 
