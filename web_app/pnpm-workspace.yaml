@@ -1,0 +1,5 @@
+# pnpm 12 settings file (not a workspace definition; ADR-0001 flat layout is unchanged).
+# The reviewed TanStack versions were published inside pnpm's minimumReleaseAge window.
+minimumReleaseAgeExclude:
+  - '@tanstack/query-core@5.105.0'
+  - '@tanstack/react-query@5.105.0'

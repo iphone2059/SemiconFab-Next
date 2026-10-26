@@ -176,12 +176,12 @@ it('reports same-zh/different-en collisions instead of silently dropping them', 
 
 it('keeps the coverage audit totals self-consistent with no empty English arguments', () => {
   const { totals, findings } = coverage;
-  expect(totals.literalPairs).toBe(182);
+  expect(totals.literalPairs).toBe(183);
   expect(totals.explicitPairs).toBe(41);
   expect(totals.frozenMappedPairs).toBe(26);
   expect(totals.twinEnOnlyPairs).toBe(115);
-  expect(totals.absentFromBothMaps).toBe(41);
-  expect(totals.twinUiPairs).toBe(141);
+  expect(totals.absentFromBothMaps).toBe(42);
+  expect(totals.twinUiPairs).toBe(142);
   expect(totals.otherUiPairs).toBe(41);
   expect(totals.matchedFrozen).toBe(0);
   expect(totals.frozenContradictions).toBe(0);
@@ -234,7 +234,7 @@ it('covers the twin UI surface and records the actionable C2 findings', () => {
     .filter((entry) => entry.surface === 'twin-ui')
     .map((entry) => entry.zhCN)
     .sort(compareText);
-  expect(twinAbsent).toEqual(['关闭', '尺寸']);
+  expect(twinAbsent).toEqual(['关闭', '尺寸', '指定的 FAB 不存在：{0}']);
   expect(coverage.findings.absentFromBothMaps.every((entry) => entry.line > 0 && entry.file.length > 0)).toBe(true);
   expect(coverage.allowlistPolicy.length).toBeGreaterThan(100);
   expect(coverage.allowlist).toEqual([]);

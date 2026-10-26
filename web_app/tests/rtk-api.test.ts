@@ -23,8 +23,8 @@ it('uses browser fetch, same-origin credentials and uncached requests without a 
     request = input;
     return Promise.resolve(Response.json([]));
   });
-  await expect(freshStore().dispatch(twinApi.endpoints.getSites.initiate()).unwrap()).resolves.toEqual([]);
-  expect(request?.url).toBe('http://localhost/api/v1/sites');
+  await expect(freshStore().dispatch(twinApi.endpoints.getRuns.initiate()).unwrap()).resolves.toEqual([]);
+  expect(request?.url).toBe('http://localhost/api/v1/runs');
   expect(request?.credentials).toBe('same-origin');
   expect(request?.cache).toBe('no-store');
   expect(request?.headers.has('X-Fab-Dev-Key')).toBe(false);
@@ -41,7 +41,7 @@ it('encodes catalog filters and equipment site identities on the active endpoint
 
 it('preserves ProblemDetails and HTTP status for UI error rendering', async () => {
   vi.stubGlobal('fetch', async () => Response.json({ title: '身份拒绝', detail: '缺少开发密钥' }, { status: 401 }));
-  await expect(freshStore().dispatch(twinApi.endpoints.getSites.initiate()).unwrap()).rejects.toEqual({ status: 401, data: { title: '身份拒绝', detail: '缺少开发密钥' } });
+  await expect(freshStore().dispatch(twinApi.endpoints.getRuns.initiate()).unwrap()).rejects.toEqual({ status: 401, data: { title: '身份拒绝', detail: '缺少开发密钥' } });
 });
 
 it('sends JSON and idempotency on the current createRun mutation', async () => {
@@ -72,5 +72,5 @@ it('propagates query cancellation to the active transport', async () => {
 
 it('retains non-JSON gateway errors instead of reporting a successful response', async () => {
   vi.stubGlobal('fetch', async () => new Response('Bad gateway', { status: 502 }));
-  await expect(freshStore().dispatch(twinApi.endpoints.getSites.initiate()).unwrap()).rejects.toMatchObject({ status: 'PARSING_ERROR', originalStatus: 502, data: 'Bad gateway' });
+  await expect(freshStore().dispatch(twinApi.endpoints.getRuns.initiate()).unwrap()).rejects.toMatchObject({ status: 'PARSING_ERROR', originalStatus: 502, data: 'Bad gateway' });
 });

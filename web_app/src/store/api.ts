@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { CatalogPageDto, RunResult, RunSummary, SiteDto } from '../contracts';
+import type { CatalogPageDto, RunResult, RunSummary } from '../contracts';
 import type { EquipmentStatusSnapshot } from '../equipment-status';
 import { parseWaferRoutes, type WaferProduct, type WaferRouteStep } from '../wafer-route';
 
@@ -7,15 +7,14 @@ const rootQuery = fetchBaseQuery({ baseUrl: '/', credentials: 'same-origin', cac
   fetchFn: (input, init) => globalThis.fetch(input, init),
 });
 
+// /api/v1/sites is owned by TanStack Query (api/queries/sites.queries.ts) so the
+// router loaders, Workbench and Twin share one cache (ARCH G-02). The remaining
+// endpoints stay on RTK Query until the M2 migration.
 export const twinApi = createApi({
   reducerPath: 'twinApi',
   baseQuery: rootQuery,
-  tagTypes: ['Sites', 'EquipmentStatus', 'Catalog', 'Runs'],
+  tagTypes: ['EquipmentStatus', 'Catalog', 'Runs'],
   endpoints: (builder) => ({
-    getSites: builder.query<SiteDto[], void>({
-      query: () => 'api/v1/sites',
-      providesTags: ['Sites'],
-    }),
     getEquipmentStatus: builder.query<EquipmentStatusSnapshot, string>({
       query: (siteId) => `api/v1/sites/${encodeURIComponent(siteId)}/equipment-status`,
       providesTags: (_result, _error, siteId) => [{ type: 'EquipmentStatus', id: siteId }],
@@ -59,6 +58,6 @@ export const twinApi = createApi({
 });
 
 export const {
-  useGetSitesQuery, useGetEquipmentStatusQuery, useGetResearchEventsQuery, useGetWaferRoutesQuery,
+  useGetEquipmentStatusQuery, useGetResearchEventsQuery, useGetWaferRoutesQuery,
   useGetCatalogQuery, useGetRunsQuery, useGetRunQuery, useGetRunResultsQuery, useCreateRunMutation,
 } = twinApi;

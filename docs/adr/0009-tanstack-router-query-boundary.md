@@ -1,9 +1,9 @@
 # ADR-0009 — TanStack Router 只做导航与加载协调，TanStack Query 独占服务端数据缓存
 
-- 状态：已采纳（2026-10-27）；实施状态：未开始（Status: Accepted / implementation pending）
+- 状态：已采纳（2026-10-27）；实施状态：M1 地基已落地 —— TanStack Router 接管顶层路由、sites 端点迁 TanStack Query、RQ-01/RQ-05 运行通过；其余端点/客户端状态迁移未开始（Status: Accepted / M1 foundation implemented / M2+ pending）
 - 取代：迁移完成后取代 [ADR-0008](0008-redux-toolkit-rtk-query.md) 中“服务端数据由 RTK Query 缓存”与“页面/交互状态由 Redux slice 承载”的部分；ADR-0008 的渲染循环约束经 [ADR-0010](0010-command-event-bridge.md) 与 [渲染管线](../rendering.md) 重新表述
 - 关联：[ADR-0003](0003-single-web-app.md)（单站点）、[ADR-0006](0006-single-backend-application.md)（唯一后端）、[ADR-0010](0010-command-event-bridge.md)；基线汇总见 [架构基线](../architecture.md)，实施细则见 [路由与查询集成](../router-query-integration.md) 与 [状态管理](../state-management.md)
-- 决策范围：仅前端 `web_app`。本文档不修改代码、依赖或 Vite 配置；迁移落地前，当前实现仍以 ADR-0008 与 [实施状态](../IMPLEMENTATION-STATUS.md) 为准
+- 决策范围：仅前端 `web_app`。M1 已按本决策新增依赖并接入路由生成插件（仅 plugin，`server`/`build` 参数不变）；剩余 RTK Query 端点与 Redux 客户端状态在 M2 迁移前仍以 ADR-0008 与 [实施状态](../IMPLEMENTATION-STATUS.md) 为准
 
 ## 背景
 

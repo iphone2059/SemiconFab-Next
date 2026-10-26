@@ -1,4 +1,5 @@
 import type { CatalogEntryDto } from './contracts';
+import { routeViewForPathname } from './app/router/url-mapping';
 
 export type CatalogDomain = 'ALL' | 'FAB' | 'OSAT';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -8,13 +9,9 @@ const object = (value: unknown): value is Record<string, unknown> =>
 export function readCatalogRoute(url: URL) {
   const domain = url.searchParams.get('domain')?.toUpperCase();
   return {
-    view: ['/compare', '/compare.html'].includes(url.pathname)
-      ? ('compare' as const)
-      : ['/catalog', '/catalog-demo', '/catalog-demo.html'].includes(url.pathname)
-        ? ('catalog' as const)
-        : ['/twin', '/twin.html', '/preview', '/preview.html'].includes(url.pathname)
-          ? ('twin' as const)
-          : ('workbench' as const),
+    // Transitional hydration helper: understands the final canonical URLs and the
+    // permanent legacy aliases. Top-level navigation is owned by TanStack Router.
+    view: routeViewForPathname(url.pathname),
     domain: (domain === 'OSAT' || domain === 'FAB' ? domain : 'ALL') as CatalogDomain,
     category: url.searchParams.get('category') ?? '',
     query: url.searchParams.get('q') ?? '',

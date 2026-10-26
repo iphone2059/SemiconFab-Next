@@ -1,36 +1,21 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { CatalogPage } from './catalog-page';
-import { readCatalogRoute } from './catalog-data';
-import { TwinPage } from './twin-page';
-import { ErrorBoundary } from './error-boundary';
-import WorkbenchApp from './workbench';
-import { Provider } from 'react-redux';
-import { store } from './store/store';
+import { RouterProvider } from '@tanstack/react-router';
+import { AppProviders } from './app/providers/AppProviders';
+import { router } from './app/router/router';
 import '../assets/styles.css';
 import '../assets/twin.css';
 import '../assets/original-twin-hud.css';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Application root element is missing.');
-const currentUrl = new URL(location.href);
-if (currentUrl.pathname === '/preview' || currentUrl.pathname === '/preview.html') {
-  currentUrl.pathname = '/twin';
-  history.replaceState({}, '', currentUrl);
-}
-const route = readCatalogRoute(currentUrl);
+// The router owns top-level navigation, including the permanent legacy aliases
+// (/twin, /preview, /catalog, /compare, /workbench) implemented by the catch-all
+// route; /preview therefore follows the same alias path as every other legacy URL.
 createRoot(container).render(
   <StrictMode>
-    <Provider store={store}>
-      <ErrorBoundary>
-        {route.view === 'workbench' ? (
-          <WorkbenchApp />
-        ) : route.view === 'twin' ? (
-          <TwinPage />
-        ) : (
-          <CatalogPage view={route.view === 'compare' ? 'compare' : 'catalog'} />
-        )}
-      </ErrorBoundary>
-    </Provider>
+    <AppProviders>
+      <RouterProvider router={router} />
+    </AppProviders>
   </StrictMode>,
 );

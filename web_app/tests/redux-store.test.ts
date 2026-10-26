@@ -13,7 +13,8 @@ it('configures Redux Toolkit, RTK Query middleware and domain slices', () => {
   expect(state.twinApi).toBeDefined();
   expect(typeof store.dispatch).toBe('function');
   expect(twinApi.reducerPath).toBe('twinApi');
-  expect(twinApi.endpoints.getSites).toBeDefined();
+  // ARCH G-02: /api/v1/sites moved to TanStack Query; the RTK cache must not keep a second copy.
+  expect('getSites' in twinApi.endpoints).toBe(false);
   expect(twinApi.endpoints.getEquipmentStatus).toBeDefined();
   expect(twinApi.endpoints.getWaferRoutes).toBeDefined();
   expect(twinApi.endpoints.createRun).toBeDefined();

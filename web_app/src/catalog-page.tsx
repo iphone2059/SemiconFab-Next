@@ -372,6 +372,12 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
   }, [dispatch, initialView, hydrated, store]);
 
   useEffect(() => {
+    // The router owns /equipment vs /equipment/compare; keep page state aligned when
+    // a route change (not the transitional pushState path) mounts this view.
+    if (store.getState().catalog.view !== initialView) dispatch(catalogActions.viewSet(initialView));
+  }, [initialView, dispatch, store]);
+
+  useEffect(() => {
     if (view !== 'compare' || selected.length > 0 || entries.length === 0) return;
     if (new URL(location.href).searchParams.has('compare')) return;
     dispatch(catalogActions.selectedSet(entries.filter((entry) => entry.category === 'lithography').slice(0, 3).map((entry) => entry.recordId)));
@@ -420,8 +426,12 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
     dispatch(catalogActions.selectedToggled(id));
   }
   function openView(next: 'catalog' | 'compare'): void {
+    // Transitional page-internal navigation: filters stay Redux-owned and are
+    // mirrored into the canonical URL with history APIs. The pushState path is a
+    // canonical /equipment/* path (never the legacy /catalog or /compare aliases);
+    // the router owns every other top-level navigation.
     const url = new URL(location.href);
-    url.pathname = next === 'compare' ? '/compare' : '/catalog';
+    url.pathname = next === 'compare' ? '/equipment/compare' : '/equipment';
     url.searchParams.set('compare', selected.join(','));
     if (location.pathname !== url.pathname) history.pushState(null, '', url);
     dispatch(catalogActions.viewSet(next));
@@ -461,14 +471,14 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
           <a href="/">{t('基地工作台', 'Workbench')}</a>
           <a
             className={view === 'catalog' ? 'active' : ''}
-            href={`/catalog?lang=${languageTag(language)}`}
+            href={`/equipment?lang=${languageTag(language)}`}
             onClick={(event) => navigate(event, 'catalog')}
           >
             {t('设备目录', 'Catalog')}
           </a>
           <a
             className={view === 'compare' ? 'active' : ''}
-            href={`/compare?compare=${selected.join(',')}&lang=${languageTag(language)}`}
+            href={`/equipment/compare?compare=${selected.join(',')}&lang=${languageTag(language)}`}
             onClick={(event) => navigate(event, 'compare')}
           >
             {t('设备对比', 'Compare')}

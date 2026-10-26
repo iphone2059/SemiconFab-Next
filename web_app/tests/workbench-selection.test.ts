@@ -4,7 +4,9 @@ import { workbenchActions, workbenchSlice } from '../src/store/workbenchSlice';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Provider } from 'react-redux';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import WorkbenchApp from '../src/workbench';
+import { sitesQueryOptions } from '../src/api/queries/sites.queries';
 import { store as appStore } from '../src/store/store';
 import { twinApi } from '../src/store/api';
 
@@ -42,9 +44,11 @@ it('clears the previous site selection and rejects its late list when the new si
 it('does not render cached run details or totals belonging to another site', async () => {
   appStore.dispatch(workbenchActions.siteIdSet('site-b'));
   appStore.dispatch(workbenchActions.runIdSet('a-run'));
-  await appStore.dispatch(twinApi.util.upsertQueryData('getSites', undefined, [{
+  // /api/v1/sites lives in TanStack Query (ARCH G-02); seed its cache instead of RTK.
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient.setQueryData(sitesQueryOptions().queryKey, [{
     siteId: 'site-b', code: 'B', templateHash: 'hash', fabs: [{ fabId: 'b-fab', code: 'FAB-B' }],
-  }]));
+  }]);
   await appStore.dispatch(twinApi.util.upsertQueryData('getRuns', undefined, []));
   await appStore.dispatch(twinApi.util.upsertQueryData('getRun', 'a-run', {
     runId: 'a-run', siteId: 'site-a', status: 'COMPLETED', version: '1',
@@ -54,7 +58,7 @@ it('does not render cached run details or totals belonging to another site', asy
     runId: 'a-run', fabs: [{ fabId: 'a-fab', completedLots: '999999', totalLots: '999999',
       simulationTimeUs: '1', busyTimeUs: '1', traceHash: 'hash', events: [] }],
   }));
-  const html = renderToStaticMarkup(createElement(Provider, { store: appStore, children: createElement(WorkbenchApp) }));
+  const html = renderToStaticMarkup(createElement(Provider, { store: appStore, children: createElement(QueryClientProvider, { client: queryClient, children: createElement(WorkbenchApp) }) }));
   expect(html).toContain('AWAITING RUN');
   expect(html).not.toContain('999,999');
   appStore.dispatch(twinApi.util.resetApiState());

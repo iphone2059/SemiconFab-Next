@@ -23,7 +23,10 @@ import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from './original-tour';
 import { buildTourScenario, TOUR_INITIAL_CAMERA, TOUR_INITIAL_TARGET } from './tour-scenario';
 import { createTourTimeline, createWaferTimeline, type TourFrame, type TourTimeline, type WaferTimeline, type WaferHud } from './tour-wafer-timeline';
 import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
-import { useGetSitesQuery, useGetEquipmentStatusQuery, useGetResearchEventsQuery, useGetWaferRoutesQuery } from './store/api';
+import { useQuery } from '@tanstack/react-query';
+import type { SiteDto } from './contracts';
+import { sitesQueryOptions } from './api/queries/sites.queries';
+import { useGetEquipmentStatusQuery, useGetResearchEventsQuery, useGetWaferRoutesQuery } from './store/api';
 import { twinUiActions, twinPageActions } from './store/twinUiSlice';
 import { twinDemoActions } from './store/twinDemoSlice';
 import { runtimeActions } from './store/runtimeSlice';
@@ -68,7 +71,7 @@ const XRAY_FILTERS: { filter: XRayFilter; label: string }[] = [
   { filter: 'amhs', label: 'AMHS Track' },
 ];
 
-function TwinContent() {
+function TwinContent({ fabId }: { fabId?: string }) {
   const { t, language, toggleLanguage } = useTwinLocale();
   const scene = useRef<FabViewportHandle>(null);
   const dispatch = useAppDispatch();
@@ -104,7 +107,7 @@ function TwinContent() {
   const waferFollow = useAppSelector(state => state.twinPage.wafer.follow);
   const { open: ymsOpen, tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, yieldInput, yieldScenario, stdfCopied } = page.yms;
 
-  const sitesQuery = useGetSitesQuery();
+  const sitesQuery = useQuery(sitesQueryOptions());
   const site = useMemo(() => sitesQuery.data?.find((value) => value.siteId === siteId), [sitesQuery.data, siteId]);
   const statusQuery = useGetEquipmentStatusQuery(siteId ?? '', { skip: !siteId, pollingInterval: 4000 });
   const researchQuery = useGetResearchEventsQuery(undefined, { skip: mode !== 'research' });
@@ -179,21 +182,36 @@ function TwinContent() {
   useEffect(() => { scene.current?.setLanguage(language); }, [language, status]);
 
   useEffect(() => {
-    if (!sitesQuery.data || siteId) return;
-    const wanted = new URL(location.href).searchParams.get('siteId');
-    const next = wanted ? sitesQuery.data.find((value) => value.siteId === wanted) : sitesQuery.data[0];
-    if (!next) { dispatch(twinPageActions.siteErrorSet(wanted ? t("指定的 FAB 站点不存在：{0}", [wanted]) : t("没有可用的 FAB 站点"))); return; }
+    if (!sitesQuery.data) return;
+    // Canonical route identity (/fabs/$fabId/3d) wins over the transitional
+    // ?siteId= compatibility parameter; the legacy parameter is still honoured
+    // when the route does not carry a FAB id.
+    const legacySiteId = new URL(location.href).searchParams.get('siteId');
+    let next: SiteDto | undefined;
+    if (fabId) {
+      next = sitesQuery.data.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
+      if (!next) {
+        dispatch(twinPageActions.siteErrorSet(t("指定的 FAB 不存在：{0}", [fabId])));
+        return;
+      }
+    } else if (siteId) {
+      return;
+    } else {
+      next = legacySiteId ? sitesQuery.data.find((value) => value.siteId === legacySiteId) : sitesQuery.data[0];
+      if (!next) {
+        dispatch(twinPageActions.siteErrorSet(legacySiteId ? t("指定的 FAB 站点不存在：{0}", [legacySiteId]) : t("没有可用的 FAB 站点")));
+        return;
+      }
+    }
     if (next.fabs.length !== 1) { dispatch(twinPageActions.siteErrorSet(t("当前产品必须只有一个 FAB"))); return; }
-    dispatch(twinPageActions.siteIdSet(next.siteId));
-    dispatch(twinPageActions.siteErrorSet(undefined));
-  }, [sitesQuery.data, siteId, t]);
+    if (store.getState().twinPage.siteId !== next.siteId) dispatch(twinPageActions.siteIdSet(next.siteId));
+    if (store.getState().twinPage.siteError !== undefined) dispatch(twinPageActions.siteErrorSet(undefined));
+  }, [sitesQuery.data, siteId, fabId, t, dispatch, store]);
 
   useEffect(() => {
     if (!sitesQuery.error) return;
-    const detail = 'data' in sitesQuery.error && sitesQuery.error.data && typeof sitesQuery.error.data === 'object' && 'detail' in sitesQuery.error.data
-      ? String((sitesQuery.error.data as { detail?: unknown }).detail) : t('FAB 数据加载失败');
-    dispatch(twinPageActions.siteErrorSet(detail));
-  }, [sitesQuery.error, t]);
+    dispatch(twinPageActions.siteErrorSet(sitesQuery.error instanceof Error ? sitesQuery.error.message : t('FAB 数据加载失败')));
+  }, [sitesQuery.error, t, dispatch]);
 
   useEffect(() => {
     if (!siteId) { statusConsumer.current = undefined; return; }
@@ -433,7 +451,9 @@ function TwinContent() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const fab = site?.fabs[0];
+  // The route FAB id selects the site's FAB; the legacy first-FAB fallback only
+  // applies when TwinPage is rendered without a canonical route param.
+  const fab = site ? (fabId ? site.fabs.find((value) => value.fabId === fabId) ?? site.fabs[0] : site.fabs[0]) : undefined;
   const stateCounts = useMemo(() => {
     const counts = { running: 0, idle: 0, down: 0, maint: 0 };
     for (const state of toolStates) counts[state] += 1;
@@ -1108,4 +1128,6 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
   );
 }
 
-export function TwinPage() { return <TwinLocaleProvider><TwinContent /></TwinLocaleProvider>; }
+export function TwinPage({ fabId }: { fabId?: string } = {}) {
+  return <TwinLocaleProvider><TwinContent fabId={fabId} /></TwinLocaleProvider>;
+}

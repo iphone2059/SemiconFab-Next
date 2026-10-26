@@ -1,18 +1,20 @@
 # SemiconFab Next V2.1 架构基线
 
 - 版本：V2.1（2026-10-27）
-- 状态：**文档基线已采纳；代码迁移未开始**（Baseline adopted / implementation pending）
+- 状态：**基线已采纳；M1（Router/Query 地基 + 最终 URL）已落地并验证；M2–M6 未开始**（Baseline adopted / M1 implemented / M2-M6 pending）
 - 适用对象：`web_app` 前端架构。后端 `fab_app`/`fab_shared` 的项目与命名空间边界沿用 ADR-0001…ADR-0007
 - 权威决策：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0010](adr/0010-command-event-bridge.md)（实时/命令/工作流边界）；本文档负责汇总、目录结构与迁移计划
-- 当前实现事实：以 [ADR-0008](adr/0008-redux-toolkit-rtk-query.md)（Redux Toolkit + RTK Query）和 [实施状态](IMPLEMENTATION-STATUS.md) 为准。**V2.1 在代码层面尚未落地，本基线不改变现有构建、依赖与运行行为。**
+- 当前实现事实：TanStack Router 已接管顶层路由；`/api/v1/sites` 已迁至 TanStack Query；其余 RTK Query 端点与 Redux slice 仍是 [ADR-0008](adr/0008-redux-toolkit-rtk-query.md) 的实现，M2 起按端点在同一变更内切换（G-02）。详细证据与过渡说明见 [实施状态](IMPLEMENTATION-STATUS.md) 与本文件 §15。
 
-> 本文档不是验收证据。文中 RQ-01..RQ-05、CE-01..CE-08 全部是 **SPECIFIED / NOT RUN**（已定义、未运行）；任何“已通过/已验证”的表述都必须指向真实测试记录，本基线不提供此类记录。
+> RQ-01/RQ-05 已由 M1 集成测试真实运行（见 §12.2）；RQ-02..RQ-04 与 CE-01..CE-08 仍为 **SPECIFIED / NOT RUN**。任何“已通过/已验证”的表述都必须指向真实测试记录。
 
 ## 1. 基线与范围
 
 ### 1.1 本次基线交付
 
-本次只交付架构文档：ADR-0009、ADR-0010、本基线、7 篇专项文档与 V2.1 实施状态指针（完整清单见 [文档地图](#13-文档地图)）。不新增依赖、不改 `web_app/vite.config.ts`、不删 Redux、不改任何源代码，也不做 git 提交。
+M0（2026-10-27，提交 e18595f）只交付架构文档：ADR-0009、ADR-0010、本基线、7 篇专项文档与 V2.1 实施状态指针（完整清单见 [文档地图](#13-文档地图)）。M0 不新增依赖、不改 `web_app/vite.config.ts`、不删 Redux。
+
+M1（2026-10-27）已在此基线上落地：依赖安装与锁文件、`app/providers`、`app/router`（生成式路由树，`defaultPreload: 'intent'`、`defaultPreloadStaleTime: 0`）、`api/queries`（sites 端点从 RTK Query 迁到 TanStack Query，无双缓存）、最终产品 URL 与永久兼容别名、RQ-01/RQ-05 集成测试。Vite 仅新增路由生成插件，server/build 参数未变（G-01）。M2–M6 未开始。
 
 ### 1.2 范围
 
@@ -145,6 +147,21 @@ web_app/
   assets/  vite.config.ts  package.json  tsconfig.json
 ```
 
+### 4.1 最终产品 URL（2026-10-27 一次性切换，永久不变）
+
+| URL | 页面/职责 | 迁移前 | 状态 |
+|---|---|---|---|
+| `/` | 工作台 / FAB 总览 | `/` | M1 已有 |
+| `/fabs/$fabId` | FAB 概览入口（M1 校验 FAB 后重定向到 `/3d`；后续里程碑在同 URL 渲染概览） | 无 | M1 路由已建 |
+| `/fabs/$fabId/3d` | 3D FAB（3D 场景） | `/twin`、`/twin.html`、`/preview` | M1 已迁移 |
+| `/equipment` | 设备目录 | `/catalog`、`/catalog-demo.html` | M1 已迁移 |
+| `/equipment/compare` | 设备对比 | `/compare`、`/compare.html` | M1 已迁移 |
+| `/equipment/$equipmentId` | 设备详情 | — | 预留，M2 起实现 |
+| `/amhs` | AMHS | — | 预留；多 FAB 后用 `?fabId=` 过滤 |
+| `/alarms` | 告警 | — | 预留；多 FAB 后用 `?fabId=` 过滤 |
+
+永久兼容别名（必须一直重定向，保留查询参数）：`/twin`、`/twin.html`、`/preview`、`/preview.html` → `/fabs/{firstFabId}/3d`；`/catalog`、`/catalog-demo`、`/catalog-demo.html` → `/equipment`；`/compare`、`/compare.html` → `/equipment/compare`；`/workbench` → `/`。转发参数：`lang/theme/siteId/modal/mode/perf/domain/category/q/hideDrafts/compare`。别名中的 FAB id 由 TanStack Query 的 sites 数据解析，不硬编码 `FAB-01`。
+
 结构说明：
 
 - **公共命令契约只放一次**：`application/contracts/CommandWorkflow.ts` 是权威定义；`workflows/contracts` 只放 XState 内部契约，不复制公共接口（G-03）。
@@ -217,7 +234,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | ARCH-11 | 高频遥测不得经过 Query/Zustand/XState | ADR-0010 + Engineering 09/15 | 架构评审 + 性能测试；渲染路径禁止读状态容器 | 性能门禁（计划） |
 | ARCH-12 | Babylon Lite 是唯一 3D 引擎，且只允许 WebGPU | ADR-0003/Engineering 09 + ADR-0010 高频路径 | `tools/check_architecture.py` 禁止 WebGL；渲染评审 | 渲染验收（现有） |
 
-规则的可执行检查在 M1..M6 逐步补齐；在此之前由评审负责。**当前这些规则没有任何自动化通过证据。**
+规则的可执行检查在 M1..M6 逐步补齐。M1 已为 ARCH-03（router 配置 + 断言测试）与 ARCH-04（loader 只调用 `queryOptions`）提供可复核代码/测试；ARCH-02 的 sites 单端点由 G-02 保证无双缓存；其余规则在 M2–M6 补齐自动化检查前仍由评审负责。
 
 补充说明：ARCH-03 的 `defaultPreloadStaleTime: 0` 只是让 Router 不再否决 loader 重跑，是**必要但不充分**条件；Query 的 `staleTime`/`gcTime`、同源 Query Options、页面订阅、失效与显式 `fetchQuery` 共同决定数据新鲜度（见 [ADR-0009](adr/0009-tanstack-router-query-boundary.md) 第 3 节）。
 
@@ -239,7 +256,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 |---|---|---|
 | [ADR-0001](adr/0001-flat-project-layout.md)…[ADR-0007](adr/0007-read-only-legacy-catalog.md) | 已采纳 | 保留。项目布局、单后端、只读目录等与前端 V2.1 不冲突 |
 | [ADR-0008](adr/0008-redux-toolkit-rtk-query.md) | 已采纳，**当前实现** | V2.1 **部分取代**：RTK Query 的服务端缓存与 Redux slice 的页面状态仅在迁移落地后由 ADR-0009/0010 取代；渲染循环约束按 ARCH-11 收紧。迁移完成前 ADR-0008 仍是代码事实 |
-| [ADR-0009](adr/0009-tanstack-router-query-boundary.md) | 已采纳，实施未开始 | Router/Query 边界、RQ 门禁 |
+| [ADR-0009](adr/0009-tanstack-router-query-boundary.md) | 已采纳，M1 地基已落地 | Router/Query 边界、RQ-01/RQ-05 已运行；RQ-02..04 待 M2 |
 | [ADR-0010](adr/0010-command-event-bridge.md) | 已采纳，实施未开始 | 实时/命令/工作流/运行时边界、CE 门禁 |
 
 ### 8.2 Engineering v1.1 对账（外部规范不修改）
@@ -257,8 +274,8 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 | 维度 | 当前（2026-10-27 可核对事实） | V2.1 目标 | 落点/阶段 | 状态 |
 |---|---|---|---|---|
-| 路由 | `src/main.tsx` 自定义 pathname 分支（workbench/catalog/compare/twin），无路由库 | TanStack Router + 类型化 URL + intent 预加载 | M1 | 未开始 |
-| HTTP 服务端缓存 | RTK Query（`store/api.ts`）8 个 query + 1 mutation | TanStack Query 唯一缓存；loader 复用 Query Options | M1/M2 | 未开始 |
+| 路由 | TanStack Router 已接管顶层路由；生成式路由树 + 最终 URL + 永久兼容别名（M1） | TanStack Router + 类型化 URL + intent 预加载 | M1 | **M1 PASS** |
+| HTTP 服务端缓存 | `/api/v1/sites` 已迁 TanStack Query 并由 loader/组件共用；其余 7 个端点仍 RTK Query（无双缓存，G-02） | TanStack Query 唯一缓存；loader 复用 Query Options | M1/M2 | sites 端点 **M1 PASS**；其余 M2 |
 | 客户端状态 | Redux Toolkit 7 个 slice；`store/store.ts` | Zustand/组件局部；不复制 Query 数据 | M2 | 未开始 |
 | 实时推送 | 仅设备状态 SSE（`EventSource` -> 有序消费者 -> Redux） | WebSocket -> Decoder -> RxJS -> 类型化流 | M3 | 未开始 |
 | 命令链路 | 无（无 WS、无命令桥、无 actor） | CommandEventBridge + CommandWorkflow + 恢复 | M3/M4 | 未开始 |
@@ -267,10 +284,10 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | 多 FAB | 产品为单 FAB（121 台设备布局，`fab-layout.ts`） | 三 FAB 隔离：独立 actor、订阅、复合身份 | M4 | 未开始（依赖产品/后端） |
 | 高频遥测 | 现有 `store/telemetry-buffer.ts` 100ms 合批后进 Redux | Worker/TypedArray -> Babylon Lite，不进 Query/Zustand/XState | M5 | 未开始 |
 | 渲染 | Babylon Lite 1.36 已在 `src/render/lite`，WebGPU-only 校验已有 | 保留；渲染目录归位 `rendering` | M5 | 部分（引擎已就位） |
-| 依赖 | 无 @tanstack/*、xstate、rxjs、zustand、zod | 按阶段引入并锁版本 | M1..M4 | 未开始 |
-| 测试基建 | Vitest + SSR `renderToStaticMarkup`；无 jsdom/Testing Library；无 integration/contract/performance 套装 | RQ/CE 集成与契约测试；性能测试目录 | M1 起 | 未开始 |
+| 依赖 | TanStack Router 1.170.46 / Query 5.105.0 / Router plugin 1.168.48、Zustand 5.0.16、RxJS 7.8.2、XState 5.33.3、Zod 4.6.7；jsdom 30.1.3 + Testing Library（dev） | 按阶段引入并锁版本；XState v6 尚无可用的稳定正式版，M4 前需复核 | M1..M4 | M1 已安装；XState 版本待 M4 决策 |
+| 测试基建 | Vitest + jsdom + Testing Library；`tests/integration` 已建立，RQ-01/RQ-05 已真实运行 | RQ/CE 集成与契约测试；性能测试目录 | M1 起 | **M1 PASS**；CE/性能未开始 |
 | 架构检查 | `tools/check_architecture.py` 只查既有前端边界（TS/TSX、禁止 WebGL、单 web_app） | 增加 ARCH 依赖方向/双缓存/契约位置检查 | M6 | 未开始 |
-| 文档 | ADR-0008 + 迁移文档；无 V2.1 基线 | 本基线 + ADR-0009/0010 + 7 篇专项 | M0（本次） | 文档已写，未合并 |
+| 文档 | V2.1 基线 + ADR-0009/0010 + 7 篇专项已合入 main（e18595f）；本文档补充 M1 证据 | 本基线 + ADR-0009/0010 + 7 篇专项 | M0 | **M0 PASS；M1 增量已更新** |
 
 ## 10. 分阶段迁移计划
 
@@ -278,8 +295,8 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 | 阶段 | 主题 | 主要交付 | 退出条件（Exit criteria） | 依赖/阻塞 | 状态 |
 |---|---|---|---|---|---|
-| M0 | 架构基线文档 | 本文件、ADR-0009/0010、7 篇专项、实施状态指针 | 文档评审通过；ARCH/RQ/CE/目录/数据流可追踪 | 无 | 本次完成（未提交） |
-| M1 | 路由与查询地基 | 依赖（Router/Query/Zod + 路由插件 + 测试环境）、`app/providers`、`app/router`、`api/queries`、现有页面的路由骨架与重定向 | typecheck/build/test 通过；RQ-01/RQ-05 首次运行；无双缓存；vite server/build 参数未变 | OPEN-V21-01/02/03 | 未开始 |
+| M0 | 架构基线文档 | 本文件、ADR-0009/0010、7 篇专项、实施状态指针 | 文档评审通过；ARCH/RQ/CE/目录/数据流可追踪 | 无 | **完成并推送（e18595f）** |
+| M1 | 路由与查询地基 | 依赖、`app/providers`、`app/router`、`api/queries`、最终 URL 与永久别名、sites 端点迁移、RQ-01/RQ-05 集成测试 | typecheck/build/test 通过；RQ-01/RQ-05 首次运行；无双缓存；vite server/build 参数未变 | 已解除（OPEN-V21-01/02/03 已决策） | **PASS（2026-10-27，§15）** |
 | M2 | 客户端状态与 RTK 退役 | Zustand store、逐端点迁移 Query、删除对应 RTK 端点/slice 服务端字段 | ARCH-02/05 检查通过；RQ-02/RQ-03/RQ-04 运行；无 RTK Query 残留端点（或清单明确） | M1；页面级切换计划 | 未开始 |
 | M3 | 实时协议与命令桥 | `application/contracts`、`realtime/transport`、`realtime/protocol`、`realtime/streams`、`application/coordination`、假源集成测试 | CE-01..CE-05、CE-08 在假源上运行；ARCH-06/07 检查通过 | M1；后端流协议 OPEN-V21-06（真实链路） | 未开始 |
 | M4 | XState 工作流与 FabRuntime | `workflows/equipment` 四文件、`runtime` 四件套、`RuntimeProvider`、三 FAB 隔离测试 | CE-06/CE-07 在测试源上运行；ARCH-08/09/10 检查通过；单 FAB 回归通过 | M3；OPEN-V21-07/08；多 FAB 产品范围 | 未开始 |
@@ -319,11 +336,11 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 | 门禁 | 内容摘要 | 计划测试位置 | 状态 |
 |---|---|---|---|
-| RQ-01 | hover 预加载后立即导航复用 Query 数据 | `web_app/tests/integration/router-query.test.tsx` | SPECIFIED / NOT RUN |
+| RQ-01 | hover 预加载后立即导航复用 Query 数据 | `web_app/tests/integration/router-query.test.tsx` | **PASS（M1）** |
 | RQ-02 | 预加载后过期导航遵循 Query 新鲜度 | 同上 | SPECIFIED / NOT RUN |
 | RQ-03 | mutation 失效展示权威数据 | 同上 | SPECIFIED / NOT RUN |
 | RQ-04 | FAB-A/FAB-B 相同设备 id 不串缓存 | 同上 | SPECIFIED / NOT RUN |
-| RQ-05 | 重叠预加载/导航复用 in-flight 请求 | 同上 | SPECIFIED / NOT RUN |
+| RQ-05 | 重叠预加载/导航复用 in-flight 请求 | 同上 | **PASS（M1）** |
 | CE-01 | 正常派发（accepted/executing/succeeded） | `web_app/tests/integration/command-event-bridge.test.ts` | SPECIFIED / NOT RUN |
 | CE-02 | 重复 revision 过滤 | 同上 | SPECIFIED / NOT RUN |
 | CE-03 | 乱序事件不回退 | 同上 | SPECIFIED / NOT RUN |
@@ -336,9 +353,9 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 ### 12.3 当前测试基建事实
 
-- 现有前端测试在 `web_app/tests`（扁平 `*.test.ts/tsx`），React 测试使用 `renderToStaticMarkup`，需要浏览器/GPU 的验收使用独立 Vite 配置。
-- 未安装 jsdom/happy-dom、Testing Library、TanStack Router/Query、Zustand、XState、RxJS、Zod；因此 RQ/CE 测试当前**无法执行**，这是事实而非缺陷声明。
-- 没有运行任何 V2.1 门禁；没有性能数据。
+- M1 已安装 jsdom 30.1.3、@testing-library/react 16.3.3、TanStack Router/Query、Zustand、XState 5.33.3、RxJS、Zod，并建立 `web_app/tests/integration`。
+- RQ-01/RQ-05 已真实运行（`web_app/tests/integration/router-query.test.tsx`，55→56 文件 / 245→259 测试全绿）；`url-mapping.test.ts` 覆盖最终 URL/永久别名；`sites-queries.test.ts` 覆盖 Query transport。
+- CE-01..08、RQ-02..04、性能门禁仍未运行；不存在任何“已通过”的 CE/性能证据。
 
 ## 13. 文档地图
 
@@ -360,22 +377,61 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 | ID | 问题 | 建议决策人/时点 |
 |---|---|---|
-| OPEN-V21-01 | 现有页面到 `routes/fabs`、`routes/equipment`、`routes/amhs`、`routes/alarms` 的最终 URL、重定向与保留策略 | Lead，M1 前 |
-| OPEN-V21-02 | TanStack Router/Query/路由插件版本锁定 | 实施者，M1 |
-| OPEN-V21-03 | jsdom/happy-dom + Testing Library 测试环境引入 | Lead 批准，M1 |
-| OPEN-V21-04 | 是否引入 `@/` 路径别名（当前 ADR-0003 相对导入） | Lead，M1 |
+| OPEN-V21-01 | ~~最终 URL、重定向与保留策略~~ | **已解决（M1，§4.1）**：最终 URL 与永久别名已实现并测试，不再改名 |
+| OPEN-V21-02 | ~~Router/Query/插件版本~~ | **已解决（M1）**：Router 1.170.46 / Query 5.105.0 / plugin 1.168.48（lockfile 记录），其余见 §9 依赖行 |
+| OPEN-V21-03 | ~~测试环境~~ | **已解决（M1）**：jsdom 30.1.3 + @testing-library/react 16.3.3 / dom 10.4.2（devDependencies） |
+| OPEN-V21-04 | ~~是否引入 `@/` 路径别名~~ | **已解决（M1）**：继续使用相对导入，不引入路径别名（与 ADR-0003 一致） |
 | OPEN-V21-05 | `useSuspenseQuery` 的渲染边界与错误/加载 UI | 实施者，M1 |
 | OPEN-V21-06 | 后端实时流协议、序列/ACK/鉴权/maxHz | 后端/Lead，M3 |
 | OPEN-V21-07 | 后端命令状态查询端点（权威恢复） | 后端/Lead，M3 |
-| OPEN-V21-08 | XState v6 版本与 actor 粒度 | 实施者，M4 |
+| OPEN-V21-08 | XState 版本与 actor 粒度 | **部分解决**：npm 稳定版为 5.33.3（6.0 仅 alpha），M1 按用户批准安装 5.33.3；M4 前需决定锁定 5.x 还是升级 v6 |
 | OPEN-V21-09 | 前端恢复记录生命周期（内存 vs sessionStorage） | 实施者，M3 |
 | OPEN-V21-10 | CommandGateway HTTP 提交契约 | 后端/前端，M3 |
 | OPEN-V21-11 | FabRuntime 实例化时机（应用启动/路由进入）与页面卸载语义 | 实施者，M4 |
-| OPEN-V21-12 | README/外部规范是否增加 V2.1 指针（README 与 Engineering v1.1 不在本次写范围） | Lead |
+| OPEN-V21-12 | ~~README/外部规范是否增加 V2.1 指针~~ | **已解决（M1）**：README 文档区已加 V2.1 指针；Engineering v1.1 保持只读 |
 | OPEN-V21-13 | 工作流状态的只读暴露方式（Query 权威状态 + 提交态之外的展示投影） | 实施者，M4 |
 | OPEN-V21-14 | 是否使用 SharedArrayBuffer（COOP/COEP 部署策略） | 实施者，M5 |
 | OPEN-V21-15 | 告警/遥测 topic 命名与订阅范围（per FAB/run/LOD） | 后端/前端，M3 |
 | OPEN-V21-16 | 解码 schema 单一来源（Zod 手写 vs 由契约生成） | 实施者，M3 |
+
+## 15. M1 落地记录（2026-10-27）
+
+> 本节只记录已执行证据；未运行项仍为 SPECIFIED / NOT RUN。
+
+### 15.1 交付
+
+| 项 | 实现 | 文件 |
+|---|---|---|
+| Query 单例与 key | `QueryClient`（staleTime 30s、retry 1、关闭 window-focus refetch）、`queryKeys.sites.all` | `web_app/src/api/queries/queryClient.ts`、`queryKeys.ts` |
+| sites 端点迁移 | `sitesQueryOptions()` + `fetchSites`（Zod 校验、ProblemDetails 错误）；RTK Query 删除 `getSites`，同一端点不再有第二份缓存 | `web_app/src/api/queries/sites.queries.ts`、`web_app/src/store/api.ts` |
+| Providers | Redux Provider → QueryClientProvider → ErrorBoundary | `web_app/src/app/providers/AppProviders.tsx`、`QueryProvider.tsx` |
+| Router | `createRouter({ routeTree, context: { queryClient }, defaultPreload: 'intent', defaultPreloadStaleTime: 0 })`；QueryClient 经 `createRootRouteWithContext` 注入 | `web_app/src/app/router/router.tsx`、`routes/__root.tsx` |
+| 最终 URL | §4.1 的 5 条现有页面 URL + 永久兼容别名；`readCatalogRoute` 同步识别新 URL/别名 | `web_app/src/app/router/url-mapping.ts`、`routes/$.tsx`、`routes/fabs/...` |
+| 路由 loader | 只调用 `queryClient.ensureQueryData(sitesQueryOptions())`；FAB 不存在时重定向 `/` | `web_app/src/app/router/route-data.ts`、`routes/fabs/$fabId/3d.tsx` |
+| 入口 | `main.tsx` 改为 `StrictMode → AppProviders → RouterProvider`，删除自定义 pathname switch | `web_app/src/main.tsx` |
+| 依赖 | Router 1.170.46、Query 5.105.0、router-plugin 1.168.48、Zustand 5.0.16、RxJS 7.8.2、XState 5.33.3、Zod 4.6.7；dev：jsdom 30.1.3、Testing Library 16.3.3 | `web_app/package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml` |
+| Vite | 仅新增 `tanstackRouter({ autoCodeSplitting: false })` 插件；`server`/`build` 原文未变（G-01） | `web_app/vite.config.ts` |
+| 路由树 | `routeTree.gen.ts` 由插件生成并提交，不手工维护 | `web_app/src/app/router/routeTree.gen.ts` |
+
+`pnpm-workspace.yaml` 是 pnpm 12 的配置载体（`minimumReleaseAgeExclude`，批准本次锁定的 TanStack 版本），不是 workspace 定义，不改变 ADR-0001 的扁平项目布局。
+
+### 15.2 证据（本次实际运行）
+
+- `node node_modules/vite/bin/vite.js build` → exit 0（1,550 modules；路由树生成）。
+- `npx tsc --noEmit` → exit 0。
+- `npx vitest run` → **56 文件 / 259 测试 PASS**（M1 前 53 / 245；新增 `tests/integration/router-query.test.tsx`、`url-mapping.test.ts`、`sites-queries.test.ts`）。
+- `./scripts/verify.ps1` → exit 0（契约/架构检查、16 个 Python 工具测试、3 个 .NET Release 构建 + 67/67、全部冻结向量门禁、前端 typecheck/test/build）。
+- RQ-01：预加载后导航只发生 1 次 `/api/v1/sites` 请求且 loaderData 为同一 Query 缓存对象；RQ-05：并发 `ensureQueryData`+`fetchQuery` 只发生 1 次在途请求（均见集成测试断言）。
+- 无双缓存：`getSites` 仅出现在“不存在”的负向断言中；`/api/v1/sites` 只有 `sitesQueryOptions` 一个数据入口。
+- `/equipment`、`/equipment/compare`、`/fabs/FAB-01/3d`、旧别名在 `vite preview` 生产构建下均返回 200 + SPA 外壳（深链接可刷新）。
+
+### 15.3 过渡与遗留
+
+- 设备目录/对比页内部筛选与视图切换仍用 `history` + Redux 过渡：路径已改为最终 URL，页面内部状态迁移留待 M2（代码注释已标注）。
+- Twin 的 `?siteId=`/`?modal=`/`?mode=` 仍直接读写 `location.search`；路由参数 `$fabId` 优先于旧 `siteId`，M2 迁到 Router search。
+- 仅 `/api/v1/sites` 迁到 TanStack Query；其余 7 个 RTK Query 端点与 Redux slice 按 M2 的“同一变更内逐端点切换、无双缓存”执行。
+- XState 稳定版为 5.33.3（6.0 仅 alpha）；已按用户批准安装 5.33.3，M4 前必须复核是否升级 v6。
+- M2–M6 未开始；CE-01..08、RQ-02..04、性能门禁仍为 SPECIFIED / NOT RUN。
 
 ## 附录 A. 关键术语
 

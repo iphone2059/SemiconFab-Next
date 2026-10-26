@@ -1,0 +1,42 @@
+import { createRootRouteWithContext, Outlet, type ErrorComponentProps } from '@tanstack/react-router';
+import type { QueryClient } from '@tanstack/react-query';
+import { ErrorBoundary } from '../../../error-boundary';
+import { routerSearchSchema } from '../search';
+
+export interface RouterContext {
+  queryClient: QueryClient;
+}
+
+function RootComponent() {
+  return (
+    <ErrorBoundary>
+      <Outlet />
+    </ErrorBoundary>
+  );
+}
+
+function RootError({ error }: ErrorComponentProps) {
+  return (
+    <div className="fatal" role="alert">
+      <h1>页面无法显示 / Page failed to render</h1>
+      <p>{error instanceof Error ? error.message : String(error)}</p>
+      <a href="/">返回工作台 / Back to workbench</a>
+    </div>
+  );
+}
+
+const RootNotFound = () => (
+  <div className="fatal" role="alert">
+    <h1>页面不存在 / Page not found</h1>
+    <a href="/">返回工作台 / Back to workbench</a>
+  </div>
+);
+
+export const Route = createRootRouteWithContext<RouterContext>()({
+  // One global search schema keeps lang/theme/... intact across canonical paths
+  // and the permanent legacy aliases.
+  validateSearch: routerSearchSchema,
+  component: RootComponent,
+  errorComponent: RootError,
+  notFoundComponent: RootNotFound,
+});

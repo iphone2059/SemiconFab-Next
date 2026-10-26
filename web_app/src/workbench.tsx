@@ -1,4 +1,5 @@
 import { useEffect, useMemo, type FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { CreateRunRequest, SiteDto } from './contracts';
 import { Panel, StatusPill } from './ui';
 import { Metric } from './widgets';
@@ -6,7 +7,9 @@ import { CompletionBar } from './charting';
 import { ScopeGate } from './state-sync';
 import { validateScenario } from './scenario';
 import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
-import { useCreateRunMutation, useGetRunQuery, useGetRunResultsQuery, useGetRunsQuery, useGetSitesQuery } from './store/api';
+import { useCreateRunMutation, useGetRunQuery, useGetRunResultsQuery, useGetRunsQuery } from './store/api';
+import { sitesQueryOptions } from './api/queries/sites.queries';
+import { fab3dPath } from './app/router/url-mapping';
 import { workbenchActions } from './store/workbenchSlice';
 const message = (error: unknown): string => {
   if (error instanceof Error) return error.message;
@@ -284,7 +287,7 @@ function Workbench({ site }: { site: SiteDto }) {
 export default function WorkbenchApp() {
   const dispatch = useAppDispatch();
   const siteId = useAppSelector((state) => state.workbench.siteId);
-  const sitesQuery = useGetSitesQuery();
+  const sitesQuery = useQuery(sitesQueryOptions());
   const sites = sitesQuery.data ?? [];
   const loading = sitesQuery.isLoading;
   const error = sitesQuery.error ? message(sitesQuery.error) : '';
@@ -293,6 +296,9 @@ export default function WorkbenchApp() {
     if (!sites.some((value) => value.siteId === siteId)) dispatch(workbenchActions.siteIdSet(sites[0].siteId));
   }, [sites, siteId, dispatch]);
   const site = sites.find((value) => value.siteId === siteId);
+  // The 3D link points at the final canonical URL for the selected site's FAB.
+  const fabId = site?.fabs[0]?.fabId;
+  const threeDeeHref = fabId ? fab3dPath(fabId) : '/';
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -311,10 +317,10 @@ export default function WorkbenchApp() {
         <a className="nav-link" href="#runs">
           <span>▷</span>仿真运行
         </a>
-        <a className="nav-link" href="/catalog">
+        <a className="nav-link" href="/equipment">
           <span>▤</span>设备目录
         </a>
-        <a className="nav-link" href="/twin" target="_blank" rel="noopener noreferrer"><span>◇</span>3D FAB</a>
+        <a className="nav-link" href={threeDeeHref} target="_blank" rel="noopener noreferrer"><span>◇</span>3D FAB</a>
         <div className="sidebar-note">
           <span className="technical">DEVELOPMENT SLICE</span>
           <p>

@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { tanstackRouter } from '@tanstack/router-plugin/vite';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'FAB_');
@@ -8,7 +9,16 @@ export default defineConfig(({ mode }) => {
   const url = new URL(target);
   if (!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || !['http:', 'https:'].includes(url.protocol)) throw new Error('开发代理仅允许本机 API');
   return {
-    plugins: [react()],
+    plugins: [
+      // Route-code generation only. server/build parameters below remain frozen (ARCH G-01).
+      tanstackRouter({
+        target: 'react',
+        autoCodeSplitting: false,
+        routesDirectory: './src/app/router/routes',
+        generatedRouteTree: './src/app/router/routeTree.gen.ts',
+      }),
+      react(),
+    ],
     server: { port: 5173, strictPort: true, host: '127.0.0.1', proxy: { '/api': { target, changeOrigin: true, configure(proxy) {
       proxy.on('proxyReq', request => { request.removeHeader('X-Fab-Dev-Key'); if (key) request.setHeader('X-Fab-Dev-Key', key); });
     } } } },
