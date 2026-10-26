@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { fetchSites, findSiteByFabId, firstFabId, sitesQueryOptions } from '../src/api/queries/sites.queries';
+import { fetchSites, findSiteByFabId, sitesQueryOptions } from '../src/api/queries/sites.queries';
 
 const sites = [
   { siteId: 'site-1', code: 'SITE-1', templateHash: 'hash-1', fabs: [{ fabId: 'FAB-01', code: 'FAB-01' }] },
@@ -46,9 +46,7 @@ it('validates the minimal sites document shape', async () => {
   await expect(fetchSites(emptyFabs)).rejects.toThrow(/fabs/);
 });
 
-it('resolves the first FAB used by legacy aliases and looks sites up by FAB identity', () => {
-  expect(firstFabId(sites)).toBe('FAB-01');
-  expect(firstFabId([])).toBeUndefined();
+it('looks sites up by FAB identity', () => {
   expect(findSiteByFabId(sites, 'FAB-01')?.siteId).toBe('site-1');
   expect(findSiteByFabId(sites, 'FAB-99')).toBeUndefined();
 });

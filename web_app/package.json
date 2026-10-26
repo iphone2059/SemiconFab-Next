@@ -22,7 +22,7 @@
     "react-dom": "19.3.1",
     "react-redux": "9.3.0",
     "rxjs": "7.8.2",
-    "xstate": "5.33.3",
+    "xstate": "6.0.0-alpha.70",
     "zod": "4.6.7",
     "zustand": "5.0.16"
   },

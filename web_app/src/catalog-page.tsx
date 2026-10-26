@@ -6,10 +6,11 @@ import {
   type ChangeEvent,
   type MouseEvent,
 } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
 import { catalogActions } from './store/catalogSlice';
 import { localeActions } from './store/localeSlice';
-import { useGetCatalogQuery } from './store/api';
+import { catalogQueryOptions } from './api/queries/catalog.queries';
 import type { CatalogEntryDto } from './contracts';
 import {
   catalogFields,
@@ -324,14 +325,14 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
   const preferences = useAppSelector(state => state.locale);
   const language = preferences.language;
   const t = (zh: string, en: string) => text(language, zh, en);
-  const catalogQuery = useGetCatalogQuery();
+  const catalogQuery = useQuery(catalogQueryOptions());
   const entries = useMemo(
     () => localEntries ?? (catalogQuery.data ? parseCatalogEntries({ entries: catalogQuery.data.items }) : []),
     [localEntries, catalogQuery.data],
   );
   const importId = localEntries ? localImportId : (catalogQuery.data?.importId ?? '');
   const localPreview = localEntries !== null;
-  const error = importError || (catalogQuery.error ? 'Catalog request failed' : '');
+  const error = importError || (catalogQuery.error instanceof Error ? 'Catalog request failed' : '');
   const loading = catalogQuery.isLoading && !localEntries;
   const detail = entries.find((entry) => entry.recordId === detailId);
   const deferredQuery = useDeferredValue(query);

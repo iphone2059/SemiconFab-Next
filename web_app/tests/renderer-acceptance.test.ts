@@ -2,13 +2,20 @@ import { expect, it } from 'vitest';
 import { runManagedClockAcceptance, waitForManagedRenderer } from './remaining-state.browser';
 
 it('rejects a working HUD when the renderer reports a caught module-load failure', async () => {
-  const locator = {
+  const statusLocator = {
     click: async () => {},
-    getByRole: () => locator,
+    getByRole: () => statusLocator,
     getAttribute: async () => 'Failed to fetch dynamically imported module: /src/lite-backend.ts',
   };
+  const linkLocator = {
+    first: () => linkLocator,
+    getAttribute: async () => '/fabs/FAB-01/3d',
+  };
   const tab = { url: async () => 'http://localhost:5173/', goto: async () => {},
-    playwright: { locator: () => locator, getByRole: () => locator } };
+    playwright: {
+      locator: (selector: string) => (selector.includes('/3d') ? linkLocator : statusLocator),
+      getByRole: () => statusLocator,
+    } };
   await expect(runManagedClockAcceptance(tab)).rejects.toThrow('Failed to fetch dynamically imported module');
 });
 

@@ -19,7 +19,7 @@ export async function waitForManagedRenderer(tab) {
 }
 
 export async function runCatalogManagedStateAcceptance(tab, baseUrl = 'http://localhost:5173') {
-  await tab.goto(baseUrl + '/catalog?lang=en&q=NXT%3A2050i');
+  await tab.goto(baseUrl + '/equipment?lang=en&q=NXT%3A2050i');
   const query = await tab.playwright.locator('input[type="search"]').getAttribute('value');
   assert.equal(query, 'NXT:2050i', 'StrictMode hydration must preserve deep-link filters');
   assert.equal(new URL(await tab.url()).searchParams.get('q'), 'NXT:2050i');
@@ -27,8 +27,15 @@ export async function runCatalogManagedStateAcceptance(tab, baseUrl = 'http://lo
 }
 
 export async function runManagedClockAcceptance(tab, baseUrl = 'http://localhost:5173') {
-  const target = baseUrl + '/twin?mode=engineer&lang=zh-CN&modal=arch';
-  if (await tab.url() === target) await tab.reload(); else await tab.goto(target);
+  await tab.goto(baseUrl + '/');
+  const href = await tab.playwright.locator('a[href*="/3d"]').first().getAttribute('href');
+  if (!href) throw new Error('workbench 3D FAB link is missing');
+  const target = new URL(href, baseUrl);
+  target.searchParams.set('mode', 'engineer');
+  target.searchParams.set('lang', 'zh-CN');
+  target.searchParams.set('modal', 'arch');
+  const targetUrl = target.toString();
+  if (await tab.url() === targetUrl) await tab.reload(); else await tab.goto(targetUrl);
   await tab.playwright.getByRole('dialog').getByRole('button', { name: '关闭', exact: true }).click({ timeoutMs: 10000 });
   const renderer = await waitForManagedRenderer(tab);
   assert.match(renderer, /^WebGPU/, 'A canvas element or working HUD does not prove renderer readiness');

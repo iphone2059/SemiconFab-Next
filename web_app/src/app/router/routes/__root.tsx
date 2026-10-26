@@ -33,8 +33,8 @@ const RootNotFound = () => (
 );
 
 export const Route = createRootRouteWithContext<RouterContext>()({
-  // One global search schema keeps lang/theme/... intact across canonical paths
-  // and the permanent legacy aliases.
+  // One global search schema keeps lang/theme/... parsed on every canonical path;
+  // there are no legacy aliases or redirects.
   validateSearch: routerSearchSchema,
   component: RootComponent,
   errorComponent: RootError,

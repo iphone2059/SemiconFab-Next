@@ -9,9 +9,8 @@ import '../assets/original-twin-hud.css';
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Application root element is missing.');
-// The router owns top-level navigation, including the permanent legacy aliases
-// (/twin, /preview, /catalog, /compare, /workbench) implemented by the catch-all
-// route; /preview therefore follows the same alias path as every other legacy URL.
+// The router owns top-level navigation. Only the canonical V2.1 URLs exist;
+// deleted legacy product URLs are an honest not-found page (no redirects).
 createRoot(container).render(
   <StrictMode>
     <AppProviders>

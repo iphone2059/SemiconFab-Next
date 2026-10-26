@@ -10,10 +10,8 @@ import { workbenchActions } from '../src/store/workbenchSlice';
 
 const site = { siteId: 'site-1', code: 'SITE-1', templateHash: 'hash', fabs: [{ fabId: 'fab-1', code: 'FAB-1' }] };
 
-it('resolves canonical and permanent legacy paths to the same route views', () => {
-  for (const path of ['/fabs/fab-1/3d', '/fabs/fab-1', '/twin', '/twin.html', '/preview', '/preview.html']) {
-    expect(readCatalogRoute(new URL(`https://example.test${path}`)).view).toBe('twin');
-  }
+it('resolves only the canonical V2.1 route views', () => {
+  expect(readCatalogRoute(new URL('https://example.test/fabs/fab-1/3d')).view).toBe('twin');
   expect(readCatalogRoute(new URL('https://example.test/equipment')).view).toBe('catalog');
   expect(readCatalogRoute(new URL('https://example.test/equipment/compare')).view).toBe('compare');
   expect(readCatalogRoute(new URL('https://example.test/')).view).toBe('workbench');
@@ -33,9 +31,7 @@ it('keeps the website entrance free of 3D preview rendering and links to the can
   );
   expect(html).toContain('href="/fabs/fab-1/3d"');
   expect(html).toContain('href="/equipment"');
-  expect(html).not.toContain('href="/twin"');
   expect(html).not.toContain('<canvas');
   expect(html).not.toContain('SITE DIGITAL VIEW');
   expect(html).not.toContain('预览');
-  expect(html).not.toContain('/preview');
 });

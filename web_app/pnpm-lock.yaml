@@ -191,8 +191,8 @@ importers:
         specifier: 7.8.2
         version: 7.8.2
       xstate:
-        specifier: 5.33.3
-        version: 5.33.3
+        specifier: 6.0.0-alpha.70
+        version: 6.0.0-alpha.70
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -1369,8 +1369,9 @@ packages:
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
 
-  xstate@5.33.3:
-    resolution: {integrity: sha512-AnDRjS/GyKHmbA1PyhVCYBqYsA7EGe3KGgeD0ht3NFsXzoz7leX/HQDFX9QlHFJ/ltLHPsgChJYwPzRvB/0b4g==}
+  xstate@6.0.0-alpha.70:
+    resolution: {integrity: sha512-TSFfXYaTNz+ylEpguNsu0L5vDy8cjHRXAqpZBKQnJI++Jm61Vb41TAg1HzeEbC+Mnq9XelKs2dQNOizTwcnssQ==}
+    hasBin: true
 
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
@@ -2291,7 +2292,7 @@ snapshots:
 
   xmlchars@2.2.0: {}
 
-  xstate@5.33.3: {}
+  xstate@6.0.0-alpha.70: {}
 
   yallist@3.1.1: {}
 

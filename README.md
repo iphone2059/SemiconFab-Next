@@ -58,16 +58,16 @@ npx --yes pnpm@12.15.0 build
 
 启动脚本支持 Windows PowerShell 5.1 / PowerShell 7；按 Ctrl+C 会停止本次 API、npm 与 Vite 进程。日志位置、`-ApiOnly` / `-SeparateWorker` 与启动冒烟检查见 [scripts/README.md](scripts/README.md)。
 
-3D FAB 的最终地址是 `/fabs/{fabId}/3d`；旧 `/twin`、`/twin.html`、`/preview` 作为永久别名重定向到该地址。首页不嵌入独立预览。当前仍在对齐原版，尚未通过整页视觉 parity；[基线、差分与剩余门槛](docs/migration/twin-parity/baseline.md)。
+3D FAB 的唯一地址是 `/fabs/{fabId}/3d`；旧产品地址已删除，不提供别名或重定向。首页不嵌入独立预览。当前仍在对齐原版，尚未通过整页视觉 parity；[基线、差分与剩余门槛](docs/migration/twin-parity/baseline.md)。
 
 ## 文档
 
-- 当前编码进度与验证：[迁移实施记录](docs/migration/progress.md)。设备目录最终地址为 `/equipment`，对比为 `/equipment/compare`；旧 `/catalog`、`/catalog-demo.html`、`/compare`、`/compare.html` 作为永久别名重定向。
+- 当前编码进度与验证：[迁移实施记录](docs/migration/progress.md)。设备目录唯一地址为 `/equipment`，对比为 `/equipment/compare`；旧地址已删除（无重定向）。
 - 原版到新版迁移规划：[功能迁移与重构规划](docs/superpowers/plans/2026-10-24-main-to-next-refactor.md)（含 44 项功能清单与原版资产基线；以当前四项目架构为准）
 - 模块档案：`docs/modules/M01.md` … `M18.md`
 - 实施状态：`docs/IMPLEMENTATION-STATUS.md`
 - 决策记录：`docs/adr/`
-- V2.1 架构基线：[架构基线](docs/architecture.md)（ADR-0009 Router/Query 边界、ADR-0010 Realtime/Workflow 桥接、ARCH-01…12 规则、M0–M6 迁移计划；状态：M1 路由/查询地基与最终 URL 已落地，M2–M6 未开始）
+- V2.1 架构基线：[架构基线](docs/architecture.md)（ADR-0009 Router/Query 边界、ADR-0010 Realtime/Workflow 桥接、ARCH-01…12 规则、M0–M6 迁移计划；状态：M1+M2a 已落地——全部端点迁 TanStack Query、RTK Query 与旧 URL 已删除；M2b/M3–M6 未开始）
 
 ## 原版数据导入
 

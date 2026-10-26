@@ -1,10 +1,10 @@
 # 路由与查询集成（Router / TanStack Query）
 
 - 版本：V2.1 / 2026-10-27
-- 状态：**M1 地基已实现；M2 起逐端点迁移**（M1 implemented / M2+ pending）
+- 状态：**M1 与 M2a 已实现；M2b 起迁 Zustand/页面 URL 状态**（M1+M2a implemented / M2b+ pending）
 - 依据：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)；总览见 [架构基线](architecture.md)；状态所有权见 [状态管理](state-management.md)
-- 当前实现：`main.tsx` 已改为 `AppProviders + RouterProvider`；TanStack Router 接管顶层路由；`/api/v1/sites` 已由 TanStack Query 独占（RTK 中删除）；其余端点仍为 RTK Query（[ADR-0008](adr/0008-redux-toolkit-rtk-query.md)）
-- 门禁状态：RQ-01/RQ-05 **已真实运行（PASS）**；RQ-02..04 仍 SPECIFIED / NOT RUN。证据见 [架构基线](architecture.md) §15 与 `web_app/tests/integration/router-query.test.tsx`
+- 当前实现：`main.tsx` 已改为 `AppProviders + RouterProvider`；TanStack Router 接管顶层路由；**全部 HTTP 端点**已由 TanStack Query 独占，RTK Query 已在 M2a 删除；Redux 仅剩临时客户端 UI slice
+- 门禁状态：RQ-01..RQ-05 **均已真实运行（PASS）**。证据见 [架构基线](architecture.md) §15/§16、`tests/integration/router-query.test.tsx` 与 `tests/integration/query-cache.test.tsx`
 
 ## 1. 职责边界
 
@@ -246,8 +246,8 @@ export const queryKeys = {
 | 测试渲染 | `render(<RouterProvider router={createRouter({ routeTree, context, history: createMemoryHistory() })} />)` | 已实现（`tests/integration/router-query.test.tsx`，合成路由树 + `createMemoryHistory`） |
 | Query 隔离 | 每个测试新建 `QueryClient`（`retry: false`、按需 `gcTime`），避免跨测试缓存污染 | 已实现 |
 | 网络模拟 | 在 `api/endpoints` 层 mock `fetch`；断言调用次数与参数 | 已实现（`vi.stubGlobal('fetch')` + 调用次数断言） |
-| 时钟 | RQ-02 使用假时钟覆盖 `staleTime`，不得用真实 sleep | 未实现（M2 的 RQ-02） |
-| 运行命令 | `pnpm test`（Vitest）纳入 CI/verify；浏览器专用测试仍用现有独立配置 | 已纳入：`npx vitest run` = 56 文件 / 259 测试；`./scripts/verify.ps1` PASS |
+| 时钟 | RQ-02 使用假时钟覆盖 `staleTime`，不得用真实 sleep | 已实现（`query-cache.test.tsx` 用 `updatedAt` 老化缓存，无真实 sleep） |
+| 运行命令 | `pnpm test`（Vitest）纳入 CI/verify；浏览器专用测试仍用现有独立配置 | 已纳入：`npx vitest run` = 57 文件 / 260 测试；`./scripts/verify.ps1` PASS |
 
 ## 12. 风险与开放问题
 
@@ -255,7 +255,7 @@ export const queryKeys = {
 |---|---|---|
 | 预加载请求放大 | 后端压力、RQ-01 失真 | loader 默认 `ensureQueryData`；仅显式权威导航用 `fetchQuery`；请求计数门禁 |
 | RQ-02 依赖假时钟/异步细节，测试易脆 | 门禁不稳定 | 使用 Query 官方测试工具（`QueryClientProvider` + `waitFor`），避免真实计时 |
-| 路由迁移与现有四入口页面耦合 | 迁移期 UI 回归 | 先骨架+重定向，保留入口兼容，再逐页替换 |
+| 路由迁移与现有四入口页面耦合 | 迁移期 UI 回归 | 先骨架 + 最终 URL；旧地址直接删除（无重定向），再逐页替换 |
 | 插件/构建约束误用 | 违反 G-01 | 对比 build 产物；不满足即 code-based |
 
 开放问题：见 [架构基线](architecture.md) 第 14 节的 OPEN-V21-01..05（URL 映射、版本锁定、测试环境、路径别名、Suspense 边界）。
@@ -264,8 +264,15 @@ export const queryKeys = {
 
 - 实现路径：`web_app/src/app/providers/*`、`web_app/src/app/router/*`（含生成式 `routeTree.gen.ts`）、`web_app/src/api/queries/*`；`main.tsx` 已改为 `AppProviders + RouterProvider`。
 - Router 配置：`defaultPreload: 'intent'`、`defaultPreloadStaleTime: 0`、`createRootRouteWithContext<{ queryClient }>`；loader 只用 `context.queryClient.ensureQueryData(sitesQueryOptions())`。
-- 最终 URL 与永久别名：见 [架构基线](architecture.md) §4.1；纯映射与测试在 `web_app/src/app/router/url-mapping.ts`、`web_app/tests/integration/url-mapping.test.ts`。
+- 最终 URL：见 [架构基线](architecture.md) §4.1；旧地址/别名/重定向已在 M2a 删除，纯映射与测试在 `web_app/src/app/router/url-mapping.ts`、`web_app/tests/integration/url-mapping.test.ts`。
 - sites 端点：`web_app/src/api/queries/sites.queries.ts` 的 `sitesQueryOptions()` 是唯一入口；RTK Query 的 `getSites` 已删除（G-02）。
 - RQ-01/RQ-05：`web_app/tests/integration/router-query.test.tsx` 真实运行 PASS（预加载后导航 1 次请求、重叠请求 1 次在途）。
 - 过渡事实：目录/对比页内部筛选/视图切换仍走 history + Redux（M2 迁移）；Twin 的 `?siteId/?modal/?mode` 仍直接读写 `location.search`。
 - 验证记录：`tsc --noEmit` 0；`npx vitest run` 56 文件 / 259 测试 PASS；`vite build` 0；`./scripts/verify.ps1` exit 0。
+
+## 14. M2a 落地记录（2026-10-27）
+
+- 全部 7 个 RTK Query 端点迁到 TanStack Query：`api/queries/equipment|catalog|runs|research|wafer.queries.ts`，mutation 在 `api/mutations/runs.mutations.ts`；RTK Query 模块/中间件/测试删除。
+- SSE 快照写入 `equipmentStatusQueryKey(siteId)`，Query 是唯一服务端缓存；4s 轮询为回退。
+- RQ-02：loader 的 `ensureQueryData` 在缓存过期时仍返回旧值，页面 `useQuery` 订阅触发后台刷新；RQ-03：`createRun` 后 `invalidateRuns` 使下一次读取返回权威列表；RQ-04：equipment status 的 key 含 siteId。
+- 验证：`tsc --noEmit` 0；`npx vitest run` 57 文件 / 260 测试 PASS；`vite build` 0；`./scripts/verify.ps1` exit 0（见 M2a 提交记录）。

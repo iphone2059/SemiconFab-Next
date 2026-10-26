@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createMemoryHistory, createRootRouteWithContext, createRoute, createRouter, Outlet, redirect } from '@tanstack/react-router';
+import { createMemoryHistory, createRootRouteWithContext, createRoute, createRouter, Outlet } from '@tanstack/react-router';
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
@@ -101,18 +101,10 @@ it('deduplicates overlapping ensureQueryData/fetchQuery calls into one in-flight
   expect(firstData).toBe(secondData);
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
-it('forwards the validated search params through a redirect', async () => {
+it('validates search params on a canonical path without any redirect', async () => {
   const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
     validateSearch: routerSearchSchema,
     component: () => <Outlet />,
-  });
-  const legacyRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/legacy-alias',
-    beforeLoad: () => {
-      throw redirect({ to: '/', search: true, replace: true });
-    },
-    component: IndexScreen,
   });
   const homeRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -120,10 +112,10 @@ it('forwards the validated search params through a redirect', async () => {
     component: IndexScreen,
   });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([legacyRoute, homeRoute]),
+    routeTree: rootRoute.addChildren([homeRoute]),
     context: { queryClient: newQueryClient() },
     history: createMemoryHistory({
-      initialEntries: ['/legacy-alias?lang=en&theme=dark&siteId=site-1&modal=arch&mode=engineer&perf=1&domain=fab&category=lithography&q=A%26B&hideDrafts=1&compare=id-1,id-2'],
+      initialEntries: ['/?lang=en&theme=dark&siteId=site-1&modal=arch&mode=engineer&perf=1&domain=fab&category=lithography&q=A%26B&hideDrafts=1&compare=id-1,id-2'],
     }),
   });
   await router.load();

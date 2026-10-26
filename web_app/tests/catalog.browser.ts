@@ -68,7 +68,7 @@ const badFile = fileURLToPath(
 try {
   await command('Page.enable');
   await command('Runtime.enable');
-  await navigate('/catalog-demo.html?lang=en');
+  await navigate('/equipment?lang=en');
   assert.equal(await evaluate(`document.querySelectorAll('.catalog-list tbody tr').length`), 40);
   await evaluate(`document.querySelector('.catalog-hide-drafts input').click()`);
   await until(`document.querySelectorAll('.catalog-list tbody tr').length === 9`);
@@ -100,7 +100,7 @@ try {
     windowsVirtualKeyCode: 27,
   });
   await until(`!document.querySelector('dialog')`);
-  await navigate('/catalog?domain=osat&lang=en');
+  await navigate('/equipment?domain=osat&lang=en');
   await until(`document.querySelector('.catalog-result-heading').textContent.includes('86 tools')`);
   for (let i = 0; i < 2; ++i)
     await evaluate(`document.querySelector('.catalog-pagination button:last-child').click()`);
@@ -119,7 +119,7 @@ try {
   );
   await evaluate(`document.querySelector('.catalog-filters > button').click()`);
   await until(
-    `location.pathname === '/compare' && document.querySelectorAll('.catalog-comparison thead th').length === 5`,
+    `location.pathname === '/equipment/compare' && document.querySelectorAll('.catalog-comparison thead th').length === 5`,
   );
   assert.ok(
     (await evaluate(`document.querySelector('.catalog-comparison').textContent`)).includes(
@@ -159,7 +159,7 @@ try {
   await until(
     `document.querySelector('.catalog-shell').dataset.theme !== ${JSON.stringify(theme)}`,
   );
-  await navigate('/catalog?lang=en');
+  await navigate('/equipment?lang=en');
   const custom = JSON.parse(readFileSync(rawCatalog, 'utf8')).slice(0, 2);
   custom[0].vendor = 'LOCAL-VENDOR';
   custom[0].record.identity.vendor.value = 'LOCAL-VENDOR';
@@ -176,7 +176,7 @@ try {
   await until(`document.querySelectorAll('.catalog-list input:checked').length === 2`);
   await evaluate(`document.querySelector('.catalog-filters > button').click()`);
   await until(
-    `location.pathname === '/compare' && document.querySelector('h1')?.textContent.includes('compare') && document.querySelector('.catalog-total strong')?.textContent !== '0'`,
+    `location.pathname === '/equipment/compare' && document.querySelector('h1')?.textContent.includes('compare') && document.querySelector('.catalog-total strong')?.textContent !== '0'`,
   );
   assert.equal(
     await evaluate(`document.querySelector('.catalog-total strong').textContent`),
@@ -190,10 +190,10 @@ try {
     ),
   );
   await evaluate('history.back()');
-  await until(`location.pathname === '/catalog' && document.querySelector('h1')?.textContent.includes('one tool')`);
+  await until(`location.pathname === '/equipment' && document.querySelector('h1')?.textContent.includes('one tool')`);
   assert.equal(await evaluate(`document.querySelector('.catalog-total strong').textContent`), '2');
   await evaluate('history.forward()');
-  await until(`location.pathname === '/compare' && document.querySelector('.catalog-comparison')?.textContent.includes('LOCAL-NEW')`);
+  await until(`location.pathname === '/equipment/compare' && document.querySelector('.catalog-comparison')?.textContent.includes('LOCAL-NEW')`);
   await command('Page.navigate', { url: 'http://127.0.0.1:5173/' });
   await until(`document.querySelectorAll('.fab-card').length >= 1`);
   await evaluate(`document.querySelector('button.primary').click()`);

@@ -17,7 +17,8 @@ export default defineConfig(async environment => {
       configurePreviewServer(server: PreviewServer) {
         server.middlewares.use((request, response, next) => {
           const url = new URL(request.url ?? '/', 'http://127.0.0.1');
-          if (!['/', '/twin', '/twin.html'].includes(url.pathname) || url.searchParams.get('parity') !== '1') return next();
+          const isTwinRoute = /^\/fabs\/[^/]+\/3d\/?$/.test(url.pathname);
+          if (!(url.pathname === '/' || isTwinRoute) || url.searchParams.get('parity') !== '1') return next();
           response.setHeader('Content-Type', 'text/html; charset=utf-8');
           response.setHeader('Cache-Control', 'no-store');
           response.end(readFileSync(resolve(outDir, 'index.html'), 'utf8')

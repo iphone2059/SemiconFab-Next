@@ -1,9 +1,9 @@
 # 状态管理（State Management）
 
 - 版本：V2.1 / 2026-10-27
-- 状态：**SPECIFIED，未实现**（Decision accepted / implementation pending）
+- 状态：**M2a 已实现（服务端数据全部归 TanStack Query）；M2b（Zustand）未开始**（M2a implemented / M2b pending）
 - 依据：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)、[ADR-0010](adr/0010-command-event-bridge.md)；总览见 [架构基线](architecture.md)；路由/Query 细则见 [路由与查询集成](router-query-integration.md)
-- 当前实现：Redux Toolkit + RTK Query（[ADR-0008](adr/0008-redux-toolkit-rtk-query.md)）。本文档是目标，不是现状；迁移完成前 ADR-0008 仍是代码事实
+- 当前实现：全部 HTTP 端点已由 TanStack Query 拥有，RTK Query 已在 M2a 删除；Redux Toolkit 仅临时承载 7 个客户端 UI slice（M2b 迁 Zustand）。迁移完成前 ADR-0008 对客户端状态的描述仍是代码事实
 - 本文不含任何已完成验证的声明
 
 ## 1. 状态分类与唯一所有权
@@ -58,7 +58,7 @@
 
 规则：
 
-- search params 用 schema 校验（`schemas`），非法值重定向/回退策略在 M1 定义。
+- search params 用 schema 校验（`schemas`），非法值回退到默认值，不做重定向（M1 已定）。
 - 同一筛选不得同时在 URL 与 Zustand 各存一份；以 URL 为准。
 - 导航/预加载只加载数据，不在 URL 中塞服务端响应。
 
@@ -145,7 +145,7 @@ HTTP 写入:  用户操作 -> mutation -> HTTP API -> 成功 -> invalidateQuerie
 | ADR-0008 内容 | V2.1 处置 |
 |---|---|
 | Redux Toolkit 拥有全部可序列化应用状态 | 迁移后由 Query（服务端）、Router（URL）、Zustand（UI）、XState（工作流）分担；Redux 在 M6 退役 |
-| RTK Query 拥有服务端缓存 | 迁移后由 TanStack Query 取代（ADR-0009）；迁移期按端点切换，不双缓存 |
+| RTK Query 拥有服务端缓存 | **已由 TanStack Query 取代（M2a，2026-10-27）**；RTK Query 模块删除，无双缓存 |
 | “Babylon 对象不进入 Redux、遥测合批、帧状态与渲染循环分离” | 原则保留；ARCH-11 进一步要求高频遥测不经过 Query/Zustand/XState，落地形态为 Worker/TypedArray 旁路。当前 `telemetry-buffer.ts` 的 100ms 合批是过渡实现，不等于满足目标 |
 | 页面选择/表单/幂等键在 Redux | 选择/表单可进 URL/组件；命令提交与幂等键归命令链路/`CommandGateway` 管理 |
 

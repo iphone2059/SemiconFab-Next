@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { CatalogPage } from '../../../../catalog-page';
 
-/** Canonical equipment comparison URL (was /compare, /compare.html). */
+/** Canonical equipment comparison URL. */
 export const Route = createFileRoute('/equipment/compare')({
   component: EquipmentCompareRoute,
 });

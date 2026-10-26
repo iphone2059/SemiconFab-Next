@@ -65,10 +65,6 @@ export const sitesQueryOptions = () =>
     staleTime: 30_000,
   });
 
-/** The resolved first FAB used by permanent legacy aliases such as /twin. */
-export function firstFabId(sites: readonly SiteDto[]): string | undefined {
-  return sites[0]?.fabs[0]?.fabId;
-}
 
 /** Route-param -> site lookup; the URL owns FAB identity in M1. */
 export function findSiteByFabId(sites: readonly SiteDto[], fabId: string): SiteDto | undefined {

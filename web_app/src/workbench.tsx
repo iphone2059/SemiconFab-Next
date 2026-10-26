@@ -1,5 +1,5 @@
 import { useEffect, useMemo, type FormEvent } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateRunRequest, SiteDto } from './contracts';
 import { Panel, StatusPill } from './ui';
 import { Metric } from './widgets';
@@ -7,7 +7,8 @@ import { CompletionBar } from './charting';
 import { ScopeGate } from './state-sync';
 import { validateScenario } from './scenario';
 import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
-import { useCreateRunMutation, useGetRunQuery, useGetRunResultsQuery, useGetRunsQuery } from './store/api';
+import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from './api/queries/runs.queries';
+import { createRun, invalidateRuns } from './api/mutations/runs.mutations';
 import { sitesQueryOptions } from './api/queries/sites.queries';
 import { fab3dPath } from './app/router/url-mapping';
 import { workbenchActions } from './store/workbenchSlice';
@@ -35,17 +36,26 @@ function Workbench({ site }: { site: SiteDto }) {
   const { lotCount, processTimeUs, durationUs, warmupUs, masterSeed } = form;
   const fab = site.fabs[0];
   const submissionScope = useMemo(() => new ScopeGate(), []);
-  const runsQuery = useGetRunsQuery(undefined, { pollingInterval: 1500 });
+  const queryClient = useQueryClient();
+  const runsQuery = useQuery({ ...runsQueryOptions(), refetchInterval: 1500 });
   const scopedRuns = useMemo(() => (runsQuery.data ?? []).filter((value) => value.siteId === site.siteId), [runsQuery.data, site.siteId]);
   const runs = scopedRuns;
   const listError = runsQuery.error ? message(runsQuery.error) : '';
-  const runQuery = useGetRunQuery(runId, { skip: !runId, pollingInterval: 1500 });
-  const resultQuery = useGetRunResultsQuery(runId, { skip: !runId || !runQuery.data || !complete(runQuery.data.status) });
+  const runQuery = useQuery({ ...runQueryOptions(runId), enabled: !!runId, refetchInterval: 1500 });
+  const runCompleted = !!runQuery.data && complete(runQuery.data.status);
+  // Results are only requested once the backend reports COMPLETED, exactly like the skipped RTK query.
+  const resultQuery = useQuery({ ...runResultsQueryOptions(runId), enabled: !!runId && runCompleted });
   const run = runQuery.data;
   const result = resultQuery.data;
   const runError = runQuery.error ? message(runQuery.error) : resultQuery.error ? message(resultQuery.error) : '';
-  const [createRun, createRunState] = useCreateRunMutation();
-  const submitting = createRunState.isLoading;
+  const createRunMutation = useMutation({
+    mutationFn: createRun,
+    // The RTK mutation invalidated the Runs tag on success; keep that refresh for list/detail/results.
+    onSuccess: () => {
+      void invalidateRuns(queryClient);
+    },
+  });
+  const submitting = createRunMutation.isPending;
   useEffect(() => () => submissionScope.dispose(), [submissionScope]);
   useEffect(() => {
     dispatch(workbenchActions.runsReceived({ siteId: site.siteId, runIds: scopedRuns.map((value) => value.runId) }));
@@ -74,7 +84,7 @@ function Workbench({ site }: { site: SiteDto }) {
     const key = store.getState().workbench.pendingSubmission!.key;
     const token = submissionScope.begin(site.siteId);
     try {
-      const created = await createRun({ request, idempotencyKey: key }).unwrap();
+      const created = await createRunMutation.mutateAsync({ request, idempotencyKey: key });
       if (submissionScope.accepts(token)) {
         dispatch(workbenchActions.submissionCompleted({ siteId: site.siteId, key, runId: created.runId }));
       }

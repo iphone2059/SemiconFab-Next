@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { CatalogPage } from '../../../../catalog-page';
 
-/** Canonical equipment catalog URL (was /catalog, /catalog-demo). */
+/** Canonical equipment catalog URL. */
 export const Route = createFileRoute('/equipment/')({
   component: EquipmentCatalogRoute,
 });

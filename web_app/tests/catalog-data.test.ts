@@ -53,20 +53,20 @@ it('flattens value/provenance fields for inspection and comparison', () => {
   );
 });
 
-it('preserves legacy route query semantics while bounding and deduplicating comparisons', () => {
+it('preserves canonical route query semantics while bounding and deduplicating comparisons', () => {
   const ids = ['3acd7b05-e6e8-5312-bb5b-045e7dd3074b', 'e3021724-ec73-534e-be7c-ba3374f4ddb8'];
   const route = readCatalogRoute(
     new URL(
-      `https://example.test/compare.html?compare=${ids[0]},${ids[0]},${ids[1]}&domain=osat&lang=en#details`,
+      `https://example.test/equipment/compare?compare=${ids[0]},${ids[0]},${ids[1]}&domain=osat&lang=en#details`,
     ),
   );
   expect(route.view).toBe('compare');
   expect(route.domain).toBe('OSAT');
   expect(route.compare).toEqual(ids);
   expect(
-    readCatalogRoute(new URL('https://example.test/catalog-demo.html?category=lithography')).view,
+    readCatalogRoute(new URL('https://example.test/equipment?category=lithography')).view,
   ).toBe('catalog');
-  expect(readCatalogRoute(new URL('https://example.test/twin')).view).toBe('twin');
+  expect(readCatalogRoute(new URL('https://example.test/fabs/fab-1/3d')).view).toBe('twin');
 });
 
 it('does not turn arbitrary provenance strings into executable links', () => {

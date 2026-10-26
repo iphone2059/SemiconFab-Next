@@ -10,22 +10,14 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SplatRouteImport } from './routes/$'
 import { Route as EquipmentRouteImport } from './routes/equipment'
 import { Route as EquipmentIndexRouteImport } from './routes/equipment/index'
 import { Route as EquipmentCompareRouteImport } from './routes/equipment/compare'
-import { Route as FabsFabIdRouteImport } from './routes/fabs/$fabId'
-import { Route as FabsFabIdIndexRouteImport } from './routes/fabs/$fabId/index'
 import { Route as FabsFabId3dRouteImport } from './routes/fabs/$fabId/3d'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SplatRoute = SplatRouteImport.update({
-  id: '/$',
-  path: '/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EquipmentRoute = EquipmentRouteImport.update({
@@ -43,87 +35,56 @@ const EquipmentCompareRoute = EquipmentCompareRouteImport.update({
   path: '/compare',
   getParentRoute: () => EquipmentRoute,
 } as any)
-const FabsFabIdRoute = FabsFabIdRouteImport.update({
-  id: '/fabs/$fabId',
-  path: '/fabs/$fabId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FabsFabIdIndexRoute = FabsFabIdIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => FabsFabIdRoute,
-} as any)
 const FabsFabId3dRoute = FabsFabId3dRouteImport.update({
-  id: '/3d',
-  path: '/3d',
-  getParentRoute: () => FabsFabIdRoute,
+  id: '/fabs/$fabId/3d',
+  path: '/fabs/$fabId/3d',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/$': typeof SplatRoute
   '/equipment': typeof EquipmentRouteWithChildren
   '/equipment/compare': typeof EquipmentCompareRoute
-  '/fabs/$fabId': typeof FabsFabIdRouteWithChildren
   '/equipment/': typeof EquipmentIndexRoute
   '/fabs/$fabId/3d': typeof FabsFabId3dRoute
-  '/fabs/$fabId/': typeof FabsFabIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/$': typeof SplatRoute
   '/equipment/compare': typeof EquipmentCompareRoute
   '/equipment': typeof EquipmentIndexRoute
   '/fabs/$fabId/3d': typeof FabsFabId3dRoute
-  '/fabs/$fabId': typeof FabsFabIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/$': typeof SplatRoute
   '/equipment': typeof EquipmentRouteWithChildren
   '/equipment/compare': typeof EquipmentCompareRoute
-  '/fabs/$fabId': typeof FabsFabIdRouteWithChildren
   '/equipment/': typeof EquipmentIndexRoute
   '/fabs/$fabId/3d': typeof FabsFabId3dRoute
-  '/fabs/$fabId/': typeof FabsFabIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/$'
     | '/equipment'
     | '/equipment/compare'
-    | '/fabs/$fabId'
     | '/equipment/'
     | '/fabs/$fabId/3d'
-    | '/fabs/$fabId/'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/$'
-    | '/equipment/compare'
-    | '/equipment'
-    | '/fabs/$fabId/3d'
-    | '/fabs/$fabId'
+  to: '/' | '/equipment/compare' | '/equipment' | '/fabs/$fabId/3d'
   id:
     | '__root__'
     | '/'
-    | '/$'
     | '/equipment'
     | '/equipment/compare'
-    | '/fabs/$fabId'
     | '/equipment/'
     | '/fabs/$fabId/3d'
-    | '/fabs/$fabId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  SplatRoute: typeof SplatRoute
   EquipmentRoute: typeof EquipmentRouteWithChildren
-  FabsFabIdRoute: typeof FabsFabIdRouteWithChildren
+  FabsFabId3dRoute: typeof FabsFabId3dRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -133,13 +94,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/$': {
-      id: '/$'
-      path: '/$'
-      fullPath: '/$'
-      preLoaderRoute: typeof SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/equipment': {
@@ -163,26 +117,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EquipmentCompareRouteImport
       parentRoute: typeof EquipmentRoute
     }
-    '/fabs/$fabId': {
-      id: '/fabs/$fabId'
-      path: '/fabs/$fabId'
-      fullPath: '/fabs/$fabId'
-      preLoaderRoute: typeof FabsFabIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/fabs/$fabId/': {
-      id: '/fabs/$fabId/'
-      path: '/'
-      fullPath: '/fabs/$fabId/'
-      preLoaderRoute: typeof FabsFabIdIndexRouteImport
-      parentRoute: typeof FabsFabIdRoute
-    }
     '/fabs/$fabId/3d': {
       id: '/fabs/$fabId/3d'
-      path: '/3d'
+      path: '/fabs/$fabId/3d'
       fullPath: '/fabs/$fabId/3d'
       preLoaderRoute: typeof FabsFabId3dRouteImport
-      parentRoute: typeof FabsFabIdRoute
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -201,25 +141,10 @@ const EquipmentRouteWithChildren = EquipmentRoute._addFileChildren(
   EquipmentRouteChildren,
 )
 
-interface FabsFabIdRouteChildren {
-  FabsFabId3dRoute: typeof FabsFabId3dRoute
-  FabsFabIdIndexRoute: typeof FabsFabIdIndexRoute
-}
-
-const FabsFabIdRouteChildren: FabsFabIdRouteChildren = {
-  FabsFabId3dRoute: FabsFabId3dRoute,
-  FabsFabIdIndexRoute: FabsFabIdIndexRoute,
-}
-
-const FabsFabIdRouteWithChildren = FabsFabIdRoute._addFileChildren(
-  FabsFabIdRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  SplatRoute: SplatRoute,
   EquipmentRoute: EquipmentRouteWithChildren,
-  FabsFabIdRoute: FabsFabIdRouteWithChildren,
+  FabsFabId3dRoute: FabsFabId3dRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

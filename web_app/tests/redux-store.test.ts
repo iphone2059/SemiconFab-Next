@@ -1,23 +1,17 @@
 import { expect, it } from 'vitest';
 import { store } from '../src/store/store';
-import { twinApi } from '../src/store/api';
 import { twinUiActions, twinPageActions } from '../src/store/twinUiSlice';
 import { twinDemoActions } from '../src/store/twinDemoSlice';
 import { workbenchActions } from '../src/store/workbenchSlice';
 import { catalogActions } from '../src/store/catalogSlice';
 import { runtimeActions } from '../src/store/runtimeSlice';
 
-it('configures Redux Toolkit, RTK Query middleware and domain slices', () => {
+it('keeps only the temporary client-UI slices after the M2 RTK Query removal', () => {
   const state = store.getState();
-  expect(Object.keys(state).sort()).toEqual(['catalog', 'locale', 'runtime', 'twinApi', 'twinDemo', 'twinPage', 'twinUi', 'workbench']);
-  expect(state.twinApi).toBeDefined();
+  expect(Object.keys(state).sort()).toEqual(['catalog', 'locale', 'runtime', 'twinDemo', 'twinPage', 'twinUi', 'workbench']);
+  // M2 removed RTK Query entirely; every HTTP endpoint is a TanStack Query module.
+  expect('twinApi' in state).toBe(false);
   expect(typeof store.dispatch).toBe('function');
-  expect(twinApi.reducerPath).toBe('twinApi');
-  // ARCH G-02: /api/v1/sites moved to TanStack Query; the RTK cache must not keep a second copy.
-  expect('getSites' in twinApi.endpoints).toBe(false);
-  expect(twinApi.endpoints.getEquipmentStatus).toBeDefined();
-  expect(twinApi.endpoints.getWaferRoutes).toBeDefined();
-  expect(twinApi.endpoints.createRun).toBeDefined();
 });
 
 it('routes all Twin mode changes through typed slice actions', () => {

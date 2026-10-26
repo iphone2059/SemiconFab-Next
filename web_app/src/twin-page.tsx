@@ -23,10 +23,12 @@ import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from './original-tour';
 import { buildTourScenario, TOUR_INITIAL_CAMERA, TOUR_INITIAL_TARGET } from './tour-scenario';
 import { createTourTimeline, createWaferTimeline, type TourFrame, type TourTimeline, type WaferTimeline, type WaferHud } from './tour-wafer-timeline';
 import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SiteDto } from './contracts';
 import { sitesQueryOptions } from './api/queries/sites.queries';
-import { useGetEquipmentStatusQuery, useGetResearchEventsQuery, useGetWaferRoutesQuery } from './store/api';
+import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from './api/queries/equipment.queries';
+import { researchEventsQueryOptions } from './api/queries/research.queries';
+import { waferRoutesQueryOptions } from './api/queries/wafer.queries';
 import { twinUiActions, twinPageActions } from './store/twinUiSlice';
 import { twinDemoActions } from './store/twinDemoSlice';
 import { runtimeActions } from './store/runtimeSlice';
@@ -76,6 +78,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
   const scene = useRef<FabViewportHandle>(null);
   const dispatch = useAppDispatch();
   const store = useAppStore();
+  const queryClient = useQueryClient();
   const ui = useAppSelector((state) => state.twinUi);
   const demo = useAppSelector((state) => state.twinDemo);
   // Playback progress/trail are store-owned, but do not rerender the full HUD
@@ -109,9 +112,11 @@ function TwinContent({ fabId }: { fabId?: string }) {
 
   const sitesQuery = useQuery(sitesQueryOptions());
   const site = useMemo(() => sitesQuery.data?.find((value) => value.siteId === siteId), [sitesQuery.data, siteId]);
-  const statusQuery = useGetEquipmentStatusQuery(siteId ?? '', { skip: !siteId, pollingInterval: 4000 });
-  const researchQuery = useGetResearchEventsQuery(undefined, { skip: mode !== 'research' });
-  const waferRoutesQuery = useGetWaferRoutesQuery(undefined, { skip: !waferActive });
+  // TanStack Query owns the server cache (ARCH-02/G-02). The SSE effect below
+  // merges live frames into the same status key this 4 s polling fallback uses.
+  const statusQuery = useQuery({ ...equipmentStatusQueryOptions(siteId ?? ''), enabled: !!siteId, refetchInterval: 4000 });
+  const researchQuery = useQuery({ ...researchEventsQueryOptions(), enabled: mode === 'research' });
+  const waferRoutesQuery = useQuery({ ...waferRoutesQueryOptions(), enabled: waferActive });
   const waferRoutes = waferRoutesQuery.data;
   const research = useMemo(() => {
     if (!researchQuery.data) return undefined;
@@ -236,10 +241,14 @@ function TwinContent({ fabId }: { fabId?: string }) {
     if (!siteId) return;
     const controller = new AbortController();
     const source = new EventSource(`/api/v1/sites/${encodeURIComponent(siteId)}/equipment-status/stream`);
-    watchEquipmentStatus(source, siteId, (snapshot) => { statusConsumer.current?.(snapshot); },
-      () => dispatch(twinPageActions.statusFeedStale()), controller.signal);
+    watchEquipmentStatus(source, siteId, (snapshot) => {
+      statusConsumer.current?.(snapshot);
+      // Exactly one server cache: live frames overwrite the polling fallback's
+      // entry instead of living in a parallel store.
+      queryClient.setQueryData(equipmentStatusQueryKey(siteId), snapshot);
+    }, () => dispatch(twinPageActions.statusFeedStale()), controller.signal);
     return () => controller.abort();
-  }, [siteId]);
+  }, [siteId, queryClient, dispatch]);
 
   useEffect(() => {
     const modal = new URL(location.href).searchParams.get('modal');

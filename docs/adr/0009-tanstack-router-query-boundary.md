@@ -1,9 +1,9 @@
 # ADR-0009 — TanStack Router 只做导航与加载协调，TanStack Query 独占服务端数据缓存
 
-- 状态：已采纳（2026-10-27）；实施状态：M1 地基已落地 —— TanStack Router 接管顶层路由、sites 端点迁 TanStack Query、RQ-01/RQ-05 运行通过；其余端点/客户端状态迁移未开始（Status: Accepted / M1 foundation implemented / M2+ pending）
+- 状态：已采纳（2026-10-27）；实施状态：M1+M2a 已落地 —— TanStack Router 接管顶层路由、全部 HTTP 端点迁 TanStack Query、RTK Query 删除、RQ-01..05 运行通过；Zustand/客户端状态迁移（M2b）未开始（Status: Accepted / M1+M2a implemented / M2b+ pending）
 - 取代：迁移完成后取代 [ADR-0008](0008-redux-toolkit-rtk-query.md) 中“服务端数据由 RTK Query 缓存”与“页面/交互状态由 Redux slice 承载”的部分；ADR-0008 的渲染循环约束经 [ADR-0010](0010-command-event-bridge.md) 与 [渲染管线](../rendering.md) 重新表述
 - 关联：[ADR-0003](0003-single-web-app.md)（单站点）、[ADR-0006](0006-single-backend-application.md)（唯一后端）、[ADR-0010](0010-command-event-bridge.md)；基线汇总见 [架构基线](../architecture.md)，实施细则见 [路由与查询集成](../router-query-integration.md) 与 [状态管理](../state-management.md)
-- 决策范围：仅前端 `web_app`。M1 已按本决策新增依赖并接入路由生成插件（仅 plugin，`server`/`build` 参数不变）；剩余 RTK Query 端点与 Redux 客户端状态在 M2 迁移前仍以 ADR-0008 与 [实施状态](../IMPLEMENTATION-STATUS.md) 为准
+- 决策范围：仅前端 `web_app`。M1 已按本决策新增依赖并接入路由生成插件（仅 plugin，`server`/`build` 参数不变）；M2a 已将全部 RTK Query 端点迁至 TanStack Query 并删除 RTK Query；Redux 仅剩客户端 UI slice，M2b 迁 Zustand 前仍以 ADR-0008 与 [实施状态](../IMPLEMENTATION-STATUS.md) 为准
 
 ## 背景
 
@@ -174,7 +174,7 @@ ADR-0008 的 RTK Query 在代码层面仍然存在。为避免双缓存互相污
 
 | ID | 问题 | 影响 | 建议 |
 |---|---|---|---|
-| OPEN-V21-01 | 现有页面（`/`、`/catalog`、`/compare`、`/twin`）到 `routes/fabs`、`routes/equipment`、`routes/amhs`、`routes/alarms` 的最终 URL 与重定向策略 | 路由迁移顺序与 RQ 测试夹具 | 由 Lead 在 M1 前确认；本基线只定义目录结构，不虚构产品路由 |
+| OPEN-V21-01 | ~~现有页面到 `routes/fabs`、`routes/equipment`、`routes/amhs`、`routes/alarms` 的最终 URL 与重定向策略~~ | 路由迁移顺序与 RQ 测试夹具 | **已解决（M1/M2）**：最终 URL 见架构基线 §4.1；旧地址直接删除，无别名/重定向；本基线只定义目录结构，不虚构产品路由 |
 | OPEN-V21-02 | TanStack Router/Query 的版本锁定与路由插件版本 | 依赖安装与 lockfile | M1 开始时核实并锁文件记录；本基线不写具体版本 |
 | OPEN-V21-03 | 集成测试环境（jsdom/happy-dom + Testing Library） | RQ-01..05 能否执行 | M1 前置依赖，需批准新增 devDependencies |
 | OPEN-V21-04 | 是否引入 `@/` 路径别名 | 目标目录的导入风格 | 当前 ADR-0003 要求相对导入；如引入别名需同时改 tsconfig 与 Vite resolve（属允许的插件/配置范围，但不在本基线） |

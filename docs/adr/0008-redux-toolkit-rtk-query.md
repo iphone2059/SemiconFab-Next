@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-25
 - Supersedes: the page-local `useReducer`/`useState` state model used by the first Twin implementation
+- Superseded in part: RTK Query was replaced by TanStack Query in M2a (2026-10-27, see [ADR-0009](0009-tanstack-router-query-boundary.md)); Redux Toolkit slices temporarily remain for client UI state until M2b/M6
 
 ## Context
 

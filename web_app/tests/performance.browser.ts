@@ -40,7 +40,11 @@ console.log('stage:connected');
 await command('Runtime.enable');
 await command('Page.enable');
 await command('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
-await command('Page.navigate', { url: 'http://127.0.0.1:5173/twin?lang=en&perf=1' });
+await command('Page.navigate', { url: 'http://127.0.0.1:5173/' });
+await wait(1000);
+const fabHref = await evaluate(`document.querySelector('a[href*="/3d"]')?.getAttribute('href') ?? ''`);
+if (!fabHref) throw new Error('workbench 3D FAB link is missing');
+await command('Page.navigate', { url: new URL(fabHref, 'http://127.0.0.1:5173').toString() + '?lang=en&perf=1' });
 for (let attempt = 0; attempt < 90; attempt += 1) {
   await wait(250);
   try {
