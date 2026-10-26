@@ -1,0 +1,199 @@
+{
+  "suite": "lite-product",
+  "baseUrl": "http://127.0.0.1:5178",
+  "capturedAt": "2026-10-26T15:29:42.274Z",
+  "viewport": "1536x735 DPR1 foreground tab",
+  "result": {
+    "steps": [
+      {
+        "name": "pick",
+        "ok": true,
+        "value": {
+          "index": 0,
+          "hover": true,
+          "selectionVisible": true
+        }
+      },
+      {
+        "name": "focus",
+        "ok": true,
+        "value": {
+          "position": [
+            -6.650876998901367,
+            38.781681060791016,
+            14.664451599121094
+          ],
+          "target": [
+            -31,
+            1.5,
+            -22.5
+          ]
+        }
+      },
+      {
+        "name": "escape-clear",
+        "ok": true,
+        "value": true
+      },
+      {
+        "name": "camera-presets",
+        "ok": true,
+        "value": true
+      },
+      {
+        "name": "orbit-zoom",
+        "ok": true,
+        "value": true
+      },
+      {
+        "name": "resize",
+        "ok": true,
+        "value": {
+          "width": 1280,
+          "height": 640,
+          "cssWidth": 1280
+        }
+      },
+      {
+        "name": "level-B1",
+        "ok": true,
+        "value": {
+          "floorAlpha": 0.2,
+          "slabVisible": false,
+          "shellVisible": true,
+          "b1Visible": true,
+          "b1Offset": 0,
+          "shellOffset": 0
+        }
+      },
+      {
+        "name": "level-DUAL",
+        "ok": true,
+        "value": {
+          "floorAlpha": 0.35,
+          "slabVisible": false,
+          "shellVisible": true,
+          "b1Visible": true,
+          "b1Offset": 0,
+          "shellOffset": 0
+        }
+      },
+      {
+        "name": "level-EXPLODED",
+        "ok": true,
+        "value": {
+          "ceilingOffset": 19.759128817349072,
+          "b1Offset": -17.783215935614166
+        }
+      },
+      {
+        "name": "level-L1",
+        "ok": true,
+        "value": {
+          "floorAlpha": 1,
+          "slabVisible": true,
+          "shellVisible": true,
+          "b1Visible": false,
+          "b1Offset": 0,
+          "shellOffset": 0
+        }
+      },
+      {
+        "name": "layers",
+        "ok": true,
+        "value": true
+      },
+      {
+        "name": "tool-state",
+        "ok": true,
+        "value": "maint"
+      },
+      {
+        "name": "xray-restore",
+        "ok": true,
+        "value": true
+      },
+      {
+        "name": "cut",
+        "ok": true,
+        "value": true
+      },
+      {
+        "name": "wafer",
+        "ok": true,
+        "value": {
+          "trailIndexCount": 2
+        }
+      },
+      {
+        "name": "tour-patrol",
+        "ok": true,
+        "value": {
+          "distinct": 9
+        }
+      },
+      {
+        "name": "language",
+        "ok": true,
+        "value": true
+      },
+      {
+        "name": "recovery-x3",
+        "ok": true,
+        "value": [
+          {
+            "round": 0,
+            "mode": "cut",
+            "losses": 1,
+            "recoveries": 1
+          },
+          {
+            "round": 1,
+            "mode": "xray",
+            "losses": 2,
+            "recoveries": 2
+          },
+          {
+            "round": 2,
+            "mode": "none",
+            "losses": 3,
+            "recoveries": 3
+          }
+        ]
+      }
+    ],
+    "diagnostics": {
+      "meshCount": 916,
+      "shadowCasters": 55,
+      "gpuErrors": 0
+    },
+    "lifecycle": {
+      "backendId": "21e03847-ee93-48fd-b304-9d66d5eeb63b",
+      "statuses": [
+        "initializing",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "losses": 3,
+      "recoveries": 3,
+      "lastStatus": "WebGPU · 程序化 FAB · 121 台设备",
+      "status": "ready"
+    },
+    "finalStatus": "WebGPU · 程序化 FAB · 121 台设备"
+  },
+  "errors": [],
+  "browser": {
+    "Browser": "Edg/156.0.4314.42",
+    "File-Path-Style": "windows",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0",
+    "V8-Version": "15.6.12.6",
+    "WebKit-Version": "537.36 (@57559ad176e613cfedd7dff5fe6856590a39eb3b)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9492/devtools/browser/a9c881a5-1934-41e6-b0e5-58277231e528"
+  }
+}

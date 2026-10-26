@@ -5,7 +5,7 @@ it('rejects a working HUD when the renderer reports a caught module-load failure
   const locator = {
     click: async () => {},
     getByRole: () => locator,
-    getAttribute: async () => 'Failed to fetch dynamically imported module: /src/babylon-webgpu.ts',
+    getAttribute: async () => 'Failed to fetch dynamically imported module: /src/lite-backend.ts',
   };
   const tab = { url: async () => 'http://localhost:5173/', goto: async () => {},
     playwright: { locator: () => locator, getByRole: () => locator } };

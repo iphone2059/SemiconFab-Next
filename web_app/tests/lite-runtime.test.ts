@@ -10,18 +10,20 @@ const gpu = vi.hoisted(() => {
     recovery: {} as DeviceLostRecoveryCallbacks,
     createEngine: vi.fn(async () => { live.add('engine'); return {}; }),
     registerScene: vi.fn(async () => {}),
+    registerShadows: vi.fn(async () => {}),
     startEngine: vi.fn(async () => {}),
     waitForGpuIdle: vi.fn(async () => {}),
   };
 });
 vi.mock('@babylonjs/lite', () => ({
   createEngine: gpu.createEngine,
-  createSceneContext: () => { gpu.live.add('scene'); return {}; },
+  createSceneContext: () => { gpu.live.add('scene'); return { shadowGenerators: [], lights: [] }; },
   enableDeviceLostSceneRecovery: (_engine: unknown, callbacks: DeviceLostRecoveryCallbacks) => {
     gpu.recovery = callbacks; gpu.live.add('recovery');
     return { disable: () => { gpu.events.push('disable'); gpu.live.delete('recovery'); } };
   },
   registerScene: gpu.registerScene,
+  registerSceneWithShadowSupport: gpu.registerShadows,
   startEngine: gpu.startEngine,
   waitForGpuIdle: gpu.waitForGpuIdle,
   stopEngine: () => { gpu.events.push('stop'); },
@@ -46,8 +48,109 @@ beforeEach(() => {
   vi.resetAllMocks(); gpu.live.clear(); gpu.events.length = 0; gpu.recovery = {};
   gpu.createEngine.mockImplementation(async () => { gpu.live.add('engine'); return {}; });
   gpu.registerScene.mockImplementation(async () => {});
+  gpu.registerShadows.mockImplementation(async () => {});
   gpu.startEngine.mockImplementation(async () => {});
   gpu.waitForGpuIdle.mockImplementation(async () => {});
+});
+
+it('awaits feature preparation before the initial frame', async () => {
+  const prepared = deferred();
+  const runtime = createLiteRuntime(canvas, { compose() {}, beforeStart: () => prepared.promise });
+  await vi.waitFor(() => expect(gpu.registerScene).toHaveBeenCalledOnce());
+  expect(runtime.status).toBe('initializing');
+  expect(gpu.startEngine).not.toHaveBeenCalled();
+  prepared.resolve(); await runtime.ready;
+  expect(runtime.status).toBe('ready');
+  runtime.dispose(); expect(gpu.live.size).toBe(0);
+});
+
+it('keeps recovered feature registration owned until disposal can safely finish', async () => {
+  const prepared = deferred(); let starts = 0;
+  const runtime = createLiteRuntime(canvas, { compose() {},
+    beforeStart: () => ++starts === 1 ? undefined : prepared.promise });
+  await runtime.ready;
+  gpu.recovery.onLost?.({ reason: 'unknown', message: 'loss with labels' });
+  gpu.recovery.onRecovered?.();
+  await vi.waitFor(() => expect(starts).toBe(2));
+  expect(runtime.status).toBe('lost');
+  expect(gpu.startEngine).toHaveBeenCalledTimes(1);
+  runtime.dispose();
+  expect(gpu.live.has('engine')).toBe(true);
+  prepared.resolve();
+  await vi.waitFor(() => expect(gpu.live.size).toBe(0));
+  expect(runtime.status).toBe('disposed');
+  expect(gpu.startEngine).toHaveBeenCalledTimes(1);
+});
+
+it('fails and releases ownership when recovered feature preparation rejects', async () => {
+  let starts = 0; let reported: unknown;
+  const failure = new Error('label registration failed');
+  const runtime = createLiteRuntime(canvas, { compose() {},
+    beforeStart: () => { if (++starts > 1) throw failure; },
+    onStatus: (_status, error) => { if (error) reported = error; } });
+  await runtime.ready;
+  gpu.recovery.onLost?.({ reason: 'unknown', message: 'loss' });
+  gpu.recovery.onRecovered?.();
+  await vi.waitFor(() => expect(runtime.status).toBe('failed'));
+  expect(reported).toBe(failure);
+  expect(gpu.live.size).toBe(0);
+  expect(gpu.startEngine).toHaveBeenCalledTimes(1);
+});
+
+it('does not restart a superseded feature recovery', async () => {
+  const older = deferred(), latest = deferred(); let starts = 0;
+  const runtime = createLiteRuntime(canvas, { compose() {}, beforeStart: () => {
+    starts++; return starts === 2 ? older.promise : starts === 3 ? latest.promise : undefined;
+  } });
+  await runtime.ready;
+  gpu.recovery.onLost?.({ reason: 'unknown', message: 'first loss' }); gpu.recovery.onRecovered?.();
+  await vi.waitFor(() => expect(starts).toBe(2));
+  gpu.recovery.onLost?.({ reason: 'unknown', message: 'second loss' }); gpu.recovery.onRecovered?.();
+  await vi.waitFor(() => expect(starts).toBe(3));
+  older.resolve(); await Promise.resolve();
+  expect(runtime.status).toBe('lost');
+  expect(gpu.startEngine).toHaveBeenCalledTimes(1);
+  latest.resolve(); await vi.waitFor(() => expect(runtime.status).toBe('ready'));
+  expect(gpu.startEngine).toHaveBeenCalledTimes(2);
+  runtime.dispose(); expect(gpu.live.size).toBe(0);
+});
+
+it.each(['ready', 'failed'] as const)('retains the engine when an older registration outlives the latest %s recovery and disposal', async outcome => {
+  const older = deferred(), latest = deferred(); let starts = 0;
+  const runtime = createLiteRuntime(canvas, { compose() {}, beforeStart: () => {
+    starts++; return starts === 2 ? older.promise : starts === 3 ? latest.promise.then(() => {
+      if (outcome === 'failed') throw new Error('latest registration failed');
+    }) : undefined;
+  } });
+  await runtime.ready;
+  gpu.recovery.onLost?.({ reason: 'unknown', message: 'first loss' }); gpu.recovery.onRecovered?.();
+  await vi.waitFor(() => expect(starts).toBe(2));
+  gpu.recovery.onLost?.({ reason: 'unknown', message: 'second loss' }); gpu.recovery.onRecovered?.();
+  await vi.waitFor(() => expect(starts).toBe(3));
+  latest.resolve(); await vi.waitFor(() => expect(runtime.status).toBe(outcome));
+  runtime.dispose();
+  expect(gpu.live.has('engine')).toBe(true);
+  older.resolve(); await vi.waitFor(() => expect(gpu.live.size).toBe(0));
+  expect(runtime.status).toBe('disposed');
+});
+
+it('awaits native shadow registration before requesting a first frame', async () => {
+  const compiled = deferred();
+  gpu.registerShadows.mockReturnValue(compiled.promise);
+  const runtime = createLiteRuntime(canvas, { compose(scene) { scene.shadowGenerators.push({}); } });
+  await vi.waitFor(() => expect(gpu.registerShadows).toHaveBeenCalledOnce());
+  expect(gpu.startEngine).not.toHaveBeenCalled();
+  expect(gpu.registerScene).not.toHaveBeenCalled();
+  compiled.resolve(); await runtime.ready;
+  runtime.dispose(); expect(gpu.live.size).toBe(0);
+});
+
+it('releases all scene ownership when native shadow registration fails', async () => {
+  gpu.registerShadows.mockRejectedValue(new Error('shadow compilation failed'));
+  const runtime = createLiteRuntime(canvas, { compose(scene) { scene.shadowGenerators.push({}); } });
+  await expect(runtime.ready).rejects.toThrow('shadow compilation failed');
+  expect(gpu.startEngine).not.toHaveBeenCalled();
+  expect(gpu.live.size).toBe(0);
 });
 
 it('reports ready only after first-frame GPU completion and releases resources exactly once', async () => {

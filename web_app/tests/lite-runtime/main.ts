@@ -3,7 +3,8 @@ import {
   addToScene, attachControl, createArcRotateCamera, createBox,
   createHemisphericLight, createPbrMaterial, forceWebGpuDeviceLossForTesting,
   getRenderingContexts, getTextureMetadata, getTextureTransform, getMeshGeometry, getViewProjectionMatrix,
-  onBeforeRender, onEngineGpuError, setSubtreeVisible, enableMirroredMeshes,
+  onBeforeRender, onEngineGpuError, setSubtreeVisible, enableMirroredMeshes, enableMaterialPlugins, setLightIntensity,
+  createStandardMaterial, setPbrUnlit,
   type ArcRotateCamera, type EngineContext, type SceneContext,
   type PbrMaterialProps,
 } from '@babylonjs/lite';
@@ -11,6 +12,9 @@ import { createLiteRuntime, type LiteRuntime } from '../../src/render/lite/runti
 import { createLiteEquipment, type LiteEquipment } from '../../src/render/lite/geometry/tool-families';
 import { createLiteStaticStructure, prepareStaticStructureEnvironment, type LiteStaticStructure } from '../../src/render/lite/geometry/static-structure';
 import { attachNextCoordinateFrame, createNextReferenceCamera, applyNextReferenceView } from '../../src/render/lite/next-coordinate-frame';
+import { createLiteLighting } from '../../src/render/lite/lighting';
+import { createLiteShadows } from '../../src/render/lite/shadows/native-lite-shadow';
+import { createLiteFacility } from '../../src/render/lite/geometry/facility';
 
 const canvas = document.querySelector('canvas')!;
 const output = document.querySelector('output')!;
@@ -25,6 +29,9 @@ const equipmentScene = sceneKind === 'equipment' || structureScene;
 let equipment: LiteEquipment | undefined;
 let structure: LiteStaticStructure | undefined;
 let camera: ArcRotateCamera | undefined;
+let lighting: ReturnType<typeof createLiteLighting> | undefined;
+let shadows: Awaited<ReturnType<typeof createLiteShadows>> | undefined;
+let facility: ReturnType<typeof createLiteFacility> | undefined;
 let loadingStage = 'mount';
 
 async function mount(abortImmediately = false) {
@@ -32,10 +39,13 @@ async function mount(abortImmediately = false) {
   context = undefined;
   equipment = undefined;
   structure = undefined;
+  lighting = undefined; shadows = undefined; facility = undefined;
   loadingStage = 'acquire';
   const controller = new AbortController();
+  let mountedFacility: ReturnType<typeof createLiteFacility> | undefined;
   const next = createLiteRuntime(canvas, {
     signal: controller.signal,
+    beforeStart: () => mountedFacility?.registerLabels(),
     async compose(scene, engine) {
       loadingStage = 'compose';
       // Track this generation at acquisition, including mounts aborted before ready resolves.
@@ -48,8 +58,22 @@ async function mount(abortImmediately = false) {
       const detachControl = attachControl(camera, canvas, scene);
       const detachErrors = onEngineGpuError(engine, error => gpuErrors.push(error.message));
       onBeforeRender(scene, () => { frames++; });
-      addToScene(scene, createHemisphericLight([0, 1, 0], 1));
+      if (sceneKind === 'lighting-probe') {
+        lighting = createLiteLighting(scene, []);
+        const unlit = createBox(engine, { size: 2 }); unlit.position.x = -1.8;
+        unlit.material = createPbrMaterial({ baseColorFactor: [0.35, 0.45, 0.55, 1] });
+        setPbrUnlit(unlit.material);
+        const standard = createBox(engine, { size: 2 }); standard.position.x = 1.8;
+        const standardMaterial = createStandardMaterial(); standardMaterial.diffuseColor = [0.5, 0.5, 0.5];
+        standard.material = standardMaterial;
+        addToScene(scene, unlit); addToScene(scene, standard);
+        lighting.configureMaterials(scene.meshes); enableMaterialPlugins(scene);
+        const mountedProbe = lighting;
+        return () => { mountedProbe.dispose(); detachControl(); detachErrors(); };
+      }
+      if (!equipmentScene) addToScene(scene, createHemisphericLight([0, 1, 0], 1));
       let mountedStructure: LiteStaticStructure | undefined;
+      let mountedLighting: ReturnType<typeof createLiteLighting> | undefined;
       try {
         if (equipmentScene) equipment = createLiteEquipment(scene, engine);
         else {
@@ -61,21 +85,35 @@ async function mount(abortImmediately = false) {
         structure = mountedStructure;
         mountedStructure?.setVisible('ffu', false);
         mountedStructure?.setVisible('b1', false);
+        // The restored facility needs its own PBR plugin instance, so it joins the scene
+        // before the source-light material pass runs.
+        if (structureScene) { mountedFacility = createLiteFacility(scene, engine); facility = mountedFacility; }
         if (equipment) {
+          mountedLighting = createLiteLighting(scene, [...(mountedStructure?.lights ?? []),
+            ...(mountedFacility?.lights ?? [])]);
+          lighting = mountedLighting;
           attachNextCoordinateFrame([...equipment.batches.map(batch => batch.mesh),
-            ...(mountedStructure ? [...Object.values(mountedStructure.roots), mountedStructure.lightRoot] : [])]);
+            ...(mountedStructure ? [...Object.values(mountedStructure.roots), mountedStructure.lightRoot] : []),
+            ...(mountedFacility ? [mountedFacility.root] : []), mountedLighting.root]);
+          mountedLighting.configureMaterials(scene.meshes);
+          enableMaterialPlugins(scene);
           await enableMirroredMeshes(scene);
         }
         if (mountedStructure) {
           loadingStage = 'environment';
           await prepareStaticStructureEnvironment(scene);
+          loadingStage = 'shadows';
+          shadows = await createLiteShadows(scene, engine, mountedLighting!.key);
         }
         loadingStage = 'register';
-        return () => { mountedStructure?.dispose(); detachControl(); detachErrors(); };
-      } catch (error) { mountedStructure?.dispose(); detachControl(); detachErrors(); throw error; }
+        return () => { mountedFacility?.dispose(); mountedLighting?.dispose(); mountedStructure?.dispose();
+          detachControl(); detachErrors(); };
+      } catch (error) { mountedFacility?.dispose(); mountedLighting?.dispose(); mountedStructure?.dispose();
+        detachControl(); detachErrors(); throw error; }
     },
     onStatus(status, error) {
-      if (status === 'lost') { equipment?.prepareForDeviceRecovery(); structure?.prepareForDeviceRecovery(); }
+      if (status === 'lost') { equipment?.prepareForDeviceRecovery(); structure?.prepareForDeviceRecovery();
+        mountedFacility?.prepareForDeviceRecovery(); }
       states.push(status); output.textContent = `Lite ${structureScene ? 'P2 static FAB · 121 tools' : equipmentScene ? 'P2 equipment · 121 tools' : 'P1'} · ${status}`;
       if (error) gpuErrors.push(error instanceof Error ? error.stack ?? error.message : String(error));
     },
@@ -95,6 +133,8 @@ function snapshot() {
     registeredContexts: context ? getRenderingContexts(context.engine).length : 0,
     surfaces: context?.engine.surfaces.length ?? 0,
     meshes: context?.scene.meshes.length ?? 0,
+    lighting: lighting ? { keyIntensity: lighting.key.intensity, localLights: lighting.localLights.length,
+      shadows: shadows?.enabled ?? false, casters: shadows?.casters.length ?? 0 } : undefined,
     width: canvas.width, height: canvas.height,
     equipment: equipment ? {
       tools: equipment.tools.length, batches: equipment.batches.length,
@@ -103,8 +143,16 @@ function snapshot() {
       identities: equipment.tools.map(tool => ({ instanceId: tool.instanceId, recordId: tool.recordId,
         mapped: tool.parts.every(part => equipment!.resolve(equipment!.batches[part.batchIndex].mesh, part.instanceIndex) === tool) })),
     } : undefined,
+    facility: facility ? {
+      parts: facility.parts.length, meshes: facility.meshes.length, airShowers: facility.airShowers.length,
+      lights: facility.lights.length, ceilingVisible: facility.ceiling.visible !== false,
+      labels: facility.labels.length,
+      instances: facility.meshes.reduce((sum, mesh) => sum + (mesh.thinInstances?.count ?? 0), 0),
+    } : undefined,
     structure: structure ? {
       parts: structure.parts.length, batches: structure.batches.length, lights: structure.lights.length,
+      airshowerVisible: structure.parts.filter(part => part.name.startsWith('airshower-'))
+        .some(part => part.mesh.visible !== false),
       floorAlpha: (structure.parts.find(part => part.name === 'procedural-floor')!.mesh.material as PbrMaterialProps).alpha ?? 1,
       slabVisible: structure.parts.find(part => part.name === 'procedural-slab')!.mesh.visible !== false,
       layers: Object.fromEntries((['shell', 'ffu', 'b1'] as const).map(layer => [layer, {
@@ -122,6 +170,16 @@ const acceptance = {
   mount, snapshot,
   dispose() { runtime?.dispose(); return snapshot(); },
   loseDevice() { if (!context) throw new Error('Scene not ready'); forceWebGpuDeviceLossForTesting(context.engine); },
+  setShadows(enabled: boolean) { if (!shadows) throw new Error('Shadows not ready'); shadows.setEnabled(enabled); },
+  setKeyLight(enabled: boolean) { if (!lighting) throw new Error('Lights not ready'); setLightIntensity(lighting.key, enabled ? 1.15 : 0); },
+  setFillLight(enabled: boolean) { if (!lighting) throw new Error('Lights not ready'); lighting.setFillEnabled(enabled); },
+  setAmbientLight(enabled: boolean) { if (!lighting) throw new Error('Lights not ready'); lighting.setAmbientEnabled(enabled); },
+  setLocalLights(enabled: boolean) { if (!lighting) throw new Error('Lights not ready'); lighting.setLocalLightsEnabled(enabled); },
+  setFacilityCeiling(visible: boolean) { if (!facility) throw new Error('Facility not ready'); facility.setCeilingVisible(visible); },
+  setLabelsVisible(visible: boolean) {
+    if (!facility) throw new Error('Facility not ready');
+    for (const label of facility.labels) label.system.visible = visible;
+  },
   isoView() {
     if (!camera) throw new Error('Scene not ready');
     applyNextReferenceView(camera, 'iso');
@@ -132,7 +190,10 @@ const acceptance = {
   },
   async structureView(view: 'l1' | 'b1' | 'dual' | 'ffu') {
     if (!structure || !equipment || !camera) throw new Error('Static scene not ready');
-    structure.setVisible('ffu', view === 'ffu');
+    // The source permanently disables the procedural ceiling (legacy-site.ts:412); the FFU
+    // layer is the restored original ceiling owned by the facility module.
+    structure.setVisible('ffu', false);
+    facility?.setCeilingVisible(view === 'ffu');
     for (const batch of equipment.batches) setSubtreeVisible(batch.mesh, true);
     // Select the pose synchronously; an older material rebuild must not overwrite a newer click.
     if (view !== 'ffu') applyNextReferenceView(camera, view);

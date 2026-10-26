@@ -8,6 +8,8 @@
 
 P2a 已证实 [LITE-GAP-RECOVERY-001](./LITE-GAP-RECOVERY-001.md)：1.36 的 Scene 恢复保留薄实例 GPU 缓存。采用公开数据槽和原生 setter 重置即可恢复；runtime 必须先停止旧 RAF，防止异步原生恢复启动前旧帧重填缓存。没有新增 GPU 扩展、私有字段访问或引擎分叉。恢复后显式首帧和队列完成才报告 ready；连续丢失保留同一未结束等待边界。
 
+P4/P5 审查修复另证实 [LITE-GAP-RECOVERY-002](./LITE-GAP-RECOVERY-002.md)：1.36 的 deferred billboard 不随 Scene 自动恢复，默认 MSAA 叠加还与透射重定向冲突。标签使用独立原生 SceneContext 与公开 RenderTask 组合；runtime 等注册与替换 GPU 帧完成后才 ready。可见性 on/off、三次丢失、关闭灯光状态保持与上下文数量均有实际像素回归。
+
 官方 release 文档明确 directional ESM/CSM 支持恢复、PCF 自动恢复不支持。P1 没有阴影，不据此选择最终阴影算法。P5 必须先验证 Lite 原生阴影，再按指南提交缺口证据。
 
 ## P2b 的原生 API 约束
@@ -18,3 +20,16 @@ P2a 已证实 [LITE-GAP-RECOVERY-001](./LITE-GAP-RECOVERY-001.md)：1.36 的 Sce
 - 原生自动恢复只遍历已注册 Scene。异步 composition/初次注册期间丢失设备时，本次 mount 必须失败并清理，不能把旧几何继续注册；后续挂载可新建引擎。成功/失败与清理时序由单测验证；没有人为制造 GPU 崩溃来验证这一分支。
 
 尚未迁移的精确 per-light legacyDecay、Gamma/Fog、PBR 深度偏移/透明深度写入和地板各向异性等配置仍由 P4 验证；保留源输入，不增加未经审查的 WGSL 通道。
+
+
+## 产品完成阶段（P3/P6–P11）新增缺口与决策 — 2026-10-26
+
+1. **整产品设备丢失策略 = 替换设备上重建原生场景**。Lite 1.36 原生 in-place Scene 恢复会重放记录的材质组/Standard MaterialPlugin UBO；产品一旦启用过 X-Ray 的 ShaderMaterial 调色板并要求稳定恢复，该路径会抛错（`rebuilding material groups`/missing sampler/旧 device buffer）。产品 backend 因此在 lost 时释放旧 runtime 与新设备上重建 world，并恢复相机位姿、选中项；React/Redux 重新施加楼层/图层/X-Ray/剖切/工具状态。bounded `lite-*` 夹具继续验证原生 in-place 恢复路径。产品三次丢失、0 GPU/console 错误、状态保持已实测（证据包）。
+2. **X-Ray 全息不再采样 CSM 深度**。1.36 在 X-Ray 激活的材质重建帧里，同一 2 层 depth texture 既是 CSM render attachment 又是全息 sampler，WebGPU 拒绝该 usage scope（每次激活约 16 条 validation error）。产品调色板绑定自有的 1×1 sampled depth，关闭 `xrayShadowEnabled`；原生 PBR/Standard 表面保持完整阴影。全息描边/扫描线主外观保留，损失源全息中的阴影调制。
+3. **剖切仅裁剪原生 PBR 材质**。Standard MaterialPlugin 的 plugin UBO 不由 1.36 原生恢复重建；为避免产品恢复路径被破坏，产品不对 Standard 材质（OHT/人员等动态 actor）挂剖切插件，保留其源外观。整厂房/设备/设施/地板/环境等 PBR 表面均被裁剪。
+4. **X-Ray/剖切互斥与楼层/爆炸组合** 沿用冻结 `spatialState` 语义（单一 spatialMode），产品验收已覆盖。
+5. **旧引擎验收套件清退**：删除 `twin-wafer/level/exploded/parity/goldens/tour/xray-acceptance/original-lighting/native-static-shadows` 等依赖旧 Scene 内部结构或已删除构建器的套件；产品行为由 `tests/twin-lite.browser.ts`（真实 /twin）覆盖，DOM 回归保留 `twin.browser.ts`。冻结时钟的 tour 时序 Golden 因此 NOT_RUN。
+6. **跨浏览器矩阵 PARTIAL**：Chrome 155 与 Edge 156（Chromium/WebGPU 实测）产品验收与 UI 回归均 PASS；非 Chromium WebGPU 浏览器本机不可用且未下载，NOT_RUN。
+7. **整产品 Golden NOT_RUN**：对照为同机逐视角截图比较（证据包 §3），动态系统时钟未冻结，不能当 Golden PASS；生产构建验收、性能 A/B、三次恢复已通过。按用户指示以 1 分钟 soak 替代 60 分钟（最终生产构建 55.5 fps、0 long task、0 GPU/console 错误）；60 分钟 soak 因此 NOT_RUN。
+8. **独立审查**：无 Critical/阻塞缺陷；1 项 docs-only Important（文档与冻结证据口径，本轮已修）与 10 项 Minor 残留风险（camera 恢复计时顺序、restartPending 无自动化覆盖、gpuErrors 订阅时机、cut 无像素断言、decodePng 无单测等）记录于 [REVIEW.md](./evidence/product-completion-2026-10-26/REVIEW.md)。
+

@@ -1,6 +1,6 @@
 import {
   addToScene, createBox, createCylinder, createLineSystem, createPbrMaterial,
-  createTransformNode, setParent, setPbrEmissive, setThinInstanceColors, setThinInstances,
+  createTransformNode, setParent, setPbrEmissive, setThinInstanceColors, setThinInstances, enableThinInstanceWorldBounds,
   type EngineContext, type Mesh, type PbrMaterialProps, type SceneContext,
 } from '@babylonjs/lite';
 import { FAB_LAYOUT } from '../../../fab-layout';
@@ -79,6 +79,9 @@ export function createLiteEquipment(scene: SceneContext, engine: EngineContext):
         batchIndex = batches.length;
         mesh.name = `equipment-batch-${batchIndex}`;
         mesh.material = materialFor(part);
+        mesh.receiveShadows = true;
+        mesh.metadata = { staticShadowCaster: !part.status
+          && !(layout.originalKind === 'draft' && partIndex >= parts.length - 2) };
         addToScene(scene, mesh); // Scene owns each allocation immediately, including partial composition failures.
         batches.push({ mesh, matrices: [], owners: [] });
         byGeometry.set(key, batchIndex);
@@ -108,6 +111,7 @@ export function createLiteEquipment(scene: SceneContext, engine: EngineContext):
   }
   for (const batch of batches) {
     setThinInstances(batch.mesh, new Float32Array(batch.matrices), batch.owners.length);
+    enableThinInstanceWorldBounds(batch.mesh);
     byMesh.set(batch.mesh, batch.owners);
   }
   return {

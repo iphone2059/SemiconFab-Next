@@ -2,9 +2,11 @@ import { createArcRotateCamera, createTransformNode, decomposeMat4, setParent,
   type ArcRotateCamera, type SceneNode } from '@babylonjs/lite';
 
 type Point = readonly [number, number, number];
-export type NextReferenceView = 'iso' | 'top' | 'l1' | 'b1' | 'dual' | 'exploded';
+export type NextReferenceView = 'home' | 'iso' | 'top' | 'l1' | 'b1' | 'dual' | 'exploded';
 // Literal poses from babylon-webgpu.ts:setView and twin-page.tsx:flyLevel.
 const poses: Record<NextReferenceView, { position: Point; target: Point }> = {
+  // Product home pose: babylon-webgpu.ts mount (alpha PI/2, beta acos(58/homeRadius), radius homeRadius).
+  home: { position: [0, 58, 68], target: [0, 0, 0] },
   iso: { position: [38, 48, 58], target: [0, 0, 0] },
   top: { position: [0, 95, 0.1], target: [0, 0, 0] },
   l1: { position: [0, 52, 64], target: [0, 2, 0] },

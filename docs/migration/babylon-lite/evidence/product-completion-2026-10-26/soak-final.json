@@ -1,0 +1,53 @@
+{
+  "minutes": 1,
+  "startedAt": "2026-10-26T15:27:04.587Z",
+  "finishedAt": "2026-10-26T15:28:04.634Z",
+  "summary": {
+    "frames": 3330,
+    "meanFrameMs": 18.012942942942946,
+    "fps": 55.51563690439473,
+    "p95FrameMs": 33.399999999999636,
+    "p99FrameMs": 33.5,
+    "longTasks": 0,
+    "longTaskMaxMs": 0,
+    "elapsedMs": 60035.5
+  },
+  "finalState": {
+    "status": "WebGPU · 程序化 FAB · 121 台设备",
+    "heap": 42933281,
+    "gpu": 0,
+    "lifecycle": {
+      "backendId": "1b7898e9-682a-465b-8709-cb8b43bb7f64",
+      "statuses": [
+        "initializing",
+        "ready"
+      ],
+      "losses": 0,
+      "recoveries": 0,
+      "lastStatus": "WebGPU · 程序化 FAB · 121 台设备",
+      "status": "ready"
+    }
+  },
+  "polls": [
+    {
+      "status": "WebGPU · 程序化 FAB · 121 台设备",
+      "heap": 42933281,
+      "gpu": 0,
+      "frames": 3331,
+      "longTasks": 0,
+      "lifecycle": {
+        "backendId": "1b7898e9-682a-465b-8709-cb8b43bb7f64",
+        "statuses": [
+          "initializing",
+          "ready"
+        ],
+        "losses": 0,
+        "recoveries": 0,
+        "lastStatus": "WebGPU · 程序化 FAB · 121 台设备",
+        "status": "ready"
+      },
+      "elapsedMs": 60015
+    }
+  ],
+  "consoleErrors": []
+}

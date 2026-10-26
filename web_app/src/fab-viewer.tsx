@@ -83,10 +83,10 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
     };
     window.addEventListener('keydown', onKeyDown);
     let scene: SceneFacade | undefined;
-    void import('./babylon-webgpu')
-      .then(({ createWebGpuBackend }) => {
+    void import('./lite-backend')
+      .then(({ createLiteBackend }) => {
         if (controller.signal.aborted) return;
-        scene = new SceneFacade(createWebGpuBackend());
+        scene = new SceneFacade(createLiteBackend());
         facade.current = scene;
         onToolChange?.(undefined);
         return scene.mount(

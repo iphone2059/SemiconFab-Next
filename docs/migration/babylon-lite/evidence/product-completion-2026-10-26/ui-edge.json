@@ -1,0 +1,24 @@
+{
+  "suite": "ui",
+  "baseUrl": "http://127.0.0.1:5178",
+  "capturedAt": "2026-10-26T15:29:54.439Z",
+  "viewport": "1536x735 DPR1 foreground tab",
+  "result": {
+    "controls": true,
+    "exclusiveModes": true,
+    "escapeWithFocusedControl": true,
+    "language": true,
+    "fontFloorPx": 12,
+    "singlePage": true
+  },
+  "errors": [],
+  "browser": {
+    "Browser": "Edg/156.0.4314.42",
+    "File-Path-Style": "windows",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0",
+    "V8-Version": "15.6.12.6",
+    "WebKit-Version": "537.36 (@57559ad176e613cfedd7dff5fe6856590a39eb3b)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9492/devtools/browser/a9c881a5-1934-41e6-b0e5-58277231e528"
+  }
+}

@@ -47,3 +47,58 @@
 挂起测试的专用 Chrome GPU 进程持续占用 CPU，页面调试求值不再响应；通过 Browser.close 关闭后，另一已有 Chrome 会话无法获取 adapter（Lite `#50`，在安装包源码中是 `requestAdapter()` 返回 null）。未认定是驱动、浏览器还是测试/Lite 路径的根因。
 
 自动审批审查先拒绝批量强制结束专用测试 Chrome 进程，随后拒绝启动新测试 Chrome，均仅给出 `blocked by policy`。改用调试接口关闭故障会话，并尝试已有会话；CUA 清单没有其他浏览器可用。未修改 GPU/系统设置或以其他方式重试被拒绝的新进程启动。
+
+
+## 2026-10-26 P4/P5 增量验证（源光照 / 原生 CSM 阴影 / 设施恢复）
+
+状态：**IMPLEMENTING / NOT_PARITY_VERIFIED**。本轮仅接受预览中的有界 P4/P5 光照、阴影与设施恢复增量，不构成整产品/整 FAB/Golden/拾取/性能结论。证据：[evidence/lighting-shadows-facility-2026-10-26/README.md](./evidence/lighting-shadows-facility-2026-10-26/README.md)、[INVENTORY_2026-10-26.md](./INVENTORY_2026-10-26.md)。
+
+| 检查 | 结果 | 证据 |
+|---|---|---|
+| 新增 GPU 验收 | PASS：`lite-lighting`、`lite-shadow`（真实 WebGPU，Chrome 155.0.8059.86 / NVIDIA RTX 3050，CDP），0 console/GPU 错误；每次运行均重新构建并通过 | `.local/lite-acceptance-final/{lite-lighting,lite-shadow}.json` 与 30+ PNG；提交副本见证据目录 |
+| 既有 GPU 回归 | PASS：`lite`、`lite-equipment`、`lite-static`（三次恢复）、`lite-layout` 全部通过，0 错误 | 同一最终环境串行运行 |
+| 源光照 | key 1.15 / fill 0.32 / ambient #cfd8dc×0.48，6 个源局部光 + 10 个结构 B1 + 2 个设施灯（18 打包）；开关实测：阴影 on/off 平均通道 Δ 3.73（11.87% ROI 像素变化，变化像素中位 Δ 28.67）；key off 平均亮度 229.71→175.61（−23.55%），且 key off 时阴影 on/off 归零；ambient/fill/locals Δ 26.37/12.82/5.90；全部恢复后与基线逐字节一致 | `lite-lighting.json` 的 `pixels` 块 |
+| LinearEncoding | 冻结源 LinearEncoding 输出经 `scene.vImageInfos` 线性模式预补偿后，透射管线（rgba16float + 尾随图像处理 gamma）与无透射场景均输出线性显示值；同视角对比旧 Next 均值接近（见下） | `lighting.ts` 注释与 `comparison.json` |
+| 原生 CSM 阴影 | 2048² depth32float × 2 层级联 + 原生静态缓存；195 caster 由显式数组捕获（721 输入 / 526 排除，透明、alphaBlend、顶点 alpha、LineMaterial、显式非 caster、禁用名零违规）；ISO/TOP/B1 贡献分别 Δ3.73/3.65/1.55；三次设备丢失均重建新 CSM 贴图并恢复；卸载+重挂载贡献一致；相同状态 PNG SHA-256 一致 | `lite-shadow.json` 的 `casters/pixels/lifecycle` 块 |
+| 几何/相机回归 | PASS：121 台机台 + 56 个黄光对象，ISO/TOP/L1/B1/DUAL 最大投影误差 0.000021 px（其余 ≤0.000025 px） | `lite-layout.json` |
+| 同视角外观对照 | HUD 隐藏的旧 Next 参考 vs Lite，场景 ROI [360,100,1500,700]、Pillow、无颜色校正：平均绝对 RGB 差 ISO 9.78 / TOP 13.11 / L1 12.32 / B1 16.75 / DUAL 19.68；P3/P6-P9 动态系统未迁移，不据此接受整图 | `comparison.json`（方法/ROI/哈希） |
+| 设施恢复 | 1659 部件 / 274 原生 mesh / 1386 FFU 实例 / 2 风淋（含灯与标签）/ 6 粘尘垫/桁架/桥架/吊杆；逐部件源包围盒对照通过；源禁用早期程序化风淋近似与程序化天花板保持禁用；FFU 视图只显示恢复的原始天花板 | `lite-facility.test.ts`、`INVENTORY` R01/R02 |
+| 前端与构建 | PASS：231/231 Vitest（55 文件）、tsc --noEmit、生产 build、Lite 独立 build（保留既有 >500 kB chunk 提示） | 本轮运行日志 |
+| 仓库级验证 | PASS：Python 16/16、契约/架构/legacy-data 检查、8 组冻结向量、.NET 3 项目 Release 构建 + 67/67 测试；i18n 覆盖清单按新增源文件重新生成（仅新增文件名） | 本轮运行日志 |
+| 原生实现边界 | 审计通过：`web_app/src/render/lite/**` 与预览入口无 `@babylonjs/core`/`compat`/`THREE`/WebGL 导入，无 Lite 私有下划线成员；光照用官方 MaterialPlugin + 公开材质 UBO，阴影用官方 CSM/静态缓存 API，几何用原生 mesh/thin-instance/billboard/ShaderMaterial；Canvas2D 仅生成源贴图/标签纹理 | 源码审计 |
+| 独立只读审查 | 见下方“独立审查”记录 | `.local/review/REVIEW.md`（提交后记录结论） |
+
+## 2026-10-26 代码审查四项修复（后续验证）
+
+本节是上述 P4/P5 历史快照之后的修复验证，完整记录见 [review-fixes evidence](evidence/review-fixes-2026-10-26/README.md)。旧版“恢复后无错误”的检查没有覆盖 billboard 可见性，不能作为标签完整恢复的证据。
+
+- 修复标签在 device-loss 后消失：公开原生 SceneContext / Billboard / RenderTask 组合，未修改 Lite、未使用私有 API。新增 `beforeStart` 注册等待与所有代际的未完成任务计数，防止过期恢复重启或卸载提前释放设备。
+- 修复环境光开关仅更新 PBR 的分裂状态：同步原生 Standard 环境光强度。
+- 修复自定义输出覆盖原生 unlit：通过 `getPbrUnlit` 保留库的材质语义。
+- 修复未设置 `LITE_EVIDENCE_DIR` 时两项验收在返回截图路径处崩溃。
+- 最终本轮实测：**238/238** 前端测试（55 文件）、类型检查、产品构建、Lite 构建通过；构建保留已有大 chunk 提示。
+- 构建产物上的 `lite-lighting` / `lite-shadow` / `lite-static` / `lite-equipment` / `lite` 五套真实 WebGPU 验收通过，无 console/runtime/GPU 错误。Chrome 155 / **Intel gen-12lp**；本轮不沿用历史 NVIDIA 环境结论。灯光/阴影套件还验证了有截图目录和无截图目录两种路径。
+- 标签 on/off 平均通道差 **0.3955**；关闭 ambient/fill/locals 后连续三次丢失，恢复画面差均为 **0**、上下文稳定为 **2**；恢复全灯后基线图片 SHA-256 完全相同。原生 unlit 灯光开关差为 **0**，Standard 环境光亮度贡献 **12.6455**。
+- 独立只读审查无未解决的实质问题；随后视觉 QA 发现并修复默认 MSAA overlay 与透射的冲突，新增可见性 RED→GREEN 断言。审查建议的恢复失败/旧注册仍挂起组合也已覆盖，无延后项。
+
+本轮没有重新运行布局投影参考套件（相关几何及坐标模块未改），也没有新增跨浏览器、60 分钟 soak 或整产品 Golden 结论。整体仍为 **IMPLEMENTING / NOT_PARITY_VERIFIED**。
+
+## 2026-10-26 产品完成阶段验证（正式 /twin 原生 Lite）
+
+状态：**IMPLEMENTING / NOT_PARITY_VERIFIED**。产品功能/生产构建验收、三次设备恢复、性能 A/B、1 分钟 soak（用户指示替代 60 分钟）与 Chrome+Edge 矩阵已通过，独立审查无 Critical/阻塞缺陷；仍缺完整冻结时钟 Golden、非 Chromium 浏览器、60 分钟 soak，故不宣布完整 parity。
+证据包：[evidence/product-completion-2026-10-26/README.md](./evidence/product-completion-2026-10-26/README.md)。
+
+| 检查 | 结果 | 证据 |
+|---|---|---|
+| 正式产品切到 Lite | PASS：`/twin` 挂载 `lite-backend.ts` → `render/lite/world.ts`；旧引擎不再在产品图内 | 源码；`vite build` dist 无 `WebGPUEngine`/`NullEngine`/core 符号 |
+| 原生产品验收（dev + 生产构建预览 + Edge 156） | PASS，0 console 错误：拾取/悬停/选中框/双击聚焦、相机预设/轨道/页面自主缩放/resize、L1/B1/DUAL/EXPLODED、全部图层（含 heatmap/airflow 时钟）、状态灯同步、X-Ray 过滤/恢复、剖切平面与互斥语义、wafer/轨迹/跟随、tour/patrol/双语、三次真实设备丢失（cut/X-Ray/无空间模式，0 GPU 错误，相机、121 状态、无模式轮选中框保持，Redux 同步恢复） | `twin-lite.browser.ts`；acceptance-final-run.json（冻结构建）/acceptance-edge.json；截图 |
+| 旧产品 UI 回归 | PASS，0 console 错误（`twin.browser.ts` 原样运行于 Lite /twin，Chrome+Edge） | ui-final-run.json / ui-edge.json |
+| 同机视觉 A/B | 比较（非 Golden）：ROI[400,120,1500,680] 均值差 ISO 10.301 / TOP 13.721 / B1 17.666 / DUAL 20.480 / EXPLODED 14.593；动态系统时钟未冻结 | pixel-diff.json、manifest、ref-*/lite-* PNG |
+| 同机性能 A/B（生产构建） | PASS：Lite idle/orbit 54.3/51.4 fps vs 冻结旧 Next 15.9/12.9 fps，0 console 错误；dist gpu chunk 396,492 B vs 旧 2,528,822 B | perf-ab.json |
+| P11 旧引擎清理 | PASS（独立审查确认）：17 旧源码删除，旧 Scene 依赖测试/采集工具清退（保留 51 文件/238 测试）；`@babylonjs/core` 移出 manifest+锁文件（frozen-lockfile 验证）；src/tests/config/tools 0 旧导入 | 清理报告；dist grep；`pnpm --frozen-lockfile` |
+| 前端检查 | PASS：`tsc --noEmit` 0；`vitest run` 51 文件 / 238 测试；`vite build` 0（仅既有 >500kB 提示） | 本轮运行 |
+| 仓库级检查 | PASS：Python 16/16、契约/架构/legacy-data 检查、8 组冻结向量（i18n coverage 已重新生成并通过）、.NET 3 项目 Release 构建 + 67/67 测试 | 本轮运行 |
+| Soak | 按用户指示以 1 分钟替代 60 分钟：生产构建最终版本 3,330 帧、均值 18.01 ms（55.5 fps）、p95 33.4 ms、0 long task、heap 42.9 MB、0 GPU/console 错误 | soak-final.json；**60 分钟 soak NOT_RUN**（用户指示） |
+| 跨浏览器矩阵 | PARTIAL PASS：Chrome 155 + Edge 156 均通过产品验收与 UI 回归（0 错误）；非 Chromium WebGPU 浏览器本机不可用，NOT_RUN | acceptance-edge/ui-edge.json |
+| 完整冻结时钟 Golden | NOT_RUN | — |
+| 独立审查 | PASS：无 Critical/阻塞缺陷；REVIEW.md 记录 1 项 docs-only Important（D-1，本轮已修）与 10 项 Minor 残留风险 | REVIEW.md |

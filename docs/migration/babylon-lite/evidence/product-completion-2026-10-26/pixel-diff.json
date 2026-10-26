@@ -1,0 +1,30 @@
+{
+  "roi": [
+    400,
+    120,
+    1500,
+    680
+  ],
+  "views": {
+    "iso": {
+      "meanAbsChannel": 10.301,
+      "changedFraction": 0.15599
+    },
+    "top": {
+      "meanAbsChannel": 13.721,
+      "changedFraction": 0.20891
+    },
+    "b1": {
+      "meanAbsChannel": 17.666,
+      "changedFraction": 0.29093
+    },
+    "dual": {
+      "meanAbsChannel": 20.48,
+      "changedFraction": 0.3792
+    },
+    "exploded": {
+      "meanAbsChannel": 14.593,
+      "changedFraction": 0.22386
+    }
+  }
+}

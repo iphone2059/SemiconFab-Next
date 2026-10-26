@@ -1,6 +1,6 @@
 import {
   createEngine, createSceneContext, enableDeviceLostSceneRecovery,
-  registerScene, startEngine, waitForGpuIdle, stopEngine, disposeScene, disposeEngine,
+  registerScene, registerSceneWithShadowSupport, startEngine, waitForGpuIdle, stopEngine, disposeScene, disposeEngine,
   type DeviceLostRecoveryHandle, type EngineContext, type SceneContext,
 } from '@babylonjs/lite';
 
@@ -9,16 +9,24 @@ export interface LiteRuntimeOptions {
   readonly signal?: AbortSignal;
   /** Scene composition, including awaited native asset uploads. Return the resource/DOM disposer. */
   readonly compose: (scene: SceneContext, engine: EngineContext) => void | (() => void) | Promise<void | (() => void)>;
+  /** Await feature-owned native registrations before initial rendering and after native recovery. */
+  readonly beforeStart?: (scene: SceneContext, engine: EngineContext) => void | Promise<void>;
   readonly onStatus?: (status: LiteRuntimeStatus, error?: unknown) => void;
 }
 export interface LiteRuntime {
   readonly ready: Promise<{ engine: EngineContext; scene: SceneContext }>;
   readonly status: LiteRuntimeStatus;
+  /** Resolves after the owned engine/scene GPU resources were actually released (disposal can be
+   *  deferred until an in-flight native recovery settles). */
+  readonly whenReleased: Promise<void>;
   dispose(): void;
 }
 
 /** Owns a single Lite scene, including cancellation during deferred GPU setup. */
 export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntimeOptions): LiteRuntime {
+  // Opt-in lifecycle tracing: /twin?liteDebug=1 reports each runtime gate to the console.
+  const debug = typeof location !== 'undefined' && new URLSearchParams(location.search).has('liteDebug');
+  const stage = (name: string) => { if (debug) console.info('[lite-runtime]', name, Math.round(performance.now())); };
   let status: LiteRuntimeStatus = 'initializing';
   let engine: EngineContext | undefined;
   let scene: SceneContext | undefined;
@@ -35,7 +43,10 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
   let resumedFirstFrame: (() => void) | undefined;
   let disposed = false;
   let released = false;
+  let preparations = 0;
   const cancellation = new AbortController();
+  let resolveReleased: (() => void) | undefined;
+  const whenReleased = new Promise<void>(resolve => { resolveReleased = resolve; });
 
   function report(next: LiteRuntimeStatus, error?: unknown) {
     if (disposed || released) return;
@@ -43,7 +54,7 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
     options.onStatus?.(next, error);
   }
   function release() {
-    if (released) return;
+    if (released || preparations > 0) return;
     released = true;
     options.signal?.removeEventListener('abort', dispose);
     try {
@@ -58,6 +69,17 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
           finally { if (engine) disposeEngine(engine); }
         }
       }
+    }
+    // Resolve only after the old engine/scene GPU resources are gone: the product recovery
+    // creates the replacement engine on the same canvas after this barrier.
+    resolveReleased?.();
+  }
+  async function prepareForStart() {
+    preparations++;
+    try { await options.beforeStart!(scene!, engine!); }
+    finally {
+      preparations--;
+      if (!initializing && !recovering && (disposed || status === 'failed')) release();
     }
   }
   function dispose() {
@@ -129,6 +151,10 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
           const generation = lossGeneration;
           void (async () => {
             try {
+              // Registration owns GPU allocations: let it settle before disposal releases the engine.
+              if (options.beforeStart) await prepareForStart();
+              if (generation !== lossGeneration) return;
+              if (disposed) { settleRecovery(); return; }
               await firstFrameBoundary(startEngine(engine!));
               if (generation !== lossGeneration) return;
               await firstFrameBoundary(waitForGpuIdle(engine!));
@@ -142,10 +168,19 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
         },
         onRecoveryFailed: failRecovery,
       });
+      stage('engine-ready');
       scene = createSceneContext(engine);
       detach = await options.compose(scene, engine) || undefined;
+      stage('composed');
       cancellation.signal.throwIfAborted();
-      await registerScene(scene);
+      if (scene.shadowGenerators.length || scene.lights.some(light => light.shadowGenerator)) await registerSceneWithShadowSupport(scene);
+      else await registerScene(scene);
+      stage('scene-registered');
+      cancellation.signal.throwIfAborted();
+      if (options.beforeStart) await prepareForStart();
+      stage('before-start-done');
+      // Feature registration is part of initialization; a loss during it cancels this mount.
+      cancellation.signal.throwIfAborted();
       sceneRegistered = true;
       cancellation.signal.throwIfAborted();
       while (recovering) await firstFrameBoundary(recoverySettled);
@@ -154,7 +189,9 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
       // A loss before that RAF also cancels it; native recovery supplies a different first frame.
       const recoveredFrame = new Promise<void>(resolve => { resumedFirstFrame = resolve; });
       renderingRequested = true;
+      stage('start-engine');
       await firstFrameBoundary(Promise.race([startEngine(engine), recoveredFrame]));
+      stage('first-frame');
       resumedFirstFrame = undefined;
       for (;;) {
         if (recovering) await firstFrameBoundary(recoverySettled);
@@ -166,6 +203,7 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
         }
         if (!recovering && submittedGeneration === lossGeneration) break;
       }
+      stage('gpu-idle');
       cancellation.signal.throwIfAborted();
       firstFrameReady = true;
       report('ready');
@@ -180,5 +218,5 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
       if (disposed && !recovering) release();
     }
   })();
-  return { ready, get status() { return status; }, dispose };
+  return { ready, get status() { return status; }, whenReleased, dispose };
 }

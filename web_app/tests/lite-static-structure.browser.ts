@@ -33,7 +33,14 @@ export async function runLiteStaticStructureAcceptance(command, baseUrl) {
   assert.equal(initial.structure.lights, 10);
   assert.equal(initial.equipment.tools, 121);
   assert.ok(initial.equipment.identities.every(identity => identity.mapped));
-  assert.equal(initial.meshes, initial.structure.batches + initial.equipment.batches);
+  assert.equal(initial.meshes, initial.structure.batches + initial.equipment.batches + initial.facility.meshes);
+  assert.equal(initial.facility.airShowers, 2);
+  assert.equal(initial.facility.lights, 2);
+  assert.equal(initial.facility.ceilingVisible, false);
+  // legacy-site.ts:406-407 and :412 disable the early procedural air showers and ceiling.
+  assert.equal(initial.structure.airshowerVisible, false);
+  assert.equal(initial.structure.layers.ffu.visible, false);
+  assert.equal(initial.facility.instances, 1386);
   assert.equal(initial.structure.textures.length, 2);
   assert.ok(initial.structure.textures.every(texture => texture.metadata.format === 'rgba8unorm'
     && texture.metadata.mipLevelCount === 10));
@@ -44,7 +51,7 @@ export async function runLiteStaticStructureAcceptance(command, baseUrl) {
     const before = await evaluate('__liteAcceptance.snapshot().frames');
     await evaluate(`__liteAcceptance.structureView('${view}')`);
     const state = await until(s => s.frames > before + 2, view);
-    assert.equal(state.structure.layers.ffu.visible, view === 'ffu');
+    assert.equal(state.structure.layers.ffu.visible, false, 'procedural ceiling stays source-disabled');
     assert.equal(state.structure.layers.b1.visible, view === 'b1' || view === 'dual');
     // legacy-site.ts:syncLevel retains L1 objects; only explodedPlacement moves B1.
     assert.equal(state.structure.layers.shell.visible, true);
@@ -52,6 +59,7 @@ export async function runLiteStaticStructureAcceptance(command, baseUrl) {
     assert.equal(state.structure.floorAlpha, view === 'b1' ? 0.2 : view === 'dual' ? 0.35 : 1);
     assert.equal(state.structure.slabVisible, view !== 'b1' && view !== 'dual');
     assert.equal(state.equipment.visible, true);
+    assert.equal(state.facility.ceilingVisible, view === 'ffu');
     assert.ok(state.drawCalls > 0);
     views.push({ view, state });
     await capture(view);
@@ -71,6 +79,8 @@ export async function runLiteStaticStructureAcceptance(command, baseUrl) {
     assert.equal(state.structure.layers.b1.offset, 0);
     assert.equal(state.structure.floorAlpha, 0.35);
     assert.equal(state.structure.parts, 1648);
+    assert.equal(state.facility.parts, initial.facility.parts);
+    assert.equal(state.facility.ceilingVisible, false);
     assert.equal(state.meshes, initial.meshes);
     recoveries.push(state);
     console.log(`Lite static: recovery ${loss} PASS`);

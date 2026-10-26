@@ -9,15 +9,11 @@ const suites = {
   'lite-equipment': ['lite-equipment.browser.ts', 'runLiteEquipmentAcceptance'],
   'lite-static': ['lite-static-structure.browser.ts', 'runLiteStaticStructureAcceptance'],
   'lite-layout': ['lite-layout-parity.browser.ts', 'runLiteLayoutParityAcceptance'],
-  wafer: ['twin-wafer.browser.ts', 'runWaferAcceptance'],
-  level: ['twin-level.browser.ts', 'runLevelAcceptance'],
-  tour: ['twin-tour.browser.ts', 'runTourAcceptance'],
-  'tour-stop': ['twin-tour.browser.ts', 'runTourInterruptionAcceptance'],
+  'lite-lighting': ['lite-lighting.browser.ts', 'runLiteLightingAcceptance'],
+  'lite-shadow': ['lite-shadow.browser.ts', 'runLiteShadowAcceptance'],
+  'lite-product': ['twin-lite.browser.ts', 'runLiteProductAcceptance'],
+  // Product DOM regression suite; the native behaviour matrix lives in twin-lite.browser.ts.
   ui: ['twin.browser.ts', 'runTwinUiAcceptance'],
-  exploded: ['twin-exploded.browser.ts', 'runTwinExplodedAcceptance'],
-  xray: ['xray-acceptance.browser.ts', 'runXrayAcceptance'],
-  lighting: ['original-lighting.browser.ts', 'runLightingAcceptance'],
-  shadow: ['native-static-shadows.browser.ts', 'runNativeShadowAcceptance'],
 };
 if (!suites[suite]) throw new Error('Unknown suite: ' + suite);
 const tab = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json();
@@ -44,19 +40,16 @@ const command = (method, params = {}) => new Promise((resolve, reject) => {
 });
 try {
   await command('Page.enable'); await command('Runtime.enable'); await command('Log.enable');
+  // A background/occluded tab suspends requestAnimationFrame, which stalls the native
+  // Lite runtime before its first frame; every suite drives a foreground tab.
+  await command('Page.bringToFront');
   await command('Emulation.setDeviceMetricsOverride', { width: 1536, height: 735, deviceScaleFactor: 1, mobile: false });
   const [file, exported] = suites[suite];
   const module = await import(new URL('../web_app/tests/' + file, import.meta.url));
-  if (suite === 'shadow') {
-    await command('Page.navigate', { url: baseUrl + '/twin?lang=zh-CN&mode=engineer&perf=1' });
-    for (let attempt = 0; attempt < 300; attempt++) {
-      const state = await command('Runtime.evaluate', { expression: "!!window.__SEMICONFAB_PERF__?.getShadow()?.readyForCurrentDevice", returnByValue: true });
-      if (state.result?.value) break;
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-  }
   const result = await module[exported](command, baseUrl);
-  const evidence = { suite, result, errors, browser: await (await fetch(`http://127.0.0.1:${port}/json/version`)).json() };
+  const evidence = { suite, baseUrl, capturedAt: new Date().toISOString(),
+    viewport: '1536x735 DPR1 foreground tab', result, errors,
+    browser: await (await fetch(`http://127.0.0.1:${port}/json/version`)).json() };
   if (output) fs.writeFileSync(output, JSON.stringify(evidence, null, 2) + '\n');
   assert.deepEqual(errors, [], 'Console/runtime errors');
   if (screenshotOutput) {

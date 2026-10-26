@@ -3,7 +3,7 @@ import {
   createPointLight, createStandardMaterial, createTransformNode, createDynamicTexture,
   setParent, setPbrEmissive, setPbrTransmission, setSubtreeVisible, setTextureTransform,
   setThinInstances, setThinInstanceColors, updateDynamicTexture, releaseTexture,
-  enableMaterialUvTransform, loadHdrEnvironment, decomposeMat4, rebuildMaterial, markMaterialUboDirty,
+  enableMaterialUvTransform, loadHdrEnvironment, decomposeMat4, rebuildMaterial, markMaterialUboDirty, enableThinInstanceWorldBounds,
   type DynamicTexture2D, type EngineContext, type Mat4, type Material, type Mesh, type PbrMaterialProps, type PointLight, type SceneContext, type TransformNode,
 } from '@babylonjs/lite';
 import frozen from '../../../../assets/lite-static-structure.json';
@@ -55,7 +55,7 @@ export interface LiteStaticStructure {
   readonly lights: PointLight[];
   setVisible(layer: StaticLayer, visible: boolean): void;
   setOffset(layer: StaticLayer, y: number): void;
-  setLevel(level: 'L1' | 'B1' | 'DUAL'): Promise<void>;
+  setLevel(level: 'L1' | 'B1' | 'DUAL' | 'EXPLODED'): Promise<void>;
   prepareForDeviceRecovery(): void;
   dispose(): void;
 }
@@ -64,6 +64,10 @@ export function createLiteStaticStructure(scene: SceneContext, engine: EngineCon
   const roots = { shell: createTransformNode('static-shell'), ffu: createTransformNode('static-ffu'),
     b1: createTransformNode('static-b1') };
   const lightRoot = createTransformNode('static-b1-lights');
+  // Source-disabled frozen meshes hang outside the layer roots so setVisible/setLevel cannot
+  // re-show them by cascading visibility through the shell subtree.
+  const sourceDisabledRoot = createTransformNode('static-source-disabled');
+  setSubtreeVisible(sourceDisabledRoot, false);
   const parts: StaticPart[] = [], batches: Mesh[] = [];
   const materials = new Map<string, Material>();
   const ownedTextures = new Set<DynamicTexture2D>();
@@ -148,9 +152,16 @@ export function createLiteStaticStructure(scene: SceneContext, engine: EngineCon
           geometry.uvs.length ? new Float32Array(geometry.uvs) : undefined);
         mesh.material = material;
       }
-      mesh.metadata = { staticShadowCaster: first.caster ?? true };
+      // Frozen null means the source decided caster status from the material at runtime
+      // (legacy-site.ts:isCaster): alpha-blended and refracted surfaces never cast.
+      const definition = source.materials[first.material];
+      mesh.metadata = { staticShadowCaster: first.caster ?? (definition.alpha >= 1 && !definition.refraction) };
       mesh.receiveShadows = first.receiveShadows;
-      setParent(mesh, roots[first.layer]);
+      // Source legacy-site.ts:406-407 disables the early procedural air-shower approximation
+      // once the original airlocks are restored: keep the frozen vertices, never display them.
+      const sourceDisabled = first.name.startsWith('airshower-');
+      setParent(mesh, sourceDisabled ? sourceDisabledRoot : roots[first.layer]);
+      if (sourceDisabled) setSubtreeVisible(mesh, false);
       const matrices = new Float32Array(entities.length * 16);
       entities.forEach((entity, instanceIndex) => {
         matrices.set(entity.matrix, instanceIndex * 16);
@@ -163,7 +174,10 @@ export function createLiteStaticStructure(scene: SceneContext, engine: EngineCon
         mesh.position.set(translation.x, translation.y, translation.z);
         mesh.rotationQuaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
         mesh.scaling.set(scale.x, scale.y, scale.z);
-      } else setThinInstances(mesh, matrices, entities.length);
+      } else {
+        setThinInstances(mesh, matrices, entities.length);
+        enableThinInstanceWorldBounds(mesh);
+      }
       addToScene(scene, mesh);
       batches.push(mesh);
     }
@@ -180,8 +194,8 @@ export function createLiteStaticStructure(scene: SceneContext, engine: EngineCon
       parts, batches, roots, lightRoot, lights, dispose,
       setVisible(layer, visible) { setSubtreeVisible(roots[layer], visible); },
       setOffset(layer, y) { roots[layer].position.y = y; if (layer === 'b1') lightRoot.position.y = y; },
-      async setLevel(level) {
-        // Next legacy-site.ts:syncLevel: retain L1; DUAL never explodes B1.
+      async setLevel(level: 'L1' | 'B1' | 'DUAL' | 'EXPLODED') {
+        // Next legacy-site.ts:syncLevel: retain L1; DUAL never explodes B1; EXPLODED lifts B1.
         setSubtreeVisible(roots.shell, true);
         setSubtreeVisible(roots.b1, level !== 'L1');
         roots.b1.position.y = 0; lightRoot.position.y = 0;

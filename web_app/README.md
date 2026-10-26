@@ -1,6 +1,6 @@
 # web_app
 
-唯一的 Web 前端项目：一个 Vite/React 单页站点，包含 Redux Toolkit + RTK Query 状态层、契约类型、工作台 UI、目录 UI 与 Babylon WebGPU 视图。页面按原版产品边界只展示一个 FAB（FAB-01），没有多 FAB 选择器。没有内部子包，也没有 pnpm workspace。
+唯一的 Web 前端项目：一个 Vite/React 单页站点，包含 Redux Toolkit + RTK Query 状态层、契约类型、工作台 UI、目录 UI 与基于 Babylon Lite 的原生 WebGPU 视图。页面按原版产品边界只展示一个 FAB（FAB-01），没有多 FAB 选择器。没有内部子包，也没有 pnpm workspace。
 
 ## 文件
 
@@ -14,9 +14,9 @@ web_app/
    ├─ contracts.ts            # 生成契约的再导出
    ├─ store/                  # configureStore、slices、RTK Query endpoints 与 typed hooks
    ├─ state-sync.ts           # 活动提交作用域与取消门禁
-   ├─ fab-scene.ts            # 与引擎无关的场景 Port
-   ├─ babylon-webgpu.ts       # 唯一 WebGPU 实现（含设备丢失恢复）
-   ├─ babylon-lifecycle.ts
+   ├─ fab-scene.ts            # 与引擎无关的场景 Port/SceneFacade
+   ├─ lite-backend.ts         # 产品 SceneBackend：原生 Babylon Lite runtime + world
+   ├─ render/lite/            # 原生世界组合、相机、拾取、状态灯、特效、剖切、环境、阴影、恢复
    ├─ ui.tsx / widgets.tsx / charting.tsx
    └─ scenario.ts
 └─ tests/                     # Vitest / 浏览器验收；support/ 为验收统计工具
@@ -46,6 +46,15 @@ npm test
 npm run build
 ```
 
-机台几何基线见 `tests/fixtures/original-tool-reference.json`：原版 121 台布局的运行时提取结果，仅用于测试。`original-tool-geometry.test.ts` 比较全部机台边界、八类顶点/颜色及四台目录模型的部件和材质。
+机台/厂房冻结基线见 `tests/fixtures/original-tool-reference.json`、`tests/fixtures/lite-static-structure-reference.json`、`tests/fixtures/lite-facility-reference.json`：原版数据的运行时提取结果，仅用于测试；原生 Lite 几何与之对照。
 
-已有隔离 Chromium CDP 会话（默认 9335，可设 `CDP_PORT`）并打开本地 `/twin` 时，可运行 `node tests/native-static-shadows.browser.ts`，验证真实 GPU 像素、静态缓存、层/光源失效与环境光隔离。它不会启动浏览器，也不改变渲染后端。连接浏览器时可传入 CDP transport 调用 `tests/twin.browser.ts` / `tests/twin-parity.browser.ts` 的导出验收函数，或传入支持的 tab 接口调用 `tests/remaining-state.browser.ts`。完整原版对齐状态及证据见 `../docs/migration/twin-parity/baseline.md`。
+浏览器验收需要隔离的 Chromium CDP 会话并打开本地 `/twin`：
+
+```powershell
+# 真实产品页（原生 Lite）：功能/状态/三次设备丢失矩阵
+node ../tools/run_twin_browser.mjs lite-product 9490 http://127.0.0.1:5173 .local/acceptance.json
+# 旧产品 DOM 回归套件（现在运行于 Lite 页面）
+node ../tools/run_twin_browser.mjs ui 9490 http://127.0.0.1:5173 .local/ui.json
+```
+
+迁移状态、产品级验收与环境说明见 `../docs/migration/babylon-lite/MIGRATION_PLAN.md`；最近一轮证据见 `../docs/migration/babylon-lite/evidence/product-completion-2026-10-26/README.md`。注意：隐藏/被遮挡的标签页会暂停 requestAnimationFrame，浏览器验收必须使用前台可见窗口。

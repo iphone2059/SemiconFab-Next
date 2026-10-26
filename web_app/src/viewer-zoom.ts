@@ -21,11 +21,14 @@ export function bindViewerZoom(root: HTMLElement, zoom: (deltaY: number) => void
     zoom(-Math.log(scale / previousScale) / 0.0028);
     previousScale = scale;
   };
-  root.addEventListener('wheel', onWheel, { passive: false });
+  // Capture phase: Lite's native camera controls also listen for wheel on the canvas and
+  // preventDefault, so the page-owned zoom must run first (the camera itself is configured
+  // with an infinite wheelPrecision and contributes nothing).
+  root.addEventListener('wheel', onWheel, { passive: false, capture: true });
   root.addEventListener('gesturestart', start, { passive: false });
   root.addEventListener('gesturechange', change, { passive: false });
   return () => {
-    root.removeEventListener('wheel', onWheel);
+    root.removeEventListener('wheel', onWheel, { capture: true });
     root.removeEventListener('gesturestart', start);
     root.removeEventListener('gesturechange', change);
   };

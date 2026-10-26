@@ -1,0 +1,103 @@
+{
+  "date": "2026-10-26",
+  "scope": "Four review fixes on built Lite fixture; whole-product parity NOT_PARITY_VERIFIED",
+  "library": "@babylonjs/lite@1.36.0",
+  "gpu": {
+    "secure": true,
+    "vendor": "intel",
+    "architecture": "gen-12lp",
+    "device": "",
+    "description": "",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+  },
+  "checks": {
+    "unitTests": 238,
+    "unitFiles": 55,
+    "typecheck": "PASS",
+    "productBuild": "PASS",
+    "liteBuild": "PASS",
+    "diffCheck": "PASS"
+  },
+  "runs": [
+    {
+      "suite": "lite-lighting",
+      "status": "PASS",
+      "errors": 0,
+      "screenshots": 0
+    },
+    {
+      "suite": "lite-shadow",
+      "status": "PASS",
+      "errors": 0,
+      "screenshots": 0
+    },
+    {
+      "suite": "lite-static",
+      "status": "PASS",
+      "errors": 0,
+      "screenshots": 0
+    },
+    {
+      "suite": "lite-equipment",
+      "status": "PASS",
+      "errors": 0,
+      "screenshots": 0
+    },
+    {
+      "suite": "lite",
+      "status": "PASS",
+      "errors": 0,
+      "screenshots": 0
+    }
+  ],
+  "evidenceOutput": {
+    "lighting": "PASS",
+    "shadow": "PASS"
+  },
+  "pixels": {
+    "unlitDelta": 0,
+    "standardAmbientLuminanceDelta": 12.645456366459879,
+    "labelVisibilityDelta": 0.3954780429761768,
+    "restoredRigDelta": 0,
+    "recoveries": [
+      {
+        "loss": 1,
+        "meanChannelDelta": 0,
+        "changedFraction": 0,
+        "registeredContexts": 2
+      },
+      {
+        "loss": 2,
+        "meanChannelDelta": 0,
+        "changedFraction": 0,
+        "registeredContexts": 2
+      },
+      {
+        "loss": 3,
+        "meanChannelDelta": 0,
+        "changedFraction": 0,
+        "registeredContexts": 2
+      }
+    ]
+  },
+  "sourceSha256": {
+    "web_app/src/render/lite/runtime.ts": "4dc32b9e733b2ee92e389f3a5de70df6bdfd94f17c0815136958077bfb0db4a8",
+    "web_app/src/render/lite/lighting.ts": "7a9323a430bf1af403c631e1d16609ddd18c4680c8236f4968ced2d6d9a46c73",
+    "web_app/src/render/lite/geometry/facility.ts": "94da5b4cea9871e268a799cf95aa1117129cafd6e04d06dcfdf2198a98c2d3b5",
+    "web_app/tests/lite-runtime/main.ts": "ed531285cfd8db63f64d829d4e2fb4b1dc00d39c0a8567c7bffac386ecb79e20",
+    "web_app/tests/lite-runtime.test.ts": "5dabf0682af447a065b8e158191814a1d0a5c0e393f22e83f5d52a93883c064c",
+    "web_app/tests/lite-lighting.test.ts": "5e28a69b72209847333831321661e9522071b0119c08d74b35af88aa3f879e25",
+    "web_app/tests/lite-lighting.browser.ts": "cbd2a2d0ff58e13fda53bc1f26d43054c377918b008c9b1417946d3aa8e45bcc",
+    "web_app/tests/lite-shadow.browser.ts": "9d3e6e3a36d416f077800abb23afdfdcc5c5ed9484d0e9df355aec32ca7739c8"
+  },
+  "imageSha256": {
+    "labels-before-loss.png": "979d31c6d35736ff85951ce301a6c61829dc908aa08199cbe33da90872a5823a",
+    "labels-after-three-losses.png": "979d31c6d35736ff85951ce301a6c61829dc908aa08199cbe33da90872a5823a"
+  },
+  "notRun": [
+    "whole-product parity",
+    "layout projection reference rerun (geometry unchanged)",
+    "cross-browser matrix",
+    "60-minute soak"
+  ]
+}

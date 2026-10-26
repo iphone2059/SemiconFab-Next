@@ -1,0 +1,618 @@
+{
+  "suite": "lite-lighting",
+  "result": {
+    "status": "PASS",
+    "scope": "P4 source lighting pixels + P5 native CSM shadow contribution on the Lite structure preview; product backend/picking and whole-product parity NOT_RUN",
+    "thresholds": {
+      "shadowsIso": {
+        "changedFraction": 0.04,
+        "darkenedFraction": 0.03,
+        "meanChannelDelta": 1.2,
+        "meanChannelDeltaAmongChanged": 12,
+        "medianChannelDeltaAmongChanged": 10
+      },
+      "keyOff": {
+        "minLuminanceDrop": 30,
+        "minRelativeDrop": 0.1,
+        "collapseChangedFraction": 0.001,
+        "collapseMeanChannelDelta": 0.02
+      },
+      "ambientOff": {
+        "changedFraction": 0.2,
+        "brightenedFraction": 0.2,
+        "meanChannelDelta": 5,
+        "minLuminanceDrop": 15
+      },
+      "fillOff": {
+        "changedFraction": 0.15,
+        "brightenedFraction": 0.15,
+        "meanChannelDelta": 4,
+        "minLuminanceDrop": 8
+      },
+      "localLightsOff": {
+        "changedFraction": 0.03,
+        "brightenedFraction": 0.03,
+        "meanChannelDelta": 1.5,
+        "minLuminanceDrop": 2
+      },
+      "restoredState": {
+        "changedFraction": 0.0005,
+        "meanChannelDelta": 0.02,
+        "meanLumDelta": 0.02
+      }
+    },
+    "gpu": {
+      "secure": true,
+      "vendor": "intel",
+      "architecture": "gen-12lp",
+      "device": "",
+      "description": "",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"
+    },
+    "initial": {
+      "lighting": {
+        "keyIntensity": 1.15,
+        "localLights": 18,
+        "shadows": true,
+        "casters": 195
+      },
+      "structureLights": 10,
+      "facilityLights": 2,
+      "tools": 121,
+      "identitiesMapped": true,
+      "facilityParts": 1659,
+      "facilityInstances": 1386,
+      "structureParts": 1648,
+      "meshes": 721,
+      "drawCalls": 722,
+      "width": 1536,
+      "height": 735
+    },
+    "pixels": {
+      "unlitResponse": {
+        "width": 1536,
+        "height": 735,
+        "roi": [
+          122,
+          147,
+          738,
+          625
+        ],
+        "pixels": 294448,
+        "meanLumA": 219.77621439228454,
+        "meanLumB": 219.77621439228454,
+        "meanLumDelta": 0,
+        "meanChannelDelta": 0,
+        "changedFraction": 0,
+        "darkenedFraction": 0,
+        "brightenedFraction": 0,
+        "meanChannelDeltaAmongChanged": 0,
+        "medianChannelDeltaAmongChanged": 255,
+        "meanLuminanceReductionAmongDarkened": 0,
+        "meanLuminanceIncreaseAmongBrightened": 0,
+        "p90ChannelDelta": 0,
+        "p99ChannelDelta": 0,
+        "maxChannelDelta": 0
+      },
+      "standardAmbient": {
+        "width": 1536,
+        "height": 735,
+        "roi": [
+          798,
+          147,
+          1414,
+          625
+        ],
+        "pixels": 294448,
+        "meanLumA": 176.8474571955526,
+        "meanLumB": 189.4929135620125,
+        "meanLumDelta": 12.645456366459879,
+        "meanChannelDelta": 12.650035546740568,
+        "changedFraction": 0.24697399880454274,
+        "darkenedFraction": 0,
+        "brightenedFraction": 0.24697399880454274,
+        "meanChannelDeltaAmongChanged": 51.220110651210334,
+        "medianChannelDeltaAmongChanged": 51.666666666666664,
+        "meanLuminanceReductionAmongDarkened": 0,
+        "meanLuminanceIncreaseAmongBrightened": 51.20156950809974,
+        "p90ChannelDelta": 51.666666666666664,
+        "p99ChannelDelta": 51.666666666666664,
+        "maxChannelDelta": 51.666666666666664
+      },
+      "determinism": {
+        "width": 1536,
+        "height": 735,
+        "roi": [
+          76,
+          73,
+          1460,
+          677
+        ],
+        "pixels": 835936,
+        "meanLumA": 229.49059135562905,
+        "meanLumB": 229.49059135562905,
+        "meanLumDelta": 0,
+        "meanChannelDelta": 0,
+        "changedFraction": 0,
+        "darkenedFraction": 0,
+        "brightenedFraction": 0,
+        "meanChannelDeltaAmongChanged": 0,
+        "medianChannelDeltaAmongChanged": 255,
+        "meanLuminanceReductionAmongDarkened": 0,
+        "meanLuminanceIncreaseAmongBrightened": 0,
+        "p90ChannelDelta": 0,
+        "p99ChannelDelta": 0,
+        "maxChannelDelta": 0
+      },
+      "shadowsOnOff": {
+        "width": 1536,
+        "height": 735,
+        "roi": [
+          76,
+          73,
+          1460,
+          677
+        ],
+        "pixels": 835936,
+        "meanLumA": 233.20048045031632,
+        "meanLumB": 229.49059135562905,
+        "meanLumDelta": -3.709889094687276,
+        "meanChannelDelta": 3.731668453087318,
+        "changedFraction": 0.11862271752861463,
+        "darkenedFraction": 0.1166656299046817,
+        "brightenedFraction": 0,
+        "meanChannelDeltaAmongChanged": 31.33495695552351,
+        "medianChannelDeltaAmongChanged": 28.666666666666668,
+        "meanLuminanceReductionAmongDarkened": 31.666918427076574,
+        "meanLuminanceIncreaseAmongBrightened": 0,
+        "p90ChannelDelta": 10.333333333333334,
+        "p99ChannelDelta": 61,
+        "maxChannelDelta": 112.33333333333333
+      },
+      "shadowRestore": {
+        "width": 1536,
+        "height": 735,
+        "roi": [
+          76,
+          73,
+          1460,
+          677
+        ],
+        "pixels": 835936,
+        "meanLumA": 229.49059135562905,
+        "meanLumB": 229.49059135562905,
+        "meanLumDelta": 0,
+        "meanChannelDelta": 0,
+        "changedFraction": 0,
+        "darkenedFraction": 0,
+        "brightenedFraction": 0,
+        "meanChannelDeltaAmongChanged": 0,
+        "medianChannelDeltaAmongChanged": 255,
+        "meanLuminanceReductionAmongDarkened": 0,
+        "meanLuminanceIncreaseAmongBrightened": 0,
+        "p90ChannelDelta": 0,
+        "p99ChannelDelta": 0,
+        "maxChannelDelta": 0
+      },
+      "keyOff": {
+        "luminance": {
+          "width": 1536,
+          "height": 735,
+          "roi": [
+            76,
+            73,
+            1460,
+            677
+          ],
+          "pixels": 835936,
+          "meanLumA": 175.41321607931803,
+          "meanLumB": 229.49059135562905,
+          "meanLumDelta": 54.07737527631101,
+          "meanChannelDelta": 53.68874929819189,
+          "changedFraction": 0.6539914538912069,
+          "darkenedFraction": 0,
+          "brightenedFraction": 0.6517771695440799,
+          "meanChannelDeltaAmongChanged": 82.06935555169397,
+          "medianChannelDeltaAmongChanged": 99,
+          "meanLuminanceReductionAmongDarkened": 0,
+          "meanLuminanceIncreaseAmongBrightened": 82.94277625434331,
+          "p90ChannelDelta": 117,
+          "p99ChannelDelta": 125.33333333333333,
+          "maxChannelDelta": 129
+        },
+        "relativeLuminanceDrop": 0.23564092521993746,
+        "shadowCollapse": {
+          "width": 1536,
+          "height": 735,
+          "roi": [
+            76,
+            73,
+            1460,
+            677
+          ],
+          "pixels": 835936,
+          "meanLumA": 175.41321607931803,
+          "meanLumB": 175.41321607931803,
+          "meanLumDelta": 0,
+          "meanChannelDelta": 0,
+          "changedFraction": 0,
+          "darkenedFraction": 0,
+          "brightenedFraction": 0,
+          "meanChannelDeltaAmongChanged": 0,
+          "medianChannelDeltaAmongChanged": 255,
+          "meanLuminanceReductionAmongDarkened": 0,
+          "meanLuminanceIncreaseAmongBrightened": 0,
+          "p90ChannelDelta": 0,
+          "p99ChannelDelta": 0,
+          "maxChannelDelta": 0
+        }
+      },
+      "ambient": {
+        "delta": {
+          "width": 1536,
+          "height": 735,
+          "roi": [
+            76,
+            73,
+            1460,
+            677
+          ],
+          "pixels": 835936,
+          "meanLumA": 202.22411744478427,
+          "meanLumB": 229.49059135562905,
+          "meanLumDelta": 27.266473910844788,
+          "meanChannelDelta": 27.097446056476414,
+          "changedFraction": 0.6323366860620909,
+          "darkenedFraction": 0,
+          "brightenedFraction": 0.6217054894154577,
+          "meanChannelDeltaAmongChanged": 42.81032792085152,
+          "medianChannelDeltaAmongChanged": 48.333333333333336,
+          "meanLuminanceReductionAmongDarkened": 0,
+          "meanLuminanceIncreaseAmongBrightened": 43.79873753556733,
+          "p90ChannelDelta": 55.333333333333336,
+          "p99ChannelDelta": 66,
+          "maxChannelDelta": 68.33333333333333
+        },
+        "restore": {
+          "width": 1536,
+          "height": 735,
+          "roi": [
+            76,
+            73,
+            1460,
+            677
+          ],
+          "pixels": 835936,
+          "meanLumA": 229.49059135562905,
+          "meanLumB": 229.49059135562905,
+          "meanLumDelta": 0,
+          "meanChannelDelta": 0,
+          "changedFraction": 0,
+          "darkenedFraction": 0,
+          "brightenedFraction": 0,
+          "meanChannelDeltaAmongChanged": 0,
+          "medianChannelDeltaAmongChanged": 255,
+          "meanLuminanceReductionAmongDarkened": 0,
+          "meanLuminanceIncreaseAmongBrightened": 0,
+          "p90ChannelDelta": 0,
+          "p99ChannelDelta": 0,
+          "maxChannelDelta": 0
+        }
+      },
+      "fill": {
+        "width": 1536,
+        "height": 735,
+        "roi": [
+          76,
+          73,
+          1460,
+          677
+        ],
+        "pixels": 835936,
+        "meanLumA": 216.62318709448255,
+        "meanLumB": 229.49059135562905,
+        "meanLumDelta": 12.867404261146508,
+        "meanChannelDelta": 12.809186349194198,
+        "changedFraction": 0.5511606151667113,
+        "darkenedFraction": 0,
+        "brightenedFraction": 0.5416132335489798,
+        "meanChannelDeltaAmongChanged": 23.196080176240137,
+        "medianChannelDeltaAmongChanged": 19,
+        "meanLuminanceReductionAmongDarkened": 0,
+        "meanLuminanceIncreaseAmongBrightened": 23.706748330046302,
+        "p90ChannelDelta": 34.666666666666664,
+        "p99ChannelDelta": 69.66666666666667,
+        "maxChannelDelta": 171.66666666666666
+      },
+      "localLights": {
+        "width": 1536,
+        "height": 735,
+        "roi": [
+          76,
+          73,
+          1460,
+          677
+        ],
+        "pixels": 835936,
+        "meanLumA": 223.56344216273192,
+        "meanLumB": 229.49059135562905,
+        "meanLumDelta": 5.927149192897149,
+        "meanChannelDelta": 5.872091882632163,
+        "changedFraction": 0.1282167534356697,
+        "darkenedFraction": 0,
+        "brightenedFraction": 0.12854811851625006,
+        "meanChannelDeltaAmongChanged": 45.53005041316403,
+        "medianChannelDeltaAmongChanged": 33,
+        "meanLuminanceReductionAmongDarkened": 0,
+        "meanLuminanceIncreaseAmongBrightened": 45.873871745237935,
+        "p90ChannelDelta": 10,
+        "p99ChannelDelta": 111.33333333333333,
+        "maxChannelDelta": 170.33333333333334
+      },
+      "allRestored": {
+        "width": 1536,
+        "height": 735,
+        "roi": [
+          76,
+          73,
+          1460,
+          677
+        ],
+        "pixels": 835936,
+        "meanLumA": 229.49059135562905,
+        "meanLumB": 229.49059135562905,
+        "meanLumDelta": 0,
+        "meanChannelDelta": 0,
+        "changedFraction": 0,
+        "darkenedFraction": 0,
+        "brightenedFraction": 0,
+        "meanChannelDeltaAmongChanged": 0,
+        "medianChannelDeltaAmongChanged": 255,
+        "meanLuminanceReductionAmongDarkened": 0,
+        "meanLuminanceIncreaseAmongBrightened": 0,
+        "p90ChannelDelta": 0,
+        "p99ChannelDelta": 0,
+        "maxChannelDelta": 0
+      }
+    },
+    "views": [
+      {
+        "view": "iso",
+        "frames": 1008,
+        "drawCalls": 722,
+        "loadingStage": "register",
+        "layers": {
+          "shell": {
+            "visible": true,
+            "offset": 0,
+            "parts": 312
+          },
+          "ffu": {
+            "visible": false,
+            "offset": 0,
+            "parts": 343
+          },
+          "b1": {
+            "visible": false,
+            "offset": 0,
+            "parts": 993
+          }
+        },
+        "floorAlpha": 1,
+        "slabVisible": true,
+        "facilityCeilingVisible": false
+      },
+      {
+        "view": "top",
+        "frames": 1103,
+        "drawCalls": 722,
+        "loadingStage": "register",
+        "layers": {
+          "shell": {
+            "visible": true,
+            "offset": 0,
+            "parts": 312
+          },
+          "ffu": {
+            "visible": false,
+            "offset": 0,
+            "parts": 343
+          },
+          "b1": {
+            "visible": false,
+            "offset": 0,
+            "parts": 993
+          }
+        },
+        "floorAlpha": 1,
+        "slabVisible": true,
+        "facilityCeilingVisible": false
+      },
+      {
+        "view": "l1",
+        "frames": 1169,
+        "drawCalls": 722,
+        "loadingStage": "register",
+        "layers": {
+          "shell": {
+            "visible": true,
+            "offset": 0,
+            "parts": 312
+          },
+          "ffu": {
+            "visible": false,
+            "offset": 0,
+            "parts": 343
+          },
+          "b1": {
+            "visible": false,
+            "offset": 0,
+            "parts": 993
+          }
+        },
+        "floorAlpha": 1,
+        "slabVisible": true,
+        "facilityCeilingVisible": false
+      },
+      {
+        "view": "b1",
+        "frames": 1241,
+        "drawCalls": 1112,
+        "loadingStage": "register",
+        "layers": {
+          "shell": {
+            "visible": true,
+            "offset": 0,
+            "parts": 312
+          },
+          "ffu": {
+            "visible": false,
+            "offset": 0,
+            "parts": 343
+          },
+          "b1": {
+            "visible": true,
+            "offset": 0,
+            "parts": 993
+          }
+        },
+        "floorAlpha": 0.2,
+        "slabVisible": false,
+        "facilityCeilingVisible": false
+      },
+      {
+        "view": "dual",
+        "frames": 1308,
+        "drawCalls": 722,
+        "loadingStage": "register",
+        "layers": {
+          "shell": {
+            "visible": true,
+            "offset": 0,
+            "parts": 312
+          },
+          "ffu": {
+            "visible": false,
+            "offset": 0,
+            "parts": 343
+          },
+          "b1": {
+            "visible": true,
+            "offset": 0,
+            "parts": 993
+          }
+        },
+        "floorAlpha": 0.35,
+        "slabVisible": false,
+        "facilityCeilingVisible": false
+      },
+      {
+        "view": "ffu",
+        "frames": 1396,
+        "drawCalls": 1112,
+        "loadingStage": "register",
+        "layers": {
+          "shell": {
+            "visible": true,
+            "offset": 0,
+            "parts": 312
+          },
+          "ffu": {
+            "visible": false,
+            "offset": 0,
+            "parts": 343
+          },
+          "b1": {
+            "visible": false,
+            "offset": 0,
+            "parts": 993
+          }
+        },
+        "floorAlpha": 1,
+        "slabVisible": true,
+        "facilityCeilingVisible": true
+      }
+    ],
+    "rapidSwitches": [
+      {
+        "order": [
+          "b1",
+          "dual"
+        ],
+        "floorAlpha": 0.35,
+        "casters": 195
+      },
+      {
+        "order": [
+          "dual",
+          "b1"
+        ],
+        "floorAlpha": 0.2,
+        "casters": 195
+      },
+      {
+        "order": [
+          "b1",
+          "dual"
+        ],
+        "floorAlpha": 0.35,
+        "casters": 195
+      }
+    ],
+    "rapidCamera": {
+      "position": [
+        3.796405057725563e-15,
+        38,
+        -62
+      ],
+      "target": [
+        0,
+        -3,
+        0
+      ],
+      "fov": 0.7853981633974483
+    },
+    "remount": {
+      "disposed": {
+        "status": "disposed",
+        "meshes": 0,
+        "registeredContexts": 0,
+        "surfaces": 0
+      },
+      "snapshot": {
+        "status": "ready",
+        "lighting": {
+          "keyIntensity": 1.15,
+          "localLights": 18,
+          "shadows": true,
+          "casters": 195
+        },
+        "meshes": 721,
+        "structureParts": 1648,
+        "facilityParts": 1659
+      }
+    },
+    "evidenceDir": null,
+    "screenshots": [],
+    "final": {
+      "frames": 1570,
+      "drawCalls": 722,
+      "gpuErrors": [],
+      "states": [
+        "initializing",
+        "ready",
+        "initializing",
+        "ready"
+      ]
+    }
+  },
+  "errors": [],
+  "browser": {
+    "Browser": "Chrome/155.0.8059.86",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+    "V8-Version": "15.5.35.25",
+    "WebKit-Version": "537.36 (@804d6b05f089b27af8342622a36558c49401a1d4)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9501/devtools/browser/488eb7d5-f01e-4c5b-8121-b523b39004de"
+  }
+}

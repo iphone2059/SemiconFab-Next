@@ -166,9 +166,6 @@ importers:
 
   .:
     dependencies:
-      '@babylonjs/core':
-        specifier: 9.32.0
-        version: 9.32.0
       '@babylonjs/lite':
         specifier: 1.36.0
         version: 1.36.0
@@ -208,9 +205,6 @@ importers:
         version: 5.0.5(@types/node@26.6.5)(vite@8.3.5(@types/node@26.6.5))
 
 packages:
-
-  '@babylonjs/core@9.32.0':
-    resolution: {integrity: sha512-mHBsyKJuQHbs97Rb/1qxMRg6Ru79+0BjLhGLTa34s6U/fkBCtOh+xKTQDqFpFtPqgBw9TLFcIEvFHy01vnJxwA==}
 
   '@babylonjs/lite@1.36.0':
     resolution: {integrity: sha512-GrXseQnLetxCVvAGfDAE0KJtpcHsll38W5uabWI/yeu2/0QbD7KuHtLzR3f2QNHqv8+FthAcXA78rJrXfqfxJw==}
@@ -829,8 +823,6 @@ packages:
     hasBin: true
 
 snapshots:
-
-  '@babylonjs/core@9.32.0': {}
 
   '@babylonjs/lite@1.36.0':
     dependencies:

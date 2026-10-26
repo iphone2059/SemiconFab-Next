@@ -14,7 +14,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@babylonjs/core": "9.32.0",
     "@babylonjs/lite": "1.36.0",
     "@reduxjs/toolkit": "2.13.0",
     "react": "19.3.1",
