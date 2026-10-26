@@ -93,12 +93,12 @@
 | 正式产品切到 Lite | PASS：`/twin` 挂载 `lite-backend.ts` → `render/lite/world.ts`；旧引擎不再在产品图内 | 源码；`vite build` dist 无 `WebGPUEngine`/`NullEngine`/core 符号 |
 | 原生产品验收（dev + 生产构建预览 + Edge 156） | PASS，0 console 错误：拾取/悬停/选中框/双击聚焦、相机预设/轨道/页面自主缩放/resize、L1/B1/DUAL/EXPLODED、全部图层（含 heatmap/airflow 时钟）、状态灯同步、X-Ray 过滤/恢复、剖切平面与互斥语义、wafer/轨迹/跟随、tour/patrol/双语、三次真实设备丢失（cut/X-Ray/无空间模式，0 GPU 错误，相机、121 状态、无模式轮选中框保持，Redux 同步恢复） | `twin-lite.browser.ts`；acceptance.json / acceptance-edge.json（最终构建）；截图 |
 | 旧产品 UI 回归 | PASS，0 console 错误（`twin.browser.ts` 原样运行于 Lite /twin，Chrome+Edge） | ui-final-run.json / ui-edge.json |
-| 冻结时钟视觉 A/B | 比较（非 Golden），可用 `tools/frozen_visual_compare.mjs` 复现（同时钟/同帧数/单前台标签顺序采集）：ROI[400,120,1500,680] 均值差 ISO 10.011 / TOP 13.571 / B1 17.688 / DUAL 20.146 / EXPLODED 8.459 / CUT 5.703 / X-RAY 34.004（重复运行波动约 ±0.5）；X-Ray 调色板已接入 CSM receiver（shadowLinked true、0 GPU 错误），从 43.86 降到 ≈34，但仍为已知视觉缺口 | frozen-clock-diff.json、ref-*/lite-* PNG |
-| 同机性能 A/B（生产构建） | PASS（方法修正）：全新单一前台浏览器三次重复，Lite idle/orbit 52.8/46.0 fps vs 冻结旧 Next 39.2/38.9 fps（≈1.2–1.35×），0 console 错误；dist gpu chunk 396,492 B vs 旧 2,528,822 B。旧记录 57.9/53.9 vs 15.8/14.0 因 legacy tab 被遮挡节流而撤回 | perf-ab.json |
+| 冻结时钟视觉 A/B | 比较（非 Golden），可用 `tools/frozen_visual_compare.mjs` 复现（同时钟/同帧数/单前台标签顺序采集）：ROI[400,120,1500,680] 均值差 ISO 9.881 / TOP 13.473 / B1 17.751 / DUAL 19.943 / EXPLODED 8.299 / CUT 5.575 / X-RAY 28.692（重复运行波动约 ±0.5）；X-Ray 在 CSM receiver（shadowLinked true、0 GPU 错误）基础上应用冻结产品 legibility floor/低对比近似（`XRAY_LIT_FLOOR`/`XRAY_SHADOW_CONTRAST`），从 43.86 降到 28.69，但仍为已知视觉缺口 | frozen-clock-diff.json、ref-*/lite-* PNG |
+| 同机性能 A/B（生产构建） | PASS（方法修正）：全新单一前台浏览器三次重复，Lite idle/orbit 52.5/45.8 fps vs 冻结旧 Next 38.2/37.4 fps（≈1.2–1.35×），0 console 错误；dist gpu chunk 396,492 B vs 旧 2,528,822 B。旧记录 57.9/53.9 vs 15.8/14.0 因 legacy tab 被遮挡节流而撤回 | perf-ab.json |
 | P11 旧引擎清理 | PASS（独立审查确认）：17 旧源码删除，旧 Scene 依赖测试/采集工具清退（保留 52 文件/241 测试，含接受度 PNG 解码器单测）；`@babylonjs/core` 移出 manifest+锁文件（frozen-lockfile 验证）；src/tests/config/tools 0 旧导入 | 清理报告；dist grep；`pnpm --frozen-lockfile` |
 | 前端检查 | PASS：`tsc --noEmit` 0；`vitest run` 52 文件 / 241 测试；`vite build` 0（仅既有 >500kB 提示） | 本轮运行 |
 | 仓库级检查 | PASS：Python 16/16、契约/架构/legacy-data 检查、8 组冻结向量（i18n coverage 已重新生成并通过）、.NET 3 项目 Release 构建 + 67/67 测试 | 本轮运行 |
-| Soak | 按用户指示以 1 分钟替代 60 分钟：生产构建最终版本 3,128 帧、均值 19.18 ms（52.1 fps）、p95 33.4 ms、0 long task、heap 32.9 MB、0 GPU/console 错误 | soak.json；**60 分钟 soak NOT_RUN**（用户指示） |
+| Soak | 按用户指示以 1 分钟替代 60 分钟：生产构建最终版本 3,088 帧、均值 19.41 ms（51.5 fps）、p95 33.4 ms、0 long task、heap 37.5 MB、0 GPU/console 错误 | soak.json；**60 分钟 soak NOT_RUN**（用户指示） |
 | 跨浏览器矩阵 | PARTIAL PASS：Chrome 155 + Edge 156 均通过产品验收与 UI 回归（0 错误）；非 Chromium WebGPU 浏览器本机不可用，NOT_RUN | acceptance-edge/ui-edge.json |
 | 完整冻结时钟 Golden | NOT_RUN | — |
 | 独立审查 | PASS：无 Critical/阻塞缺陷；REVIEW.md 记录 1 项 docs-only Important（D-1，本轮已修）与 10 项 Minor 残留风险 | REVIEW.md |

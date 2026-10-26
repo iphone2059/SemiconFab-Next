@@ -22,7 +22,7 @@
 | P3 后端/相机/拾取 | PASS（产品） | `lite-backend.ts` 实现现有 SceneBackend/SceneFacade，`/twin` 由原生 Lite 世界承载：相机预设/轨道/缩放/open resize、GPU 拾取/悬停/选中框/双击聚焦、楼层/爆炸/图层/状态灯/X-Ray/剖切/wafer/tour/patrol/双语。真实 /twin 产品验收 0 console 错误。 |
 | P4 材质/光照 | PASS（产品集成，完整矩阵 NOT_RUN） | 源光照在预览与产品一致；生产构建逐视角对照冻结旧 Next 的均值差 ISO 10.2 / TOP 13.7 / B1 17.7 / DUAL 20.6 / EXPLODED 14.6（动态时钟未冻结，不构成 Golden）。 |
 | P5 阴影 | PASS（产品集成，Golden NOT_RUN） | 原生 CSM 在产品中持续开启；三次设备丢失后 0 GPU 错误；完整场景矩阵/Golden 未执行。 |
-| P6–P10 动态/业务/性能 | PASS（产品功能），性能：生产 A/B PASS | AMHS/人员/巡检、Roof HVAC/气流/热力图、X-Ray/剖切/wafer、tour/HUD 已由 Lite 原生模块承载并通过产品验收。生产预览同机性能：全新单一前台浏览器三次重复，Lite idle/orbit 52.8/46.0 fps vs 冻结旧渲染器 39.2/38.9 fps（≈1.2–1.35×；旧 57.9/53.9 vs 15.8/14.0 因遮挡节流撤回）；冻结时钟视觉 A/B、1 分钟 soak（用户指示替代 60 分钟）与 Chrome 155+Edge 156 矩阵见验证表。 |
+| P6–P10 动态/业务/性能 | PASS（产品功能），性能：生产 A/B PASS | AMHS/人员/巡检、Roof HVAC/气流/热力图、X-Ray/剖切/wafer、tour/HUD 已由 Lite 原生模块承载并通过产品验收。生产预览同机性能：全新单一前台浏览器三次重复，Lite idle/orbit 52.5/45.8 fps vs 冻结旧渲染器 38.2/37.4 fps（≈1.2–1.35×；旧 57.9/53.9 vs 15.8/14.0 因遮挡节流撤回）；冻结时钟视觉 A/B、1 分钟 soak（用户指示替代 60 分钟）与 Chrome 155+Edge 156 矩阵见验证表。 |
 | P11 删除旧引擎 | PASS（待独立审查） | 17 个旧渲染源文件删除；旧 Scene 依赖的验收/单测与采集工具删除，`lite-facility.test.ts` 改为冻结 fixture 对照（保留 52 文件/241 测试）；`@babylonjs/core` 移出 package.json 与锁文件；src/tests/config/tools 0 旧导入；生产 dist 无旧引擎符号；`gpu` chunk 396 kB vs 旧 2.53 MB。 |
 
 独立测试入口支持 P1 立方体、`?scene=equipment` 和 `?scene=structure`（含 L1/B1/DUAL/FFU 按钮）。当前 `/twin` 已由原生 Lite 后端承载（P3/P11 完成，见“产品完成阶段”）；新 Lite 路径没有 `@babylonjs/core`、compat、alias、WebGL 或自制引擎兼容类，旧引擎源码与依赖均已删除。完整冻结时钟 Golden 与性能以外的浏览器/Soak 门禁状态见验证表。
@@ -82,10 +82,10 @@ node tools/run_twin_browser.mjs lite-layout 9490 http://127.0.0.1:5175 .local/li
 
 - **正式产品切到 Lite**：`web_app/src/fab-viewer.tsx` 动态加载 `lite-backend.ts`（原 `babylon-webgpu`），产品状态仍通过 SceneBackend/SceneFacade 与 Redux 交互。`render/lite/world.ts` 组合设备/静态厂房/设施/光照/原生 CSM 阴影/AMHS/人员/环境/特效，使用单一 RH→LH 渲染边界与单帧循环；`render/lite/cut-plane.ts` 用公开 MaterialPlugin 为 PBR 材质补齐全场景剖切；`render/lite/selection.ts`+`tool-states.ts` 提供原生 GPU 拾取与状态灯；billboard 使用共享 `overlay-billboards.ts`（LITE-GAP-RECOVERY-002 组合）。
 - **产品验收**：`web_app/tests/twin-lite.browser.ts` 在真实 `/twin` 上覆盖拾取/悬停/选中框/双击聚焦、相机预设/轨道/缩放/resize、L1/B1/DUAL/EXPLODED、全部图层（含 heatmap/airflow 时钟）、工具状态帧同步、X-Ray 过滤/恢复、剖切平面/极性/互斥语义、wafer/轨迹/跟随相机、巡游/巡检/双语，以及**三次真实设备丢失**（cut/X-Ray/无空间模式三种前置状态，0 GPU 错误，相机/121 状态/无模式轮选中框与选中项保持，Redux 同步恢复；重建中的二次丢失会排队重建）。生产构建预览上同一套件与旧 `twin.browser.ts` UI 套件均 PASS，0 console 错误。证据：[evidence/product-completion-2026-10-26/README.md](./evidence/product-completion-2026-10-26/README.md)。
-- **冻结时钟视觉 A/B**：对冻结旧 Next（`0b35ca5`）用参考 golden 的 GOLDEN_CLOCK 手动步进（相同虚拟帧数）捕获 7 视角，ROI 均值差 ISO 10.011 / TOP 13.571 / B1 17.688 / DUAL 20.146 / EXPLODED 8.459 / CUT 5.703 / X-RAY 34.004（`tools/frozen_visual_compare.mjs` 可复现，重复运行 ±0.5）；X-Ray 已接入 CSM receiver 阴影调制（43.86→≈34），但仍为已知视觉缺口（偏亮），整体仍记录为比较而非 Golden。
-- **性能 A/B（生产构建）**：全新单一前台浏览器三次重复，Lite 52.8/46.0 fps（idle/orbit）vs 旧渲染器 39.2/38.9 fps（≈1.2–1.35×），0 console 错误；Lite gpu chunk 396,492 B vs 旧 2,528,822 B。旧记录 57.9/53.9 vs 15.8/14.0 因 legacy tab 被遮挡节流而撤回。
+- **冻结时钟视觉 A/B**：对冻结旧 Next（`0b35ca5`）用参考 golden 的 GOLDEN_CLOCK 手动步进（相同虚拟帧数）捕获 7 视角，ROI 均值差 ISO 9.881 / TOP 13.473 / B1 17.751 / DUAL 19.943 / EXPLODED 8.299 / CUT 5.575 / X-RAY 28.692（`tools/frozen_visual_compare.mjs` 可复现，重复运行 ±0.5）；X-Ray 在 CSM receiver 阴影调制上应用冻结产品 legibility floor/低对比近似，从 43.86 降到 28.69，但仍为已知视觉缺口（偏亮），整体仍记录为比较而非 Golden。
+- **性能 A/B（生产构建）**：全新单一前台浏览器三次重复，Lite 52.5/45.8 fps（idle/orbit）vs 旧渲染器 38.2/37.4 fps（≈1.2–1.35×），0 console 错误；Lite gpu chunk 396,492 B vs 旧 2,528,822 B。旧记录 57.9/53.9 vs 15.8/14.0 因 legacy tab 被遮挡节流而撤回。
 - **P11 清理**：17 个旧渲染源文件删除，旧 Scene 依赖的验收/单测与采集工具清退（保留 52 文件/241 测试，设施测试改为冻结 fixture 对照，新增接受度 PNG 解码器单测）；`@babylonjs/core` 从 package.json/锁文件移除；生产依赖图与 dist 无旧引擎导入/符号；前端 241 测试、typecheck、build 通过。
-- **已知产品级取舍**（详见 [FEATURE_GAPS.md](./FEATURE_GAPS.md)）：整产品设备恢复采用替换设备上重建场景（原生 in-place 恢复仍由 bounded 夹具覆盖）；X-Ray 全息已接入 CSM receiver 阴影调制（深度-only caster material 规避 1.36 usage conflict），但冻结帧仍整体偏亮（冻结时钟视觉差 34.98，从 43.86 下降，仍记录为已知缺口）；剖切仅作用于 PBR 材质；依赖旧 Scene 内部结构的旧验收脚本已清退，由产品验收套件替代。
-- **Soak**：按用户指示改为 1 分钟 soak（最终生产构建：52.1 fps、0 long task、0 GPU/console 错误、heap 32.9 MB）；60 分钟 soak 因此 NOT_RUN，不虚报。
+- **已知产品级取舍**（详见 [FEATURE_GAPS.md](./FEATURE_GAPS.md)）：整产品设备恢复采用替换设备上重建场景（原生 in-place 恢复仍由 bounded 夹具覆盖）；X-Ray 全息已接入 CSM receiver 阴影调制（深度-only caster material 规避 1.36 usage conflict），并应用冻结产品 legibility floor/低对比近似，冻结帧仍整体偏亮（视觉差 28.69，从 43.86 下降，仍记录为已知缺口）；剖切仅作用于 PBR 材质；依赖旧 Scene 内部结构的旧验收脚本已清退，由产品验收套件替代。
+- **Soak**：按用户指示改为 1 分钟 soak（最终生产构建：51.5 fps、0 long task、0 GPU/console 错误、heap 37.5 MB）；60 分钟 soak 因此 NOT_RUN，不虚报。
 - **浏览器矩阵**：Chrome 155 与 Edge 156 产品验收+UI 回归均 PASS；非 Chromium WebGPU 浏览器本机不可用，NOT_RUN。
 - **仍未完成**：完整冻结时钟 Golden、独立审查（REVIEW.md 收敛中）。

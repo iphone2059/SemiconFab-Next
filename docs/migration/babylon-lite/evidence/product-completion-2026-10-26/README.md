@@ -26,7 +26,7 @@ Edge run: [acceptance-edge.json](./acceptance-edge.json), [acceptance-edge.png](
 | Levels | L1 floor alpha 1 / B1 0.2 / DUAL 0.35 / EXPLODED 0.55, slab+ceiling+subfab visibility, ceiling lift >15 m, subfab drop <-13 m, offsets reset |
 | Layers | roof (>0 native exhaust particle sprites; source data has 70), ceiling, subfab/piping, heatmap texture updates, airflow clock advances, AMHS layer hide/show |
 | Tool states | inspector MAINT reaches the native frame loop within the up-to-5 s frame-sync poll window; 121 states after each recovery |
-| X-Ray | all/vac filters, hologram materials active, **CSM receiver sampled (`shadowLinked` true)**, subfab forced visible, restore removes all `fab-xray-*` materials and returns L1 |
+| X-Ray | all/vac filters, hologram materials active, **CSM receiver sampled (`shadowLinked` true) with the source legibility floor**, subfab forced visible, restore removes all `fab-xray-*` materials and returns L1 |
 | Section cut | Z +12 => `[0,0,-1,-12]`; invert => `[0,0,1,12]`; exclusive spatial mode clears cut for X-Ray; cut off => null |
 | Wafer | marker visible/moving, additive trail draws (>0 indices), follow camera targets the marker, close hides marker/trail |
 | Tour / patrol | tour card animates the camera and closes; patrol focus targets the walking engineer |
@@ -51,7 +51,7 @@ Method (reproducible from the repository, no scratch scripts): `node tools/froze
 Both pages run under the reference golden harness clock (`GOLDEN_CLOCK`: fixed 16.667 ms virtual
 frames, seeded `Math.random`, fixed `Date.now`), injected via CDP
 `Page.addScriptToEvaluateOnNewDocument`; the clock is held at 0 until the shell loads, readiness is
-padded to a fixed 120-frame budget on both sides, then +180 settle frames and identical per-view frame
+padded to a fixed 400-frame budget on both sides, then +180 settle frames and identical per-view frame
 counts for ISO, Top, B1, Dual, L1→Exploded, Cut and X-Ray. Sites are captured sequentially in one
 foreground tab so a second tab cannot blank/occlude the canvas. Viewport 1536x735 DPR 1, HUD visible
 outside the ROI, ROI `[400,120,1500,680]`, absolute RGB difference computed in Node, no colour
@@ -61,13 +61,13 @@ about ±0.5 mean channel; the values below are one recorded run (both sides on i
 
 | View | mean abs channel diff | pixels changed >24 |
 |---|---|---|
-| ISO | 10.011 | 15.3% |
-| TOP | 13.571 | 20.6% |
-| B1 | 17.688 | 29.1% |
-| DUAL | 20.146 | 37.5% |
-| EXPLODED | 8.459 | 11.3% |
-| CUT (X axis) | 5.703 | 8.5% |
-| X-RAY (all) | 34.004 | 56.1% |
+| ISO | 9.881 | 15.0% |
+| TOP | 13.473 | 20.4% |
+| B1 | 17.751 | 29.1% |
+| DUAL | 19.943 | 37.3% |
+| EXPLODED | 8.299 | 11.1% |
+| CUT (X axis) | 5.575 | 8.2% |
+| X-RAY (all) | 28.692 | 55.7% |
 
 Free-running earlier captures (no frozen clock) are superseded: ISO 10.301 / TOP 13.721 / B1 17.666 /
 DUAL 20.480 / EXPLODED 14.593. Freezing removed the dynamic-phase noise (notably EXPLODED
@@ -75,17 +75,25 @@ DUAL 20.480 / EXPLODED 14.593. Freezing removed the dynamic-phase noise (notably
 receiver** (2-layer `depth32float` array with its comparison sampler) and casts through a depth-only
 Standard caster material, which avoids Lite 1.36's writable+sampled usage conflict: `shadowLinked`
 is true, the three device-loss rounds still report 0 GPU errors, and the frozen X-Ray diff improved
-from 43.860 (no shadow sampling) to **≈34** (34.004 in this run). X-Ray remains a **known visual gap** — the product
-hologram is still lighter than the frozen source's custom depth-pass hologram — and is recorded as a
-limitation, not a pass.
+from 43.860 (no shadow sampling) via ≈35 (raw CSM response) to **28.692** after the frozen-product
+legibility-floor decision (below). X-Ray remains a **known visual gap** — the product hologram is
+still lighter than the frozen source's custom depth-pass hologram — and is recorded as a limitation,
+not a pass.
 
 Residual analysis (round 4, debug-marker experiment): a temporary pure-red highlight marker proved
 the highlighted-subfab branch renders over ~20% of the canvas on both sides, so coverage is right;
 inside that mask the reference's median luminance is 117 vs the product's 164 (mean RGB (65,136,167)
-vs (125,185,201)). The residual is therefore the *shadow/lit response* of the palette: the source
-hologram sampled its own static depth pass, while the product samples camera-fitted CSM cascades
-whose `lit` is ~1 for most subfab surfaces. The marker experiment was reverted; no debug code
-remains in the tree.
+vs (125,185,201)). The residual was therefore the *shadow/lit response* of the palette, not geometry.
+
+Frozen-product legibility-floor decision (round 6): experiments showed the raw CSM response leaves most
+hologram surfaces near fully lit (35.039 X-Ray mean diff), while the source hologram sampled its own
+custom static depth pass and reads as much darker with a wide distribution (median luminance 117).
+Reproducing the source's single-map response cannot use the CSM cadence directly, so the palette keeps
+the native CSM modulation but folds it into the source legibility floor and reduced contrast:
+`lit = 0.35 + (1 - 0.35) * shadow * 0.35` (named `XRAY_LIT_FLOOR` / `XRAY_SHADOW_CONTRAST` in
+`render/lite/effects.ts`). This is a documented **visual-parity approximation of the frozen product's
+appearance**, not a claim that the legacy depth pass was reproduced; it lowers the frozen X-Ray diff
+to 28.692. The marker experiment was reverted; no debug code remains in the tree.
 
 This is a **frozen-clock comparison, not a Golden PASS**: the migration guide does not define a
 whole-product golden threshold and the X-Ray gap is visible. Whole-product Golden remains NOT_RUN.
@@ -98,8 +106,8 @@ Method: 5 s warmup, 8 s idle + 6 s orbit sampling of rAF deltas, same Chrome/vie
 
 | Renderer | idle fps | orbit fps |
 |---|---|---|
-| Native Lite (production) | 52.8 | 46.0 |
-| Frozen Next 0b35ca5 (production) | 39.2 | 38.9 |
+| Native Lite (production) | 52.5 | 45.8 |
+| Frozen Next 0b35ca5 (production) | 38.2 | 37.4 |
 
 Both runs 0 console errors. **Methodology correction**: earlier A/B numbers (Lite 57.9/53.9 vs legacy
 15.8/14.0) were captured in a stale multi-window CDP browser in which the legacy tab was
@@ -113,8 +121,8 @@ asserted here.
 ## 5. Soak (user-directed 1-minute run; 60-minute NOT_RUN)
 
 The session owner explicitly replaced the planned 60-minute soak with a 1-minute soak. Final-build
-result: 3,128 frames, mean frame 19.18 ms (**52.1 fps**), p95 33.4 ms, p99 33.5 ms, **0 long tasks**,
-heap 32.9 MB, 0 GPU validation errors, 0 console errors, status stable at
+result: 3,088 frames, mean frame 19.41 ms (**51.5 fps**), p95 33.4 ms, p99 33.5 ms, **0 long tasks**,
+heap 37.5 MB, 0 GPU validation errors, 0 console errors, status stable at
 `WebGPU · 程序化 FAB · 121 台设备`. Raw: [soak.json](./soak.json).
 A 60-minute soak remains **NOT_RUN** by instruction; it is not reported as passed.
 
@@ -154,8 +162,8 @@ downloaded; non-Chromium coverage is **NOT_RUN**.
 
 - Whole-product frozen-clock **Golden: NOT_RUN**; frozen-clock comparison above is the closest
   recorded evidence and is reproducible with `tools/frozen_visual_compare.mjs`. **X-Ray visual gap**
-  (frozen mean diff ≈34 with CSM shadow sampling, down from 43.86 without it) is accepted as a
-  documented limitation.
+  (frozen mean diff 28.692 after the legibility-floor approximation, down from 43.86 without shadow
+  sampling) is accepted as a documented limitation.
 - 60-minute soak: **NOT_RUN** (user-directed 1-minute soak instead).
 - Non-Chromium browser coverage: **NOT_RUN** (no such browser available).
 - Residual review items (camera-restore timer ordering, cascading-loss queue untested, clip scope for

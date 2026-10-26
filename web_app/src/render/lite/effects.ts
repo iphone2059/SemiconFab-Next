@@ -70,6 +70,12 @@ const XRAY_NORMAL_LINE_COLOR: readonly [number, number, number, number] = [217 /
 // xray-hologram.ts:154 setLineXray(true).
 const XRAY_LINE_PARAMS: readonly [number, number, number, number] = [1, 0.75, 0, 1.4];
 const XRAY_ZERO_PARAMS: readonly [number, number, number, number] = [0, 0, 0, 0];
+// Frozen-product visual response: the source hologram shaded through its own custom static depth pass,
+// whose sampled response reads as the legibility floor for most hologram surfaces. The native CSM
+// approximation is kept (it adds local contrast) but scaled so the palette reproduces the frozen
+// product's overall luminance. Measured with tools/frozen_visual_compare.mjs; see FEATURE_GAPS.
+const XRAY_LIT_FLOOR = 0.35;
+const XRAY_SHADOW_CONTRAST = 0.35;
 
 // Frozen source palette colours, xray-hologram.ts:114-116 and babylon-webgpu.ts:188-218.
 const rgb = (hex: number): [number, number, number] =>
@@ -196,7 +202,7 @@ fn mainFragment(input: XrayVertexOutput) -> @location(0) vec4<f32> {
   if (shaderUniforms.xrayShadowEnabled >= 0.5) {
     shadow = xrayCsmShadow(vec4<f32>(input.worldPosition, 1.0), (shaderSystem.view * vec4<f32>(input.worldPosition, 1.0)).z);
   }
-  let lit = 0.35 + 0.65 * shadow;
+  let lit = ${XRAY_LIT_FLOOR.toFixed(2)} + (1.0 - ${XRAY_LIT_FLOOR.toFixed(2)}) * shadow * ${XRAY_SHADOW_CONTRAST.toFixed(2)};
   if (shaderUniforms.xrayParams.z > 0.5) {
     return vec4<f32>((tint * (0.45 + 0.2 * scan) + glow * (0.35 + 0.35 * rim)) * lit, 1.0);
   }

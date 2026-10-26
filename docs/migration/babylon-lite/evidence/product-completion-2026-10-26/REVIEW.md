@@ -275,3 +275,20 @@ residual risks, not merge blockers.
 - An intermediate simultaneous-two-tab variant produced blank reference canvases (background tab
   presentation); the shipped tool captures sites sequentially to avoid it. This is documented in the
   tool header and the evidence README.
+
+## Post-review delta (round 6): frozen-product legibility floor for X-Ray
+
+- Experiments (coarsest-cascade sampling, constant lit, inverted compare, reduced contrast) isolated
+  the remaining X-Ray gap to the palette's luminance response: the raw CSM response leaves hologram
+  surfaces near fully lit (frozen X-Ray diff 35.04), while the frozen source's custom static depth pass
+  reads much darker (highlight-mask median luminance 117 vs 164).
+- Adopted a documented visual-parity approximation of the frozen product's appearance: keep the native
+  CSM modulation but fold it into the source legibility floor and reduced contrast
+  (`lit = 0.35 + 0.65 * shadow * 0.35`, named constants in `render/lite/effects.ts`). Frozen X-Ray diff
+  drops to 28.692; the other six frozen views are unchanged within run variance (ISO 9.881, TOP 13.473,
+  B1 17.751, DUAL 19.943, EXPLODED 8.299, CUT 5.575).
+- This is explicitly a frozen-product appearance approximation, not a reproduction of the legacy depth
+  pass; X-Ray remains a documented visual gap and the project remains NOT_PARITY_VERIFIED.
+- Gates re-run on this build: Chrome 155 + Edge 156 product/UI suites PASS (0 errors, three device
+  losses), production perf A/B 52.5/45.8 vs 38.2/37.4 fps, 1-minute soak 51.5 fps / 0 long tasks /
+  0 GPU+console errors; tsc/vitest/build clean.

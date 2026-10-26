@@ -45,7 +45,8 @@ export const VIEWS = [
 export const ROI = { x0: 400, y0: 120, x1: 1500, y1: 680 };
 const SETTLE_FRAMES = 180;
 // Both sites pad readiness to this frame count so the whole view schedule runs on identical frames.
-const READY_FRAMES = 120;
+// First ready needs ~130 frames on a cold GPU upload, so the budget is deliberately generous.
+const READY_FRAMES = 400;
 
 /** Mirrors web_app/tests/support/png.ts; returns {width,height,channels,data}. */
 export function decodePng(buffer) {
@@ -224,7 +225,7 @@ const views = {};
 for (const view of VIEWS) views[view.id] = diffViews(fs.readFileSync(reference.files[view.id]), fs.readFileSync(lite.files[view.id]));
 const report = {
   capturedAt: new Date().toISOString(),
-  method: 'GOLDEN_CLOCK manual stepping via CDP Page.addScriptToEvaluateOnNewDocument; clock held at 0 until the shell loads, readiness padded to a fixed 120-frame budget on both sites, +180 settle frames, identical per-view frame counts; one foreground tab captured at a time; viewport 1536x735 DPR1; ROI [400,120,1500,680]; absolute RGB diff computed in Node.',
+  method: 'GOLDEN_CLOCK manual stepping via CDP Page.addScriptToEvaluateOnNewDocument; clock held at 0 until the shell loads, readiness padded to a fixed ' + READY_FRAMES + '-frame budget on both sites, +180 settle frames, identical per-view frame counts; one foreground tab captured at a time; viewport 1536x735 DPR1; ROI [400,120,1500,680]; absolute RGB diff computed in Node.',
   reference: { url: args.ref, commit: '0b35ca5' },
   lite: { url: args.lite },
   roi: ROI,

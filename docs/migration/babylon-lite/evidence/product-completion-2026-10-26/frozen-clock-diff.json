@@ -1,6 +1,6 @@
 {
-  "capturedAt": "2026-10-26T16:51:31.692Z",
-  "method": "GOLDEN_CLOCK manual stepping via CDP Page.addScriptToEvaluateOnNewDocument; clock held at 0 until the shell loads, readiness padded to a fixed 120-frame budget on both sites, +180 settle frames, identical per-view frame counts; one foreground tab captured at a time; viewport 1536x735 DPR1; ROI [400,120,1500,680]; absolute RGB diff computed in Node.",
+  "capturedAt": "2026-10-26T17:18:54.628Z",
+  "method": "GOLDEN_CLOCK manual stepping via CDP Page.addScriptToEvaluateOnNewDocument; clock held at 0 until the shell loads, readiness padded to a fixed 400-frame budget on both sites, +180 settle frames, identical per-view frame counts; one foreground tab captured at a time; viewport 1536x735 DPR1; ROI [400,120,1500,680]; absolute RGB diff computed in Node.",
   "reference": {
     "url": "http://127.0.0.1:5179",
     "commit": "0b35ca5"
@@ -16,54 +16,54 @@
   },
   "views": {
     "iso": {
-      "meanAbsChannel": 10.011,
-      "changedFraction": 0.15313
+      "meanAbsChannel": 9.881,
+      "changedFraction": 0.15047
     },
     "top": {
-      "meanAbsChannel": 13.571,
-      "changedFraction": 0.2059
+      "meanAbsChannel": 13.473,
+      "changedFraction": 0.20431
     },
     "b1": {
-      "meanAbsChannel": 17.688,
-      "changedFraction": 0.29069
+      "meanAbsChannel": 17.751,
+      "changedFraction": 0.29086
     },
     "dual": {
-      "meanAbsChannel": 20.146,
-      "changedFraction": 0.37464
+      "meanAbsChannel": 19.943,
+      "changedFraction": 0.37323
     },
     "exploded": {
-      "meanAbsChannel": 8.459,
-      "changedFraction": 0.11263
+      "meanAbsChannel": 8.299,
+      "changedFraction": 0.11077
     },
     "cut": {
-      "meanAbsChannel": 5.703,
-      "changedFraction": 0.08451
+      "meanAbsChannel": 5.575,
+      "changedFraction": 0.08187
     },
     "xray": {
-      "meanAbsChannel": 34.004,
-      "changedFraction": 0.56094
+      "meanAbsChannel": 28.692,
+      "changedFraction": 0.55743
     }
   },
   "timing": {
-    "referenceFrames": 3380,
-    "liteFrames": 3380,
+    "referenceFrames": 3660,
+    "liteFrames": 3660,
     "reference": {
-      "iso": 7000.000000000038,
-      "top": 9500.000000000013,
-      "b1": 14499.99999999983,
-      "dual": 19499.99999999999,
-      "exploded": 34500.000000000706,
-      "cut": 48666.66666666531,
-      "xray": 56333.33333333086
+      "iso": 11666.6666666666,
+      "top": 14166.66666666651,
+      "b1": 19166.66666666663,
+      "dual": 24166.666666666995,
+      "exploded": 39166.66666666669,
+      "cut": 53333.3333333313,
+      "xray": 60999.99999999685
     },
     "lite": {
-      "iso": 7000.000000000038,
-      "top": 9500.000000000013,
-      "b1": 14499.99999999983,
-      "dual": 19499.99999999999,
-      "exploded": 34500.000000000706,
-      "cut": 48666.66666666531,
-      "xray": 56333.33333333086
+      "iso": 11666.6666666666,
+      "top": 14166.66666666651,
+      "b1": 19166.66666666663,
+      "dual": 24166.666666666995,
+      "exploded": 39166.66666666669,
+      "cut": 53333.3333333313,
+      "xray": 60999.99999999685
     }
   },
   "errors": {
