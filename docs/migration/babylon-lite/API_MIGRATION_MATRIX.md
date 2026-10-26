@@ -18,6 +18,11 @@
 | 每零件 Mesh / 设备身份 | `setThinInstances`、现有 `TWIN_LAYOUT_IDENTITIES` | 按几何+材质分为 51 批；CPU 保存 `(mesh, instanceIndex) → 121 个独立 placement identity`，保留重复 recordId。GPU picker 尚属 P3。 |
 | 设备 PBR/状态灯 | `createPbrMaterial`、`setPbrEmissive` | 保留基色/透明度/金属度/粗糙度；材质共享。只通过数据/几何门禁，完整光照视觉属于 P4。 |
 | 薄实例设备恢复 | 公开 `mesh.thinInstances` 数据槽、`setThinInstances`、`setThinInstanceColors` | 旧 RAF 停止后丢弃旧实例状态并重建，避免 Lite 1.36 保留旧设备缓存；构建后真实 GPU 三次恢复通过。见 [缺口证据](./LITE-GAP-RECOVERY-001.md)。 |
-| 厂房结构/拾取/阴影/粒子 | 见指南完整模块映射 | P2 其余部分与 P3–P10 尚未实施，不以设备夹具替代产品验收。 |
+| 厂房 L1/墙柱/区带/FFU/B1 | `createMeshFromData`、`createLineSystem`、`setThinInstances`、`decomposeMat4` | P2b 离线保留原顶点/法线/UV/索引与完整矩阵；1648 部件、396 批。透明 Mesh 自身持有世界变换，保留原生排序中心。没有旧引擎运行依赖。 |
+| 地板穿孔纹理/重复 UV | `createDynamicTexture`、`updateDynamicTexture`、`setTextureTransform`、`enableMaterialUvTransform` | 两张 512² 线性纹理、10 mip，原 Canvas2D 配方，95×70 / 28×60 重复；creator 引用单独释放，含上传失败清理。 |
+| B1 显隐/展开/灯 | `createTransformNode`、`setParent`、`setSubtreeVisible`、`createPointLight` | shell/FFU/B1 独立根；B1 灯不随 Mesh 隐藏，随 B1 offset 移动。10 盏灯的位置/颜色/范围/强度保留，legacyDecay 输入保留在 metadata，精确光照仍属 P4。 |
+| 原生 PBR 折射依赖 | `setPbrTransmission`、`loadHdrEnvironment` | 1.36 折射片段依赖 IBL；通过全黑 RGBE 和官方 loader 提供，environmentIntensity=0，恢复 loader 修改的 imageProcessing。无自实现 shader。见 [原生能力记录](./FEATURE_GAPS.md)。 |
+| 异步初始化/注册前丢失 | 等待 compose Promise、AbortSignal、原生恢复回调 | 不在上传未结束时释放设备；注册前丢失终止本次挂载，等待 composition/recovery 都结束再清理，禁止注册旧设备资源。 |
+| 产品拾取/阴影/粒子 | 见指南完整模块映射 | P3–P10 尚未实施；静态预览不替代完整产品验收。 |
 
 已阅读的官方 release 资料：[Welcome](https://github.com/BabylonJS/Babylon-Lite/blob/npm-lite-v1.36.0/docs/lite/00-welcome.md)、[Getting Started](https://github.com/BabylonJS/Babylon-Lite/blob/npm-lite-v1.36.0/docs/lite/01-getting-started.md)、[Native Porting Guide](https://github.com/BabylonJS/Babylon-Lite/blob/npm-lite-v1.36.0/docs/lite/03-porting-guide.md)、[Device Lost Recovery](https://github.com/BabylonJS/Babylon-Lite/blob/npm-lite-v1.36.0/docs/lite/architecture/50-device-lost-recovery.md)、[public exports](https://github.com/BabylonJS/Babylon-Lite/blob/npm-lite-v1.36.0/packages/babylon-lite/src/index.ts)。实现时另查了安装包 `engine.js` 的 start/stop/resize 和 `scene-core.js` 的 deferred register/dispose 所有权。

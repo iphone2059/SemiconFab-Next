@@ -79,6 +79,53 @@ it('does not acquire a device when the mount signal is already aborted', async (
   expect(gpu.live.size).toBe(0);
 });
 
+it('waits for asynchronous scene composition before cleaning an aborted mount', async () => {
+  const composition = deferred();
+  const runtime = createLiteRuntime(canvas, { compose: async () => {
+    gpu.live.add('controls');
+    await composition.promise;
+    return () => { gpu.live.delete('controls'); };
+  } });
+  await vi.waitFor(() => expect(gpu.live.has('controls')).toBe(true));
+  runtime.dispose();
+  expect(gpu.live.has('engine')).toBe(true);
+  composition.resolve();
+  await expect(runtime.ready).rejects.toMatchObject({ name: 'AbortError' });
+  expect(gpu.registerScene).not.toHaveBeenCalled();
+  expect(gpu.live.size).toBe(0);
+});
+
+it('releases the scene and engine when asynchronous composition rejects', async () => {
+  const failure = new Error('environment upload rejected');
+  const runtime = createLiteRuntime(canvas, { compose: async () => { throw failure; } });
+  await expect(runtime.ready).rejects.toBe(failure);
+  expect(runtime.status).toBe('failed');
+  expect(gpu.live.size).toBe(0);
+});
+
+it.each(['before-compose-settles', 'after-compose-settles'] as const)(
+  'fails a device loss during asynchronous composition and retains ownership until recovery finishes %s', async order => {
+    const composition = deferred();
+    const runtime = createLiteRuntime(canvas, { compose: async () => {
+      gpu.live.add('controls'); await composition.promise;
+      return () => { gpu.live.delete('controls'); };
+    } });
+    await vi.waitFor(() => expect(gpu.live.has('controls')).toBe(true));
+    gpu.recovery.onLost?.({ reason: 'unknown', message: 'device lost during HDR upload' });
+    if (order === 'before-compose-settles') gpu.recovery.onRecovered?.();
+    expect(gpu.live.has('engine')).toBe(true);
+    composition.resolve();
+    await expect(runtime.ready).rejects.toThrow('WebGPU device lost before scene registration completed');
+    expect(gpu.registerScene).not.toHaveBeenCalled();
+    expect(gpu.startEngine).not.toHaveBeenCalled();
+    if (order === 'after-compose-settles') {
+      expect(gpu.live.has('engine')).toBe(true);
+      gpu.recovery.onRecovered?.();
+    }
+    expect(runtime.status).toBe('failed');
+    expect(gpu.live.size).toBe(0);
+  });
+
 it.each(['create', 'register'] as const)('defers cleanup during pending %s and never starts stale work', async stage => {
   const pending = deferred(); const states: string[] = [];
   if (stage === 'create') gpu.createEngine.mockImplementation(async () => { await pending.promise; gpu.live.add('engine'); return {}; });

@@ -1,6 +1,6 @@
-# P0–P2a 验证记录 — 2026-10-26
+# P0–P2 验证记录 — 2026-10-26
 
-当前验收独立原生生命周期和 P2a 设备几何。产品状态仍是 `IMPLEMENTING / NOT_PARITY_VERIFIED`。P2a 的最新完整记录见 [P2_EQUIPMENT.md](./P2_EQUIPMENT.md)。
+当前验收独立原生生命周期、P2a 设备和 P2b 厂房静态几何。产品状态仍是 `IMPLEMENTING / NOT_PARITY_VERIFIED`。最新完整记录见 [P2_STATIC_STRUCTURE.md](./P2_STATIC_STRUCTURE.md)，P2a 历史记录见 [P2_EQUIPMENT.md](./P2_EQUIPMENT.md)。
 
 | 检查 | 结果 | 证据 |
 |---|---|---|
@@ -13,7 +13,8 @@
 | 8 组原版冻结向量/翻译检查 | PASS：手动完整执行；新增 runtime 文件后重新生成 i18n 源码清单（只增加文件名） | [frozen-vectors.txt](./evidence/frozen-vectors.txt) |
 | 12 个冻结源码/fixture 文件散列 | PASS：0 变化 | [BASELINE.json](./BASELINE.json) |
 | 121 台 Lite 设备几何 | PASS（P2a）：51 批 / 936 零件实例，冻结几何/颜色/包围盒/身份对照、构建后 GPU 三次恢复及卸载/重挂载通过 | [P2 设备记录](./P2_EQUIPMENT.md)；全套 Python 16 / .NET 67 / 前端 213，typecheck/build PASS |
-| 厂房结构、拾取、FAB 页面功能、阴影、模式组合 | NOT_RUN | P2 剩余工作和 P3–P9 后续门禁 |
+| 厂房结构 | PASS（P2b 几何）：1648 部件 / 396 批 / 10 灯，矩阵/包围盒/三角属性/材质输入对照通过；构建后 L1/FFU/B1/DUAL、三次恢复及重挂载通过 | [P2b 完整证据](./P2_STATIC_STRUCTURE.md)；最新总验证 Python 16 / .NET 67 / 前端 223，生命周期 23 项 |
+| 产品拾取、完整 FAB 页面、阴影、模式组合 | NOT_RUN | P3–P9 后续门禁 |
 | 原版/隔离旧 Next ISO/Top 参考捕获 | PASS（同 Chrome，1536×735，DPR 1，冻结 seed/clock），不等于完整 Golden 通过 | [清单](./evidence/p2-reference/manifest.json) |
 | 原版/旧 Next/Lite 截图差异 | NOT_RUN | P1 cube 不等于 FAB Golden |
 | 同机性能 A/B、60 分钟内存、浏览器矩阵 | NOT_RUN | 不推断性能收益或完整场景恢复能力 |

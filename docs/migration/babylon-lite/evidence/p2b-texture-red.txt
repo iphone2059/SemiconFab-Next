@@ -1,0 +1,34 @@
+npm notice run web_app@0.1.0 test
+npm notice run vitest run tests/lite-static-structure.test.ts
+
+ RUN  v5.0.5 C:/Users/han_qingyu/SemiconFab-Next/web_app
+
+ ❯ tests/lite-static-structure.test.ts (5 tests | 1 failed) 263ms
+   × releases the caller-owned floor texture if its upload fails before scene registration 7ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lite-static-structure.test.ts > releases the caller-owned floor texture if its upload fails before scene registration
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ tests/lite-static-structure.test.ts:145:34
+    143|     expect(() => createLiteStaticStructure(scene, engine)).toThrow('te…
+    144|     disposeScene(scene);
+    145|     expect(textureGpu.live.size).toBe(0);
+       |                                  ^
+    146|   } finally { disposeScene(scene); vi.unstubAllGlobals(); }
+    147| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  11:51:34
+   Duration  799ms (import 53%, tests 37%, transform 9%)

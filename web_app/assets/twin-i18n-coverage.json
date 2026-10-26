@@ -98,6 +98,7 @@
       "web_app/src/preferences.ts",
       "web_app/src/procedural-fab.ts",
       "web_app/src/process-control.ts",
+      "web_app/src/render/lite/geometry/static-structure.ts",
       "web_app/src/render/lite/geometry/tool-families.ts",
       "web_app/src/render/lite/runtime.ts",
       "web_app/src/research-replay.ts",

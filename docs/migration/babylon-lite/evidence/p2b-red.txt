@@ -1,0 +1,74 @@
+npm notice run web_app@0.1.0 test
+npm notice run vitest run tests/lite-static-structure.test.ts
+
+ RUN  v5.0.5 C:/Users/han_qingyu/SemiconFab-Next/web_app
+
+ ❯ tests/lite-static-structure.test.ts (4 tests | 4 failed) 5ms
+   × retains every frozen static mesh and its actual world matrix and rendered bounds 4ms
+   × preserves frozen triangle vertices, normals, UVs and indices rather than replacing pipes or detailed facilities with boxes 0ms
+   × keeps PBR/Standard colors, opacity, specular and emissive inputs and native curtain transmission 0ms
+   × moves and hides B1/FFU independently while keeping basement lights active and applying their B1 offset 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lite-static-structure.test.ts > retains every frozen static mesh and its actual world matrix and rendered bounds
+Error: Static structure not implemented
+ ❯ Module.createLiteStaticStructure src/render/lite/geometry/static-structure.ts:20:9
+     18| }
+     19| export function createLiteStaticStructure(_scene: SceneContext, _engin…
+     20|   throw new Error('Static structure not implemented');
+       |         ^
+     21| }
+     22|
+ ❯ fixture tests/lite-static-structure.test.ts:30:26
+ ❯ tests/lite-static-structure.test.ts:35:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/lite-static-structure.test.ts > preserves frozen triangle vertices, normals, UVs and indices rather than replacing pipes or detailed facilities with boxes
+Error: Static structure not implemented
+ ❯ Module.createLiteStaticStructure src/render/lite/geometry/static-structure.ts:20:9
+     18| }
+     19| export function createLiteStaticStructure(_scene: SceneContext, _engin…
+     20|   throw new Error('Static structure not implemented');
+       |         ^
+     21| }
+     22|
+ ❯ fixture tests/lite-static-structure.test.ts:30:26
+ ❯ tests/lite-static-structure.test.ts:62:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/lite-static-structure.test.ts > keeps PBR/Standard colors, opacity, specular and emissive inputs and native curtain transmission
+Error: Static structure not implemented
+ ❯ Module.createLiteStaticStructure src/render/lite/geometry/static-structure.ts:20:9
+     18| }
+     19| export function createLiteStaticStructure(_scene: SceneContext, _engin…
+     20|   throw new Error('Static structure not implemented');
+       |         ^
+     21| }
+     22|
+ ❯ fixture tests/lite-static-structure.test.ts:30:26
+ ❯ tests/lite-static-structure.test.ts:76:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/lite-static-structure.test.ts > moves and hides B1/FFU independently while keeping basement lights active and applying their B1 offset
+Error: Static structure not implemented
+ ❯ Module.createLiteStaticStructure src/render/lite/geometry/static-structure.ts:20:9
+     18| }
+     19| export function createLiteStaticStructure(_scene: SceneContext, _engin…
+     20|   throw new Error('Static structure not implemented');
+       |         ^
+     21| }
+     22|
+ ❯ fixture tests/lite-static-structure.test.ts:30:26
+ ❯ tests/lite-static-structure.test.ts:104:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  11:46:48
+   Duration  582ms (import 67%, transform 31%, tests 1%, worker 1%)

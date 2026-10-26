@@ -1,0 +1,82 @@
+npm notice run web_app@0.1.0 test
+npm notice run vitest run tests/lite-runtime.test.ts
+
+ RUN  v5.0.5 C:/Users/han_qingyu/SemiconFab-Next/web_app
+
+ ❯ tests/lite-runtime.test.ts (21 tests | 2 failed) 764ms
+   × waits for asynchronous scene composition before cleaning an aborted mount 63ms
+   × releases the scene and engine when asynchronous composition rejects 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lite-runtime.test.ts > waits for asynchronous scene composition before cleaning an aborted mount
+TypeError: detach is not a function
+ ❯ release src/render/lite/runtime.ts:54:15
+     52|         recovery?.disable();
+     53|       } finally {
+     54|         try { detach?.(); }
+       |               ^
+     55|         finally {
+     56|           try { if (scene) disposeScene(scene); }
+ ❯ Object.dispose src/render/lite/runtime.ts:69:39
+ ❯ tests/lite-runtime.test.ts:90:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/lite-runtime.test.ts > releases the scene and engine when asynchronous composition rejects
+AssertionError: promise resolved "{ engine: {}, scene: {} }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "engine": {},
++   "scene": {},
+  }
+
+ ❯ tests/lite-runtime.test.ts:101:30
+     99|   const failure = new Error('environment upload rejected');
+    100|   const runtime = createLiteRuntime(canvas, { compose: async () => { t…
+    101|   await expect(runtime.ready).rejects.toBe(failure);
+       |                              ^
+    102|   expect(runtime.status).toBe('failed');
+    103|   expect(gpu.live.size).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+Error: environment upload rejected
+ ❯ tests/lite-runtime.test.ts:99:19
+     97|
+     98| it('releases the scene and engine when asynchronous composition reject…
+     99|   const failure = new Error('environment upload rejected');
+       |                   ^
+    100|   const runtime = createLiteRuntime(canvas, { compose: async () => { t…
+    101|   await expect(runtime.ready).rejects.toBe(failure);
+ ❯ node_modules/.pnpm/vitest@5.0.5_@types+node@26_178ea311d59e0807ae0248da70c5e56c/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35
+ ❯ node_modules/.pnpm/vitest@5.0.5_@types+node@26_178ea311d59e0807ae0248da70c5e56c/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26
+ ❯ node_modules/.pnpm/vitest@5.0.5_@types+node@26_178ea311d59e0807ae0248da70c5e56c/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20
+ ❯ runWithCancel node_modules/.pnpm/vitest@5.0.5_@types+node@26_178ea311d59e0807ae0248da70c5e56c/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10
+ ❯ node_modules/.pnpm/vitest@5.0.5_@types+node@26_178ea311d59e0807ae0248da70c5e56c/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20
+ ❯ runWithTimeout node_modules/.pnpm/vitest@5.0.5_@types+node@26_178ea311d59e0807ae0248da70c5e56c/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10
+ ❯ node_modules/.pnpm/vitest@5.0.5_@types+node@26_178ea311d59e0807ae0248da70c5e56c/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3904:64
+
+This error originated in "tests/lite-runtime.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The last test to run before this error was "defers cleanup during pending register and never starts stale work". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 19 passed (21)
+     Errors  1 error
+   Start at  14:16:58
+   Duration  913ms (tests 93%, transform 4%, import 2%)

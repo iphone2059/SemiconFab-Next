@@ -1,0 +1,34 @@
+npm notice run web_app@0.1.0 test
+npm notice run vitest run tests/lite-static-structure.test.ts
+
+ RUN  v5.0.5 C:/Users/han_qingyu/SemiconFab-Next/web_app
+
+ ❯ tests/lite-static-structure.test.ts (5 tests | 1 failed) 242ms
+   × keeps PBR/Standard colors, opacity, specular and emissive inputs and native curtain transmission 17ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lite-static-structure.test.ts > keeps PBR/Standard colors, opacity, specular and emissive inputs and native curtain transmission
+AssertionError: procedural-floor:floor tiling: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/lite-static-structure.test.ts:98:98
+     96|         expect(material.roughnessFactor).toBe(source.roughness);
+     97|         expect(getPbrEmissiveColor(material)).toEqual(source.emissive);
+     98|         if (source.texture) expect(hasMaterialUvTransform(material), r…
+       |                                                                                                  ^
+     99|         if (source.refraction) expect(getPbrTransmission(material)).to…
+    100|           intensity: source.refraction.intensity, indexOfRefraction: s…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  14:17:26
+   Duration  802ms (import 55%, tests 34%, transform 10%)

@@ -7,6 +7,7 @@ const [suite = 'wafer', port = '9487', baseUrl = 'http://127.0.0.1:4173', output
 const suites = {
   lite: ['lite-runtime.browser.ts', 'runLiteRuntimeAcceptance'],
   'lite-equipment': ['lite-equipment.browser.ts', 'runLiteEquipmentAcceptance'],
+  'lite-static': ['lite-static-structure.browser.ts', 'runLiteStaticStructureAcceptance'],
   wafer: ['twin-wafer.browser.ts', 'runWaferAcceptance'],
   level: ['twin-level.browser.ts', 'runLevelAcceptance'],
   tour: ['twin-tour.browser.ts', 'runTourAcceptance'],
@@ -62,6 +63,10 @@ try {
     fs.writeFileSync(screenshotOutput, Buffer.from(screenshot.data, 'base64'));
   }
   console.log(JSON.stringify({ suite, status: 'PASS', errors: errors.length, output }));
+} catch (error) {
+  if (output) fs.writeFileSync(output, JSON.stringify({ suite, status: 'FAIL',
+    error: error instanceof Error ? error.stack : String(error), errors }, null, 2) + '\n');
+  throw error;
 } finally {
   socket.close();
   await fetch(`http://127.0.0.1:${port}/json/close/${tab.id}`);

@@ -7,8 +7,8 @@ import {
 export type LiteRuntimeStatus = 'initializing' | 'ready' | 'lost' | 'failed' | 'disposed';
 export interface LiteRuntimeOptions {
   readonly signal?: AbortSignal;
-  /** Synchronous scene composition. Return the disposer for controls and other DOM resources. */
-  readonly compose: (scene: SceneContext, engine: EngineContext) => void | (() => void);
+  /** Scene composition, including awaited native asset uploads. Return the resource/DOM disposer. */
+  readonly compose: (scene: SceneContext, engine: EngineContext) => void | (() => void) | Promise<void | (() => void)>;
   readonly onStatus?: (status: LiteRuntimeStatus, error?: unknown) => void;
 }
 export interface LiteRuntime {
@@ -26,6 +26,7 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
   let detach: (() => void) | undefined;
   let initializing = true;
   let firstFrameReady = false;
+  let sceneRegistered = false;
   let renderingRequested = false;
   let recovering = false;
   let lossGeneration = 0;
@@ -115,6 +116,9 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
           // Native recovery is loaded asynchronously. Stop now, before owners reset
           // device-bound data, so an old-device RAF cannot repopulate those caches.
           stopEngine(engine!);
+          // Native recovery enumerates registered scenes only. Composition/initial
+          // registration can still own old-device resources, so this mount must fail.
+          if (!sceneRegistered) cancellation.abort(new Error('WebGPU device lost before scene registration completed'));
           report('lost');
         },
         // We paused before native recovery, so Lite rebuilds without restarting.
@@ -139,9 +143,10 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
         onRecoveryFailed: failRecovery,
       });
       scene = createSceneContext(engine);
-      detach = options.compose(scene, engine) || undefined;
+      detach = await options.compose(scene, engine) || undefined;
       cancellation.signal.throwIfAborted();
       await registerScene(scene);
+      sceneRegistered = true;
       cancellation.signal.throwIfAborted();
       while (recovering) await firstFrameBoundary(recoverySettled);
       cancellation.signal.throwIfAborted();
