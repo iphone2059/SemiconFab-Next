@@ -71,8 +71,8 @@ const bySourceLine = (left: { sourceLine: number }, right: { sourceLine: number 
 
 it('pins the frozen source hashes and emits only the en and zh-CN bytes', () => {
   const expected: Record<string, string> = {
-    'twin.html': 'f7e013b1d01b53ba89984ee75280211a8b29db76b17bc5025eb30035e4a26687',
-    'js/translations.js': '9583c939e0310bc37b556a6b4e5a0220e66d1030706d1adc2b71a51bd97ed46c',
+    'twin.html': '633598e4ab21c13eab440f65fb1c427bad08d147b2218f320bedb2770d32fc30',
+    'js/translations.js': 'de7d8da63739647b6635520ac9b2fa52d7b4c07930de20a53a20683362006f69',
     'js/i18n.js': '195551a502c0446b2735f513f4365899e93272fa709c60d150701243dddfceef',
   };
   for (const [file, hash] of Object.entries(expected)) {
@@ -84,10 +84,10 @@ it('pins the frozen source hashes and emits only the en and zh-CN bytes', () => 
   expect(fixture.locales).toEqual(['en', 'zh-CN']);
   expect(fixture.excludedLocales).toEqual(['zh-TW', 'ja', 'ko', 'de', 'fr', 'it', 'es']);
   expect(fixture.frozenLocaleIds).toHaveLength(9);
-  expect(fixture.dictionaryKeyCounts).toEqual({ en: 823, 'zh-CN': 823 });
+  expect(fixture.dictionaryKeyCounts).toEqual({ en: 827, 'zh-CN': 827 });
   expect(fixture.source['js/translations.js'].dictionaryLines).toEqual({
-    en: { start: 3, end: 1025 },
-    'zh-CN': { start: 1026, end: 2004 },
+    en: { start: 3, end: 1029 },
+    'zh-CN': { start: 1030, end: 2012 },
   });
   const serialized = JSON.stringify(fixture);
   for (const locale of fixture.excludedLocales) {
@@ -151,10 +151,10 @@ it('records the real dictionary gap and the Chinese-only toasts explicitly', () 
   const [dictionaryGap] = dictionaryGaps;
   expect(dictionaryGap.key).toBe('nav_lang_toggle');
   expect(dictionaryGap.attributes).toEqual(['data-i18n-title']);
-  expect(dictionaryGap.sourceLines).toEqual([1796]);
+  expect(dictionaryGap.sourceLines).toEqual([1804]);
   expect(dictionaryGap.locales).toEqual(['en', 'zh-CN']);
   const copyGaps = fixture.missing.filter((entry) => entry.kind === 'zh-only-copy');
-  expect(copyGaps.map((entry) => entry.sourceLine)).toEqual([14804, 14818, 14871, 14903, 14973]);
+  expect(copyGaps.map((entry) => entry.sourceLine)).toEqual([14812, 14826, 14879, 14911, 14981]);
   for (const entry of copyGaps) {
     expect(entry.surface).toBe('twin-toast');
     expect(entry.en).toBeNull();
@@ -187,7 +187,7 @@ it('extracts dynamic zh/en pairs covering patrol, AMHS, wafer, tour and scenario
   for (const category of ['patrol', 'amhs', 'wafer', 'tour']) expect(categories.has(category)).toBe(true);
 
   const patrolStatus = dynamicIn('patrol.status-text').sort(bySourceLine);
-  expect(patrolStatus.map((entry) => entry.sourceLine)).toEqual([9095, 9609, 9622, 9639, 9722, 9763, 9795, 9803]);
+  expect(patrolStatus.map((entry) => entry.sourceLine)).toEqual([9103, 9617, 9630, 9647, 9730, 9771, 9803, 9811]);
   expect(patrolStatus[3]?.zhCN).toContain('吹淋');
   expect(patrolStatus[3]?.zhCN).toContain('28 m/s');
   expect(placeholderCount(patrolStatus[3]?.zhCN ?? '')).toBe(1);
@@ -248,9 +248,9 @@ it('keeps the parser limitations in an explicitly typed skipped list', () => {
   for (const kind of ['font-metric-ternary', 'expression-branch', 'nested-ternary', 'non-literal-branch']) {
     expect(kinds.has(kind)).toBe(true);
   }
-  expect(fixture.skipped.filter((entry) => entry.kind === 'font-metric-ternary').map((entry) => entry.sourceLine)).toEqual([9991, 9999]);
-  expect(fixture.skipped.find((entry) => entry.sourceLine === 18356)?.kind).toBe('expression-branch');
-  expect(fixture.skipped.find((entry) => entry.sourceLine === 21245)?.kind).toBe('nested-ternary');
+  expect(fixture.skipped.filter((entry) => entry.kind === 'font-metric-ternary').map((entry) => entry.sourceLine)).toEqual([9999, 10007]);
+  expect(fixture.skipped.find((entry) => entry.sourceLine === 18364)?.kind).toBe('expression-branch');
+  expect(fixture.skipped.find((entry) => entry.sourceLine === 21253)?.kind).toBe('nested-ternary');
 });
 
 it('keeps fixture counts, ordering and top-level schema self-consistent', () => {

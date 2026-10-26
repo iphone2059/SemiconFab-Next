@@ -9,7 +9,7 @@ if ($LASTEXITCODE) { exit $LASTEXITCODE }
 python tools/migrate_legacy_data.py --check
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 # Frozen-original vector drift gates need the read-only reference checkout; CI without it skips them.
-$originalTwin = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../SemiconFab/twin.html'))
+$originalTwin = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../SemiconFab/twin.html'))
 if (Test-Path -LiteralPath $originalTwin) {
     node tools/build_twin_process_vectors.cjs --check
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -28,7 +28,7 @@ if (Test-Path -LiteralPath $originalTwin) {
     node tools/build_twin_motion_vectors.cjs --check
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
 } else {
-    Write-Host 'Skipping frozen-original vector checks: ../SemiconFab/twin.html not present.'
+    Write-Host 'Skipping frozen-original vector checks: ../../SemiconFab/twin.html not present.'
 }
 $fabProjects = @(Get-ChildItem -LiteralPath . -Directory |
     ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Filter *.csproj -File -ErrorAction SilentlyContinue } |
@@ -43,11 +43,31 @@ foreach ($fabProject in $fabProjects) {
     }
 }
 Set-Location -LiteralPath (Join-Path (Get-Location) 'web_app')
-npx --yes pnpm@12.15.0 install --frozen-lockfile
+# Some Windows global pnpm.cmd shims invoke an extensionless file through cmd.exe.
+# Use the matching pinned installation's JS entry directly; do not change global tooling.
+$fabPnpmVersion = ((Get-Content -LiteralPath 'package.json' -Raw | ConvertFrom-Json).packageManager -replace '^pnpm@', '')
+$fabNode = (Get-Command node.exe -ErrorAction Stop).Source
+$fabPnpmEntry = $null
+$fabPnpmCandidates = @((Join-Path (Get-Location) 'node_modules\pnpm\bin\pnpm.mjs'))
+foreach ($fabPnpmCommand in @(Get-Command pnpm.cmd -All -ErrorAction SilentlyContinue)) {
+    $fabPnpmCandidates += Join-Path (Split-Path -Parent $fabPnpmCommand.Source) 'node_modules\pnpm\bin\pnpm.mjs'
+}
+foreach ($fabCandidate in $fabPnpmCandidates) {
+    if (Test-Path -LiteralPath $fabCandidate) {
+        $fabCandidateVersion = & $fabNode $fabCandidate --version
+        if ($LASTEXITCODE -eq 0 -and $fabCandidateVersion -eq $fabPnpmVersion) { $fabPnpmEntry = $fabCandidate; break }
+    }
+}
+function Invoke-FabPinnedPnpm {
+    param([string[]]$FabArguments)
+    if ($fabPnpmEntry) { & $fabNode $fabPnpmEntry @FabArguments }
+    else { npx --yes "pnpm@$fabPnpmVersion" @FabArguments }
+}
+Invoke-FabPinnedPnpm -FabArguments @('install', '--frozen-lockfile')
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
-npx --yes pnpm@12.15.0 typecheck
+Invoke-FabPinnedPnpm -FabArguments @('typecheck')
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
-npx --yes pnpm@12.15.0 test
+Invoke-FabPinnedPnpm -FabArguments @('test')
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
-npx --yes pnpm@12.15.0 build
+Invoke-FabPinnedPnpm -FabArguments @('build')
 exit $LASTEXITCODE

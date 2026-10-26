@@ -2,6 +2,12 @@
 
 日期：2026-10-24。首批实现分支为 `feat/main-to-next-migration`；GitHub 同步状态以远程 Git 记录为准，尚未部署生产版本。规划见 [迁移工作包](../superpowers/plans/2026-10-24-main-to-next-refactor.md)，逐功能状态见 [feature-map.csv](feature-map.csv)。
 
+## Twin 冻结基线重钉（2026-10-27）
+
+只读原版参考仓库从 `b3666132e5d8cab2cebe4c4227fc04c52242eb28` 前进到 `d76378c7ae475f77f7a13bae9c093267c13fc5f3`，冻结基线（`tools/build_twin_inventory.py`、[source-manifest.json](twin-parity/source-manifest.json)）已按新提交重新钉定，所有 frozen-source 漂移门禁均从新源重新生成。八个受钉文件中只有两处上游变化：`twin.html` 顶栏新增 8 行指向 `twin-mega.html` 的 Mega Fab 概念页链接（其后所有冻结源码行号整体 +8，其余内容不变）；`js/translations.js` 新增 4 个英文 + 4 个中文导航键（`hero_cta_mega`、`nav_item_mega_twin`、`nav_item_mega_twin_sub`、`nav_item_mega_twin_mobile`），但 `twin.html` 未引用它们，因此序列化库存与生成的翻译映射不变，仅字典计数 823→827（每种语言）和字典行段移动。`catalog.json`、`twin/layout-default.json`、`twin/events-t1-fifo.jsonl`、`benchmark/routes.json`、`js/i18n.js`、`LICENSE` 字节未变。逐值核对确认重新生成的夹具只含源哈希、+8 行号与字典计数变化，没有数据行、几何、时序或翻译值变化。
+
+上游新增的 `twin-mega.html` 是独立的 Three.js 3,000 机台概念页，**本轮不迁移**，仅登记为新的上游功能缺口；单 FAB `/twin` 产品边界与 Babylon 渲染器均不变，不对 Mega Fab 作任何迁移或视觉声明。本轮 Python 工具/契约/架构/导入检查、全部冻结向量门禁、i18n 覆盖审计、TypeScript、Vitest 与生产构建结果见验证记录。
+
 ## Twin 最新增量（2026-10-25）
 
 以下旧轮次记录保留为历史；当前页面边界、验收结果和未完成项以本节及 [Twin baseline](twin-parity/baseline.md) 为准。状态仍为 **IMPLEMENTING / NOT PARITY_VERIFIED**。

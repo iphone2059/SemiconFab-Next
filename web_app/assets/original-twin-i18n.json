@@ -2,26 +2,26 @@
   "generatedBy": "tools/build_twin_i18n_vectors.cjs",
   "source": {
     "twin.html": {
-      "sha256": "f7e013b1d01b53ba89984ee75280211a8b29db76b17bc5025eb30035e4a26687",
-      "bytes": 989731,
-      "lines": 24763,
+      "sha256": "633598e4ab21c13eab440f65fb1c427bad08d147b2218f320bedb2770d32fc30",
+      "bytes": 990298,
+      "lines": 24771,
       "inlineScript": {
-        "start": 2958,
-        "end": 23800
+        "start": 2966,
+        "end": 23808
       }
     },
     "js/translations.js": {
-      "sha256": "9583c939e0310bc37b556a6b4e5a0220e66d1030706d1adc2b71a51bd97ed46c",
-      "bytes": 300131,
-      "lines": 4893,
+      "sha256": "de7d8da63739647b6635520ac9b2fa52d7b4c07930de20a53a20683362006f69",
+      "bytes": 300647,
+      "lines": 4901,
       "dictionaryLines": {
         "en": {
           "start": 3,
-          "end": 1025
+          "end": 1029
         },
         "zh-CN": {
-          "start": 1026,
-          "end": 2004
+          "start": 1030,
+          "end": 2012
         }
       }
     },
@@ -56,8 +56,8 @@
     "es"
   ],
   "dictionaryKeyCounts": {
-    "en": 823,
-    "zh-CN": 823
+    "en": 827,
+    "zh-CN": 827
   },
   "attributeNames": [
     "data-i18n",
@@ -1168,1057 +1168,1057 @@
       "id": "patrol.status-text.1",
       "zhCN": "正在步向黄光风淋气闸",
       "en": "Approaching Litho Airlock",
-      "sourceLine": 9095
+      "sourceLine": 9103
     },
     {
       "id": "patrol.name.1",
       "zhCN": "巡检 EUV 涂胶显影机 Track #2",
       "en": "Inspecting EUV Coater/Track #2",
-      "sourceLine": 9105
+      "sourceLine": 9113
     },
     {
       "id": "patrol.name.2",
       "zhCN": "巡检 ASML High-NA EUV 光刻机",
       "en": "Inspecting ASML High-NA EUV Scanner",
-      "sourceLine": 9114
+      "sourceLine": 9122
     },
     {
       "id": "patrol.name.3",
       "zhCN": "巡检 ArFi 浸润光刻机 (NXT:2100i)",
       "en": "Inspecting Immersion DUV Scanner",
-      "sourceLine": 9123
+      "sourceLine": 9131
     },
     {
       "id": "patrol.name.4",
       "zhCN": "巡检 黄光关键尺寸 CD-SEM 量测机",
       "en": "Inspecting Litho CD-SEM Metrology",
-      "sourceLine": 9132
+      "sourceLine": 9140
     },
     {
       "id": "patrol.status-text.2",
       "zhCN": "正在步向黄光风淋气闸",
       "en": "Approaching Litho Airlock Entry",
-      "sourceLine": 9609
+      "sourceLine": 9617
     },
     {
       "id": "patrol.status-text.3",
       "zhCN": "步入洁净风淋气闸·双门互锁",
       "en": "Entering Airlock · Interlock Engaged",
-      "sourceLine": 9622
+      "sourceLine": 9630
     },
     {
       "id": "patrol.status-text.4",
       "zhCN": "高速除尘吹淋中 28 m/s (${Math.max(0, 4.5 - bt.stateTimer).toFixed(1)}s)",
       "en": "HEPA Air Purging 28 m/s (${Math.max(0, 4.5 - bt.stateTimer).toFixed(1)}s)",
-      "sourceLine": 9639
+      "sourceLine": 9647
     },
     {
       "id": "patrol.status-text.5",
       "zhCN": "吹淋完毕·安全绿灯放行·步入黄光区",
       "en": "Purge Complete · Safe Green · Entering Litho",
-      "sourceLine": 9722
+      "sourceLine": 9730
     },
     {
       "id": "patrol.status-text.6",
       "zhCN": "${wp.nameZh} (${Math.max(0, wp.duration - bt.stateTimer).toFixed(1)}s)",
       "en": "${wp.nameEn} (${Math.max(0, wp.duration - bt.stateTimer).toFixed(1)}s)",
-      "sourceLine": 9763
+      "sourceLine": 9771
     },
     {
       "id": "patrol.status-text.7",
       "zhCN": "正在前往: ${wp.nameZh}",
       "en": "Heading to: ${wp.nameEn}",
-      "sourceLine": 9795
+      "sourceLine": 9803
     },
     {
       "id": "patrol.status-text.8",
       "zhCN": "黄光区巡检完成·步出风淋气闸返回主通道",
       "en": "Litho Patrol Completed · Returning to Corridor",
-      "sourceLine": 9803
+      "sourceLine": 9811
     },
     {
       "id": "patrol.draw-air-shower-billboard-canvas.1",
       "zhCN": "黄光抗紫外风淋气闸",
       "en": "LITHO AMBER AIRLOCK",
-      "sourceLine": 9977
+      "sourceLine": 9985
     },
     {
       "id": "patrol.draw-air-shower-billboard-canvas.2",
       "zhCN": "589nm 防紫外 · ISO-1 洁净气闸",
       "en": "589nm UV-Safe · Esco/Terra ISO-1",
-      "sourceLine": 9978
+      "sourceLine": 9986
     },
     {
       "id": "patrol.draw-air-shower-billboard-canvas.3",
       "zhCN": "主人员洁净风淋气闸",
       "en": "MAIN AIR SHOWER TUNNEL",
-      "sourceLine": 9982
+      "sourceLine": 9990
     },
     {
       "id": "patrol.draw-air-shower-billboard-canvas.4",
       "zhCN": "ISO Class 1 入口 · 28 m/s 高速吹淋",
       "en": "ISO Class 1 Entry · 28 m/s Jets",
-      "sourceLine": 9983
+      "sourceLine": 9991
     },
     {
       "id": "bay.name.1",
       "zhCN": "光刻曝光核心间 (黄光区)",
       "en": "Lithography Scanner Bay",
-      "sourceLine": 12686
+      "sourceLine": 12694
     },
     {
       "id": "bay.name.2",
       "zhCN": "涂胶显影跟踪机区 (黄光区)",
       "en": "Resist Track & Coater/Dev Bay",
-      "sourceLine": 12694
+      "sourceLine": 12702
     },
     {
       "id": "bay.name.3",
       "zhCN": "等离子干法刻蚀区",
       "en": "Plasma Dry Etch & Strip Bay",
-      "sourceLine": 12702
+      "sourceLine": 12710
     },
     {
       "id": "bay.name.4",
       "zhCN": "薄膜沉积与外延区",
       "en": "Thin Film Deposition (CVD/PVD/ALD)",
-      "sourceLine": 12710
+      "sourceLine": 12718
     },
     {
       "id": "bay.name.5",
       "zhCN": "高温氧化扩散炉管区",
       "en": "Thermal Diffusion & Oxidation Bay",
-      "sourceLine": 12718
+      "sourceLine": 12726
     },
     {
       "id": "bay.name.6",
       "zhCN": "离子注入机区",
       "en": "Ion Implantation Bay",
-      "sourceLine": 12726
+      "sourceLine": 12734
     },
     {
       "id": "bay.name.7",
       "zhCN": "化学机械研磨平坦化区",
       "en": "CMP Chemical Mechanical Planarization Bay",
-      "sourceLine": 12734
+      "sourceLine": 12742
     },
     {
       "id": "bay.name.8",
       "zhCN": "湿法清洗腐蚀工作台区",
       "en": "Automated Wet Cleaning Bay",
-      "sourceLine": 12742
+      "sourceLine": 12750
     },
     {
       "id": "bay.name.9",
       "zhCN": "在线微观量测与椭偏仪区",
       "en": "In-line CD-SEM & Thin Film Metrology",
-      "sourceLine": 12750
+      "sourceLine": 12758
     },
     {
       "id": "bay.name.10",
       "zhCN": "光学缺陷暗场检测区",
       "en": "Darkfield Wafer Defect Inspection Bay",
-      "sourceLine": 12758
+      "sourceLine": 12766
     },
     {
       "id": "bay.name.11",
       "zhCN": "先进封装与异构集成区",
       "en": "Advanced 2.5D/3D Packaging Bay",
-      "sourceLine": 12766
+      "sourceLine": 12774
     },
     {
       "id": "bay.name.12",
       "zhCN": "晶圆探针测试与ATE分选区",
       "en": "Wafer Sort & ATE Final Test Bay",
-      "sourceLine": 12774
+      "sourceLine": 12782
     },
     {
       "id": "bay.name.13",
       "zhCN": "厂务辅助与综合保障区",
       "en": "Facility Support & Auxiliary Systems",
-      "sourceLine": 12782
+      "sourceLine": 12790
     },
     {
       "id": "draft.update-elevation-provenance-tag.1",
       "zhCN": "数据状态:",
       "en": "Status:",
-      "sourceLine": 13849
+      "sourceLine": 13857
     },
     {
       "id": "draft.update-elevation-provenance-tag.2",
       "zhCN": "待补充",
       "en": "Pending",
-      "sourceLine": 13857
+      "sourceLine": 13865
     },
     {
       "id": "draft.update-elevation-provenance-tag.3",
       "zhCN": "推断",
       "en": "Inferred",
-      "sourceLine": 13862
+      "sourceLine": 13870
     },
     {
       "id": "draft.update-elevation-provenance-tag.4",
       "zhCN": "合成",
       "en": "Synthetic",
-      "sourceLine": 13867
+      "sourceLine": 13875
     },
     {
       "id": "draft.update-elevation-provenance-tag.5",
       "zhCN": "厂商确认",
       "en": "Vendor Confirmed",
-      "sourceLine": 13873
+      "sourceLine": 13881
     },
     {
       "id": "draft.update-elevation-provenance-tag.6",
       "zhCN": "独立核实",
       "en": "Verified",
-      "sourceLine": 13879
+      "sourceLine": 13887
     },
     {
       "id": "draft.select-draft-equipment.1",
       "zhCN": "全球半导体设备制造厂商",
       "en": "Global Semiconductor OEM",
-      "sourceLine": 13911
+      "sourceLine": 13919
     },
     {
       "id": "draft.select-draft-equipment.2",
       "zhCN": "位于洁净室 ${bayCfg?.nameZh || item.category}，类别通用概念占位外形",
       "en": "Slotted in ${bayCfg?.nameEn || item.category}, procedural category shell placeholder.",
-      "sourceLine": 13925
+      "sourceLine": 13933
     },
     {
       "id": "draft.select-draft-equipment.3",
       "zhCN": "【待补充机型】此设备为社区编目条目，当前使用类别通用概念外形。尺寸待实测，欢迎点击下方按钮补充参数。",
       "en": "[Draft Record] Community catalog entry rendered as a category-generic placeholder shell. Dimensions and CAD envelopes pending verification.",
-      "sourceLine": 13931
+      "sourceLine": 13939
     },
     {
       "id": "draft.select-draft-equipment.4",
       "zhCN": "待补充机型 · 尺寸待实测",
       "en": "Draft Shell · Dimensions Unverified",
-      "sourceLine": 13941
+      "sourceLine": 13949
     },
     {
       "id": "draft.select-draft-equipment.5",
       "zhCN": "尺寸待实测 · 概念占位",
       "en": "Dimensions Pending Verification",
-      "sourceLine": 13958
+      "sourceLine": 13966
     },
     {
       "id": "draft.select-draft-equipment.6",
       "zhCN": "当前显示为类别通用概念外形，物理包络与长宽高尺寸尚未实测校准。",
       "en": "Geometry shown is a generic category placeholder. Physical envelope and dimensions have not been verified.",
-      "sourceLine": 13966
+      "sourceLine": 13974
     },
     {
       "id": "draft.select-draft-equipment.7",
       "zhCN": "补充实测机台参数 (Add Equipment) →",
       "en": "Contribute Verified Footprint (Add Equipment) →",
-      "sourceLine": 13973
+      "sourceLine": 13981
     },
     {
       "id": "draft.select-draft-equipment.8",
       "zhCN": "概念占位 · 尺寸待实测",
       "en": "Nominal placeholder · pending",
-      "sourceLine": 13984
+      "sourceLine": 13992
     },
     {
       "id": "draft.select-draft-equipment.9",
       "zhCN": "待补充",
       "en": "Pending verification",
-      "sourceLine": 13988
+      "sourceLine": 13996
     },
     {
       "id": "draft.select-draft-equipment.10",
       "zhCN": "查看编目卡片 →",
       "en": "View in Equipment Catalog →",
-      "sourceLine": 14005
+      "sourceLine": 14013
     },
     {
       "id": "draft.select-draft-equipment.11",
       "zhCN": "类别通用概念外形 · 尺寸待实测",
       "en": "Category Generic Shell · Pending Verification",
-      "sourceLine": 14017
+      "sourceLine": 14025
     },
     {
       "id": "custom-layout.validate-layout-data.1",
       "zhCN": "布局文件必须为有效的 JSON 对象",
       "en": "Layout payload must be a valid JSON object",
-      "sourceLine": 14066
+      "sourceLine": 14074
     },
     {
       "id": "custom-layout.validate-layout-data.2",
       "zhCN": "布局中的 'tools' 必须为非空数组",
       "en": "Layout 'tools' must be a non-empty array",
-      "sourceLine": 14076
+      "sourceLine": 14084
     },
     {
       "id": "custom-layout.validate-layout-data.3",
       "zhCN": "机台 #${i + 1}：缺失必需的 'tool_id'",
       "en": "Tool #${i + 1}: missing required 'tool_id'",
-      "sourceLine": 14089
+      "sourceLine": 14097
     },
     {
       "id": "custom-layout.validate-layout-data.4",
       "zhCN": "机台 #${i + 1} (${t.tool_id})：机台在设备目录中不存在",
       "en": "Tool #${i + 1} (${t.tool_id}): id does not exist in catalog.json",
-      "sourceLine": 14095
+      "sourceLine": 14103
     },
     {
       "id": "custom-layout.validate-layout-data.5",
       "zhCN": "机台 #${i + 1}：缺失工艺分区 'bay'",
       "en": "Tool #${i + 1}: missing required 'bay'",
-      "sourceLine": 14102
+      "sourceLine": 14110
     },
     {
       "id": "custom-layout.validate-layout-data.6",
       "zhCN": "机台 #${i + 1}：分区 '${t.bay}' 不是 13 个洁净室工艺分区之一",
       "en": "Tool #${i + 1}: bay '${t.bay}' is not one of the 13 cleanroom bays",
-      "sourceLine": 14108
+      "sourceLine": 14116
     },
     {
       "id": "custom-layout.validate-layout-data.7",
       "zhCN": "机台 #${i + 1}：'x' 坐标必须为有效数字",
       "en": "Tool #${i + 1}: 'x' must be a valid coordinate number",
-      "sourceLine": 14115
+      "sourceLine": 14123
     },
     {
       "id": "custom-layout.validate-layout-data.8",
       "zhCN": "机台 #${i + 1}：'z' 坐标必须为有效数字",
       "en": "Tool #${i + 1}: 'z' must be a valid coordinate number",
-      "sourceLine": 14122
+      "sourceLine": 14130
     },
     {
       "id": "custom-layout.validate-layout-data.9",
       "zhCN": "机台 #${i + 1}：'rotation' 旋转角度必须为 0、90、180 或 270 度",
       "en": "Tool #${i + 1}: 'rotation' must be 0, 90, 180, or 270 degrees",
-      "sourceLine": 14132
+      "sourceLine": 14140
     },
     {
       "id": "custom-layout.render-layout-tools.1",
       "zhCN": "自定义布局: ${name} (${customLayout.tools.length} 台设备)",
       "en": "Custom Layout: ${name} (${customLayout.tools.length} Tools)",
-      "sourceLine": 14251
+      "sourceLine": 14259
     },
     {
       "id": "toast.load-catalog-and-build-layout.1",
       "zhCN": "自定义布局文件校验未通过，已载入默认布局",
       "en": "Custom layout validation failed, using default layout",
-      "sourceLine": 14395
+      "sourceLine": 14403
     },
     {
       "id": "amhs.update-research-hud-lang.1",
       "zhCN": "AMHS 仿真运行",
       "en": "AMHS Simulated",
-      "sourceLine": 14488
+      "sourceLine": 14496
     },
     {
       "id": "amhs.update-research-hud-lang.2",
       "zhCN": "环路交通简化模型：需求派单、加减速、跟车。未建模道岔死锁，未与 MIMAC DES 耦合。",
       "en": "Loop traffic model: demand-driven dispatch, accel/decel, car-following. Simplified — no junction deadlocks, not coupled to MIMAC DES.",
-      "sourceLine": 14489
+      "sourceLine": 14497
     },
     {
       "id": "amhs.update-research-hud-lang.3",
       "zhCN": "机台稼动率热力图",
       "en": "Utilization Heatmap",
-      "sourceLine": 14495
+      "sourceLine": 14503
     },
     {
       "id": "amhs.update-amhs-hud-language.1",
       "zhCN": "已完成",
       "en": "Jobs",
-      "sourceLine": 14509
+      "sourceLine": 14517
     },
     {
       "id": "amhs.update-amhs-hud-language.2",
       "zhCN": "均时",
       "en": "Avg",
-      "sourceLine": 14510
+      "sourceLine": 14518
     },
     {
       "id": "amhs.update-amhs-hud-language.3",
       "zhCN": "在途",
       "en": "Active",
-      "sourceLine": 14511
+      "sourceLine": 14519
     },
     {
       "id": "mode.update-mode-select-options.1",
       "zhCN": "Visitor 导览",
       "en": "Visitor",
-      "sourceLine": 14520
+      "sourceLine": 14528
     },
     {
       "id": "mode.update-mode-select-options.2",
       "zhCN": "Engineer 工程师",
       "en": "Engineer",
-      "sourceLine": 14522
+      "sourceLine": 14530
     },
     {
       "id": "mode.update-mode-select-options.3",
       "zhCN": "Research 科研",
       "en": "Research",
-      "sourceLine": 14524
+      "sourceLine": 14532
     },
     {
       "id": "amhs.bay-name.1",
       "zhCN": "干法刻蚀工区",
       "en": "Dry Etch Bay",
-      "sourceLine": 15217
+      "sourceLine": 15225
     },
     {
       "id": "amhs.bay-name.2",
       "zhCN": "薄膜沉积工区",
       "en": "Deposition Bay",
-      "sourceLine": 15225
+      "sourceLine": 15233
     },
     {
       "id": "amhs.bay-name.3",
       "zhCN": "先进封装工区",
       "en": "Packaging Bay",
-      "sourceLine": 15233
+      "sourceLine": 15241
     },
     {
       "id": "amhs.bay-name.4",
       "zhCN": "晶圆测试工区",
       "en": "Wafer Test Bay",
-      "sourceLine": 15241
+      "sourceLine": 15249
     },
     {
       "id": "amhs.bay-name.5",
       "zhCN": "热处理/离子注入工区",
       "en": "Thermal / Implant Bay",
-      "sourceLine": 15249
+      "sourceLine": 15257
     },
     {
       "id": "amhs.bay-name.6",
       "zhCN": "湿法清洗/CMP工区",
       "en": "Clean & CMP Bay",
-      "sourceLine": 15257
+      "sourceLine": 15265
     },
     {
       "id": "amhs.bay-name.7",
       "zhCN": "光刻黄光核心区",
       "en": "Photolithography Bay",
-      "sourceLine": 15265
+      "sourceLine": 15273
     },
     {
       "id": "amhs.bay-name.8",
       "zhCN": "光刻曝光中心",
       "en": "Litho Core Bay",
-      "sourceLine": 15276
+      "sourceLine": 15284
     },
     {
       "id": "amhs.bay-name.9",
       "zhCN": "涂胶显影工区",
       "en": "Coater/Developer Bay",
-      "sourceLine": 15284
+      "sourceLine": 15292
     },
     {
       "id": "amhs.bay-name.10",
       "zhCN": "CVD/ALD薄膜工区",
       "en": "Thin Film CVD/ALD Bay",
-      "sourceLine": 15292
+      "sourceLine": 15300
     },
     {
       "id": "amhs.bay-name.11",
       "zhCN": "氧化扩散炉管工区",
       "en": "Furnace / Diffusion Bay",
-      "sourceLine": 15300
+      "sourceLine": 15308
     },
     {
       "id": "amhs.bay-name.12",
       "zhCN": "化学机械抛光工区",
       "en": "Planarization CMP Bay",
-      "sourceLine": 15308
+      "sourceLine": 15316
     },
     {
       "id": "amhs.bay-name.13",
       "zhCN": "全自动清洗机台区",
       "en": "Wet Cleaning Bay",
-      "sourceLine": 15316
+      "sourceLine": 15324
     },
     {
       "id": "amhs.bay-name.14",
       "zhCN": "等离子刻蚀机台区",
       "en": "Plasma Etch Bay",
-      "sourceLine": 15324
+      "sourceLine": 15332
     },
     {
       "id": "roof.name.1",
       "zhCN": "MAU-1 新风机组",
       "en": "MAU-1 Make-up Air Unit",
-      "sourceLine": 16062
+      "sourceLine": 16070
     },
     {
       "id": "roof.name.2",
       "zhCN": "MAU-2 新风机组",
       "en": "MAU-2 Make-up Air Unit",
-      "sourceLine": 16069
+      "sourceLine": 16077
     },
     {
       "id": "roof.name.3",
       "zhCN": "MAU-3 新风机组",
       "en": "MAU-3 Make-up Air Unit",
-      "sourceLine": 16076
+      "sourceLine": 16084
     },
     {
       "id": "roof.tooltip.1",
       "zhCN": "送风主管 (北干线) → 光刻/刻蚀/薄膜核心工艺区",
       "en": "Supply Air Main (North Line) → Lithography, Etch & Thin Film Bays",
-      "sourceLine": 16154
+      "sourceLine": 16162
     },
     {
       "id": "roof.tooltip.2",
       "zhCN": "送风主管 (中干线) → 涂胶显影、量测与缺陷检测区",
       "en": "Supply Air Main (Central Line) → Resist Track, Metrology & Inspection",
-      "sourceLine": 16160
+      "sourceLine": 16168
     },
     {
       "id": "roof.tooltip.3",
       "zhCN": "送风主管 (南干线) → 扩散炉管/湿法清洗/CMP/离子注入区",
       "en": "Supply Air Main (South Line) → Diffusion, Wet Clean, CMP & Implant Bays",
-      "sourceLine": 16166
+      "sourceLine": 16174
     },
     {
       "id": "roof.name.4",
       "zhCN": "光刻曝光核心间 (黄光区)",
       "en": "Lithography Scanner Bay",
-      "sourceLine": 16207
+      "sourceLine": 16215
     },
     {
       "id": "roof.name.5",
       "zhCN": "涂胶显影跟踪机区 (黄光区)",
       "en": "Resist Track & Coater/Dev Bay",
-      "sourceLine": 16213
+      "sourceLine": 16221
     },
     {
       "id": "roof.name.6",
       "zhCN": "等离子干法刻蚀区",
       "en": "Plasma Dry Etch Bay",
-      "sourceLine": 16219
+      "sourceLine": 16227
     },
     {
       "id": "roof.name.7",
       "zhCN": "薄膜沉积与外延区",
       "en": "Thin Film Deposition Bay (CVD/PVD)",
-      "sourceLine": 16225
+      "sourceLine": 16233
     },
     {
       "id": "roof.name.8",
       "zhCN": "高温氧化扩散炉管区",
       "en": "Thermal Diffusion & Oxidation Bay",
-      "sourceLine": 16231
+      "sourceLine": 16239
     },
     {
       "id": "roof.name.9",
       "zhCN": "离子注入机区",
       "en": "Ion Implantation Bay",
-      "sourceLine": 16237
+      "sourceLine": 16245
     },
     {
       "id": "roof.name.10",
       "zhCN": "化学机械研磨平坦化区",
       "en": "CMP Planarization Bay",
-      "sourceLine": 16243
+      "sourceLine": 16251
     },
     {
       "id": "roof.name.11",
       "zhCN": "湿法清洗腐蚀工作台区",
       "en": "Automated Wet Cleaning Bay",
-      "sourceLine": 16249
+      "sourceLine": 16257
     },
     {
       "id": "roof.name.12",
       "zhCN": "在线微观量测与椭偏仪区",
       "en": "In-line CD-SEM Metrology Bay",
-      "sourceLine": 16255
+      "sourceLine": 16263
     },
     {
       "id": "roof.name.13",
       "zhCN": "光学缺陷暗场检测区",
       "en": "Darkfield Defect Inspection Bay",
-      "sourceLine": 16261
+      "sourceLine": 16269
     },
     {
       "id": "roof.name.14",
       "zhCN": "先进封装与异构集成区",
       "en": "Advanced Packaging Bay",
-      "sourceLine": 16267
+      "sourceLine": 16275
     },
     {
       "id": "roof.name.15",
       "zhCN": "晶圆探针测试与ATE分选区",
       "en": "Wafer Sort & ATE Final Test Bay",
-      "sourceLine": 16273
+      "sourceLine": 16281
     },
     {
       "id": "roof.name.16",
       "zhCN": "酸性腐蚀废气洗涤塔排气烟囱",
       "en": "Acid / Corrosive Wet Scrubber Stack",
-      "sourceLine": 16303
+      "sourceLine": 16311
     },
     {
       "id": "roof.name.17",
       "zhCN": "碱性含氨废气排气烟囱",
       "en": "Ammonia / Alkali Exhaust Stack",
-      "sourceLine": 16310
+      "sourceLine": 16318
     },
     {
       "id": "roof.name.18",
       "zhCN": "VOC 挥发性有机物热氧化排气烟囱",
       "en": "VOC Thermal Oxidizer (RTO) Stack",
-      "sourceLine": 16317
+      "sourceLine": 16325
     },
     {
       "id": "roof.name.19",
       "zhCN": "硅烷与特种易燃毒性尾气燃烧筒",
       "en": "Pyrophoric / Silane Abatement Stack",
-      "sourceLine": 16324
+      "sourceLine": 16332
     },
     {
       "id": "roof.name.20",
       "zhCN": "厂房综合工艺散热排气烟囱",
       "en": "General Cleanroom Thermal Exhaust Stack",
-      "sourceLine": 16331
+      "sourceLine": 16339
     },
     {
       "id": "roof.update-roof-hvaclanguage.1",
       "zhCN": "屋顶暖通: 示意",
       "en": "Roof & HVAC: Schematic",
-      "sourceLine": 16488
+      "sourceLine": 16496
     },
     {
       "id": "wafer.update-wafer-follow-hud.1",
       "zhCN": "路线完成",
       "en": "Route complete",
-      "sourceLine": 18386
+      "sourceLine": 18394
     },
     {
       "id": "wafer.update-wafer-follow-hud.2",
       "zhCN": "晶圆流转中...",
       "en": "Navigating...",
-      "sourceLine": 18388
+      "sourceLine": 18396
     },
     {
       "id": "wafer.update-wafer-follow-hud.3",
       "zhCN": "已暂停",
       "en": "Paused",
-      "sourceLine": 18390
+      "sourceLine": 18398
     },
     {
       "id": "wafer.update-wafer-cam-toggle-ui.1",
       "zhCN": "跟随视角",
       "en": "Follow Cam",
-      "sourceLine": 18546
+      "sourceLine": 18554
     },
     {
       "id": "wafer.update-wafer-cam-toggle-ui.2",
       "zhCN": "自由视角",
       "en": "Free Cam",
-      "sourceLine": 18551
+      "sourceLine": 18559
     },
     {
       "id": "tour.title.1",
       "zhCN": "300mm 晶圆洁净室宏观全景",
       "en": "300mm Cleanroom Grand Aerial Overview",
-      "sourceLine": 19362
+      "sourceLine": 19370
     },
     {
       "id": "tour.desc.1",
       "zhCN": "ISO Class 1/3 微环境洁净室全景与双环路天车 (AMHS OHT) 自动化物流导轨。",
       "en": "ISO Class 1 / Class 3 cleanroom with dual-loop AMHS OHT monorail logistics.",
-      "sourceLine": 19364
+      "sourceLine": 19372
     },
     {
       "id": "tour.title.2",
       "zhCN": "黄光微影区、风淋气闸与 589nm 琥珀安全核心",
       "en": "Litho Bay 589nm Core & Amber Airlock",
-      "sourceLine": 19377
+      "sourceLine": 19385
     },
     {
       "id": "tour.desc.2",
       "zhCN": "抗UV幕墙风淋过渡气闸、除尘粘尘垫、步进光刻机与无尘服巡检工程师。",
       "en": "Anti-UV airlock chamber, tacky mats, twin DUV/EUV scanners, and bunny suit operator.",
-      "sourceLine": 19379
+      "sourceLine": 19387
     },
     {
       "id": "tour.title.3",
       "zhCN": "等离子刻蚀区与腔体辉光视窗",
       "en": "Etch Bay Plasma Glow & Wafer Transfer",
-      "sourceLine": 19392
+      "sourceLine": 19400
     },
     {
       "id": "tour.desc.3",
       "zhCN": "ICP/RIE 高频等离子体放电辉光视窗、EFEM 机械手与 SEMI E87 状态指示塔灯。",
       "en": "ICP/RIE high-frequency plasma glow windows, EFEM wafer robot, and SEMI E87 LEDs.",
-      "sourceLine": 19394
+      "sourceLine": 19402
     },
     {
       "id": "tour.title.4",
       "zhCN": "AMHS OHT 天车垂直装卸示移动作",
       "en": "AMHS OHT Overhead Track & Hoist Docking (Illustrative)",
-      "sourceLine": 19407
+      "sourceLine": 19415
     },
     {
       "id": "tour.desc.4",
       "zhCN": "天车悬挂导轨行进、垂直钢丝绳吊索下放 FOUP 至机台 Load Port 示移动作 (T1 传输假设即时)。",
       "en": "Monorail cruising, vertical wire rope hoist lowering FOUP to machine Load Port (illustrative).",
-      "sourceLine": 19409
+      "sourceLine": 19417
     },
     {
       "id": "tour.title.5",
       "zhCN": "Subfab B1 动力基建与管道流向光效",
       "en": "B1 Subfab Support Infra & Flowing Utility Piping",
-      "sourceLine": 19422
+      "sourceLine": 19430
     },
     {
       "id": "tour.desc.5",
       "zhCN": "超纯水 (UPW)、冷却水 (PCW)、特气 (VMB) 综合管廊动态流向脉冲光效与干泵中枢。",
       "en": "Dynamic directional flow pulses across UPW, PCW, and VMB utility headers.",
-      "sourceLine": 19424
+      "sourceLine": 19432
     },
     {
       "id": "tour.tag.1",
       "zhCN": "第 1 / 3 步",
       "en": "STEP 1 OF 3",
-      "sourceLine": 19672
+      "sourceLine": 19680
     },
     {
       "id": "tour.title.6",
       "zhCN": "这里是 300mm 晶圆厂数字孪生",
       "en": "300mm Fab Digital Twin",
-      "sourceLine": 19674
+      "sourceLine": 19682
     },
     {
       "id": "tour.desc.6",
       "zhCN": "全景漫游 300mm 晶圆制造洁净室，包含生产 Bay 区、动力机房与天车物流网络。",
       "en": "Explore the cleanroom bays, subfab infrastructure, and dual-loop AMHS OHT monorail logistics in real-time 3D.",
-      "sourceLine": 19676
+      "sourceLine": 19684
     },
     {
       "id": "tour.tag.2",
       "zhCN": "第 2 / 3 步",
       "en": "STEP 2 OF 3",
-      "sourceLine": 19680
+      "sourceLine": 19688
     },
     {
       "id": "tour.title.7",
       "zhCN": "点击左侧设备列表查看机台参数",
       "en": "Inspect Equipment & Parameters",
-      "sourceLine": 19682
+      "sourceLine": 19690
     },
     {
       "id": "tour.desc.7",
       "zhCN": "在左侧设备名录选择机台，或在 3D 场景中直接点选设备，查看 SEMI 规格、物理尺寸及工艺指标。",
       "en": "Select tools from the left catalog drawer or click directly on 3D equipment to inspect SEMI dimensions, weight, and specs.",
-      "sourceLine": 19684
+      "sourceLine": 19692
     },
     {
       "id": "tour.tag.3",
       "zhCN": "第 3 / 3 步",
       "en": "STEP 3 OF 3",
-      "sourceLine": 19688
+      "sourceLine": 19696
     },
     {
       "id": "tour.title.8",
       "zhCN": "点击右上角 Tour 可随时开启导览",
       "en": "Cinematic Tour Anytime",
-      "sourceLine": 19690
+      "sourceLine": 19698
     },
     {
       "id": "tour.desc.8",
       "zhCN": "点击右上角 Tour / 导览 按钮，可随时开启全厂 5 大核心站点的自动化巡检与镜头漫游。",
       "en": "Click the Tour button in the top-right header anytime to enjoy a 5-station guided inspection across the fab.",
-      "sourceLine": 19692
+      "sourceLine": 19700
     },
     {
       "id": "tour.render-onboarding-step.1",
       "zhCN": "不再提示",
       "en": "Don't show again",
-      "sourceLine": 19711
+      "sourceLine": 19719
     },
     {
       "id": "tour.render-onboarding-step.2",
       "zhCN": "上一步",
       "en": "Previous",
-      "sourceLine": 19724
+      "sourceLine": 19732
     },
     {
       "id": "tour.render-onboarding-step.3",
       "zhCN": "知道了 / 开始探索",
       "en": "Got it / Explore",
-      "sourceLine": 19728
+      "sourceLine": 19736
     },
     {
       "id": "tour.render-onboarding-step.4",
       "zhCN": "下一步 →",
       "en": "Next →",
-      "sourceLine": 19730
+      "sourceLine": 19738
     },
     {
       "id": "scenario.update-scenario-select-options.1",
       "zhCN": "🟢 基线正常量产 (93.4%)",
       "en": "🟢 Baseline (93.4%)",
-      "sourceLine": 20538
+      "sourceLine": 20546
     },
     {
       "id": "scenario.update-scenario-select-options.2",
       "zhCN": "🟡 光刻套刻漂移",
       "en": "🟡 Overlay Drift",
-      "sourceLine": 20538
+      "sourceLine": 20546
     },
     {
       "id": "scenario.update-scenario-select-options.3",
       "zhCN": "🔴 刻蚀RF故障停机",
       "en": "🔴 Etch RF Down",
-      "sourceLine": 20538
+      "sourceLine": 20546
     },
     {
       "id": "scenario.update-scenario-select-options.4",
       "zhCN": "🔵 洁净室定期维保",
       "en": "🔵 Scheduled PM",
-      "sourceLine": 20538
+      "sourceLine": 20546
     },
     {
       "id": "scenario.update-scenario-select-options.5",
       "zhCN": "⚡ 复合连锁瓶颈",
       "en": "⚡ Cascade Fail",
-      "sourceLine": 20538
+      "sourceLine": 20546
     },
     {
       "id": "scenario.update-scenario-select-options.6",
       "zhCN": "🚀 AI-APC优化 (96.5%)",
       "en": "🚀 AI-APC (96.5%)",
-      "sourceLine": 20538
+      "sourceLine": 20546
     },
     {
       "id": "subfab.select-equipment.1",
       "zhCN": "查看编目卡片 →",
       "en": "View in Equipment Catalog →",
-      "sourceLine": 20655
+      "sourceLine": 20663
     },
     {
       "id": "subfab.select-equipment.2",
       "zhCN": "Subfab 下层动力管线接口 (B1)",
       "en": "Subfab Utility Interconnect (B1)",
-      "sourceLine": 20678
+      "sourceLine": 20686
     },
     {
       "id": "subfab.select-equipment.3",
       "zhCN": "B1 厂务地下层",
       "en": "B1 BASEMENT",
-      "sourceLine": 20682
+      "sourceLine": 20690
     },
     {
       "id": "subfab.select-equipment.4",
       "zhCN": "穿透华夫板地面直连 B1 下层机房的动力与特气排风接口。",
       "en": "Under-floor utility connections penetrating the waffle slab to B1 basement level.",
-      "sourceLine": 20687
+      "sourceLine": 20695
     },
     {
       "id": "subfab.select-equipment.5",
       "zhCN": "洁净室主机机台直连 (L1)",
       "en": "Cleanroom Host Tool Interconnect (L1)",
-      "sourceLine": 20701
+      "sourceLine": 20709
     },
     {
       "id": "subfab.select-equipment.6",
       "zhCN": "L1 洁净厂房",
       "en": "L1 CLEANROOM",
-      "sourceLine": 20705
+      "sourceLine": 20713
     },
     {
       "id": "subfab.select-equipment.7",
       "zhCN": "此 Subfab 动力单元所服务的上层洁净室核心工艺制造主机。",
       "en": "Primary cleanroom fabrication unit served by this subfab utility.",
-      "sourceLine": 20710
+      "sourceLine": 20718
     },
     {
       "id": "subfab.select-equipment.8",
       "zhCN": "对应主机",
       "en": "Host Tool",
-      "sourceLine": 20718
+      "sourceLine": 20726
     },
     {
       "id": "yield.render-yield-waterfall.1",
       "zhCN": "🚨 瓶颈工序",
       "en": "🚨 BOTTLENECK",
-      "sourceLine": 22074
+      "sourceLine": 22082
     },
     {
       "id": "sim.update-sim-play-button-ui.1",
       "zhCN": "暂停实时离散仿真时钟",
       "en": "Pause Simulation Clock",
-      "sourceLine": 22240
+      "sourceLine": 22248
     },
     {
       "id": "sim.update-sim-play-button-ui.2",
       "zhCN": "继续实时离散仿真时钟",
       "en": "Resume Simulation Clock",
-      "sourceLine": 22246
+      "sourceLine": 22254
     },
     {
       "id": "sidebar.render-category-pills.1",
       "zhCN": "全部",
       "en": "All",
-      "sourceLine": 22562
+      "sourceLine": 22570
     },
     {
       "id": "sidebar.render-category-pills.2",
       "zhCN": "光刻",
       "en": "Lithography",
-      "sourceLine": 22563
+      "sourceLine": 22571
     },
     {
       "id": "sidebar.render-category-pills.3",
       "zhCN": "刻蚀",
       "en": "Etch",
-      "sourceLine": 22564
+      "sourceLine": 22572
     },
     {
       "id": "sidebar.render-category-pills.4",
       "zhCN": "薄膜沉积",
       "en": "Thin Film",
-      "sourceLine": 22565
+      "sourceLine": 22573
     },
     {
       "id": "sidebar.render-category-pills.5",
       "zhCN": "Subfab厂务",
       "en": "Subfab Utilities",
-      "sourceLine": 22566
+      "sourceLine": 22574
     },
     {
       "id": "sidebar.render-category-pills.6",
       "zhCN": "洁净环控",
       "en": "Facility & Airlock",
-      "sourceLine": 22567
+      "sourceLine": 22575
     },
     {
       "id": "sidebar.render-category-pills.7",
       "zhCN": "注入/热处理",
       "en": "Implant/Thermal",
-      "sourceLine": 22570
+      "sourceLine": 22578
     },
     {
       "id": "sidebar.render-category-pills.8",
       "zhCN": "CMP/清洗",
       "en": "CMP/Cleans",
-      "sourceLine": 22572
+      "sourceLine": 22580
     },
     {
       "id": "sidebar.render-category-pills.9",
       "zhCN": "检测量测",
       "en": "Metrology",
-      "sourceLine": 22573
+      "sourceLine": 22581
     },
     {
       "id": "sidebar.render-category-pills.10",
       "zhCN": "先进封装",
       "en": "Packaging",
-      "sourceLine": 22574
+      "sourceLine": 22582
     },
     {
       "id": "sidebar.render-category-pills.11",
       "zhCN": "天轨物流",
       "en": "Logistics",
-      "sourceLine": 22575
+      "sourceLine": 22583
     },
     {
       "id": "sidebar.render-category-pills.12",
       "zhCN": "全部 (116)",
       "en": "All (116)",
-      "sourceLine": 22588
+      "sourceLine": 22596
     },
     {
       "id": "sidebar.render-category-pills.13",
       "zhCN": "光刻 (16)",
       "en": "Litho (16)",
-      "sourceLine": 22589
+      "sourceLine": 22597
     },
     {
       "id": "sidebar.render-category-pills.14",
       "zhCN": "刻蚀 (15)",
       "en": "Etch (15)",
-      "sourceLine": 22590
+      "sourceLine": 22598
     },
     {
       "id": "sidebar.render-category-pills.15",
       "zhCN": "量测 (14)",
       "en": "Metro (14)",
-      "sourceLine": 22593
+      "sourceLine": 22601
     },
     {
       "id": "sidebar.render-category-pills.16",
       "zhCN": "薄膜 (12)",
       "en": "Depo (12)",
-      "sourceLine": 22595
+      "sourceLine": 22603
     },
     {
       "id": "sidebar.render-category-pills.17",
       "zhCN": "封装 (12)",
       "en": "Pkg (12)",
-      "sourceLine": 22596
+      "sourceLine": 22604
     },
     {
       "id": "sidebar.render-category-pills.18",
       "zhCN": "注入 (10)",
       "en": "Implant (10)",
-      "sourceLine": 22597
+      "sourceLine": 22605
     },
     {
       "id": "sidebar.render-category-pills.19",
       "zhCN": "测试 (10)",
       "en": "Test (10)",
-      "sourceLine": 22598
+      "sourceLine": 22606
     },
     {
       "id": "sidebar.render-category-pills.20",
       "zhCN": "研磨 (9)",
       "en": "CMP (9)",
-      "sourceLine": 22599
+      "sourceLine": 22607
     },
     {
       "id": "sidebar.render-category-pills.21",
       "zhCN": "清洗 (9)",
       "en": "Cleans (9)",
-      "sourceLine": 22600
+      "sourceLine": 22608
     },
     {
       "id": "sidebar.render-category-pills.22",
       "zhCN": "扩散 (9)",
       "en": "Diff/Anneal (9)",
-      "sourceLine": 22603
+      "sourceLine": 22611
     },
     {
       "id": "sidebar.render-secondary-controls.1",
       "zhCN": "运行",
       "en": "Running",
-      "sourceLine": 22624
+      "sourceLine": 22632
     },
     {
       "id": "sidebar.render-secondary-controls.2",
       "zhCN": "待料",
       "en": "Idle",
-      "sourceLine": 22625
+      "sourceLine": 22633
     },
     {
       "id": "sidebar.render-secondary-controls.3",
       "zhCN": "告警",
       "en": "Down",
-      "sourceLine": 22626
+      "sourceLine": 22634
     },
     {
       "id": "sidebar.render-secondary-controls.4",
       "zhCN": "维保",
       "en": "PM",
-      "sourceLine": 22627
+      "sourceLine": 22635
     },
     {
       "id": "sidebar.render-secondary-controls.5",
       "zhCN": "40 家全球标杆品牌",
       "en": "40 Global OEMs",
-      "sourceLine": 22649
+      "sourceLine": 22657
     }
   ],
   "missing": [
@@ -2229,9 +2229,9 @@
         "data-i18n-title"
       ],
       "sourceLines": [
-        1796
+        1804
       ],
-      "sourceLine": 1796,
+      "sourceLine": 1804,
       "locales": [
         "en",
         "zh-CN"
@@ -2243,7 +2243,7 @@
       "surface": "twin-toast",
       "zhCN": "未找到目标产线机台",
       "en": null,
-      "sourceLine": 14804,
+      "sourceLine": 14812,
       "reason": "showTwinToast message has no en variant in the frozen source"
     },
     {
@@ -2251,7 +2251,7 @@
       "surface": "twin-toast",
       "zhCN": "未找到替代设备数据",
       "en": null,
-      "sourceLine": 14818,
+      "sourceLine": 14826,
       "reason": "showTwinToast message has no en variant in the frozen source"
     },
     {
@@ -2259,7 +2259,7 @@
       "surface": "twin-toast",
       "zhCN": "✅ 3D原位替代成功！已将原机台替换为 ${newBrand} ${customTool.model}",
       "en": null,
-      "sourceLine": 14871,
+      "sourceLine": 14879,
       "reason": "showTwinToast message has no en variant in the frozen source"
     },
     {
@@ -2267,7 +2267,7 @@
       "surface": "twin-toast",
       "zhCN": "↩️ 已恢复原厂机台配置 (${fabTool.brand} ${fabTool.model})",
       "en": null,
-      "sourceLine": 14903,
+      "sourceLine": 14911,
       "reason": "showTwinToast message has no en variant in the frozen source"
     },
     {
@@ -2275,27 +2275,22 @@
       "surface": "twin-toast",
       "zhCN": "未在3D厂房中找到可直接对应替代的运行机位",
       "en": null,
-      "sourceLine": 14973,
+      "sourceLine": 14981,
       "reason": "showTwinToast message has no en variant in the frozen source"
     }
   ],
   "skipped": [
     {
       "kind": "non-literal-branch",
-      "sourceLine": 9183,
+      "sourceLine": 9191,
       "reason": "locale-conditioned ternary whose branches are variable references",
       "snippet": "textZh : textEn, 24, 94);"
     },
     {
       "kind": "non-literal-branch",
-      "sourceLine": 9252,
+      "sourceLine": 9260,
       "reason": "locale-conditioned ternary whose branches are variable references",
       "snippet": "textZh : textEn, 24, 94);"
-    },
-    {
-      "kind": "font-metric-ternary",
-      "sourceLine": 9991,
-      "reason": "locale-dependent canvas font string, not user-visible copy"
     },
     {
       "kind": "font-metric-ternary",
@@ -2303,74 +2298,79 @@
       "reason": "locale-dependent canvas font string, not user-visible copy"
     },
     {
+      "kind": "font-metric-ternary",
+      "sourceLine": 10007,
+      "reason": "locale-dependent canvas font string, not user-visible copy"
+    },
+    {
       "kind": "non-literal-branch",
-      "sourceLine": 13903,
+      "sourceLine": 13911,
       "reason": "locale-conditioned ternary whose branches are variable references",
       "snippet": "bayCfg?.nameZh || item.category"
     },
     {
       "kind": "non-literal-branch",
-      "sourceLine": 16469,
+      "sourceLine": 16477,
       "reason": "locale-conditioned ternary whose branches are variable references",
       "snippet": "nameZh : nameEn, 192, 64);"
     },
     {
       "kind": "non-literal-branch",
-      "sourceLine": 16521,
+      "sourceLine": 16529,
       "reason": "locale-conditioned ternary whose branches are variable references",
       "snippet": "obj.userData.tooltipZh || obj.userData.tooltipEn"
     },
     {
       "kind": "expression-branch",
-      "sourceLine": 18356,
+      "sourceLine": 18364,
       "reason": "locale-conditioned ternary with a non-literal or concatenated branch",
       "snippet": "\"步骤 \" + cur.step + \"/\" + total"
     },
     {
       "kind": "non-literal-branch",
-      "sourceLine": 18379,
+      "sourceLine": 18387,
       "reason": "locale-conditioned ternary whose branches are variable references",
       "snippet": "bay.nameZh + \" (\" + bay.nameEn + \")\""
     },
     {
       "kind": "non-literal-branch",
-      "sourceLine": 19519,
+      "sourceLine": 19527,
       "reason": "locale-conditioned ternary whose branches are variable references",
       "snippet": "wp.titleZh : wp.titleEn;"
     },
     {
       "kind": "non-literal-branch",
-      "sourceLine": 19521,
+      "sourceLine": 19529,
       "reason": "locale-conditioned ternary whose branches are variable references",
       "snippet": "wp.descZh : wp.descEn;"
     },
     {
       "kind": "non-literal-branch",
-      "sourceLine": 19708,
+      "sourceLine": 19716,
       "reason": "locale-conditioned ternary whose branches are variable references",
       "snippet": "step.tagZh : step.tagEn;"
     },
     {
       "kind": "non-literal-branch",
-      "sourceLine": 19709,
+      "sourceLine": 19717,
       "reason": "locale-conditioned ternary whose branches are variable references",
       "snippet": "step.titleZh : step.titleEn;"
     },
     {
       "kind": "non-literal-branch",
-      "sourceLine": 19710,
+      "sourceLine": 19718,
       "reason": "locale-conditioned ternary whose branches are variable references",
       "snippet": "step.descZh : step.descEn;"
     },
     {
       "kind": "nested-ternary",
-      "sourceLine": 21245,
+      "sourceLine": 21253,
       "reason": "locale-conditioned ternary whose Chinese branch is itself a ternary",
       "snippet": "eqSt === \"RUNNING\""
     },
     {
       "kind": "non-literal-branch",
-      "sourceLine": 22072,
+      "sourceLine": 22080,
       "reason": "locale-conditioned ternary whose branches are variable references",
       "snippet": "zhProcessNames[proc.id] || proc.name"
     }

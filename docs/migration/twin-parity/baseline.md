@@ -1,8 +1,8 @@
 # Twin parity baseline
 
-Updated: 2026-10-26. Status: **IMPLEMENTING / NOT PARITY_VERIFIED**.
+Updated: 2026-10-27. Status: **IMPLEMENTING / NOT PARITY_VERIFIED**.
 
-The user selected the final construction loaded by `../SemiconFab/twin.html`, with `?layout=/twin/layout-default.json&mode=engineer`. The frozen original is `jinjiefan2020/SemiconFab@b3666132e5d8cab2cebe4c4227fc04c52242eb28`. Next started this increment at `060957d`. Original source bytes are unchanged; hashes and inputs are in [source-manifest.json](source-manifest.json). See [attribution.md](attribution.md) for original PolyForm and icon notices.
+The user selected the final construction loaded by `../SemiconFab/twin.html`, with `?layout=/twin/layout-default.json&mode=engineer`. The frozen original is `jinjiefan2020/SemiconFab@d76378c7ae475f77f7a13bae9c093267c13fc5f3`. Next started this increment at `060957d`. Original source bytes are frozen at that commit (see the 2026-10-27 re-pin below); hashes and inputs are in [source-manifest.json](source-manifest.json). See [attribution.md](attribution.md) for original PolyForm and icon notices.
 
 ## Product boundary
 
@@ -367,6 +367,17 @@ Evidence: [material/light README](evidence/material-lighting-2026-10-26/README.m
 [production acceptance](evidence/material-lighting-2026-10-26/acceptance.json),
 [independent material response](evidence/material-lighting-2026-10-26/material-response.json).
 **60-minute soak and device-loss matrix remain skipped by user decision.**
+
+## 2026-10-27 upstream baseline re-pin
+
+The read-only reference checkout advanced from `b3666132e5d8cab2cebe4c4227fc04c52242eb28` to `d76378c7ae475f77f7a13bae9c093267c13fc5f3`. The frozen baseline is re-pinned to that commit in `tools/build_twin_inventory.py` and [source-manifest.json](source-manifest.json), and every frozen-source fixture is regenerated from it. Across the eight pinned files the upstream delta is limited to two files:
+
+- `twin.html` +8 lines: a top-bar header-link anchor to `twin-mega.html` (around source line 1572). No scene, HUD, geometry, event or `data-i18n*` code changed, so every frozen-source line range after the insertion shifts by exactly +8 and nothing else.
+- `js/translations.js` +4 en and +4 zh-CN nav keys (`hero_cta_mega`, `nav_item_mega_twin`, `nav_item_mega_twin_sub`, `nav_item_mega_twin_mobile`). None of them is referenced by a `twin.html` `data-i18n*` attribute, so the serialized en/zh-CN twin inventory and generated translation map are unchanged; only the dictionary counts (823 → 827 per locale) and dictionary line spans move.
+
+`catalog.json`, `twin/layout-default.json`, `twin/events-t1-fifo.jsonl`, `benchmark/routes.json`, `js/i18n.js` and `LICENSE` are byte-identical. Regenerated fixtures were value-diffed: process/dynamics/personnel/tour-wafer/exploded vectors differ only by the source hash, the +8 line ranges and the corresponding provenance notes; the i18n fixture differs only by source pins, +8 line positions and the dictionary counts. No data row, geometry, timing or translation value changed.
+
+Upstream also adds `twin-mega.html`, a separate Three.js 3,000-tool concept page linked from the new header entry. It is **recorded as a new upstream feature gap and is not migrated** in this increment: the single-FAB `/twin` product boundary, Babylon renderer and frozen vectors are unchanged, no Mega Fab page is implemented and no parity claim is made for it. A future migration would need its own scope, renderer decision and parity evidence.
 
 ## Earlier GPU evidence interpretation
 

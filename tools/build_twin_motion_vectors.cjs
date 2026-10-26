@@ -1,7 +1,7 @@
 // Deterministic extraction of the frozen original Cinematic Tour and Wafer-follow
 // fixed-time vectors.
 //
-// Source: SemiconFab/twin.html @ b3666132 (sha256 pinned in
+// Source: SemiconFab/twin.html @ d76378c (sha256 pinned in
 // docs/migration/twin-parity/source-manifest.json). Only character-for-character
 // slices of the frozen page are executed inside node:vm. THREE, camera/controls,
 // DOM elements, performance.now, requestAnimationFrame and setTimeout/setInterval
@@ -122,34 +122,34 @@ function extractConst(name, openChar) {
 
 // Line ranges asserted so source drift cannot silently move the sliced code.
 const TOUR_RANGES = {
-  CINEMATIC_WAYPOINTS: [19353, 19429],
-  cancelActiveCameraAnimation: [19302, 19304],
-  tweenCamera: [19306, 19343],
-  clearTourTimers: [19431, 19440],
-  updateTourTimerUI: [19442, 19448],
-  setFabLevelQuiet: [19450, 19495],
-  playTourWaypoint: [19497, 19570],
-  nextTourWaypoint: [19572, 19580],
-  prevTourWaypoint: [19582, 19589],
-  startCinematicTour: [19591, 19627],
-  stopCinematicTour: [19629, 19647],
+  CINEMATIC_WAYPOINTS: [19361, 19437],
+  cancelActiveCameraAnimation: [19310, 19312],
+  tweenCamera: [19314, 19351],
+  clearTourTimers: [19439, 19448],
+  updateTourTimerUI: [19450, 19456],
+  setFabLevelQuiet: [19458, 19503],
+  playTourWaypoint: [19505, 19578],
+  nextTourWaypoint: [19580, 19588],
+  prevTourWaypoint: [19590, 19597],
+  startCinematicTour: [19599, 19635],
+  stopCinematicTour: [19637, 19655],
 };
 const WAFER_RANGES = {
-  CATEGORY_BAYS: [12684, 12789],
-  WAFER_TOOL_GROUP_TO_CATEGORY: [16564, 16583],
-  computeWaferWaypoints: [18058, 18108],
-  initProductRoute: [18110, 18112],
-  getCatmullRomSplinePoint: [18195, 18213],
-  recordWaferTrailPoint: [18215, 18225],
-  updateWaferTrailMesh: [18227, 18260],
-  clearWaferTrail: [18262, 18268],
-  updateWaferFollowFrame: [18270, 18342],
-  updateWaferFollowHUD: [18344, 18399],
-  toggleWaferPlay: [18495, 18513],
-  setWaferSpeed: [18515, 18529],
-  replayWaferRoute: [18555, 18575],
-  onWaferProductChange: [18577, 18596],
-  onWaferRouteFinished: [18598, 18608],
+  CATEGORY_BAYS: [12692, 12797],
+  WAFER_TOOL_GROUP_TO_CATEGORY: [16572, 16591],
+  computeWaferWaypoints: [18066, 18116],
+  initProductRoute: [18118, 18120],
+  getCatmullRomSplinePoint: [18203, 18221],
+  recordWaferTrailPoint: [18223, 18233],
+  updateWaferTrailMesh: [18235, 18268],
+  clearWaferTrail: [18270, 18276],
+  updateWaferFollowFrame: [18278, 18350],
+  updateWaferFollowHUD: [18352, 18407],
+  toggleWaferPlay: [18503, 18521],
+  setWaferSpeed: [18523, 18537],
+  replayWaferRoute: [18563, 18583],
+  onWaferProductChange: [18585, 18604],
+  onWaferRouteFinished: [18606, 18616],
 };
 
 function extractAll(ranges, constNames) {
@@ -1017,7 +1017,7 @@ function runWaferStallTrace() {
 // ---------------------------------------------------------------------------
 const stubBoundary = {
   frozenSource:
-    'SemiconFab/twin.html @ b3666132; benchmark/routes.json and twin/layout-default.json are the pinned assets the frozen page fetches at runtime (see source-manifest.json).',
+    'SemiconFab/twin.html @ d76378c; benchmark/routes.json and twin/layout-default.json are the pinned assets the frozen page fetches at runtime (see source-manifest.json).',
   execution:
     'Only character-for-character frozen slices are executed inside node:vm; every emitted number comes from original source code.',
   three:
@@ -1039,7 +1039,7 @@ const stubBoundary = {
   routeData:
     'computeWaferWaypoints is executed against the pinned benchmark/routes.json + twin/layout-default.json route/layout data that the page fetches. The trace uses a declared 5-step prefix of each product route (the full pinned routes have 120/104/92 steps) so a fixed-time trace stays bounded; waypoint x/z are still chosen by the frozen round-robin against the full layout tool list.',
   seekAdvance:
-    'Frozen source has no seek/scrub for the wafer follow flow: the wafer UI exposes play/pause, speed 1x/4x/16x, replay, product select and camera follow only (twin.html:955-1036, 18495-18608). Fast-forward is setWaferSpeed scaling dur = 2.0 / speed (18285); replayWaferRoute resets index/stepTimer/trail. The Tour advances via timer callbacks + tweenCamera RAF frames; next/prev jump waypoints. There is no seek in either flow and none was invented.',
+    'Frozen source has no seek/scrub for the wafer follow flow: the wafer UI exposes play/pause, speed 1x/4x/16x, replay, product select and camera follow only (twin.html:955-1036, 18503-18616). Fast-forward is setWaferSpeed scaling dur = 2.0 / speed (18293); replayWaferRoute resets index/stepTimer/trail. The Tour advances via timer callbacks + tweenCamera RAF frames; next/prev jump waypoints. There is no seek in either flow and none was invented.',
   dtClamp:
     'updateWaferFollowFrame computes dt = Math.min((performance.now() - waferLastFrameTime) / 1000, 0.1); the declared stall trace feeds one 500 ms frame gap to exercise the 0.1 s clamp.',
   hudLanguage:
@@ -1134,7 +1134,7 @@ function buildFixture() {
       seek: {
         supported: false,
         evidence:
-          'No seek/scrub control exists in the frozen wafer-follow UI (only play/pause, speed 1x/4x/16x, replay, product select, camera follow; twin.html:955-1036). Fast-forward is setWaferSpeed -> dur = 2.0 / speed (18285); replayWaferRoute resets index/stepTimer/trail (18555-18575). Tour advance is nextTourWaypoint/prevTourWaypoint + timer callbacks; no seek.',
+          'No seek/scrub control exists in the frozen wafer-follow UI (only play/pause, speed 1x/4x/16x, replay, product select, camera follow; twin.html:955-1036). Fast-forward is setWaferSpeed -> dur = 2.0 / speed (18293); replayWaferRoute resets index/stepTimer/trail (18563-18583). Tour advance is nextTourWaypoint/prevTourWaypoint + timer callbacks; no seek.',
       },
     },
   };

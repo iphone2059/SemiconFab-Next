@@ -17,6 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { inflateSync } from 'node:zlib';
+import { pathToFileURL } from 'node:url';
 
 // Source: frozen reference worktree 0b35ca5 web_app/tests/twin-goldens.browser.ts GOLDEN_CLOCK.
 export const GOLDEN_CLOCK = `(() => {
@@ -43,10 +44,69 @@ export const VIEWS = [
   { id: 'xray', steps: [['#btn-toggle-cut', 60], ['#btn-toggle-xray', 400]] },
 ];
 export const ROI = { x0: 400, y0: 120, x1: 1500, y1: 680 };
+const VIEW_POSES = {
+  iso: { position: [38, 48, 58], target: [0, 0, 0] },
+  top: { position: [0, 95, .1], target: [0, 0, 0] },
+  b1: { position: [-15, -2, 34], target: [-15, -6, -5] },
+  dual: { position: [0, 38, 62], target: [0, -3, 0] },
+  exploded: { position: [55, 44, 72], target: [0, -4, 0] },
+  cut: { position: [0, 52, 64], target: [0, 2, 0] },
+  xray: { position: [0, 52, 64], target: [0, 2, 0] },
+};
 const SETTLE_FRAMES = 180;
 // Both sites pad readiness to this frame count so the whole view schedule runs on identical frames.
 // First ready needs ~130 frames on a cold GPU upload, so the budget is deliberately generous.
 const READY_FRAMES = 400;
+
+/** Equal clocks cannot establish camera, viewport or renderer readiness. Fail closed. */
+export function validateCapture(capture, expectedPose) {
+  if (!capture.status?.startsWith('WebGPU ·')) throw new Error('renderer is not ready');
+  if (capture.viewport?.width !== 1536 || capture.viewport?.height !== 735 || capture.viewport?.dpr !== 1)
+    throw new Error('capture viewport/DPR mismatch');
+  const canvas = capture.canvas;
+  if (!(canvas?.cssWidth > 768 && canvas?.cssHeight > 300)
+    || Math.abs(canvas.width - Math.round(canvas.cssWidth * capture.viewport.dpr)) > 1
+    || Math.abs(canvas.height - Math.round(canvas.cssHeight * capture.viewport.dpr)) > 1)
+    throw new Error('canvas backing size/rectangle mismatch');
+  for (const field of ['position', 'target']) {
+    const actual = capture.pose?.[field];
+    if (!Array.isArray(actual) || actual.length !== 3 || actual.some((value, index) =>
+      !Number.isFinite(value) || Math.abs(value - expectedPose[field][index]) > .002))
+      throw new Error('camera mismatch: ' + JSON.stringify(capture.pose));
+  }
+}
+
+/** Reject uniform/empty scene output, sampling above the X-Ray panel and outside the sidebar/HUD. */
+export function validateScenePixels(image, roi = { x0: 400, y0: 140, x1: 1500, y1: 560 }) {
+  if (!(roi.x0 >= 0 && roi.y0 >= 0 && roi.x1 <= image.width && roi.y1 <= image.height
+    && roi.x1 > roi.x0 && roi.y1 > roi.y0)) throw new Error('scene ROI is outside screenshot');
+  const sums = [0, 0, 0], squares = [0, 0, 0]; let count = 0;
+  for (let y = roi.y0; y < roi.y1; y++) for (let x = roi.x0; x < roi.x1; x++) {
+    const offset = (y * image.width + x) * image.channels;
+    for (let channel = 0; channel < 3; channel++) {
+      const value = image.data[offset + channel]; sums[channel] += value; squares[channel] += value * value;
+    }
+    count++;
+  }
+  const variance = Math.max(...sums.map((sum, channel) => squares[channel] / count - (sum / count) ** 2));
+  if (!Number.isFinite(variance) || variance < 16) throw new Error('blank or uniform scene capture');
+}
+
+async function captureMetadata(site, viewId) {
+  // Let the UI finish its queued state projection, without advancing the virtual clock.
+  let metadata;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    metadata = await site.evaluate(`({status:document.querySelector('.twin-status')?.title,
+      pose:window.__SEMICONFAB_PERF__?.getCameraPose(),
+      viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio},
+      canvas:{width:document.querySelector('canvas')?.width,height:document.querySelector('canvas')?.height,
+        cssWidth:document.querySelector('canvas')?.getBoundingClientRect().width,
+        cssHeight:document.querySelector('canvas')?.getBoundingClientRect().height}})`);
+    try { validateCapture(metadata, VIEW_POSES[viewId]); return metadata; }
+    catch (error) { if (attempt === 9) throw error; }
+    await sleep(100);
+  }
+}
 
 /** Mirrors web_app/tests/support/png.ts; returns {width,height,channels,data}. */
 export function decodePng(buffer) {
@@ -131,11 +191,15 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
  * advanced after load, so both apps mount at the same virtual frame; `steps` records how many frames
  * each side needed so the caller can align both to an identical total before capturing.
  */
-async function openSite(port, baseUrl, tag) {
+async function openSite(port, baseUrl, tag, transport, clockInHtml = false) {
+  let close = async () => {};
+  let command = transport;
+  const errors = [];
+  if (!command) {
   const tab = await (await fetch('http://127.0.0.1:' + port + '/json/new?about:blank', { method: 'PUT' })).json();
   const socket = new WebSocket(tab.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
-  let seq = 0; const pending = new Map(); const errors = [];
+  let seq = 0; const pending = new Map();
   socket.addEventListener('message', event => {
     const message = JSON.parse(String(event.data));
     if (message.method === 'Runtime.exceptionThrown') errors.push(message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text);
@@ -144,11 +208,16 @@ async function openSite(port, baseUrl, tag) {
     pending.delete(message.id);
     message.error ? handler.reject(new Error(JSON.stringify(message.error))) : handler.resolve(message.result);
   });
-  const command = (method, params = {}) => new Promise((resolve, reject) => {
+  command = (method, params = {}) => new Promise((resolve, reject) => {
     const id = ++seq; const timer = setTimeout(() => { pending.delete(id); reject(new Error('timeout ' + method)); }, 180000);
     pending.set(id, { resolve: value => { clearTimeout(timer); resolve(value); }, reject: error => { clearTimeout(timer); reject(error); } });
     socket.send(JSON.stringify({ id, method, params }));
   });
+  close = async () => {
+    socket.close();
+    await fetch('http://127.0.0.1:' + port + '/json/close/' + tab.id).catch(() => {});
+  };
+  }
   const evaluate = async expression => {
     const result = await command('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
@@ -157,10 +226,10 @@ async function openSite(port, baseUrl, tag) {
   let steps = 0;
   const step = async frames => { steps += frames; return evaluate('window.__twinGoldenClock.step(' + frames + ')'); };
   await command('Page.enable'); await command('Runtime.enable'); await command('Log.enable');
-  await command('Page.addScriptToEvaluateOnNewDocument', { source: GOLDEN_CLOCK });
+  if (!clockInHtml) await command('Page.addScriptToEvaluateOnNewDocument', { source: GOLDEN_CLOCK });
   await command('Page.bringToFront');
   await command('Emulation.setDeviceMetricsOverride', { width: 1536, height: 735, deviceScaleFactor: 1, mobile: false });
-  await command('Page.navigate', { url: baseUrl + '/twin?lang=zh-CN&mode=engineer&perf=1' });
+  await command('Page.navigate', { url: baseUrl + '/twin?lang=zh-CN&mode=engineer&perf=1' + (clockInHtml ? '&parity=1' : '') });
   const loadDeadline = Date.now() + 180000;
   let loaded = false;
   while (Date.now() < loadDeadline) {
@@ -178,14 +247,18 @@ async function openSite(port, baseUrl, tag) {
   }
   if (!ready) throw new Error('frozen-clock page did not become ready: ' + tag);
   await evaluate('document.fonts.ready');
-  const click = selector => evaluate('document.querySelector(' + JSON.stringify(selector) + ').click()');
+  const click = async selector => {
+    await evaluate('document.querySelector(' + JSON.stringify(selector) + ').click()');
+    // Redux/React projects the click asynchronously. Flush its first frame and queued effects
+    // before consuming the fixed animation budget; otherwise the transition starts mid-budget.
+    await step(1);
+    await sleep(100);
+  };
   const capture = async file => {
     const shot = await command('Page.captureScreenshot', { format: 'png' });
-    fs.writeFileSync(file, Buffer.from(shot.data, 'base64'));
-  };
-  const close = async () => {
-    socket.close();
-    await fetch('http://127.0.0.1:' + port + '/json/close/' + tab.id).catch(() => {});
+    const png = Buffer.from(shot.data, 'base64');
+    validateScenePixels(decodePng(png));
+    fs.writeFileSync(file, png);
   };
   return { tag, steps: () => steps, step, click, capture, close, errors, evaluate };
 }
@@ -196,26 +269,54 @@ async function openSite(port, baseUrl, tag) {
  * (both sites pad to the same total), followed by SETTLE_FRAMES and identical per-view frames. Sites
  * are captured one at a time so a second tab can never occlude/blank the captured canvas.
  */
-async function runSite(port, baseUrl, tag, outDir) {
-  const site = await openSite(port, baseUrl, tag);
+async function runSite(port, baseUrl, tag, outDir, command, clockInHtml) {
+  const site = await openSite(port, baseUrl, tag, command, clockInHtml);
   try {
     if (site.steps() > READY_FRAMES) throw new Error(tag + ' needed ' + site.steps() + ' frames to become ready (budget ' + READY_FRAMES + ')');
     await site.step(READY_FRAMES - site.steps());
     await site.step(SETTLE_FRAMES);
-    const files = {}; const times = {};
+    const files = {}; const times = {}; const captures = {};
     for (const view of VIEWS) {
       for (const [selector, frames] of view.steps) { await site.click(selector); await site.step(frames); }
+      captures[view.id] = await captureMetadata(site, view.id);
       const file = path.join(outDir, tag + '-' + view.id + '.png');
       await site.capture(file);
       files[view.id] = file;
       times[view.id] = await site.evaluate('window.__twinGoldenClock.timeMs');
     }
-    return { files, times, errors: site.errors, totalFrames: site.steps() };
+    return { files, times, captures, errors: site.errors, totalFrames: site.steps() };
   } finally {
     await site.close();
   }
 }
 
+/** Capture through an existing supported tab transport; the caller owns the tab and error events. */
+export async function captureFrozenSite(command, baseUrl, tag, outDir, { clockInHtml = false } = {}) {
+  fs.mkdirSync(outDir, { recursive: true });
+  return runSite(null, baseUrl, tag, outDir, command, clockInHtml);
+}
+
+/** Incremental capture for connected transports with bounded per-call execution times. */
+export async function beginFrozenCapture(command, baseUrl, tag) {
+  const site = await openSite(null, baseUrl, tag, command, true);
+  if (site.steps() > READY_FRAMES) throw new Error(tag + ': readiness frame budget exceeded');
+  await site.step(READY_FRAMES - site.steps());
+  await site.step(SETTLE_FRAMES);
+  return site;
+}
+
+export async function captureFrozenView(site, viewId, outDir) {
+  const view = VIEWS.find(item => item.id === viewId);
+  if (!view) throw new Error('unknown view: ' + viewId);
+  fs.mkdirSync(outDir, { recursive: true });
+  for (const [selector, frames] of view.steps) { await site.click(selector); await site.step(frames); }
+  const metadata = await captureMetadata(site, view.id);
+  const file = path.join(outDir, site.tag + '-' + view.id + '.png');
+  await site.capture(file);
+  return { file, metadata, timeMs: await site.evaluate('window.__twinGoldenClock.timeMs'), totalFrames: site.steps() };
+}
+
+async function main() {
 const args = parseArgs(process.argv);
 fs.mkdirSync(args.out, { recursive: true });
 // Sequential: a single foreground tab at a time, both sites on the identical virtual-frame schedule.
@@ -231,8 +332,13 @@ const report = {
   roi: ROI,
   views,
   timing: { referenceFrames: reference.totalFrames, liteFrames: lite.totalFrames, reference: reference.times, lite: lite.times },
+  captures: { reference: reference.captures, lite: lite.captures },
   errors: { reference: reference.errors.length, lite: lite.errors.length },
 };
 fs.writeFileSync(path.join(args.out, 'frozen-clock-diff.json'), JSON.stringify(report, null, 2) + '\n');
 if (reference.errors.length || lite.errors.length) throw new Error('console errors: ref=' + reference.errors.length + ' lite=' + lite.errors.length);
 console.log(JSON.stringify(report, null, 2));
+}
+
+if (typeof process !== 'undefined' && process.argv[1]
+  && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) await main();

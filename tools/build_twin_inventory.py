@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEST = ROOT / 'docs/migration/twin-parity'
-ORIGINAL_COMMIT = 'b3666132e5d8cab2cebe4c4227fc04c52242eb28'
+ORIGINAL_COMMIT = 'd76378c7ae475f77f7a13bae9c093267c13fc5f3'
 FAMILIES = ['litho', 'thermal', 'bench', 'cluster_depo', 'cluster_etch', 'cluster_implant', 'neutral_metro', 'neutral_pkg']
 CATEGORY_FAMILY = {
     'lithography': 'litho', 'resist_track': 'litho', 'thermal_processing': 'thermal',

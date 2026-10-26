@@ -4,6 +4,15 @@ import assert from 'node:assert/strict';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.0.1:5173') {
+  const steps = liteProductAcceptanceSteps(command, baseUrl);
+  while (true) {
+    const next = await steps.next();
+    if (next.done) return next.value;
+  }
+}
+
+/** Same assertions, exposed in bounded steps for connected browser sessions. */
+export async function* liteProductAcceptanceSteps(command, baseUrl = 'http://127.0.0.1:5173') {
   async function evaluate(expression) {
     const result = await command('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
@@ -44,7 +53,9 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   await until('document.querySelector(".twin-status")?.getAttribute("title")?.startsWith("WebGPU ·")', 'first product frame', 120000);
   await until('!!window.__SEMICONFAB_PERF__?.getDiagnostics', 'perf diagnostics');
   const result = { steps: [] };
-  const record = (name, value) => { result.steps.push({ name, ok: true, value }); };
+  const record = (name, value) => {
+    const step = { name, ok: true, value }; result.steps.push(step); return step;
+  };
 
   // ---- C2: 121 tools, hover, click selection, double-click focus, Escape clear ----
   const before = await diag();
@@ -75,7 +86,7 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   const pickedIndex = picked.state.selection.index;
   assert.ok(hoverSeen, 'hover card appears over a canvas tool');
   assert.ok(await evaluate('!!document.querySelector(".twin-inspector")'), 'inspector opens on selection');
-  record('pick', { index: pickedIndex, hover: hoverSeen, selectionVisible: picked.state.selection.visible });
+  yield record('pick', { index: pickedIndex, hover: hoverSeen, selectionVisible: picked.state.selection.visible });
   const reproject = await evaluate('window.__SEMICONFAB_PERF__.projectTool(' + pickedIndex + ')');
   assert.ok(reproject && Math.hypot(reproject.x - picked.candidate.x, reproject.y - picked.candidate.y) < 40, 'selected tool matches the click location');
   const poseBeforeFocus = await pose();
@@ -91,13 +102,13 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   // The selection box is authored in the Next RH domain; the native camera target reflects Z once.
   assert.ok(vectorNear(focused.target, [focusState.center[0], focused.target[1], -focusState.center[2]], 6), 'double-click focus targets the selected tool: target=' + JSON.stringify(focused.target) + ' center=' + JSON.stringify(focusState.center));
   assert.ok(Math.hypot(focused.position[0] - poseBeforeFocus.position[0], focused.position[2] - poseBeforeFocus.position[2]) > 0.5, 'double-click focus moves the camera');
-  record('focus', focused);
+  yield record('focus', focused);
   await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 760, y: 400, button: 'left', buttons: 1, clickCount: 1 });
   await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 760, y: 400, button: 'left', buttons: 0, clickCount: 1 });
   await sleep(200);
   await key('Escape');
   await until('window.__SEMICONFAB_PERF__.getDiagnostics().selection.index === null', 'escape clears selection', 5000);
-  record('escape-clear', true);
+  yield record('escape-clear', true);
 
   // ---- C3: camera presets, orbit, wheel zoom, resize ----
   const presetButton = label => evaluate('document.querySelector(\'[aria-label="' + label + '"]\').click()');
@@ -109,7 +120,7 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   assert.ok(vectorNear((await pose()).position, [-21, 3.6, -12.5], 2), 'Litho preset');
   await presetButton('Airlock'); await sleep(1300);
   assert.ok(vectorNear((await pose()).position, [-12.5, 4.2, 7.5], 2), 'Airlock preset');
-  record('camera-presets', true);
+  yield record('camera-presets', true);
   const orbitBefore = await pose();
   await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 900, y: 400, button: 'left', buttons: 1, clickCount: 1 });
   for (let step = 1; step <= 8; step += 1) {
@@ -126,7 +137,7 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   await sleep(400);
   assert.ok(radiusOf(await pose()) < radiusBeforeZoom - 0.1, 'wheel zoom belongs to the page owner');
   await presetButton('ISO'); await sleep(1200);
-  record('orbit-zoom', true);
+  yield record('orbit-zoom', true);
   await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 640, deviceScaleFactor: 1, mobile: false });
   await sleep(600);
   const resized = await evaluate('(() => { const canvas = document.querySelector("canvas"); const rect = canvas.getBoundingClientRect(); return { width: canvas.width, height: canvas.height, cssWidth: Math.round(rect.width) }; })()');
@@ -134,7 +145,7 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   await command('Emulation.setDeviceMetricsOverride', { width: 1536, height: 735, deviceScaleFactor: 1, mobile: false });
   await sleep(600);
   assert.equal((await lifecycle()).statuses.includes('lost'), false, 'resize must not lose the device');
-  record('resize', resized);
+  yield record('resize', resized);
 
   // ---- C4: level state machine ----
   await clickId('level-btn-b1'); await sleep(1600);
@@ -143,12 +154,12 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   assert.equal(level.structure.b1Visible, true, 'B1 visible');
   assert.equal(level.structure.slabVisible, false, 'slab hidden below L1');
   assert.equal(level.facility.ceilingVisible, false, 'ceiling hidden at B1');
-  record('level-B1', level.structure);
+  yield record('level-B1', level.structure);
   await clickId('level-btn-dual'); await sleep(1600);
   level = await diag();
   assert.ok(near(level.structure.floorAlpha, 0.35, 0.02), 'DUAL floor alpha ' + level.structure.floorAlpha);
   assert.equal(level.structure.b1Visible, true, 'DUAL keeps B1 visible');
-  record('level-DUAL', level.structure);
+  yield record('level-DUAL', level.structure);
   await clickId('level-btn-exploded');
   await until('window.__SEMICONFAB_PERF__.getWorld().explodeFactor > 0.98', 'explode reaches 100%', 20000);
   await sleep(400);
@@ -158,7 +169,7 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   assert.ok(level.facility.ceilingOffset > 15, 'ceiling lifted ' + level.facility.ceilingOffset);
   assert.ok(level.structure.b1Offset < -13, 'subfab lowered ' + level.structure.b1Offset);
   assert.equal(level.environment.linksVisible, true, 'exploded interconnects visible');
-  record('level-EXPLODED', { ceilingOffset: level.facility.ceilingOffset, b1Offset: level.structure.b1Offset });
+  yield record('level-EXPLODED', { ceilingOffset: level.facility.ceilingOffset, b1Offset: level.structure.b1Offset });
   await clickId('level-btn-l1');
   // The source eases the hierarchy by 8% per frame and only settles below 0.0005; the
   // floor slab/ceiling offsets follow that eased factor, so wait for the settled state.
@@ -169,7 +180,7 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   assert.equal(level.structure.b1Visible, false, 'L1 hides B1');
   assert.equal(level.structure.slabVisible, true, 'L1 slab visible');
   assert.ok(near(level.facility.ceilingOffset, 0, 0.01) && near(level.structure.b1Offset, 0, 0.01), 'offsets reset');
-  record('level-L1', level.structure);
+  yield record('level-L1', level.structure);
 
   // ---- C5: layer toggles ----
   await clickId('btn-toggle-roof'); await sleep(500);
@@ -207,7 +218,7 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   layerState = await diag();
   assert.equal(layerState.environment.roofVisible, false, 'roof restored');
   assert.equal(layerState.structure.b1Visible, false, 'piping restored');
-  record('layers', true);
+  yield record('layers', true);
 
   // ---- C6: tool state sync (manual MAINT through the inspector) ----
   await clickId('level-btn-l1');
@@ -241,7 +252,7 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   assert.ok(await waitState('maint'), 'manual MAINT reaches the native frame sync');
   await evaluate('(() => { const button = [...document.querySelectorAll(".twin-manual-state button")].find(item => item.textContent === "RUN"); if (button) button.click(); })()');
   await sleep(300);
-  record('tool-state', 'maint');
+  yield record('tool-state', 'maint');
 
   // ---- C7: X-Ray filters and material restore ----
   await clickId('btn-toggle-xray'); await sleep(600);
@@ -257,7 +268,7 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   assert.equal(effectsState.xray.filter, null, 'xray restored');
   assert.equal(effectsState.xray.shaderMeshes, 0, 'hologram materials restored');
   assert.equal(effectsState.structure.b1Visible, false, 'L1 subfab restored after xray');
-  record('xray-restore', true);
+  yield record('xray-restore', true);
 
   // ---- C8: section cut on the whole scene ----
   await clickId('btn-toggle-cut');
@@ -281,7 +292,7 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   effectsState = await diag();
   assert.equal(effectsState.xray.filter, null, 'xray disabled');
   assert.equal(effectsState.cutPlane, null, 'cut disabled');
-  record('cut', true);
+  yield record('cut', true);
 
   // ---- C9: wafer follow, tour, patrol, language ----
   await clickId('btn-follow-wafer');
@@ -300,7 +311,7 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   await clickSelector('.twin-wafer-head button');
   await sleep(400);
   assert.equal((await diag()).wafer.markerVisible, false, 'wafer marker hidden after close');
-  record('wafer', { trailIndexCount: waferA.trailIndexCount });
+  yield record('wafer', { trailIndexCount: waferA.trailIndexCount });
   await clickId('btn-cinematic-tour');
   await until('!!document.querySelector(".twin-tour-card")', 'tour card', 8000);
   const tourSamples = [];
@@ -314,12 +325,12 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
   await clickId('btn-focus-patrol'); await sleep(500);
   const patrolPose = await pose();
   assert.ok(Math.hypot(patrolPose.target[0] - patrol[0], patrolPose.target[2] - patrol[2]) < 2, 'patrol focus targets the walking engineer');
-  record('tour-patrol', { distinct: distinct.size });
+  yield record('tour-patrol', { distinct: distinct.size });
   await clickId('lang-toggle-btn');
   await until('document.documentElement.lang === "en-US"', 'english toggle');
   await clickId('lang-toggle-btn');
   await until('document.documentElement.lang === "zh-CN"', 'chinese toggle');
-  record('language', true);
+  yield record('language', true);
 
   // ---- D: three device losses preserve native + product state ----
   await clickId('level-btn-l1');
@@ -379,7 +390,7 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
     const recoveredLifecycle = await lifecycle();
     assert.equal(recoveredLifecycle.losses, lossesBefore + 1, 'loss count: before=' + lossesBefore + ' state=' + JSON.stringify(recoveredLifecycle));
     assert.ok(recoveredLifecycle.recoveries >= round + 1, 'recovery count');
-    assert.deepEqual(recovered.gpuErrors, [], 'no GPU validation errors after loss');
+    assert.equal(JSON.stringify(recovered.gpuErrors), '[]', 'no GPU validation errors after loss');
     // Product strategy rebuilds the native scene on the replacement device (same backend/Redux
     // state); the bounded fixtures verify the in-place native recovery path separately.
     assert.ok(recoveredLifecycle.recoveries >= round + 1, 'scene rebuilt on the replacement device');
@@ -399,6 +410,7 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
     assert.ok(recovered.toolStates.every(state => ['running', 'idle', 'down', 'maint'].includes(state)), 'valid tool states after recovery');
     assert.equal(recovered.meshCount, before.meshCount, 'mesh count preserved');
     recoveryRounds.push({ round, mode, losses: recoveredLifecycle.losses, recoveries: recoveredLifecycle.recoveries });
+    yield { name: 'recovery-round', ok: true, value: recoveryRounds.at(-1) };
   }
   const poseAfterLoss = await pose();
   assert.ok(vectorNear(poseAfterLoss.position, cameraBeforeLoss.position, 3), 'camera pose preserved across losses');
@@ -424,14 +436,14 @@ export async function runLiteProductAcceptance(command, baseUrl = 'http://127.0.
     await sleep(150);
   }
   assert.ok(resynced, 'Redux tool-state sync resumes after recovery');
-  record('recovery-x3', recoveryRounds);
+  yield record('recovery-x3', recoveryRounds);
   if (await evaluate('window.__SEMICONFAB_PERF__.getDiagnostics().xray.filter !== null')) await clickId('btn-toggle-xray');
   await sleep(300);
   if (await evaluate('!!document.querySelector(".twin-cut")')) await clickId('btn-toggle-cut');
   await sleep(300);
   await clickId('btn-toggle-roof');
   const final = await diag();
-  assert.deepEqual(final.gpuErrors, [], 'no GPU errors in the whole acceptance run');
+  assert.equal(JSON.stringify(final.gpuErrors), '[]', 'no GPU errors in the whole acceptance run');
   result.diagnostics = { meshCount: final.meshCount, shadowCasters: final.shadowCasters, gpuErrors: final.gpuErrors.length };
   result.lifecycle = await lifecycle();
   result.finalStatus = await evaluate('document.querySelector(".twin-status").getAttribute("title")');

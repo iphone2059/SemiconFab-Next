@@ -91,176 +91,176 @@ amhs-hud-lbl-avg#1,amhs-hud-lbl-avg,1,1491,static-markup,span,,,,amhs_hud_avg,te
 amhs-hud-avg#1,amhs-hud-avg,1,1495,static-markup,b,,,,,text-sky-300 font-bold,False,PENDING,PENDING,,BASELINED
 amhs-hud-lbl-active#1,amhs-hud-lbl-active,1,1498,static-markup,span,,,,amhs_hud_active,text-slate-400 font-sans,False,PENDING,PENDING,,BASELINED
 amhs-hud-active#1,amhs-hud-active,1,1502,static-markup,b,,,,,text-amber-300 font-bold,False,PENDING,PENDING,,BASELINED
-mode-select#1,mode-select,1,1590,static-markup,select,,onchange=switchEntryMode(this.value),,,bg-transparent text-slate-900 font-bold text-[10px] focus:outline-none cursor-pointer pr-1,False,PENDING,PENDING,,BASELINED
-opt-mode-visitor#1,opt-mode-visitor,1,1594,static-markup,option,,,,,,False,PENDING,PENDING,,BASELINED
-opt-mode-engineer#1,opt-mode-engineer,1,1597,static-markup,option,,,,,,False,PENDING,PENDING,,BASELINED
-opt-mode-research#1,opt-mode-research,1,1598,static-markup,option,,,,,,False,PENDING,PENDING,,BASELINED
-level-btn-l1#1,level-btn-l1,1,1607,static-markup,button,,onclick=switchFabLevel('L1'),L1 Cleanroom Floor (0.0m),,level-btn flex items-center gap-1 px-2 h-full rounded text-[10.5px] font-semibold transition-all bg-slate-900 text-white shadow-sm whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
-level-btn-b1#1,level-btn-b1,1,1617,static-markup,button,,onclick=switchFabLevel('B1'),B1 Subfab Basement (-7.0m),,level-btn flex items-center gap-1 px-2 h-full rounded text-[10.5px] font-semibold transition-all text-slate-600 hover:text-slate-900 whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
-level-btn-dual#1,level-btn-dual,1,1627,static-markup,button,,onclick=switchFabLevel('DUAL'),Dual-Level X-Ray View,,level-btn flex items-center gap-1 px-2 h-full rounded text-[10.5px] font-semibold transition-all text-slate-600 hover:text-slate-900 whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
-level-btn-exploded#1,level-btn-exploded,1,1637,static-markup,button,,onclick=toggleSpatialMode('exploded'),Multi-Tier Exploded Deconstruction,,level-btn flex items-center gap-1 px-2 h-full rounded text-[10.5px] font-semibold transition-all text-slate-600 hover:text-slate-900 whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
-camera-presets-group#1,camera-presets-group,1,1653,static-markup,div,,,,,flex items-center bg-white rounded-lg px-1 py-0.5 border border-slate-200/90 shadow-sm gap-0.5 shrink-0 h-[28px],False,PENDING,PENDING,,BASELINED
-btn-focus-patrol#1,btn-focus-patrol,1,1697,static-markup,button,,onclick=focusPatrolEngineer(),Track Inspection Engineer,,cam-preset-btn w-6 h-6 flex items-center justify-center hover:bg-emerald-50 text-emerald-600 rounded-md transition,False,PENDING,PENDING,,BASELINED
-btn-cinematic-tour#1,btn-cinematic-tour,1,1715,static-markup,button,,onclick=toggleCinematicTour(),Start Cinematic Inspection Tour,,cam-preset-btn ml-0.5 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gradient-to-r from-emerald-500 to-sky-500 hover:from-emerald-600 hover:to-sky-600 text-white font-semibold text-[9px] transition shadow-sm whitespace-nowrap,False,PENDING,PENDING,,BASELINED
-btn-toggle-oht#1,btn-toggle-oht,1,1729,static-markup,button,,onclick=toggleOhtVisibility(),Automated Material Handling System,,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-medium hover:bg-emerald-100 transition whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
-btn-toggle-ceiling#1,btn-toggle-ceiling,1,1739,static-markup,button,,onclick=toggleCeilingGrid(),Fan Filter Units,,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200 font-medium hover:bg-slate-50 transition whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
-btn-toggle-laminar#1,btn-toggle-laminar,1,1749,static-markup,button,,onclick=toggleSpatialMode('aerodynamics'),ISO Class 1 Laminar Downflow Particles (0.45 m/s),,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200 font-medium hover:bg-sky-50 transition whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
-btn-toggle-heatmap#1,btn-toggle-heatmap,1,1758,static-markup,button,,onclick=toggleAerodynamicsHeatmap(),Airlock Pressure Gradient & Streamline Heatmap (+15 Pa / +30 Pa),,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200 font-medium hover:bg-amber-50 transition whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
-btn-toggle-xray#1,btn-toggle-xray,1,1768,static-markup,button,,onclick=toggleSpatialMode('xray'),MEP Piping & Utility Systems X-Ray,,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200 font-medium hover:bg-indigo-50 transition whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
-btn-toggle-draft-labels#1,btn-toggle-draft-labels,1,1778,static-markup,button,,onclick=toggleDraftLabels(),Toggle Pending Tool Labels,,hidden items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-sky-100 text-sky-800 border border-sky-300 font-semibold hover:bg-sky-200 transition whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
-lang-toggle-btn#1,lang-toggle-btn,1,1793,static-markup,button,,onclick=toggleLanguage(),Switch Language,,flex items-center gap-1 text-[9.5px] px-2 h-full hover:bg-slate-200 text-slate-800 rounded-l-lg font-medium transition cursor-pointer,False,PENDING,PENDING,,BASELINED
-current-lang-code#1,current-lang-code,1,1799,static-markup,span,,,,,font-mono font-bold text-[9px],False,PENDING,PENDING,,BASELINED
-lang-picker-btn#1,lang-picker-btn,1,1804,static-markup,button,,onclick=toggleLangDropdown(),More Languages,,h-full px-1.5 hover:bg-slate-200 text-slate-500 rounded-r-lg border-l border-slate-200 transition cursor-pointer,False,PENDING,PENDING,,BASELINED
-lang-dropdown-panel#1,lang-dropdown-panel,1,1812,static-markup,div,,,,,hidden absolute right-0 top-full mt-1.5 w-40 bg-white border border-slate-200 rounded-xl shadow-2xl p-1 z-50 max-h-72 overflow-y-auto,False,PENDING,PENDING,,BASELINED
-lang-selector-menu#1,lang-selector-menu,1,1815,static-markup,div,,,,,space-y-0.5,False,PENDING,PENDING,,BASELINED
-tour-status-subbar#1,tour-status-subbar,1,1823,static-markup,div,,,,,fixed top-11 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white/95 backdrop-blur-md px-2 py-0.5 rounded-xl shadow-lg border border-slate-200/90 z-20 whitespace-nowrap pointer-events-auto,False,PENDING,PENDING,,BASELINED
-header-yield-dot#1,header-yield-dot,1,1834,static-markup,span,,,,,w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse,False,PENDING,PENDING,,BASELINED
-header-yield-val#1,header-yield-val,1,1837,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-header-wpm-val#1,header-wpm-val,1,1845,static-markup,span,,,,,font-bold text-slate-800,False,PENDING,PENDING,,BASELINED
-btn-sim-play#1,btn-sim-play,1,1853,static-markup,button,,onclick=toggleSimulationLoop(event),Toggle Sim Clock,,flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-900 text-white text-[9px] font-mono font-semibold hover:bg-slate-800 active:scale-95 transition shadow-xs whitespace-nowrap cursor-pointer select-none,False,PENDING,PENDING,,BASELINED
-sim-play-icon#1,sim-play-icon,1,1860,static-markup,span,,,,,flex items-center justify-center pointer-events-none,False,PENDING,PENDING,,BASELINED
-lbl-sim-cycle#1,lbl-sim-cycle,1,1872,static-markup,span,,,,,pointer-events-none select-none,False,PENDING,PENDING,,BASELINED
-dt-scenario-select#1,dt-scenario-select,1,1882,static-markup,select,,onchange=applyScenario(this.value),,,bg-transparent text-slate-800 font-semibold text-[9px] focus:outline-none cursor-pointer max-w-[130px],False,PENDING,PENDING,,BASELINED
-btn-toggle-cut#1,btn-toggle-cut,1,1911,static-markup,button,,onclick=toggleSpatialMode('cut'),Dynamic 3D Section Clipping,,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200 font-medium hover:bg-cyan-50 transition whitespace-nowrap shrink-0 cursor-pointer,False,PENDING,PENDING,,BASELINED
-btn-toggle-roof#1,btn-toggle-roof,1,1923,static-markup,button,,onclick=toggleRoofVisibility(),"Roof & HVAC Layer (MAU, Ducts, Exhaust)",,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200 font-medium hover:bg-slate-50 transition whitespace-nowrap shrink-0 cursor-pointer,False,PENDING,PENDING,,BASELINED
-btn-follow-wafer#1,btn-follow-wafer,1,1935,static-markup,button,,onclick=toggleWaferFollowPanel(),Follow Wafer Process Route,,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-amber-700 border border-amber-200 font-medium hover:bg-amber-50 transition whitespace-nowrap shrink-0 cursor-pointer,False,PENDING,PENDING,,BASELINED
-yield-waterfall-panel#1,yield-waterfall-panel,1,1948,static-markup,div,,,,,fixed top-16 left-1/2 transform -translate-x-1/2 w-[760px] max-w-[95vw] glass-panel rounded-2xl z-30 shadow-2xl p-5 border border-slate-300 hidden transition-all duration-300,False,PENDING,PENDING,,BASELINED
-waterfall-total-yield#1,waterfall-total-yield,1,1988,static-markup,div,,,,,text-base font-bold font-mono text-emerald-600,False,PENDING,PENDING,,BASELINED
-waterfall-bars-container#1,waterfall-bars-container,1,2005,static-markup,div,,,,,space-y-1.5 mb-4 max-h-[300px] overflow-y-auto pr-1,False,PENDING,PENDING,,BASELINED
-dt-purity-val#1,dt-purity-val,1,2021,static-markup,span,,,,,font-mono font-bold text-emerald-700,False,PENDING,PENDING,,BASELINED
-dt-health-val#1,dt-health-val,1,2039,static-markup,span,,,,,font-mono font-bold text-emerald-700,False,PENDING,PENDING,,BASELINED
-dt-lag-val#1,dt-lag-val,1,2056,static-markup,span,,,,,font-mono font-bold text-slate-700,False,PENDING,PENDING,,BASELINED
-left-sidebar#1,left-sidebar,1,2072,static-markup,aside,,,,,fixed top-12 left-2.5 bottom-2.5 glass-panel rounded-xl z-20 flex flex-col shadow-lg border border-slate-200/90 overflow-hidden,False,PENDING,PENDING,,BASELINED
-sidebar-tab-fab#1,sidebar-tab-fab,1,2089,static-markup,button,,onclick=switchSidebarTab('fab'),,,flex-1 py-1 rounded-md transition text-center bg-white text-slate-900 shadow-sm,False,PENDING,PENDING,,BASELINED
-tab-count-fab#1,tab-count-fab,1,2094,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-sidebar-tab-oem#1,sidebar-tab-oem,1,2099,static-markup,button,,onclick=switchSidebarTab('oem'),,,flex-1 py-1 rounded-md transition text-center text-slate-500 hover:text-slate-900,False,PENDING,PENDING,,BASELINED
-tab-count-oem#1,tab-count-oem,1,2104,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-search-input#1,search-input,1,2117,static-markup,input,text,oninput=handleSearch(this.value),,,w-full bg-slate-50/90 text-[9px] text-slate-800 pl-7 pr-6 py-1 rounded-lg border border-slate-200 focus:outline-none focus:border-slate-800 focus:bg-white transition-all shadow-inner,False,PENDING,PENDING,,BASELINED
-search-clear-btn#1,search-clear-btn,1,2126,static-markup,button,,onclick=clearSearch(),,,hidden absolute right-2 top-1.5 text-slate-400 hover:text-slate-700,False,PENDING,PENDING,,BASELINED
-category-pills-container#1,category-pills-container,1,2135,static-markup,div,,,,,flex items-center gap-1 overflow-x-auto pb-0.5 text-[8.5px] no-scrollbar,False,PENDING,PENDING,,BASELINED
-sidebar-secondary-controls#1,sidebar-secondary-controls,1,2142,static-markup,div,,,,,,False,PENDING,PENDING,,BASELINED
-equipment-list#1,equipment-list,1,2149,static-markup,div,,,,,flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5 overscroll-contain,False,PENDING,PENDING,,BASELINED
-footer-tool-count#1,footer-tool-count,1,2160,static-markup,span,,,,,whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
-stat-count#1,stat-count,1,2162,static-markup,b,,,,,text-slate-900 font-semibold,False,PENDING,PENDING,,BASELINED
-inspector-panel#1,inspector-panel,1,2187,static-markup,aside,,,,,fixed top-12 right-2.5 bottom-[76px] w-[350px] glass-panel rounded-xl z-20 flex flex-col shadow-2xl transition-all duration-300 transform translate-x-[115%] pointer-events-auto border border-slate-200/90 text-slate-800,False,PENDING,PENDING,,BASELINED
-inspect-category-badge#1,inspect-category-badge,1,2210,static-markup,span,,,,,px-1.5 py-0.5 rounded text-[9px] font-semibold badge-litho shrink-0,False,PENDING,PENDING,,BASELINED
-inspect-brand-country#1,inspect-brand-country,1,2215,static-markup,span,,,,,text-[9px] text-slate-500 font-mono tracking-wider truncate flex-1 min-w-0,False,PENDING,PENDING,,BASELINED
-inspect-name#1,inspect-name,1,2221,static-markup,h2,,,,,text-[12px] font-bold text-slate-900 tracking-tight leading-snug,False,PENDING,PENDING,,BASELINED
-inspect-brand#1,inspect-brand,1,2228,static-markup,span,,,,,text-[10px] font-semibold text-slate-800,False,PENDING,PENDING,,BASELINED
-inspect-model#1,inspect-model,1,2233,static-markup,span,,,,,text-[9px] text-slate-600 font-mono bg-slate-100 px-1 py-0.2 rounded border border-slate-200,False,PENDING,PENDING,,BASELINED
-inspect-node-badge#1,inspect-node-badge,1,2241,static-markup,span,,,,,px-1.5 py-0.2 rounded text-[8.5px] font-mono bg-violet-100 text-violet-800 border border-violet-200 font-semibold,False,PENDING,PENDING,,BASELINED
-inspect-wafer-size#1,inspect-wafer-size,1,2246,static-markup,span,,,,,px-1.5 py-0.2 rounded text-[8.5px] font-mono bg-slate-100 text-slate-700 border border-slate-200,False,PENDING,PENDING,,BASELINED
-inspect-tier-badge#1,inspect-tier-badge,1,2251,static-markup,span,,,,,px-1.5 py-0.2 rounded text-[8.5px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold flex items-center gap-1,False,PENDING,PENDING,,BASELINED
-inspect-tier-dot#1,inspect-tier-dot,1,2255,static-markup,span,,,,,w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0,False,PENDING,PENDING,,BASELINED
-inspect-tier-text#1,inspect-tier-text,1,2258,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-inspect-draft-banner#1,inspect-draft-banner,1,2264,static-markup,div,,,,,hidden mt-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/40 text-amber-900 text-[9px],False,PENDING,PENDING,,BASELINED
-inspect-draft-banner-title#1,inspect-draft-banner-title,1,2272,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-inspect-draft-banner-body#1,inspect-draft-banner-body,1,2277,static-markup,div,,,,,text-[8px] text-amber-700 mt-0.5 leading-snug,False,PENDING,PENDING,,BASELINED
-inspect-draft-prefill-cta#1,inspect-draft-prefill-cta,1,2287,static-markup,a,,,,,hidden mt-2 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[9.5px] shadow-sm transition,False,PENDING,PENDING,,BASELINED
-inspect-draft-cta-text#1,inspect-draft-cta-text,1,2293,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-inspect-elevation-tag-bar#1,inspect-elevation-tag-bar,1,2301,static-markup,div,,,,,px-2.5 py-1.5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between,False,PENDING,PENDING,,BASELINED
-inspect-elevation-label#1,inspect-elevation-label,1,2308,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-inspect-elevation-badge#1,inspect-elevation-badge,1,2311,static-markup,span,,,,,inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[9px] font-mono font-bold shadow-2xs border bg-sky-50 text-sky-800 border-sky-300,False,PENDING,PENDING,,BASELINED
-inspect-elevation-dot#1,inspect-elevation-dot,1,2315,static-markup,span,,,,,w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0,False,PENDING,PENDING,,BASELINED
-inspect-elevation-text#1,inspect-elevation-text,1,2318,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-line-art-svg-container#1,line-art-svg-container,1,2345,static-markup,div,,,,,w-full h-32 flex items-center justify-center,False,PENDING,PENDING,,BASELINED
-inspect-dimensions#1,inspect-dimensions,1,2359,static-markup,b,,,,,text-slate-900 font-semibold,False,PENDING,PENDING,,BASELINED
-inspect-weight#1,inspect-weight,1,2370,static-markup,b,,,,,text-amber-700 font-semibold text-right truncate max-w-[210px],False,PENDING,PENDING,,BASELINED
-telemetry-status-badge#1,telemetry-status-badge,1,2393,static-markup,span,,,,,px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200,False,PENDING,PENDING,,BASELINED
-telemetry-sensors-grid#1,telemetry-sensors-grid,1,2401,static-markup,div,,,,,grid grid-cols-2 gap-1 text-[8.5px],False,PENDING,PENDING,,BASELINED
-telemetry-sparkline-val#1,telemetry-sparkline-val,1,2414,static-markup,span,,,,,font-bold text-slate-900,False,PENDING,PENDING,,BASELINED
-telemetry-sparkline-container#1,telemetry-sparkline-container,1,2420,static-markup,div,,,,,w-full h-6 flex items-center,False,PENDING,PENDING,,BASELINED
-oee-avail-pct#1,oee-avail-pct,1,2440,static-markup,span,,,,,font-bold text-emerald-700,False,PENDING,PENDING,,BASELINED
-oee-bar-pr#1,oee-bar-pr,1,2449,static-markup,div,,,Productive (PR): 88%,,h-full bg-emerald-500 transition-all duration-300,False,PENDING,PENDING,,BASELINED
-oee-bar-sb#1,oee-bar-sb,1,2455,static-markup,div,,,Standby (SB): 6%,,h-full bg-amber-400 transition-all duration-300,False,PENDING,PENDING,,BASELINED
-oee-bar-ud#1,oee-bar-ud,1,2461,static-markup,div,,,Unscheduled Down (UD): 3%,,h-full bg-rose-500 transition-all duration-300,False,PENDING,PENDING,,BASELINED
-oee-bar-sd#1,oee-bar-sd,1,2467,static-markup,div,,,Scheduled PM (SD): 3%,,h-full bg-indigo-500 transition-all duration-300,False,PENDING,PENDING,,BASELINED
-oee-lbl-pr#1,oee-lbl-pr,1,2476,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-oee-lbl-sb#1,oee-lbl-sb,1,2477,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-oee-lbl-ud#1,oee-lbl-ud,1,2478,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-oee-lbl-sd#1,oee-lbl-sd,1,2479,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-telemetry-soh#1,telemetry-soh,1,2492,static-markup,b,,,,,text-emerald-700 font-mono font-semibold,False,PENDING,PENDING,,BASELINED
-telemetry-lot-id#1,telemetry-lot-id,1,2499,static-markup,b,,,,,text-slate-800,False,PENDING,PENDING,,BASELINED
-mes-job-state-badge#1,mes-job-state-badge,1,2556,static-markup,span,,,,,px-1.5 py-0.2 rounded text-[7.5px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200,False,PENDING,PENDING,,BASELINED
-mes-carrier-id#1,mes-carrier-id,1,2566,static-markup,span,,,,,font-bold text-slate-800,False,PENDING,PENDING,,BASELINED
-mes-recipe-id#1,mes-recipe-id,1,2573,static-markup,span,,,RCP-N2-GATE-ETCH-V3,,font-bold text-slate-800 truncate block,False,PENDING,PENDING,,BASELINED
-mes-step-name#1,mes-step-name,1,2585,static-markup,b,,,,,text-slate-700 font-sans,False,PENDING,PENDING,,BASELINED
-btn-mes-trackin#1,btn-mes-trackin,1,2591,static-markup,button,,onclick=mesTrackInCurrent(),,,px-1.5 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-semibold transition text-[7.5px],False,PENDING,PENDING,,BASELINED
-btn-mes-trackout#1,btn-mes-trackout,1,2598,static-markup,button,,onclick=mesTrackOutCurrent(),,,px-1.5 py-0.5 rounded bg-sky-100 hover:bg-sky-200 text-sky-800 font-semibold transition text-[7.5px],False,PENDING,PENDING,,BASELINED
-btn-mes-hold#1,btn-mes-hold,1,2605,static-markup,button,,onclick=mesHoldLotCurrent(),,,px-1.5 py-0.5 rounded bg-rose-100 hover:bg-rose-200 text-rose-800 font-semibold transition text-[7.5px],False,PENDING,PENDING,,BASELINED
-spc-status-badge#1,spc-status-badge,1,2627,static-markup,span,,,,,px-1.5 py-0.2 rounded text-[7.5px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200,False,PENDING,PENDING,,BASELINED
-spc-cp-val#1,spc-cp-val,1,2637,static-markup,span,,,,,font-bold text-slate-800,False,PENDING,PENDING,,BASELINED
-spc-cpk-val#1,spc-cpk-val,1,2641,static-markup,span,,,,,font-bold text-emerald-700,False,PENDING,PENDING,,BASELINED
-spc-sigma-level#1,spc-sigma-level,1,2647,static-markup,span,,,,,font-bold text-indigo-700,False,PENDING,PENDING,,BASELINED
-spc-nelson-rule#1,spc-nelson-rule,1,2657,static-markup,span,,,,,font-semibold text-emerald-700 font-mono,False,PENDING,PENDING,,BASELINED
-inspect-subfab-container#1,inspect-subfab-container,1,2666,static-markup,div,,,,,hidden glass-card p-2 rounded-lg border border-sky-200/80 bg-sky-50/40 space-y-1.5,False,PENDING,PENDING,,BASELINED
-inspect-subfab-title#1,inspect-subfab-title,1,2674,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-inspect-subfab-tag#1,inspect-subfab-tag,1,2679,static-markup,span,,,,,text-[7.5px] font-mono px-1 py-0.2 rounded bg-sky-200/80 text-sky-900 font-semibold,False,PENDING,PENDING,,BASELINED
-inspect-subfab-desc#1,inspect-subfab-desc,1,2685,static-markup,p,,,,,text-[8px] text-slate-600 leading-tight,False,PENDING,PENDING,,BASELINED
-inspect-subfab-links#1,inspect-subfab-links,1,2691,static-markup,div,,,,,flex flex-wrap gap-1 pt-0.5,False,PENDING,PENDING,,BASELINED
-inspect-location-desc#1,inspect-location-desc,1,2707,static-markup,p,,,,,text-[8.5px] text-slate-600 leading-relaxed font-sans,False,PENDING,PENDING,,BASELINED
-inspect-specs#1,inspect-specs,1,2726,static-markup,div,,,,,space-y-0.5 text-[8.5px],False,PENDING,PENDING,,BASELINED
-inspect-desc#1,inspect-desc,1,2740,static-markup,p,,,,,text-[8.5px] text-slate-600 leading-relaxed,False,PENDING,PENDING,,BASELINED
-inspect-source-card#1,inspect-source-card,1,2750,static-markup,div,,,,,glass-card p-2 rounded-lg border border-indigo-200/80 bg-indigo-50/40 space-y-1,False,PENDING,PENDING,,BASELINED
-inspect-source-tier#1,inspect-source-tier,1,2761,static-markup,span,,,,,text-[7.5px] font-mono px-1 py-0.2 rounded bg-indigo-100 text-indigo-800 font-semibold,False,PENDING,PENDING,,BASELINED
-inspect-notes#1,inspect-notes,1,2766,static-markup,p,,,,,text-[8px] text-slate-600 leading-tight,False,PENDING,PENDING,,BASELINED
-inspect-source-link#1,inspect-source-link,1,2770,static-markup,a,,,,,w-full flex items-center justify-center gap-1.5 py-1 px-2 mt-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[8.5px] font-semibold transition shadow-sm,False,PENDING,PENDING,,BASELINED
-inspect-infab-container#1,inspect-infab-container,1,2782,static-markup,div,,,,,hidden,False,PENDING,PENDING,,BASELINED
-inspect-infab-btn#1,inspect-infab-btn,1,2784,static-markup,button,,onclick=,,,w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[8.5px] font-semibold transition shadow-sm,False,PENDING,PENDING,,BASELINED
-inspect-replacement-container#1,inspect-replacement-container,1,2795,static-markup,div,,,,,hidden space-y-1.5,False,PENDING,PENDING,,BASELINED
-hud-grid-badge#1,hud-grid-badge,1,2814,static-markup,div,,,,,fixed bottom-[46px] right-2.5 bg-white px-2.5 py-1 rounded-lg text-slate-700 font-mono text-[10px] shadow-md border border-slate-200/90 z-20 flex items-center gap-1.5 transition-all duration-300 pointer-events-none select-none,False,PENDING,PENDING,,BASELINED
-bottom-hud-footer#1,bottom-hud-footer,1,2823,static-markup,footer,,,,,fixed bottom-2.5 left-[335px] right-2.5 h-8 bg-white rounded-lg z-20 flex items-center justify-between px-2 text-[10px] text-slate-700 shadow-md border border-slate-200/90 overflow-hidden transition-all duration-300,False,PENDING,PENDING,,BASELINED
-btn-edit-layout#1,btn-edit-layout,1,2829,static-markup,a,,,Edit Fab Floor Plan in 2D,,flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[9.5px] shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer hover:scale-105 active:scale-95,False,PENDING,PENDING,,BASELINED
-stat-count#2,stat-count,2,14324,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
-tg-live-busy-${tg.id}#1,tg-live-busy-${tg.id},1,14737,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
-twin-toast-container#1,twin-toast-container,1,15120,dom-property,,,,,,,False,PENDING,PENDING,,BASELINED
-inspect-catalog-link#1,inspect-catalog-link,1,20644,dom-property,,,,,,,False,PENDING,PENDING,,BASELINED
-stat-count#3,stat-count,3,22540,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
-stat-count#4,stat-count,4,22551,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
-state-btn-RUNNING#1,state-btn-RUNNING,1,22631,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
-count-running#1,count-running,1,22632,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
-state-btn-IDLE#1,state-btn-IDLE,1,22634,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
-count-idle#1,count-idle,1,22635,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
-state-btn-DOWN#1,state-btn-DOWN,1,22637,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
-count-down#1,count-down,1,22638,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
-state-btn-MAINT#1,state-btn-MAINT,1,22640,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
-count-maint#1,count-maint,1,22641,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
-wafer-dies-group#1,wafer-dies-group,1,23430,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
-oem-database-modal#1,oem-database-modal,1,23803,static-markup,div,,onclick=if (event.target === this) closeOemDatabaseModal();,,,fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden transition-all,False,PENDING,PENDING,,BASELINED
-modal-search-input#1,modal-search-input,1,23862,static-markup,input,text,oninput=filterModalDatabase(),,,w-full bg-slate-50 text-xs pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-indigo-600 focus:bg-white transition,False,PENDING,PENDING,,BASELINED
-modal-segment-select#1,modal-segment-select,1,23871,static-markup,select,,onchange=filterModalDatabase(),,,text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none cursor-pointer,False,PENDING,PENDING,,BASELINED
-modal-vendor-select#1,modal-vendor-select,1,23878,static-markup,select,,onchange=filterModalDatabase(),,,text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none cursor-pointer,False,PENDING,PENDING,,BASELINED
-modal-matched-count#1,modal-matched-count,1,23887,static-markup,b,,,,,text-indigo-700,False,PENDING,PENDING,,BASELINED
-modal-database-tbody#1,modal-database-tbody,1,23911,static-markup,tbody,,,,,divide-y divide-slate-200 bg-white font-sans text-slate-800,False,PENDING,PENDING,,BASELINED
-yms-wafer-modal#1,yms-wafer-modal,1,23925,static-markup,div,,onclick=if (event.target === this) toggleWaferMapModal(false);,,,fixed inset-0 bg-slate-900/65 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden transition-all,False,PENDING,PENDING,,BASELINED
-btn-copy-stdf#1,btn-copy-stdf,1,23962,static-markup,button,,onclick=copyStdfJson(),,,flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition,False,PENDING,PENDING,,BASELINED
-wafer-svg-container#1,wafer-svg-container,1,24003,static-markup,div,,,,,relative w-[340px] h-[340px] flex items-center justify-center my-2,False,PENDING,PENDING,,BASELINED
-wafer-die-tooltip#1,wafer-die-tooltip,1,24011,static-markup,div,,,,,text-[11px] font-mono bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-lg opacity-0 transition-opacity pointer-events-none mt-1,False,PENDING,PENDING,,BASELINED
-pat-btn-clean#1,pat-btn-clean,1,24072,static-markup,button,,onclick=selectDefectPattern('clean'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-900 text-white border-slate-900,False,PENDING,PENDING,,BASELINED
-pat-btn-center#1,pat-btn-center,1,24084,static-markup,button,,onclick=selectDefectPattern('center'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200,False,PENDING,PENDING,,BASELINED
-pat-btn-ring#1,pat-btn-ring,1,24094,static-markup,button,,onclick=selectDefectPattern('ring'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200,False,PENDING,PENDING,,BASELINED
-pat-btn-scratch#1,pat-btn-scratch,1,24104,static-markup,button,,onclick=selectDefectPattern('scratch'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200,False,PENDING,PENDING,,BASELINED
-pat-btn-donut#1,pat-btn-donut,1,24116,static-markup,button,,onclick=selectDefectPattern('donut'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200,False,PENDING,PENDING,,BASELINED
-pat-btn-random#1,pat-btn-random,1,24126,static-markup,button,,onclick=selectDefectPattern('random'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200,False,PENDING,PENDING,,BASELINED
-pat-btn-edge_local#1,pat-btn-edge_local,1,24138,static-markup,button,,onclick=selectDefectPattern('edge_local'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200,False,PENDING,PENDING,,BASELINED
-adc-pattern-name#1,adc-pattern-name,1,24166,static-markup,span,,,,,font-bold text-slate-900,False,PENDING,PENDING,,BASELINED
-adc-confidence#1,adc-confidence,1,24169,static-markup,span,,,,,text-slate-500 font-mono,False,PENDING,PENDING,,BASELINED
-adc-root-cause#1,adc-root-cause,1,24175,static-markup,b,,,,,text-slate-900 font-semibold,False,PENDING,PENDING,,BASELINED
-slider-val-area#1,slider-val-area,1,24210,static-markup,b,,,,,text-slate-900 font-bold,False,PENDING,PENDING,,BASELINED
-input-die-area#1,input-die-area,1,24216,static-markup,input,range,oninput=onYieldParamsChanged(),,,w-full accent-emerald-600 cursor-pointer h-1.5 bg-slate-200 rounded,False,PENDING,PENDING,,BASELINED
-slider-val-d0#1,slider-val-d0,1,24230,static-markup,b,,,,,text-slate-900 font-bold,False,PENDING,PENDING,,BASELINED
-input-defect-d0#1,input-defect-d0,1,24236,static-markup,input,range,oninput=onYieldParamsChanged(),,,w-full accent-emerald-600 cursor-pointer h-1.5 bg-slate-200 rounded,False,PENDING,PENDING,,BASELINED
-slider-val-alpha#1,slider-val-alpha,1,24250,static-markup,b,,,,,text-slate-900 font-bold,False,PENDING,PENDING,,BASELINED
-input-cluster-alpha#1,input-cluster-alpha,1,24256,static-markup,input,range,oninput=onYieldParamsChanged(),,,w-full accent-emerald-600 cursor-pointer h-1.5 bg-slate-200 rounded,False,PENDING,PENDING,,BASELINED
-model-actual-yield#1,model-actual-yield,1,24276,static-markup,span,,,,,text-base font-bold text-emerald-800,False,PENDING,PENDING,,BASELINED
-model-poisson-yield#1,model-poisson-yield,1,24289,static-markup,span,,,,,text-base font-bold text-slate-800,False,PENDING,PENDING,,BASELINED
-model-murphy-yield#1,model-murphy-yield,1,24302,static-markup,span,,,,,text-base font-bold text-slate-800,False,PENDING,PENDING,,BASELINED
-model-seeds-yield#1,model-seeds-yield,1,24315,static-markup,span,,,,,text-base font-bold text-slate-800,False,PENDING,PENDING,,BASELINED
-stdf-lot-record#1,stdf-lot-record,1,24339,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-stdf-preview-text#1,stdf-preview-text,1,24343,static-markup,div,,,,,bg-slate-900 text-emerald-400 p-2 rounded-lg max-h-[85px] overflow-y-auto leading-relaxed select-all,False,PENDING,PENDING,,BASELINED
-open-architecture-modal#1,open-architecture-modal,1,24364,static-markup,div,,onclick=if (event.target === this) toggleOpenArchitectureModal(false);,,,fixed inset-0 bg-slate-900/65 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden transition-all,False,PENDING,PENDING,,BASELINED
-arch-search-input#1,arch-search-input,1,24430,static-markup,input,text,oninput=filterArchStack(),,,w-full bg-slate-50 text-xs pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-emerald-600 focus:bg-white transition,False,PENDING,PENDING,,BASELINED
-arch-cards-container#1,arch-cards-container,1,24459,static-markup,div,,,,,grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs,False,PENDING,PENDING,,BASELINED
-top-action-tooltip#1,top-action-tooltip,1,24751,static-markup,div,,,,,fixed z-[9999] pointer-events-none opacity-0 transition-opacity duration-150 px-2.5 py-1 rounded-md bg-slate-900/95 backdrop-blur-md text-white text-[10.5px] font-sans font-medium shadow-2xl border border-slate-700/80 whitespace-nowrap flex items-center gap-1.5,False,PENDING,PENDING,,BASELINED
-top-action-tooltip-text#1,top-action-tooltip-text,1,24755,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
-top-action-tooltip-arrow#1,top-action-tooltip-arrow,1,24757,static-markup,span,,,,,absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-t border-l border-slate-700/80 rotate-45,False,PENDING,PENDING,,BASELINED
+mode-select#1,mode-select,1,1598,static-markup,select,,onchange=switchEntryMode(this.value),,,bg-transparent text-slate-900 font-bold text-[10px] focus:outline-none cursor-pointer pr-1,False,PENDING,PENDING,,BASELINED
+opt-mode-visitor#1,opt-mode-visitor,1,1602,static-markup,option,,,,,,False,PENDING,PENDING,,BASELINED
+opt-mode-engineer#1,opt-mode-engineer,1,1605,static-markup,option,,,,,,False,PENDING,PENDING,,BASELINED
+opt-mode-research#1,opt-mode-research,1,1606,static-markup,option,,,,,,False,PENDING,PENDING,,BASELINED
+level-btn-l1#1,level-btn-l1,1,1615,static-markup,button,,onclick=switchFabLevel('L1'),L1 Cleanroom Floor (0.0m),,level-btn flex items-center gap-1 px-2 h-full rounded text-[10.5px] font-semibold transition-all bg-slate-900 text-white shadow-sm whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
+level-btn-b1#1,level-btn-b1,1,1625,static-markup,button,,onclick=switchFabLevel('B1'),B1 Subfab Basement (-7.0m),,level-btn flex items-center gap-1 px-2 h-full rounded text-[10.5px] font-semibold transition-all text-slate-600 hover:text-slate-900 whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
+level-btn-dual#1,level-btn-dual,1,1635,static-markup,button,,onclick=switchFabLevel('DUAL'),Dual-Level X-Ray View,,level-btn flex items-center gap-1 px-2 h-full rounded text-[10.5px] font-semibold transition-all text-slate-600 hover:text-slate-900 whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
+level-btn-exploded#1,level-btn-exploded,1,1645,static-markup,button,,onclick=toggleSpatialMode('exploded'),Multi-Tier Exploded Deconstruction,,level-btn flex items-center gap-1 px-2 h-full rounded text-[10.5px] font-semibold transition-all text-slate-600 hover:text-slate-900 whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
+camera-presets-group#1,camera-presets-group,1,1661,static-markup,div,,,,,flex items-center bg-white rounded-lg px-1 py-0.5 border border-slate-200/90 shadow-sm gap-0.5 shrink-0 h-[28px],False,PENDING,PENDING,,BASELINED
+btn-focus-patrol#1,btn-focus-patrol,1,1705,static-markup,button,,onclick=focusPatrolEngineer(),Track Inspection Engineer,,cam-preset-btn w-6 h-6 flex items-center justify-center hover:bg-emerald-50 text-emerald-600 rounded-md transition,False,PENDING,PENDING,,BASELINED
+btn-cinematic-tour#1,btn-cinematic-tour,1,1723,static-markup,button,,onclick=toggleCinematicTour(),Start Cinematic Inspection Tour,,cam-preset-btn ml-0.5 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-gradient-to-r from-emerald-500 to-sky-500 hover:from-emerald-600 hover:to-sky-600 text-white font-semibold text-[9px] transition shadow-sm whitespace-nowrap,False,PENDING,PENDING,,BASELINED
+btn-toggle-oht#1,btn-toggle-oht,1,1737,static-markup,button,,onclick=toggleOhtVisibility(),Automated Material Handling System,,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-medium hover:bg-emerald-100 transition whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
+btn-toggle-ceiling#1,btn-toggle-ceiling,1,1747,static-markup,button,,onclick=toggleCeilingGrid(),Fan Filter Units,,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200 font-medium hover:bg-slate-50 transition whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
+btn-toggle-laminar#1,btn-toggle-laminar,1,1757,static-markup,button,,onclick=toggleSpatialMode('aerodynamics'),ISO Class 1 Laminar Downflow Particles (0.45 m/s),,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200 font-medium hover:bg-sky-50 transition whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
+btn-toggle-heatmap#1,btn-toggle-heatmap,1,1766,static-markup,button,,onclick=toggleAerodynamicsHeatmap(),Airlock Pressure Gradient & Streamline Heatmap (+15 Pa / +30 Pa),,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200 font-medium hover:bg-amber-50 transition whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
+btn-toggle-xray#1,btn-toggle-xray,1,1776,static-markup,button,,onclick=toggleSpatialMode('xray'),MEP Piping & Utility Systems X-Ray,,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200 font-medium hover:bg-indigo-50 transition whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
+btn-toggle-draft-labels#1,btn-toggle-draft-labels,1,1786,static-markup,button,,onclick=toggleDraftLabels(),Toggle Pending Tool Labels,,hidden items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-sky-100 text-sky-800 border border-sky-300 font-semibold hover:bg-sky-200 transition whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
+lang-toggle-btn#1,lang-toggle-btn,1,1801,static-markup,button,,onclick=toggleLanguage(),Switch Language,,flex items-center gap-1 text-[9.5px] px-2 h-full hover:bg-slate-200 text-slate-800 rounded-l-lg font-medium transition cursor-pointer,False,PENDING,PENDING,,BASELINED
+current-lang-code#1,current-lang-code,1,1807,static-markup,span,,,,,font-mono font-bold text-[9px],False,PENDING,PENDING,,BASELINED
+lang-picker-btn#1,lang-picker-btn,1,1812,static-markup,button,,onclick=toggleLangDropdown(),More Languages,,h-full px-1.5 hover:bg-slate-200 text-slate-500 rounded-r-lg border-l border-slate-200 transition cursor-pointer,False,PENDING,PENDING,,BASELINED
+lang-dropdown-panel#1,lang-dropdown-panel,1,1820,static-markup,div,,,,,hidden absolute right-0 top-full mt-1.5 w-40 bg-white border border-slate-200 rounded-xl shadow-2xl p-1 z-50 max-h-72 overflow-y-auto,False,PENDING,PENDING,,BASELINED
+lang-selector-menu#1,lang-selector-menu,1,1823,static-markup,div,,,,,space-y-0.5,False,PENDING,PENDING,,BASELINED
+tour-status-subbar#1,tour-status-subbar,1,1831,static-markup,div,,,,,fixed top-11 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white/95 backdrop-blur-md px-2 py-0.5 rounded-xl shadow-lg border border-slate-200/90 z-20 whitespace-nowrap pointer-events-auto,False,PENDING,PENDING,,BASELINED
+header-yield-dot#1,header-yield-dot,1,1842,static-markup,span,,,,,w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse,False,PENDING,PENDING,,BASELINED
+header-yield-val#1,header-yield-val,1,1845,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+header-wpm-val#1,header-wpm-val,1,1853,static-markup,span,,,,,font-bold text-slate-800,False,PENDING,PENDING,,BASELINED
+btn-sim-play#1,btn-sim-play,1,1861,static-markup,button,,onclick=toggleSimulationLoop(event),Toggle Sim Clock,,flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-900 text-white text-[9px] font-mono font-semibold hover:bg-slate-800 active:scale-95 transition shadow-xs whitespace-nowrap cursor-pointer select-none,False,PENDING,PENDING,,BASELINED
+sim-play-icon#1,sim-play-icon,1,1868,static-markup,span,,,,,flex items-center justify-center pointer-events-none,False,PENDING,PENDING,,BASELINED
+lbl-sim-cycle#1,lbl-sim-cycle,1,1880,static-markup,span,,,,,pointer-events-none select-none,False,PENDING,PENDING,,BASELINED
+dt-scenario-select#1,dt-scenario-select,1,1890,static-markup,select,,onchange=applyScenario(this.value),,,bg-transparent text-slate-800 font-semibold text-[9px] focus:outline-none cursor-pointer max-w-[130px],False,PENDING,PENDING,,BASELINED
+btn-toggle-cut#1,btn-toggle-cut,1,1919,static-markup,button,,onclick=toggleSpatialMode('cut'),Dynamic 3D Section Clipping,,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200 font-medium hover:bg-cyan-50 transition whitespace-nowrap shrink-0 cursor-pointer,False,PENDING,PENDING,,BASELINED
+btn-toggle-roof#1,btn-toggle-roof,1,1931,static-markup,button,,onclick=toggleRoofVisibility(),"Roof & HVAC Layer (MAU, Ducts, Exhaust)",,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-slate-600 border border-slate-200 font-medium hover:bg-slate-50 transition whitespace-nowrap shrink-0 cursor-pointer,False,PENDING,PENDING,,BASELINED
+btn-follow-wafer#1,btn-follow-wafer,1,1943,static-markup,button,,onclick=toggleWaferFollowPanel(),Follow Wafer Process Route,,flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-md bg-white text-amber-700 border border-amber-200 font-medium hover:bg-amber-50 transition whitespace-nowrap shrink-0 cursor-pointer,False,PENDING,PENDING,,BASELINED
+yield-waterfall-panel#1,yield-waterfall-panel,1,1956,static-markup,div,,,,,fixed top-16 left-1/2 transform -translate-x-1/2 w-[760px] max-w-[95vw] glass-panel rounded-2xl z-30 shadow-2xl p-5 border border-slate-300 hidden transition-all duration-300,False,PENDING,PENDING,,BASELINED
+waterfall-total-yield#1,waterfall-total-yield,1,1996,static-markup,div,,,,,text-base font-bold font-mono text-emerald-600,False,PENDING,PENDING,,BASELINED
+waterfall-bars-container#1,waterfall-bars-container,1,2013,static-markup,div,,,,,space-y-1.5 mb-4 max-h-[300px] overflow-y-auto pr-1,False,PENDING,PENDING,,BASELINED
+dt-purity-val#1,dt-purity-val,1,2029,static-markup,span,,,,,font-mono font-bold text-emerald-700,False,PENDING,PENDING,,BASELINED
+dt-health-val#1,dt-health-val,1,2047,static-markup,span,,,,,font-mono font-bold text-emerald-700,False,PENDING,PENDING,,BASELINED
+dt-lag-val#1,dt-lag-val,1,2064,static-markup,span,,,,,font-mono font-bold text-slate-700,False,PENDING,PENDING,,BASELINED
+left-sidebar#1,left-sidebar,1,2080,static-markup,aside,,,,,fixed top-12 left-2.5 bottom-2.5 glass-panel rounded-xl z-20 flex flex-col shadow-lg border border-slate-200/90 overflow-hidden,False,PENDING,PENDING,,BASELINED
+sidebar-tab-fab#1,sidebar-tab-fab,1,2097,static-markup,button,,onclick=switchSidebarTab('fab'),,,flex-1 py-1 rounded-md transition text-center bg-white text-slate-900 shadow-sm,False,PENDING,PENDING,,BASELINED
+tab-count-fab#1,tab-count-fab,1,2102,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+sidebar-tab-oem#1,sidebar-tab-oem,1,2107,static-markup,button,,onclick=switchSidebarTab('oem'),,,flex-1 py-1 rounded-md transition text-center text-slate-500 hover:text-slate-900,False,PENDING,PENDING,,BASELINED
+tab-count-oem#1,tab-count-oem,1,2112,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+search-input#1,search-input,1,2125,static-markup,input,text,oninput=handleSearch(this.value),,,w-full bg-slate-50/90 text-[9px] text-slate-800 pl-7 pr-6 py-1 rounded-lg border border-slate-200 focus:outline-none focus:border-slate-800 focus:bg-white transition-all shadow-inner,False,PENDING,PENDING,,BASELINED
+search-clear-btn#1,search-clear-btn,1,2134,static-markup,button,,onclick=clearSearch(),,,hidden absolute right-2 top-1.5 text-slate-400 hover:text-slate-700,False,PENDING,PENDING,,BASELINED
+category-pills-container#1,category-pills-container,1,2143,static-markup,div,,,,,flex items-center gap-1 overflow-x-auto pb-0.5 text-[8.5px] no-scrollbar,False,PENDING,PENDING,,BASELINED
+sidebar-secondary-controls#1,sidebar-secondary-controls,1,2150,static-markup,div,,,,,,False,PENDING,PENDING,,BASELINED
+equipment-list#1,equipment-list,1,2157,static-markup,div,,,,,flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5 overscroll-contain,False,PENDING,PENDING,,BASELINED
+footer-tool-count#1,footer-tool-count,1,2168,static-markup,span,,,,,whitespace-nowrap shrink-0,False,PENDING,PENDING,,BASELINED
+stat-count#1,stat-count,1,2170,static-markup,b,,,,,text-slate-900 font-semibold,False,PENDING,PENDING,,BASELINED
+inspector-panel#1,inspector-panel,1,2195,static-markup,aside,,,,,fixed top-12 right-2.5 bottom-[76px] w-[350px] glass-panel rounded-xl z-20 flex flex-col shadow-2xl transition-all duration-300 transform translate-x-[115%] pointer-events-auto border border-slate-200/90 text-slate-800,False,PENDING,PENDING,,BASELINED
+inspect-category-badge#1,inspect-category-badge,1,2218,static-markup,span,,,,,px-1.5 py-0.5 rounded text-[9px] font-semibold badge-litho shrink-0,False,PENDING,PENDING,,BASELINED
+inspect-brand-country#1,inspect-brand-country,1,2223,static-markup,span,,,,,text-[9px] text-slate-500 font-mono tracking-wider truncate flex-1 min-w-0,False,PENDING,PENDING,,BASELINED
+inspect-name#1,inspect-name,1,2229,static-markup,h2,,,,,text-[12px] font-bold text-slate-900 tracking-tight leading-snug,False,PENDING,PENDING,,BASELINED
+inspect-brand#1,inspect-brand,1,2236,static-markup,span,,,,,text-[10px] font-semibold text-slate-800,False,PENDING,PENDING,,BASELINED
+inspect-model#1,inspect-model,1,2241,static-markup,span,,,,,text-[9px] text-slate-600 font-mono bg-slate-100 px-1 py-0.2 rounded border border-slate-200,False,PENDING,PENDING,,BASELINED
+inspect-node-badge#1,inspect-node-badge,1,2249,static-markup,span,,,,,px-1.5 py-0.2 rounded text-[8.5px] font-mono bg-violet-100 text-violet-800 border border-violet-200 font-semibold,False,PENDING,PENDING,,BASELINED
+inspect-wafer-size#1,inspect-wafer-size,1,2254,static-markup,span,,,,,px-1.5 py-0.2 rounded text-[8.5px] font-mono bg-slate-100 text-slate-700 border border-slate-200,False,PENDING,PENDING,,BASELINED
+inspect-tier-badge#1,inspect-tier-badge,1,2259,static-markup,span,,,,,px-1.5 py-0.2 rounded text-[8.5px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold flex items-center gap-1,False,PENDING,PENDING,,BASELINED
+inspect-tier-dot#1,inspect-tier-dot,1,2263,static-markup,span,,,,,w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0,False,PENDING,PENDING,,BASELINED
+inspect-tier-text#1,inspect-tier-text,1,2266,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+inspect-draft-banner#1,inspect-draft-banner,1,2272,static-markup,div,,,,,hidden mt-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/40 text-amber-900 text-[9px],False,PENDING,PENDING,,BASELINED
+inspect-draft-banner-title#1,inspect-draft-banner-title,1,2280,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+inspect-draft-banner-body#1,inspect-draft-banner-body,1,2285,static-markup,div,,,,,text-[8px] text-amber-700 mt-0.5 leading-snug,False,PENDING,PENDING,,BASELINED
+inspect-draft-prefill-cta#1,inspect-draft-prefill-cta,1,2295,static-markup,a,,,,,hidden mt-2 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[9.5px] shadow-sm transition,False,PENDING,PENDING,,BASELINED
+inspect-draft-cta-text#1,inspect-draft-cta-text,1,2301,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+inspect-elevation-tag-bar#1,inspect-elevation-tag-bar,1,2309,static-markup,div,,,,,px-2.5 py-1.5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between,False,PENDING,PENDING,,BASELINED
+inspect-elevation-label#1,inspect-elevation-label,1,2316,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+inspect-elevation-badge#1,inspect-elevation-badge,1,2319,static-markup,span,,,,,inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[9px] font-mono font-bold shadow-2xs border bg-sky-50 text-sky-800 border-sky-300,False,PENDING,PENDING,,BASELINED
+inspect-elevation-dot#1,inspect-elevation-dot,1,2323,static-markup,span,,,,,w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0,False,PENDING,PENDING,,BASELINED
+inspect-elevation-text#1,inspect-elevation-text,1,2326,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+line-art-svg-container#1,line-art-svg-container,1,2353,static-markup,div,,,,,w-full h-32 flex items-center justify-center,False,PENDING,PENDING,,BASELINED
+inspect-dimensions#1,inspect-dimensions,1,2367,static-markup,b,,,,,text-slate-900 font-semibold,False,PENDING,PENDING,,BASELINED
+inspect-weight#1,inspect-weight,1,2378,static-markup,b,,,,,text-amber-700 font-semibold text-right truncate max-w-[210px],False,PENDING,PENDING,,BASELINED
+telemetry-status-badge#1,telemetry-status-badge,1,2401,static-markup,span,,,,,px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200,False,PENDING,PENDING,,BASELINED
+telemetry-sensors-grid#1,telemetry-sensors-grid,1,2409,static-markup,div,,,,,grid grid-cols-2 gap-1 text-[8.5px],False,PENDING,PENDING,,BASELINED
+telemetry-sparkline-val#1,telemetry-sparkline-val,1,2422,static-markup,span,,,,,font-bold text-slate-900,False,PENDING,PENDING,,BASELINED
+telemetry-sparkline-container#1,telemetry-sparkline-container,1,2428,static-markup,div,,,,,w-full h-6 flex items-center,False,PENDING,PENDING,,BASELINED
+oee-avail-pct#1,oee-avail-pct,1,2448,static-markup,span,,,,,font-bold text-emerald-700,False,PENDING,PENDING,,BASELINED
+oee-bar-pr#1,oee-bar-pr,1,2457,static-markup,div,,,Productive (PR): 88%,,h-full bg-emerald-500 transition-all duration-300,False,PENDING,PENDING,,BASELINED
+oee-bar-sb#1,oee-bar-sb,1,2463,static-markup,div,,,Standby (SB): 6%,,h-full bg-amber-400 transition-all duration-300,False,PENDING,PENDING,,BASELINED
+oee-bar-ud#1,oee-bar-ud,1,2469,static-markup,div,,,Unscheduled Down (UD): 3%,,h-full bg-rose-500 transition-all duration-300,False,PENDING,PENDING,,BASELINED
+oee-bar-sd#1,oee-bar-sd,1,2475,static-markup,div,,,Scheduled PM (SD): 3%,,h-full bg-indigo-500 transition-all duration-300,False,PENDING,PENDING,,BASELINED
+oee-lbl-pr#1,oee-lbl-pr,1,2484,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+oee-lbl-sb#1,oee-lbl-sb,1,2485,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+oee-lbl-ud#1,oee-lbl-ud,1,2486,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+oee-lbl-sd#1,oee-lbl-sd,1,2487,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+telemetry-soh#1,telemetry-soh,1,2500,static-markup,b,,,,,text-emerald-700 font-mono font-semibold,False,PENDING,PENDING,,BASELINED
+telemetry-lot-id#1,telemetry-lot-id,1,2507,static-markup,b,,,,,text-slate-800,False,PENDING,PENDING,,BASELINED
+mes-job-state-badge#1,mes-job-state-badge,1,2564,static-markup,span,,,,,px-1.5 py-0.2 rounded text-[7.5px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200,False,PENDING,PENDING,,BASELINED
+mes-carrier-id#1,mes-carrier-id,1,2574,static-markup,span,,,,,font-bold text-slate-800,False,PENDING,PENDING,,BASELINED
+mes-recipe-id#1,mes-recipe-id,1,2581,static-markup,span,,,RCP-N2-GATE-ETCH-V3,,font-bold text-slate-800 truncate block,False,PENDING,PENDING,,BASELINED
+mes-step-name#1,mes-step-name,1,2593,static-markup,b,,,,,text-slate-700 font-sans,False,PENDING,PENDING,,BASELINED
+btn-mes-trackin#1,btn-mes-trackin,1,2599,static-markup,button,,onclick=mesTrackInCurrent(),,,px-1.5 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-semibold transition text-[7.5px],False,PENDING,PENDING,,BASELINED
+btn-mes-trackout#1,btn-mes-trackout,1,2606,static-markup,button,,onclick=mesTrackOutCurrent(),,,px-1.5 py-0.5 rounded bg-sky-100 hover:bg-sky-200 text-sky-800 font-semibold transition text-[7.5px],False,PENDING,PENDING,,BASELINED
+btn-mes-hold#1,btn-mes-hold,1,2613,static-markup,button,,onclick=mesHoldLotCurrent(),,,px-1.5 py-0.5 rounded bg-rose-100 hover:bg-rose-200 text-rose-800 font-semibold transition text-[7.5px],False,PENDING,PENDING,,BASELINED
+spc-status-badge#1,spc-status-badge,1,2635,static-markup,span,,,,,px-1.5 py-0.2 rounded text-[7.5px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200,False,PENDING,PENDING,,BASELINED
+spc-cp-val#1,spc-cp-val,1,2645,static-markup,span,,,,,font-bold text-slate-800,False,PENDING,PENDING,,BASELINED
+spc-cpk-val#1,spc-cpk-val,1,2649,static-markup,span,,,,,font-bold text-emerald-700,False,PENDING,PENDING,,BASELINED
+spc-sigma-level#1,spc-sigma-level,1,2655,static-markup,span,,,,,font-bold text-indigo-700,False,PENDING,PENDING,,BASELINED
+spc-nelson-rule#1,spc-nelson-rule,1,2665,static-markup,span,,,,,font-semibold text-emerald-700 font-mono,False,PENDING,PENDING,,BASELINED
+inspect-subfab-container#1,inspect-subfab-container,1,2674,static-markup,div,,,,,hidden glass-card p-2 rounded-lg border border-sky-200/80 bg-sky-50/40 space-y-1.5,False,PENDING,PENDING,,BASELINED
+inspect-subfab-title#1,inspect-subfab-title,1,2682,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+inspect-subfab-tag#1,inspect-subfab-tag,1,2687,static-markup,span,,,,,text-[7.5px] font-mono px-1 py-0.2 rounded bg-sky-200/80 text-sky-900 font-semibold,False,PENDING,PENDING,,BASELINED
+inspect-subfab-desc#1,inspect-subfab-desc,1,2693,static-markup,p,,,,,text-[8px] text-slate-600 leading-tight,False,PENDING,PENDING,,BASELINED
+inspect-subfab-links#1,inspect-subfab-links,1,2699,static-markup,div,,,,,flex flex-wrap gap-1 pt-0.5,False,PENDING,PENDING,,BASELINED
+inspect-location-desc#1,inspect-location-desc,1,2715,static-markup,p,,,,,text-[8.5px] text-slate-600 leading-relaxed font-sans,False,PENDING,PENDING,,BASELINED
+inspect-specs#1,inspect-specs,1,2734,static-markup,div,,,,,space-y-0.5 text-[8.5px],False,PENDING,PENDING,,BASELINED
+inspect-desc#1,inspect-desc,1,2748,static-markup,p,,,,,text-[8.5px] text-slate-600 leading-relaxed,False,PENDING,PENDING,,BASELINED
+inspect-source-card#1,inspect-source-card,1,2758,static-markup,div,,,,,glass-card p-2 rounded-lg border border-indigo-200/80 bg-indigo-50/40 space-y-1,False,PENDING,PENDING,,BASELINED
+inspect-source-tier#1,inspect-source-tier,1,2769,static-markup,span,,,,,text-[7.5px] font-mono px-1 py-0.2 rounded bg-indigo-100 text-indigo-800 font-semibold,False,PENDING,PENDING,,BASELINED
+inspect-notes#1,inspect-notes,1,2774,static-markup,p,,,,,text-[8px] text-slate-600 leading-tight,False,PENDING,PENDING,,BASELINED
+inspect-source-link#1,inspect-source-link,1,2778,static-markup,a,,,,,w-full flex items-center justify-center gap-1.5 py-1 px-2 mt-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[8.5px] font-semibold transition shadow-sm,False,PENDING,PENDING,,BASELINED
+inspect-infab-container#1,inspect-infab-container,1,2790,static-markup,div,,,,,hidden,False,PENDING,PENDING,,BASELINED
+inspect-infab-btn#1,inspect-infab-btn,1,2792,static-markup,button,,onclick=,,,w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[8.5px] font-semibold transition shadow-sm,False,PENDING,PENDING,,BASELINED
+inspect-replacement-container#1,inspect-replacement-container,1,2803,static-markup,div,,,,,hidden space-y-1.5,False,PENDING,PENDING,,BASELINED
+hud-grid-badge#1,hud-grid-badge,1,2822,static-markup,div,,,,,fixed bottom-[46px] right-2.5 bg-white px-2.5 py-1 rounded-lg text-slate-700 font-mono text-[10px] shadow-md border border-slate-200/90 z-20 flex items-center gap-1.5 transition-all duration-300 pointer-events-none select-none,False,PENDING,PENDING,,BASELINED
+bottom-hud-footer#1,bottom-hud-footer,1,2831,static-markup,footer,,,,,fixed bottom-2.5 left-[335px] right-2.5 h-8 bg-white rounded-lg z-20 flex items-center justify-between px-2 text-[10px] text-slate-700 shadow-md border border-slate-200/90 overflow-hidden transition-all duration-300,False,PENDING,PENDING,,BASELINED
+btn-edit-layout#1,btn-edit-layout,1,2837,static-markup,a,,,Edit Fab Floor Plan in 2D,,flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[9.5px] shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer hover:scale-105 active:scale-95,False,PENDING,PENDING,,BASELINED
+stat-count#2,stat-count,2,14332,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
+tg-live-busy-${tg.id}#1,tg-live-busy-${tg.id},1,14745,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
+twin-toast-container#1,twin-toast-container,1,15128,dom-property,,,,,,,False,PENDING,PENDING,,BASELINED
+inspect-catalog-link#1,inspect-catalog-link,1,20652,dom-property,,,,,,,False,PENDING,PENDING,,BASELINED
+stat-count#3,stat-count,3,22548,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
+stat-count#4,stat-count,4,22559,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
+state-btn-RUNNING#1,state-btn-RUNNING,1,22639,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
+count-running#1,count-running,1,22640,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
+state-btn-IDLE#1,state-btn-IDLE,1,22642,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
+count-idle#1,count-idle,1,22643,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
+state-btn-DOWN#1,state-btn-DOWN,1,22645,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
+count-down#1,count-down,1,22646,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
+state-btn-MAINT#1,state-btn-MAINT,1,22648,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
+count-maint#1,count-maint,1,22649,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
+wafer-dies-group#1,wafer-dies-group,1,23438,script-template,,,,,,,False,PENDING,PENDING,,BASELINED
+oem-database-modal#1,oem-database-modal,1,23811,static-markup,div,,onclick=if (event.target === this) closeOemDatabaseModal();,,,fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden transition-all,False,PENDING,PENDING,,BASELINED
+modal-search-input#1,modal-search-input,1,23870,static-markup,input,text,oninput=filterModalDatabase(),,,w-full bg-slate-50 text-xs pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-indigo-600 focus:bg-white transition,False,PENDING,PENDING,,BASELINED
+modal-segment-select#1,modal-segment-select,1,23879,static-markup,select,,onchange=filterModalDatabase(),,,text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none cursor-pointer,False,PENDING,PENDING,,BASELINED
+modal-vendor-select#1,modal-vendor-select,1,23886,static-markup,select,,onchange=filterModalDatabase(),,,text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none cursor-pointer,False,PENDING,PENDING,,BASELINED
+modal-matched-count#1,modal-matched-count,1,23895,static-markup,b,,,,,text-indigo-700,False,PENDING,PENDING,,BASELINED
+modal-database-tbody#1,modal-database-tbody,1,23919,static-markup,tbody,,,,,divide-y divide-slate-200 bg-white font-sans text-slate-800,False,PENDING,PENDING,,BASELINED
+yms-wafer-modal#1,yms-wafer-modal,1,23933,static-markup,div,,onclick=if (event.target === this) toggleWaferMapModal(false);,,,fixed inset-0 bg-slate-900/65 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden transition-all,False,PENDING,PENDING,,BASELINED
+btn-copy-stdf#1,btn-copy-stdf,1,23970,static-markup,button,,onclick=copyStdfJson(),,,flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm transition,False,PENDING,PENDING,,BASELINED
+wafer-svg-container#1,wafer-svg-container,1,24011,static-markup,div,,,,,relative w-[340px] h-[340px] flex items-center justify-center my-2,False,PENDING,PENDING,,BASELINED
+wafer-die-tooltip#1,wafer-die-tooltip,1,24019,static-markup,div,,,,,text-[11px] font-mono bg-slate-900 text-white px-2.5 py-1 rounded-md shadow-lg opacity-0 transition-opacity pointer-events-none mt-1,False,PENDING,PENDING,,BASELINED
+pat-btn-clean#1,pat-btn-clean,1,24080,static-markup,button,,onclick=selectDefectPattern('clean'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-900 text-white border-slate-900,False,PENDING,PENDING,,BASELINED
+pat-btn-center#1,pat-btn-center,1,24092,static-markup,button,,onclick=selectDefectPattern('center'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200,False,PENDING,PENDING,,BASELINED
+pat-btn-ring#1,pat-btn-ring,1,24102,static-markup,button,,onclick=selectDefectPattern('ring'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200,False,PENDING,PENDING,,BASELINED
+pat-btn-scratch#1,pat-btn-scratch,1,24112,static-markup,button,,onclick=selectDefectPattern('scratch'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200,False,PENDING,PENDING,,BASELINED
+pat-btn-donut#1,pat-btn-donut,1,24124,static-markup,button,,onclick=selectDefectPattern('donut'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200,False,PENDING,PENDING,,BASELINED
+pat-btn-random#1,pat-btn-random,1,24134,static-markup,button,,onclick=selectDefectPattern('random'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200,False,PENDING,PENDING,,BASELINED
+pat-btn-edge_local#1,pat-btn-edge_local,1,24146,static-markup,button,,onclick=selectDefectPattern('edge_local'),,,pat-btn px-2.5 py-1.5 rounded-lg border text-left transition font-medium flex flex-col bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200,False,PENDING,PENDING,,BASELINED
+adc-pattern-name#1,adc-pattern-name,1,24174,static-markup,span,,,,,font-bold text-slate-900,False,PENDING,PENDING,,BASELINED
+adc-confidence#1,adc-confidence,1,24177,static-markup,span,,,,,text-slate-500 font-mono,False,PENDING,PENDING,,BASELINED
+adc-root-cause#1,adc-root-cause,1,24183,static-markup,b,,,,,text-slate-900 font-semibold,False,PENDING,PENDING,,BASELINED
+slider-val-area#1,slider-val-area,1,24218,static-markup,b,,,,,text-slate-900 font-bold,False,PENDING,PENDING,,BASELINED
+input-die-area#1,input-die-area,1,24224,static-markup,input,range,oninput=onYieldParamsChanged(),,,w-full accent-emerald-600 cursor-pointer h-1.5 bg-slate-200 rounded,False,PENDING,PENDING,,BASELINED
+slider-val-d0#1,slider-val-d0,1,24238,static-markup,b,,,,,text-slate-900 font-bold,False,PENDING,PENDING,,BASELINED
+input-defect-d0#1,input-defect-d0,1,24244,static-markup,input,range,oninput=onYieldParamsChanged(),,,w-full accent-emerald-600 cursor-pointer h-1.5 bg-slate-200 rounded,False,PENDING,PENDING,,BASELINED
+slider-val-alpha#1,slider-val-alpha,1,24258,static-markup,b,,,,,text-slate-900 font-bold,False,PENDING,PENDING,,BASELINED
+input-cluster-alpha#1,input-cluster-alpha,1,24264,static-markup,input,range,oninput=onYieldParamsChanged(),,,w-full accent-emerald-600 cursor-pointer h-1.5 bg-slate-200 rounded,False,PENDING,PENDING,,BASELINED
+model-actual-yield#1,model-actual-yield,1,24284,static-markup,span,,,,,text-base font-bold text-emerald-800,False,PENDING,PENDING,,BASELINED
+model-poisson-yield#1,model-poisson-yield,1,24297,static-markup,span,,,,,text-base font-bold text-slate-800,False,PENDING,PENDING,,BASELINED
+model-murphy-yield#1,model-murphy-yield,1,24310,static-markup,span,,,,,text-base font-bold text-slate-800,False,PENDING,PENDING,,BASELINED
+model-seeds-yield#1,model-seeds-yield,1,24323,static-markup,span,,,,,text-base font-bold text-slate-800,False,PENDING,PENDING,,BASELINED
+stdf-lot-record#1,stdf-lot-record,1,24347,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+stdf-preview-text#1,stdf-preview-text,1,24351,static-markup,div,,,,,bg-slate-900 text-emerald-400 p-2 rounded-lg max-h-[85px] overflow-y-auto leading-relaxed select-all,False,PENDING,PENDING,,BASELINED
+open-architecture-modal#1,open-architecture-modal,1,24372,static-markup,div,,onclick=if (event.target === this) toggleOpenArchitectureModal(false);,,,fixed inset-0 bg-slate-900/65 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden transition-all,False,PENDING,PENDING,,BASELINED
+arch-search-input#1,arch-search-input,1,24438,static-markup,input,text,oninput=filterArchStack(),,,w-full bg-slate-50 text-xs pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-emerald-600 focus:bg-white transition,False,PENDING,PENDING,,BASELINED
+arch-cards-container#1,arch-cards-container,1,24467,static-markup,div,,,,,grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs,False,PENDING,PENDING,,BASELINED
+top-action-tooltip#1,top-action-tooltip,1,24759,static-markup,div,,,,,fixed z-[9999] pointer-events-none opacity-0 transition-opacity duration-150 px-2.5 py-1 rounded-md bg-slate-900/95 backdrop-blur-md text-white text-[10.5px] font-sans font-medium shadow-2xl border border-slate-700/80 whitespace-nowrap flex items-center gap-1.5,False,PENDING,PENDING,,BASELINED
+top-action-tooltip-text#1,top-action-tooltip-text,1,24763,static-markup,span,,,,,,False,PENDING,PENDING,,BASELINED
+top-action-tooltip-arrow#1,top-action-tooltip-arrow,1,24765,static-markup,span,,,,,absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-t border-l border-slate-700/80 rotate-45,False,PENDING,PENDING,,BASELINED

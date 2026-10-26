@@ -36,6 +36,9 @@ infrastructure/ assets/ scripts/ tools/ .github/   # 部署参考、资产、脚
 # 本地开发：API(127.0.0.1:5080) + Web(127.0.0.1:5173)
 ./scripts/start-dev.ps1
 
+# 如默认端口已占用，可启动独立实例（数据、日志与构建产物也隔离）
+./scripts/start-dev.ps1 -ApiPort 5280 -WebPort 5273 -LocalDirectory '.local/second dev'
+
 # 单后端模式
 dotnet run --project fab_app                 # API（默认，内嵌 Worker）
 dotnet run --project fab_app -- --worker     # 独立 Worker
@@ -53,6 +56,8 @@ npx --yes pnpm@12.15.0 test
 npx --yes pnpm@12.15.0 build
 ```
 
+启动脚本支持 Windows PowerShell 5.1 / PowerShell 7；按 Ctrl+C 会停止本次 API、npm 与 Vite 进程。日志位置、`-ApiOnly` / `-SeparateWorker` 与启动冒烟检查见 [scripts/README.md](scripts/README.md)。
+
 3D FAB 仅使用 `/twin` 页面（兼容 `/twin.html`）；首页不嵌入独立预览。旧 `/preview` 地址会规范化到同一页面。当前仍在对齐原版，尚未通过整页视觉 parity；[基线、差分与剩余门槛](docs/migration/twin-parity/baseline.md)。
 
 ## 文档
@@ -62,6 +67,7 @@ npx --yes pnpm@12.15.0 build
 - 模块档案：`docs/modules/M01.md` … `M18.md`
 - 实施状态：`docs/IMPLEMENTATION-STATUS.md`
 - 决策记录：`docs/adr/`
+- V2.1 架构基线：[架构基线](docs/architecture.md)（ADR-0009 Router/Query 边界、ADR-0010 Realtime/Workflow 桥接、ARCH-01…12 规则、M0–M6 迁移计划；状态：文档已采纳、代码迁移未开始）
 
 ## 原版数据导入
 

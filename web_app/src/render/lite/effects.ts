@@ -70,12 +70,9 @@ const XRAY_NORMAL_LINE_COLOR: readonly [number, number, number, number] = [217 /
 // xray-hologram.ts:154 setLineXray(true).
 const XRAY_LINE_PARAMS: readonly [number, number, number, number] = [1, 0.75, 0, 1.4];
 const XRAY_ZERO_PARAMS: readonly [number, number, number, number] = [0, 0, 0, 0];
-// Frozen-product visual response: the source hologram shaded through its own custom static depth pass,
-// whose sampled response reads as the legibility floor for most hologram surfaces. The native CSM
-// approximation is kept (it adds local contrast) but scaled so the palette reproduces the frozen
-// product's overall luminance. Measured with tools/frozen_visual_compare.mjs; see FEATURE_GAPS.
+// Frozen source response: shadowed surfaces retain a .35 legibility floor, unshadowed surfaces
+// retain their original color. Color encoding belongs to the output path, not this light response.
 const XRAY_LIT_FLOOR = 0.35;
-const XRAY_SHADOW_CONTRAST = 0.35;
 
 // Frozen source palette colours, xray-hologram.ts:114-116 and babylon-webgpu.ts:188-218.
 const rgb = (hex: number): [number, number, number] =>
@@ -120,6 +117,13 @@ const XRAY_FRAGMENT_SOURCE = `struct XrayVertexOutput{
   @builtin(position) position: vec4<f32>,
   @location(0) worldPosition: vec3<f32>,
 };
+fn xrayDisplayColor(rgb: vec3<f32>, alpha: f32) -> vec4<f32> {
+  // Preserve the frozen opaque ShaderMaterial response through transmission's trailing encode.
+  // Ghosts still blend in the linear target, so their encoded-space alpha composition remains
+  // a separate parity gap; see LITE-GAP-COMPOSITING-001.md and the GPU ghost probe.
+  let display = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+  return vec4<f32>(select(display, pow(display, vec3<f32>(2.2)), scene.vImageInfos.w < 0.0), alpha);
+}
 fn xrayCsmFallOff(value: f32, clipSpace: vec2<f32>, frustumEdgeFalloff: f32) -> f32 {
   let mask = smoothstep(1.0 - frustumEdgeFalloff, 1.00000012, clamp(dot(clipSpace, clipSpace), 0.0, 1.0));
   return mix(value, 1.0, mask);
@@ -187,7 +191,7 @@ fn mainFragment(input: XrayVertexOutput) -> @location(0) vec4<f32> {
   // Section cut: every effects shader owns the same clamped plane copy.
   if (dot(vec4<f32>(input.worldPosition, 1.0), shaderUniforms.cutPlane) > 0.0) { discard; }
   if (shaderUniforms.xrayParams.x < 0.5) {
-    return vec4<f32>(shaderUniforms.xrayNormalColor.rgb, shaderUniforms.xrayNormalColor.a);
+    return xrayDisplayColor(shaderUniforms.xrayNormalColor.rgb, shaderUniforms.xrayNormalColor.a);
   }
   let viewDir = normalize(shaderSystem.cameraPosition - input.worldPosition);
   let scan = 0.5 + 0.5 * sin(input.worldPosition.y * shaderUniforms.xrayTint.w + shaderUniforms.xrayTime);
@@ -202,12 +206,12 @@ fn mainFragment(input: XrayVertexOutput) -> @location(0) vec4<f32> {
   if (shaderUniforms.xrayShadowEnabled >= 0.5) {
     shadow = xrayCsmShadow(vec4<f32>(input.worldPosition, 1.0), (shaderSystem.view * vec4<f32>(input.worldPosition, 1.0)).z);
   }
-  let lit = ${XRAY_LIT_FLOOR.toFixed(2)} + (1.0 - ${XRAY_LIT_FLOOR.toFixed(2)}) * shadow * ${XRAY_SHADOW_CONTRAST.toFixed(2)};
+  let lit = ${XRAY_LIT_FLOOR.toFixed(2)} + (1.0 - ${XRAY_LIT_FLOOR.toFixed(2)}) * shadow;
   if (shaderUniforms.xrayParams.z > 0.5) {
-    return vec4<f32>((tint * (0.45 + 0.2 * scan) + glow * (0.35 + 0.35 * rim)) * lit, 1.0);
+    return xrayDisplayColor((tint * (0.45 + 0.2 * scan) + glow * (0.35 + 0.35 * rim)) * lit, 1.0);
   }
   let holo = (mix(tint, glow, 0.2 + 0.7 * rim) + glow * ((0.05 + 0.1 * scan) * shaderUniforms.xrayGlow.w)) * lit;
-  return vec4<f32>(holo, shaderUniforms.xrayParams.y);
+  return xrayDisplayColor(holo, shaderUniforms.xrayParams.y);
 }`;
 
 const XRAY_UNIFORMS = [
@@ -665,7 +669,10 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
     // recovery preserves both) so the CSM transforms resync on the replacement device.
     shadowTexture = null;
     shadowData = null;
-    for (const material of paletteMaterials) setShaderUniform(material, 'xrayShadowEnabled', 0);
+    for (const material of paletteMaterials) {
+      setShaderTexture(material, 'xrayDepth', null);
+      setShaderUniform(material, 'xrayShadowEnabled', 0);
+    }
     // Force the next trail replay through the retained CPU geometry; no buffers reallocate.
     lastTrailCount = -1;
     lastTrailLength = -1;

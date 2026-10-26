@@ -12,6 +12,7 @@ const suites = {
   'lite-lighting': ['lite-lighting.browser.ts', 'runLiteLightingAcceptance'],
   'lite-shadow': ['lite-shadow.browser.ts', 'runLiteShadowAcceptance'],
   'lite-product': ['twin-lite.browser.ts', 'runLiteProductAcceptance'],
+  'lite-color': ['lite-effects-color.browser.ts', 'runLiteEffectsColorAcceptance'],
   // Product DOM regression suite; the native behaviour matrix lives in twin-lite.browser.ts.
   ui: ['twin.browser.ts', 'runTwinUiAcceptance'],
 };

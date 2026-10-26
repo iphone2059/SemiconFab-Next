@@ -1,7 +1,7 @@
 // Deterministic extraction of the frozen original cleanroom-personnel, patrol
 // behavior-tree and air-shower timing vectors.
 //
-// Source: SemiconFab/twin.html @ b3666132 (sha256 pinned in
+// Source: SemiconFab/twin.html @ d76378c (sha256 pinned in
 // docs/migration/twin-parity/source-manifest.json). The tool executes ONLY
 // character-for-character slices of the frozen page inside node:vm (function,
 // const and animation-loop block text). THREE, the canvas 2D context, document
@@ -136,22 +136,22 @@ function extractBlock(marker) {
 
 // Line ranges asserted so source drift cannot silently move the sliced code.
 const SOURCE_RANGES = {
-  PATROL_BEHAVIOR_TREE: [9090, 9138],
-  createPatrolStatusCanvas: [9140, 9186],
-  createPatrolStatusSprite: [9188, 9206],
-  updatePatrolStatusSprite: [9208, 9255],
-  createAirlockVortexParticles: [9257, 9293],
-  createBunnySuitOperator: [9295, 9468],
-  buildCleanroomPersonnel: [9470, 9541],
-  updatePatrolEngineerBehaviorTree: [9544, 9834],
-  drawAirShowerBillboardCanvas: [9927, 10002],
-  createAirShowerSprite: [10004, 10024],
-  updateAllAirShowerSprites: [10026, 10042],
-  createAirShower: [10087, 10249],
+  PATROL_BEHAVIOR_TREE: [9098, 9146],
+  createPatrolStatusCanvas: [9148, 9194],
+  createPatrolStatusSprite: [9196, 9214],
+  updatePatrolStatusSprite: [9216, 9263],
+  createAirlockVortexParticles: [9265, 9301],
+  createBunnySuitOperator: [9303, 9476],
+  buildCleanroomPersonnel: [9478, 9549],
+  updatePatrolEngineerBehaviorTree: [9552, 9842],
+  drawAirShowerBillboardCanvas: [9935, 10010],
+  createAirShowerSprite: [10012, 10032],
+  updateAllAirShowerSprites: [10034, 10050],
+  createAirShower: [10095, 10257],
 };
 const INLINE_BLOCK_RANGES = {
-  personnelBreathing: [19119, 19126],
-  airShowerStandbyCycle: [19129, 19198],
+  personnelBreathing: [19127, 19134],
+  airShowerStandbyCycle: [19137, 19206],
 };
 
 const frozen = {};
@@ -1182,7 +1182,7 @@ function simulate(mode) {
 // ---------------------------------------------------------------------------
 const humanNotes = {
   frozenSource:
-    'SemiconFab/twin.html @ b3666132 (twin.html sha256 pinned in docs/migration/twin-parity/source-manifest.json)',
+    'SemiconFab/twin.html @ d76378c (twin.html sha256 pinned in docs/migration/twin-parity/source-manifest.json)',
   execution:
     'Frozen source slices are executed character-for-character inside node:vm; every emitted number is produced by original source code.',
   three:
@@ -1197,15 +1197,15 @@ const humanNotes = {
   catalogRecords:
     'The two frozen air-shower chambers are built with createAirShower using the original dimension/amber options and positions; the catalog equipment record substituted as eqData is reduced to {id} because catalog metadata feeds no timing math.',
   operatorUserDataOverwrite:
-    'Frozen buildCleanroomPersonnel overwrites operator.userData at twin.html:9517/9530, discarding the leg/arm pivots, floating status sprite and tablet screen material created by createBunnySuitOperator. As-built, the behavior tree therefore cannot animate limbs, the overhead board or the tablet screen.',
+    'Frozen buildCleanroomPersonnel overwrites operator.userData at twin.html:9525/9538, discarding the leg/arm pivots, floating status sprite and tablet screen material created by createBunnySuitOperator. As-built, the behavior tree therefore cannot animate limbs, the overhead board or the tablet screen.',
   chamberUserDataOverwrite:
-    'The frozen facility builder overwrites chamber.userData at twin.html:10489/10507 with the catalog record, discarding indicators/jetStreams/innerLight/labelSprite. As-built, the behavior-tree purge and the 12 s standby cycle cannot animate air-shower materials, and the billboard sprite never refreshes.',
+    'The frozen facility builder overwrites chamber.userData at twin.html:10497/10515 with the catalog record, discarding indicators/jetStreams/innerLight/labelSprite. As-built, the behavior-tree purge and the 12 s standby cycle cannot animate air-shower materials, and the billboard sprite never refreshes.',
   preservedMode:
     'Diagnostic mode only. createBunnySuitOperator is executed once more (frozen function) and its outputs are re-attached to patrolEngineer.userData, and chamber.userData is left intact. This exposes the animation math that the frozen functions contain but the original build discards; it adds no new math. It is not original runtime behaviour.',
   inlineBlocks:
-    'The two animation-loop bodies that own breathing and the 12 s air-shower standby cycle are not named functions; their frozen text was sliced from the animate() loop (lines 19119-19126 and 19129-19198) and executed verbatim inside wrapper functions.',
+    'The two animation-loop bodies that own breathing and the 12 s air-shower standby cycle are not named functions; their frozen text was sliced from the animate() loop (lines 19127-19134 and 19137-19206) and executed verbatim inside wrapper functions.',
   extraFunction:
-    'createBunnySuitOperator (9295-9468) is additionally sliced because frozen buildCleanroomPersonnel calls it; this keeps badge colors, tablet material and status-sprite construction original instead of stubbing them.',
+    'createBunnySuitOperator (9303-9476) is additionally sliced because frozen buildCleanroomPersonnel calls it; this keeps badge colors, tablet material and status-sprite construction original instead of stubbing them.',
   waypointDwellFinding:
     'Frozen PATROL_WAYPOINTS never resets stateTimer on arrival; it accumulates while walking and is only reset when the waypoint index advances. Every travel leg takes 6.7-12.6 s while inspect durations are 3.0-4.5 s, so the index advances on the arrival tick and no inspect/countdown frame is observable. waypointTrace records ticks per heading leg and the arrival tick; the arrival status text is still set (and captured) inside that same call.',
 };

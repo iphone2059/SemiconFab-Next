@@ -211,11 +211,11 @@ function simulate() {
   return {
     sourceSha256: hash,
     sourceFunctions: {
-      updateAmhsSimulation: [18688, 19037],
-      setVehicleLedColor: [15364, 15369],
-      AMHS_STATIONS_LOOP1: [15211, 15268],
-      AMHS_STATIONS_LOOP2: [15270, 15327],
-      AMHS_LED_COLORS: [15329, 15335],
+      updateAmhsSimulation: [18696, 19045],
+      setVehicleLedColor: [15372, 15377],
+      AMHS_STATIONS_LOOP1: [15219, 15276],
+      AMHS_STATIONS_LOOP2: [15278, 15335],
+      AMHS_LED_COLORS: [15337, 15343],
     },
     scenario: {
       seed: scenario.seed,

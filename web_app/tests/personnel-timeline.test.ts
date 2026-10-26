@@ -117,22 +117,22 @@ function replay(mode: ChamberUserDataMode): Replay {
 it('pins the frozen source hash and line ranges', () => {
   expect(fixture.sourceSha256).toBe(manifest.source_sha256['twin.html']);
   expect(fixture.sourceFunctions).toEqual({
-    PATROL_BEHAVIOR_TREE: [9090, 9138],
-    createPatrolStatusCanvas: [9140, 9186],
-    createPatrolStatusSprite: [9188, 9206],
-    updatePatrolStatusSprite: [9208, 9255],
-    createAirlockVortexParticles: [9257, 9293],
-    createBunnySuitOperator: [9295, 9468],
-    buildCleanroomPersonnel: [9470, 9541],
-    updatePatrolEngineerBehaviorTree: [9544, 9834],
-    drawAirShowerBillboardCanvas: [9927, 10002],
-    createAirShowerSprite: [10004, 10024],
-    updateAllAirShowerSprites: [10026, 10042],
-    createAirShower: [10087, 10249],
+    PATROL_BEHAVIOR_TREE: [9098, 9146],
+    createPatrolStatusCanvas: [9148, 9194],
+    createPatrolStatusSprite: [9196, 9214],
+    updatePatrolStatusSprite: [9216, 9263],
+    createAirlockVortexParticles: [9265, 9301],
+    createBunnySuitOperator: [9303, 9476],
+    buildCleanroomPersonnel: [9478, 9549],
+    updatePatrolEngineerBehaviorTree: [9552, 9842],
+    drawAirShowerBillboardCanvas: [9935, 10010],
+    createAirShowerSprite: [10012, 10032],
+    updateAllAirShowerSprites: [10034, 10050],
+    createAirShower: [10095, 10257],
   });
   expect(fixture.inlineAnimationBlocks).toEqual({
-    personnelBreathing: [19119, 19126],
-    airShowerStandbyCycle: [19129, 19198],
+    personnelBreathing: [19127, 19134],
+    airShowerStandbyCycle: [19137, 19206],
   });
 });
 

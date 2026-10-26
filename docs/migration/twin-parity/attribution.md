@@ -1,10 +1,12 @@
 # Twin source and licence record
 
 The reference is `C:/Users/han_qingyu/SemiconFab/twin.html`, original repository
-`jinjiefan2020/SemiconFab`, commit `b3666132e5d8cab2cebe4c4227fc04c52242eb28`.
+`jinjiefan2020/SemiconFab`, frozen at commit `d76378c7ae475f77f7a13bae9c093267c13fc5f3`.
 The user selected its **final loaded construction**, including the custom
-`twin/layout-default.json` layout. The reference files remain unchanged.
-File hashes are in [source-manifest.json](source-manifest.json).
+`twin/layout-default.json` layout. The reference checkout is read-only in this
+workspace and is never modified. File hashes are in [source-manifest.json](source-manifest.json).
+The upstream `twin-mega.html` (3,000-tool concept page) is not migrated; only the
+`twin.html` construction is the parity target.
 
 The original code, data, geometry recipes, pressure field, tour waypoints and
 site mark are covered by the original **PolyForm Noncommercial License 1.0.0**.
