@@ -1,0 +1,10 @@
+npm notice run web_app@0.1.0 test
+npm notice run vitest run tests/lite-equipment.test.ts tests/original-tool-geometry.test.ts
+
+ RUN  v5.0.5 C:/Users/han_qingyu/SemiconFab-Next/web_app
+
+
+ Test Files  2 passed (2)
+      Tests  8 passed (8)
+   Start at  11:07:25
+   Duration  689ms (import 55%, tests 34%, transform 9%, worker 1%)

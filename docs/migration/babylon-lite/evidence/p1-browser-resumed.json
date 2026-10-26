@@ -18,7 +18,7 @@
         "ready"
       ],
       "gpuErrors": [],
-      "frames": 8,
+      "frames": 6,
       "drawCalls": 1,
       "registeredContexts": 1,
       "surfaces": 1,
@@ -36,7 +36,7 @@
           "ready"
         ],
         "gpuErrors": [],
-        "frames": 14,
+        "frames": 9,
         "drawCalls": 1,
         "registeredContexts": 1,
         "surfaces": 1,
@@ -55,7 +55,7 @@
           "ready"
         ],
         "gpuErrors": [],
-        "frames": 27,
+        "frames": 20,
         "drawCalls": 1,
         "registeredContexts": 1,
         "surfaces": 1,
@@ -76,7 +76,7 @@
           "ready"
         ],
         "gpuErrors": [],
-        "frames": 40,
+        "frames": 31,
         "drawCalls": 1,
         "registeredContexts": 1,
         "surfaces": 1,
@@ -98,7 +98,7 @@
         "ready"
       ],
       "gpuErrors": [],
-      "frames": 55,
+      "frames": 46,
       "drawCalls": 1,
       "registeredContexts": 1,
       "surfaces": 1,
@@ -120,7 +120,7 @@
         "lost"
       ],
       "gpuErrors": [],
-      "frames": 55,
+      "frames": 46,
       "drawCalls": 1,
       "registeredContexts": 1,
       "surfaces": 1,
@@ -142,7 +142,7 @@
         "lost"
       ],
       "gpuErrors": [],
-      "frames": 56,
+      "frames": 46,
       "drawCalls": 1,
       "registeredContexts": 0,
       "surfaces": 0,
@@ -165,7 +165,7 @@
         "initializing"
       ],
       "gpuErrors": [],
-      "frames": 56,
+      "frames": 46,
       "drawCalls": 0,
       "registeredContexts": 0,
       "surfaces": 0,
@@ -190,7 +190,7 @@
         "ready"
       ],
       "gpuErrors": [],
-      "frames": 58,
+      "frames": 49,
       "drawCalls": 1,
       "registeredContexts": 1,
       "surfaces": 1,
@@ -218,7 +218,7 @@
         "ready"
       ],
       "gpuErrors": [],
-      "frames": 69,
+      "frames": 58,
       "drawCalls": 1,
       "registeredContexts": 1,
       "surfaces": 1,

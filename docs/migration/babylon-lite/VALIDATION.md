@@ -1,18 +1,20 @@
-# P0/P1 验证记录 — 2026-10-26
+# P0–P2a 验证记录 — 2026-10-26
 
-仅验收迁移起步和独立原生生命周期。产品状态仍是 `IMPLEMENTING / NOT_PARITY_VERIFIED`。
+当前验收独立原生生命周期和 P2a 设备几何。产品状态仍是 `IMPLEMENTING / NOT_PARITY_VERIFIED`。P2a 的最新完整记录见 [P2_EQUIPMENT.md](./P2_EQUIPMENT.md)。
 
 | 检查 | 结果 | 证据 |
 |---|---|---|
 | 迁移前前端基线 | PASS：49 文件、190 测试，typecheck/build | [baseline-tests.txt](./evidence/baseline-tests.txt)、[baseline-typecheck.txt](./evidence/baseline-typecheck.txt)、[baseline-build.txt](./evidence/baseline-build.txt) |
-| 生命周期测试先失败后通过 | PASS：初版 10 项，审查后新增 7 项，总计 17 项通过 | [runtime-red.txt](./evidence/runtime-red.txt)、[runtime-green.txt](./evidence/runtime-green.txt)、[review-red.txt](./evidence/review-red.txt)、[initialization-recovery-red.txt](./evidence/initialization-recovery-red.txt)、[review-green.txt](./evidence/review-green.txt) |
+| 生命周期测试先失败后通过 | PASS：初版 10 项、审查后新增 7 项、P2a 再新增 2 项，总计 19 项通过 | [初版 RED](./evidence/runtime-red.txt)、[初版 GREEN](./evidence/runtime-green.txt)、[审查 RED](./evidence/review-red.txt)、[初始化恢复 RED](./evidence/initialization-recovery-red.txt)、[审查 GREEN](./evidence/review-green.txt)、[旧 RAF RED](./evidence/p2-instance-race-red.txt)、[连续丢失 RED](./evidence/p2-overlapping-loss-red.txt)、[最终全套](./evidence/p2-verify.txt) |
 | 仓库总验证（修复后） | PASS：Python 16、.NET 67、前端 207；3 个 .NET 项目 Release 构建、类型检查、冻结锁文件安装、生产构建通过 | [verify.txt](./evidence/verify.txt) |
 | 独立 Lite 构建 | PASS | [lite-build.txt](./evidence/lite-build.txt) |
 | 初版真实 WebGPU：首帧、resize、卸载/重挂载、中止、3 次设备丢失恢复 | PASS（仅初版 `c00f1e0`，不覆盖审查后的修复）；Chrome 155.0.8059.86 / NVIDIA Ampere，GPU/console 错误均为 0 | [p1-browser.json](./evidence/p1-browser.json)、[p1-cube.png](./evidence/p1-cube.png) |
 | 修复后的扩展原生 GPU 回归 | PASS（2026-10-26 恢复执行）：新专用 Chrome 155 / NVIDIA Ampere；三次恢复、恢复中卸载、初始 RAF 丢失、中止、重挂载、resize；GPU/console 错误 0 | [p1-browser-resumed.json](./evidence/p1-browser-resumed.json)、[p1-cube-resumed.png](./evidence/p1-cube-resumed.png)。保留历史 [超时](./evidence/browser-timeout.txt) / [adapter 不可用](./evidence/browser-gpu-unavailable.txt) 证据；旧会话根因未认定。 |
 | 8 组原版冻结向量/翻译检查 | PASS：手动完整执行；新增 runtime 文件后重新生成 i18n 源码清单（只增加文件名） | [frozen-vectors.txt](./evidence/frozen-vectors.txt) |
 | 12 个冻结源码/fixture 文件散列 | PASS：0 变化 | [BASELINE.json](./BASELINE.json) |
-| 121 台 Lite 几何、拾取、FAB 页面功能、阴影、模式组合 | NOT_RUN | P2–P9 后续门禁 |
+| 121 台 Lite 设备几何 | PASS（P2a）：51 批 / 936 零件实例，冻结几何/颜色/包围盒/身份对照、构建后 GPU 三次恢复及卸载/重挂载通过 | [P2 设备记录](./P2_EQUIPMENT.md)；全套 Python 16 / .NET 67 / 前端 213，typecheck/build PASS |
+| 厂房结构、拾取、FAB 页面功能、阴影、模式组合 | NOT_RUN | P2 剩余工作和 P3–P9 后续门禁 |
+| 原版/隔离旧 Next ISO/Top 参考捕获 | PASS（同 Chrome，1536×735，DPR 1，冻结 seed/clock），不等于完整 Golden 通过 | [清单](./evidence/p2-reference/manifest.json) |
 | 原版/旧 Next/Lite 截图差异 | NOT_RUN | P1 cube 不等于 FAB Golden |
 | 同机性能 A/B、60 分钟内存、浏览器矩阵 | NOT_RUN | 不推断性能收益或完整场景恢复能力 |
 | 最终生产依赖禁止项 | NOT_RUN | 旧引擎待 P11 删除；本轮仅检查新 Lite 源码路径没有 core/compat/WebGL/私有 GPU API |

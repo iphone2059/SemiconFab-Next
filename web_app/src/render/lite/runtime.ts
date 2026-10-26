@@ -26,6 +26,7 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
   let detach: (() => void) | undefined;
   let initializing = true;
   let firstFrameReady = false;
+  let renderingRequested = false;
   let recovering = false;
   let lossGeneration = 0;
   let recoverySettled: Promise<void> = Promise.resolve();
@@ -78,6 +79,20 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
     try { await Promise.race([operation, aborted]); }
     finally { signal.removeEventListener('abort', cancel); }
   }
+  function settleRecovery() {
+    recovering = false;
+    finishRecovery?.();
+    resumedFirstFrame?.();
+    if (!initializing && (disposed || status === 'failed')) release();
+    else if (firstFrameReady) report('ready');
+  }
+  function failRecovery(error: unknown) {
+    recovering = false;
+    finishRecovery?.();
+    if (released) return;
+    if (initializing) cancellation.abort(error);
+    else { try { report('failed', error); } finally { release(); } }
+  }
 
   options.signal?.addEventListener('abort', dispose, { once: true });
   if (options.signal?.aborted) dispose();
@@ -92,37 +107,48 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
       recovery = enableDeviceLostSceneRecovery(engine, {
         onLost: () => {
           if (released) return;
+          // Initialization may already await this barrier. Consecutive losses
+          // belong to the same recovery until the newest GPU frame completes.
+          if (!recovering) recoverySettled = new Promise(resolve => { finishRecovery = resolve; });
           recovering = true;
           lossGeneration++;
-          recoverySettled = new Promise(resolve => { finishRecovery = resolve; });
+          // Native recovery is loaded asynchronously. Stop now, before owners reset
+          // device-bound data, so an old-device RAF cannot repopulate those caches.
+          stopEngine(engine!);
           report('lost');
         },
-        // Lite invokes this only after the rebuilt scene's first resumed frame.
+        // We paused before native recovery, so Lite rebuilds without restarting.
+        // The owner resumes only after rebuilding, and confirms the replacement GPU frame.
         onRecovered: () => {
-          recovering = false;
-          finishRecovery?.();
-          resumedFirstFrame?.();
-          if (!initializing && (disposed || status === 'failed')) release();
-          else if (firstFrameReady) report('ready');
-        },
-        onRecoveryFailed: error => {
-          recovering = false;
-          finishRecovery?.();
           if (released) return;
-          if (initializing) cancellation.abort(error);
-          else { try { report('failed', error); } finally { release(); } }
+          if (disposed || status === 'failed' || !renderingRequested) { settleRecovery(); return; }
+          const generation = lossGeneration;
+          void (async () => {
+            try {
+              await firstFrameBoundary(startEngine(engine!));
+              if (generation !== lossGeneration) return;
+              await firstFrameBoundary(waitForGpuIdle(engine!));
+              if (generation === lossGeneration) settleRecovery();
+            } catch (error) {
+              if (generation !== lossGeneration) return;
+              if (disposed) settleRecovery();
+              else failRecovery(error);
+            }
+          })();
         },
+        onRecoveryFailed: failRecovery,
       });
       scene = createSceneContext(engine);
       detach = options.compose(scene, engine) || undefined;
       cancellation.signal.throwIfAborted();
       await registerScene(scene);
       cancellation.signal.throwIfAborted();
-      if (recovering) await firstFrameBoundary(recoverySettled);
+      while (recovering) await firstFrameBoundary(recoverySettled);
       cancellation.signal.throwIfAborted();
       // stopEngine cancels RAF without resolving startEngine; cancellation must race this wait.
       // A loss before that RAF also cancels it; native recovery supplies a different first frame.
       const recoveredFrame = new Promise<void>(resolve => { resumedFirstFrame = resolve; });
+      renderingRequested = true;
       await firstFrameBoundary(Promise.race([startEngine(engine), recoveredFrame]));
       resumedFirstFrame = undefined;
       for (;;) {

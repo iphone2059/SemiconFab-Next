@@ -1,0 +1,65 @@
+{
+  "scope": "Source reference capture only; full Lite FAB comparison NOT_RUN",
+  "originalSha": "b3666132e5d8cab2cebe4c4227fc04c52242eb28",
+  "nextSha": "0b35ca5000140415046c9689ad769395953f9d08",
+  "clockSeed": 20261024,
+  "virtualFrameMs": 16.666666666666668,
+  "captures": [
+    {
+      "side": "original",
+      "case": "iso",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 1
+      },
+      "clockMs": 9000.000000000031,
+      "language": "zh-CN",
+      "url": "http://127.0.0.1:5179/twin.html?layout=%2Ftwin%2Flayout-default.json&mode=engineer&parity=1",
+      "file": "original-iso.png",
+      "sha256": "60e34e695688c4bd783d763c17c73c989a6e015b97e08f2d7fd8b297fedaf211"
+    },
+    {
+      "side": "original",
+      "case": "top",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 1
+      },
+      "clockMs": 9000.000000000031,
+      "language": "zh-CN",
+      "url": "http://127.0.0.1:5179/twin.html?layout=%2Ftwin%2Flayout-default.json&mode=engineer&parity=1",
+      "file": "original-top.png",
+      "sha256": "2399dd597f008b82680ffdb79cb785a53b0cd0e0c392f2af43bae620ab7be06e"
+    },
+    {
+      "side": "next",
+      "case": "iso",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 1
+      },
+      "clockMs": 9033.333333333363,
+      "language": "zh-CN",
+      "url": "http://127.0.0.1:5176/twin?lang=zh-CN&mode=engineer&parity=1",
+      "file": "next-iso.png",
+      "sha256": "0311c748281c83e02617d7338de2bfc7904b4ea0c5676c7c9b7ad634753f2842"
+    },
+    {
+      "side": "next",
+      "case": "top",
+      "viewport": {
+        "width": 1536,
+        "height": 735,
+        "devicePixelRatio": 1
+      },
+      "clockMs": 9033.333333333363,
+      "language": "zh-CN",
+      "url": "http://127.0.0.1:5176/twin?lang=zh-CN&mode=engineer&parity=1",
+      "file": "next-top.png",
+      "sha256": "4d4a9eef3786bd6b3b37b655511911bc97a646ce9d22e3ddf8a36ac78b9352d1"
+    }
+  ]
+}

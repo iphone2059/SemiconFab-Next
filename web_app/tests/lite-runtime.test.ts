@@ -43,7 +43,7 @@ function deferred() {
   return { promise, resolve };
 }
 beforeEach(() => {
-  vi.clearAllMocks(); gpu.live.clear(); gpu.events.length = 0; gpu.recovery = {};
+  vi.resetAllMocks(); gpu.live.clear(); gpu.events.length = 0; gpu.recovery = {};
   gpu.createEngine.mockImplementation(async () => { gpu.live.add('engine'); return {}; });
   gpu.registerScene.mockImplementation(async () => {});
   gpu.startEngine.mockImplementation(async () => {});
@@ -126,6 +126,7 @@ it('forwards native recovery and suppresses late callbacks after disposal', asyn
   gpu.recovery.onLost?.({ reason: 'unknown', message: 'test loss' });
   expect(runtime.status).toBe('lost');
   gpu.recovery.onRecovered?.();
+  await vi.waitFor(() => expect(runtime.status).toBe('ready'));
   expect(runtime.status).toBe('ready');
   runtime.dispose();
   gpu.recovery.onLost?.({ reason: 'destroyed', message: '' });
@@ -154,7 +155,7 @@ it.each(['recover', 'fail'] as const)('waits for in-flight recovery to %s before
   expect(runtime.status).toBe('disposed');
   // Lite disable() cannot cancel a captured requestAdapter/requestDevice operation.
   expect(gpu.live.has('engine')).toBe(true);
-  expect(gpu.events).toEqual([]);
+  expect(gpu.events).toEqual(['stop']);
   if (outcome === 'recover') gpu.recovery.onRecovered?.();
   else gpu.recovery.onRecoveryFailed?.(new Error('replacement failed'));
   expect(gpu.live.size).toBe(0);
@@ -162,7 +163,7 @@ it.each(['recover', 'fail'] as const)('waits for in-flight recovery to %s before
 });
 
 it('finishes initialization from a recovered first frame when the original RAF was canceled', async () => {
-  gpu.startEngine.mockReturnValue(new Promise(() => {}));
+  gpu.startEngine.mockReturnValueOnce(new Promise(() => {}));
   const runtime = createLiteRuntime(canvas, { compose: () => {} });
   await vi.waitFor(() => expect(gpu.startEngine).toHaveBeenCalledOnce());
   gpu.recovery.onLost?.({ reason: 'unknown', message: 'first frame lost' });
@@ -170,6 +171,51 @@ it('finishes initialization from a recovered first frame when the original RAF w
   const result = await Promise.race([runtime.ready.then(() => 'ready'), new Promise(resolve => setTimeout(() => resolve('pending'), 100))]);
   expect(result).toBe('ready');
   runtime.dispose();
+});
+
+it('stops old-device frames before lost observers reset resources and waits for replacement GPU completion', async () => {
+  const resumed = deferred(), submitted = deferred();
+  const runtime = createLiteRuntime(canvas, {
+    compose: () => {},
+    onStatus: status => { if (status === 'lost') gpu.events.push('reset-instance-state'); },
+  });
+  await runtime.ready;
+  gpu.startEngine.mockReturnValueOnce(resumed.promise);
+  gpu.waitForGpuIdle.mockReturnValueOnce(submitted.promise);
+  gpu.recovery.onLost?.({ reason: 'unknown', message: 'instance buffers lost' });
+  expect(gpu.events).toEqual(['stop', 'reset-instance-state']);
+  gpu.recovery.onRecovered?.();
+  expect(runtime.status).toBe('lost');
+  resumed.resolve();
+  await vi.waitFor(() => expect(gpu.waitForGpuIdle).toHaveBeenCalledTimes(2));
+  expect(runtime.status).toBe('lost');
+  submitted.resolve();
+  await vi.waitFor(() => expect(runtime.status).toBe('ready'));
+  runtime.dispose();
+});
+
+it('settles initialization when a second device loss interrupts the replacement first frame', async () => {
+  let rejectSubmission!: (error: Error) => void;
+  gpu.waitForGpuIdle.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectSubmission = reject; }));
+  const runtime = createLiteRuntime(canvas, { compose: () => {} });
+  try {
+    await vi.waitFor(() => expect(gpu.waitForGpuIdle).toHaveBeenCalledOnce());
+    gpu.recovery.onLost?.({ reason: 'unknown', message: 'initial submission lost' });
+    rejectSubmission(new Error('old device lost'));
+    // Model native recovery arriving in a later turn, after the rejected submission's
+    // microtasks have moved initialization onto the first recovery barrier.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    gpu.startEngine.mockReturnValueOnce(new Promise(() => {}));
+    gpu.recovery.onRecovered?.();
+    await vi.waitFor(() => expect(gpu.startEngine).toHaveBeenCalledTimes(2));
+    gpu.recovery.onLost?.({ reason: 'unknown', message: 'replacement RAF lost' });
+    gpu.recovery.onRecovered?.();
+    await vi.waitFor(() => expect(gpu.startEngine).toHaveBeenCalledTimes(3));
+    const result = await Promise.race([runtime.ready.then(() => 'ready'),
+      new Promise(resolve => setTimeout(() => resolve('pending'), 100))]);
+    expect(result).toBe('ready');
+    expect(runtime.status).toBe('ready');
+  } finally { runtime.dispose(); }
 });
 
 it('rechecks cancellation after a ready observer synchronously aborts its owner', async () => {
@@ -191,7 +237,8 @@ it('retries the first-frame GPU boundary on the replacement device after loss du
   rejectSubmission(new Error('old device lost'));
   gpu.recovery.onRecovered?.();
   await runtime.ready;
-  expect(gpu.waitForGpuIdle).toHaveBeenCalledTimes(2);
+  // Original submission, explicit resumed-frame completion, then initialization's final generation check.
+  expect(gpu.waitForGpuIdle).toHaveBeenCalledTimes(3);
   expect(runtime.status).toBe('ready');
   runtime.dispose();
 });

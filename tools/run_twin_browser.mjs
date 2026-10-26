@@ -6,6 +6,7 @@ import fs from 'node:fs';
 const [suite = 'wafer', port = '9487', baseUrl = 'http://127.0.0.1:4173', output, screenshotOutput] = process.argv.slice(2);
 const suites = {
   lite: ['lite-runtime.browser.ts', 'runLiteRuntimeAcceptance'],
+  'lite-equipment': ['lite-equipment.browser.ts', 'runLiteEquipmentAcceptance'],
   wafer: ['twin-wafer.browser.ts', 'runWaferAcceptance'],
   level: ['twin-level.browser.ts', 'runLevelAcceptance'],
   tour: ['twin-tour.browser.ts', 'runTourAcceptance'],

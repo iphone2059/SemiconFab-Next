@@ -1,0 +1,16 @@
+{
+  "browser": {
+    "Browser": "Chrome/155.0.8059.86",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+    "V8-Version": "15.5.35.25",
+    "WebKit-Version": "537.36 (@804d6b05f089b27af8342622a36558c49401a1d4)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9492/devtools/browser/e4c73cba-34cb-496d-b4d7-5ec7add6670e"
+  },
+  "errors": [],
+  "warnings": [
+    "cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation",
+    "cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation"
+  ],
+  "scope": "ISO/Top source baseline only; Lite full-FAB pixel comparison NOT_RUN"
+}

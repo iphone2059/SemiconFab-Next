@@ -1,0 +1,87 @@
+npm notice run web_app@0.1.0 test
+npm notice run vitest run tests/lite-runtime.test.ts
+
+ RUN  v5.0.5 C:/Users/han_qingyu/SemiconFab-Next/web_app
+
+ ❯ tests/lite-runtime.test.ts (18 tests | 3 failed) 10386ms
+   × stops old-device frames before lost observers reset resources and waits for replacement GPU completion 4ms
+   × rechecks cancellation after a ready observer synchronously aborts its owner 5005ms
+   × retries the first-frame GPU boundary on the replacement device after loss during submission 5003ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lite-runtime.test.ts > stops old-device frames before lost observers reset resources and waits for replacement GPU completion
+AssertionError: expected [ 'reset-instance-state' ] to deeply equal [ 'stop', 'reset-instance-state' ]
+
+- Expected
++ Received
+
+  [
+-   "stop",
+    "reset-instance-state",
+  ]
+
+ ❯ tests/lite-runtime.test.ts:186:22
+    184|   gpu.waitForGpuIdle.mockReturnValueOnce(submitted.promise);
+    185|   gpu.recovery.onLost?.({ reason: 'unknown', message: 'instance buffer…
+    186|   expect(gpu.events).toEqual(['stop', 'reset-instance-state']);
+       |                      ^
+    187|   gpu.recovery.onRecovered?.();
+    188|   expect(runtime.status).toBe('lost');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/lite-runtime.test.ts > rechecks cancellation after a ready observer synchronously aborts its owner
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/lite-runtime.test.ts:197:1
+    195| });
+    196|
+    197| it('rechecks cancellation after a ready observer synchronously aborts …
+       | ^
+    198|   const controller = new AbortController();
+    199|   const runtime = createLiteRuntime(canvas, {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/lite-runtime.test.ts > retries the first-frame GPU boundary on the replacement device after loss during submission
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/lite-runtime.test.ts:207:1
+    205| });
+    206|
+    207| it('retries the first-frame GPU boundary on the replacement device aft…
+       | ^
+    208|   let rejectSubmission!: (error: Error) => void;
+    209|   gpu.waitForGpuIdle.mockReturnValueOnce(new Promise((_resolve, reject…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+Error: old device lost
+ ❯ tests/lite-runtime.test.ts:213:20
+    211|   await vi.waitFor(() => expect(gpu.waitForGpuIdle).toHaveBeenCalledOn…
+    212|   gpu.recovery.onLost?.({ reason: 'unknown', message: 'submitted devic…
+    213|   rejectSubmission(new Error('old device lost'));
+       |                    ^
+    214|   gpu.recovery.onRecovered?.();
+    215|   await runtime.ready;
+ ❯ node_modules/.pnpm/vitest@5.0.5_@types+node@26_178ea311d59e0807ae0248da70c5e56c/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20
+
+This error originated in "tests/lite-runtime.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The last test to run before this error was "retries the first-frame GPU boundary on the replacement device after loss during submission". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 15 passed (18)
+     Errors  1 error
+   Start at  11:14:25
+   Duration  10.55s (tests 100%)
