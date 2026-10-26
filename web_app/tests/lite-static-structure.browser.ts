@@ -46,12 +46,21 @@ export async function runLiteStaticStructureAcceptance(command, baseUrl) {
     const state = await until(s => s.frames > before + 2, view);
     assert.equal(state.structure.layers.ffu.visible, view === 'ffu');
     assert.equal(state.structure.layers.b1.visible, view === 'b1' || view === 'dual');
-    assert.equal(state.structure.layers.shell.visible, view !== 'b1');
-    assert.equal(state.structure.layers.b1.offset, view === 'dual' ? -18 : 0);
+    // legacy-site.ts:syncLevel retains L1 objects; only explodedPlacement moves B1.
+    assert.equal(state.structure.layers.shell.visible, true);
+    assert.equal(state.structure.layers.b1.offset, 0);
+    assert.equal(state.structure.floorAlpha, view === 'b1' ? 0.2 : view === 'dual' ? 0.35 : 1);
+    assert.equal(state.structure.slabVisible, view !== 'b1' && view !== 'dual');
+    assert.equal(state.equipment.visible, true);
     assert.ok(state.drawCalls > 0);
     views.push({ view, state });
     await capture(view);
   }
+  const rapid = await evaluate(`(async()=>{
+    await Promise.all([__liteAcceptance.structureView('b1'), __liteAcceptance.structureView('dual')]);
+    return __liteAcceptance.inspectLayout().camera;
+  })()`);
+  assert.deepEqual(rapid.target, [0, -3, 0], 'Latest level selection must retain its camera during material rebuild');
   const recoveries = [];
   await evaluate("__liteAcceptance.structureView('dual')");
   for (let loss = 1; loss <= 3; loss++) {
@@ -59,7 +68,8 @@ export async function runLiteStaticStructureAcceptance(command, baseUrl) {
     const recovered = await until(s => s.status === 'ready' && s.states.filter(state => state === 'lost').length === loss,
       `static recovery ${loss}`);
     const state = await until(s => s.frames > recovered.frames + 2, 'resumed static frame');
-    assert.equal(state.structure.layers.b1.offset, -18);
+    assert.equal(state.structure.layers.b1.offset, 0);
+    assert.equal(state.structure.floorAlpha, 0.35);
     assert.equal(state.structure.parts, 1648);
     assert.equal(state.meshes, initial.meshes);
     recoveries.push(state);

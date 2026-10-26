@@ -2,12 +2,15 @@
 import {
   addToScene, attachControl, createArcRotateCamera, createBox,
   createHemisphericLight, createPbrMaterial, forceWebGpuDeviceLossForTesting,
-  getRenderingContexts, getTextureMetadata, getTextureTransform, onBeforeRender, onEngineGpuError, setSubtreeVisible,
+  getRenderingContexts, getTextureMetadata, getTextureTransform, getMeshGeometry, getViewProjectionMatrix,
+  onBeforeRender, onEngineGpuError, setSubtreeVisible, enableMirroredMeshes,
   type ArcRotateCamera, type EngineContext, type SceneContext,
+  type PbrMaterialProps,
 } from '@babylonjs/lite';
 import { createLiteRuntime, type LiteRuntime } from '../../src/render/lite/runtime';
 import { createLiteEquipment, type LiteEquipment } from '../../src/render/lite/geometry/tool-families';
 import { createLiteStaticStructure, prepareStaticStructureEnvironment, type LiteStaticStructure } from '../../src/render/lite/geometry/static-structure';
+import { attachNextCoordinateFrame, createNextReferenceCamera, applyNextReferenceView } from '../../src/render/lite/next-coordinate-frame';
 
 const canvas = document.querySelector('canvas')!;
 const output = document.querySelector('output')!;
@@ -37,32 +40,39 @@ async function mount(abortImmediately = false) {
       loadingStage = 'compose';
       // Track this generation at acquisition, including mounts aborted before ready resolves.
       context = { engine, scene };
-      scene.clearColor = { r: 0.86, g: 0.93, b: 0.99, a: 1 };
+      scene.clearColor = equipmentScene ? { r: 0.945, g: 0.961, b: 0.976, a: 1 } : { r: 0.86, g: 0.93, b: 0.99, a: 1 };
       camera = equipmentScene
-        ? createArcRotateCamera(-Math.PI / 3, Math.PI / 3, structureScene ? 155 : 115, { x: 0, y: 1, z: 0 })
+        ? createNextReferenceCamera()
         : createArcRotateCamera(-Math.PI / 2, Math.PI / 2.5, 8, { x: 0, y: 0, z: 0 });
       scene.camera = camera;
       const detachControl = attachControl(camera, canvas, scene);
       const detachErrors = onEngineGpuError(engine, error => gpuErrors.push(error.message));
       onBeforeRender(scene, () => { frames++; });
       addToScene(scene, createHemisphericLight([0, 1, 0], 1));
-      if (equipmentScene) equipment = createLiteEquipment(scene, engine);
-      else {
-        const box = createBox(engine, { size: 2 });
-        box.material = createPbrMaterial({ baseColorFactor: [0.2, 0.7, 0.9, 1], metallicFactor: 0.1, roughnessFactor: 0.55 });
-        addToScene(scene, box);
-      }
-      const mountedStructure = structureScene ? createLiteStaticStructure(scene, engine) : undefined;
-      structure = mountedStructure;
-      mountedStructure?.setVisible('ffu', false);
-      mountedStructure?.setVisible('b1', false);
-      if (mountedStructure) {
-        loadingStage = 'environment';
-        try { await prepareStaticStructureEnvironment(scene); }
-        catch (error) { mountedStructure.dispose(); detachControl(); detachErrors(); throw error; }
-      }
-      loadingStage = 'register';
-      return () => { mountedStructure?.dispose(); detachControl(); detachErrors(); };
+      let mountedStructure: LiteStaticStructure | undefined;
+      try {
+        if (equipmentScene) equipment = createLiteEquipment(scene, engine);
+        else {
+          const box = createBox(engine, { size: 2 });
+          box.material = createPbrMaterial({ baseColorFactor: [0.2, 0.7, 0.9, 1], metallicFactor: 0.1, roughnessFactor: 0.55 });
+          addToScene(scene, box);
+        }
+        mountedStructure = structureScene ? createLiteStaticStructure(scene, engine) : undefined;
+        structure = mountedStructure;
+        mountedStructure?.setVisible('ffu', false);
+        mountedStructure?.setVisible('b1', false);
+        if (equipment) {
+          attachNextCoordinateFrame([...equipment.batches.map(batch => batch.mesh),
+            ...(mountedStructure ? [...Object.values(mountedStructure.roots), mountedStructure.lightRoot] : [])]);
+          await enableMirroredMeshes(scene);
+        }
+        if (mountedStructure) {
+          loadingStage = 'environment';
+          await prepareStaticStructureEnvironment(scene);
+        }
+        loadingStage = 'register';
+        return () => { mountedStructure?.dispose(); detachControl(); detachErrors(); };
+      } catch (error) { mountedStructure?.dispose(); detachControl(); detachErrors(); throw error; }
     },
     onStatus(status, error) {
       if (status === 'lost') { equipment?.prepareForDeviceRecovery(); structure?.prepareForDeviceRecovery(); }
@@ -88,12 +98,15 @@ function snapshot() {
     width: canvas.width, height: canvas.height,
     equipment: equipment ? {
       tools: equipment.tools.length, batches: equipment.batches.length,
+      visible: equipment.batches.every(batch => batch.mesh.visible !== false),
       instances: equipment.batches.reduce((sum, batch) => sum + (batch.mesh.thinInstances?.count ?? 0), 0),
       identities: equipment.tools.map(tool => ({ instanceId: tool.instanceId, recordId: tool.recordId,
         mapped: tool.parts.every(part => equipment!.resolve(equipment!.batches[part.batchIndex].mesh, part.instanceIndex) === tool) })),
     } : undefined,
     structure: structure ? {
       parts: structure.parts.length, batches: structure.batches.length, lights: structure.lights.length,
+      floorAlpha: (structure.parts.find(part => part.name === 'procedural-floor')!.mesh.material as PbrMaterialProps).alpha ?? 1,
+      slabVisible: structure.parts.find(part => part.name === 'procedural-slab')!.mesh.visible !== false,
       layers: Object.fromEntries((['shell', 'ffu', 'b1'] as const).map(layer => [layer, {
         visible: structure!.roots[layer].visible !== false, offset: structure!.roots[layer].position.y,
         parts: structure!.parts.filter(part => part.layer === layer).length,
@@ -109,30 +122,69 @@ const acceptance = {
   mount, snapshot,
   dispose() { runtime?.dispose(); return snapshot(); },
   loseDevice() { if (!context) throw new Error('Scene not ready'); forceWebGpuDeviceLossForTesting(context.engine); },
+  isoView() {
+    if (!camera) throw new Error('Scene not ready');
+    applyNextReferenceView(camera, 'iso');
+  },
   topView() {
     if (!camera) throw new Error('Scene not ready');
-    camera.beta = 0.01;
-    camera.alpha = -Math.PI / 2;
-    camera.radius = structureScene ? 180 : 145;
+    applyNextReferenceView(camera, 'top');
   },
-  structureView(view: 'l1' | 'b1' | 'dual' | 'ffu') {
+  async structureView(view: 'l1' | 'b1' | 'dual' | 'ffu') {
     if (!structure || !equipment || !camera) throw new Error('Static scene not ready');
-    structure.setVisible('shell', view !== 'b1');
     structure.setVisible('ffu', view === 'ffu');
-    structure.setVisible('b1', view === 'b1' || view === 'dual');
-    structure.setOffset('b1', view === 'dual' ? -18 : 0);
-    for (const batch of equipment.batches) setSubtreeVisible(batch.mesh, view !== 'b1');
-    camera.target.y = view === 'b1' ? -4 : 0;
-    camera.radius = 155; camera.beta = Math.PI / 3; camera.alpha = -Math.PI / 3;
+    for (const batch of equipment.batches) setSubtreeVisible(batch.mesh, true);
+    // Select the pose synchronously; an older material rebuild must not overwrite a newer click.
+    if (view !== 'ffu') applyNextReferenceView(camera, view);
+    await structure.setLevel(view === 'b1' ? 'B1' : view === 'dual' ? 'DUAL' : 'L1');
+  },
+  inspectLayout() {
+    if (!context || !equipment || !camera) throw new Error('Scene not ready');
+    const transform = (p: number[], m: ArrayLike<number>, offset = 0) => [0, 1, 2].map(axis =>
+      m[offset + axis] * p[0] + m[offset + axis + 4] * p[1] + m[offset + axis + 8] * p[2] + m[offset + axis + 12]);
+    const positions = new Map(equipment.batches.map(({ mesh }) => [mesh, getMeshGeometry(mesh)!.positions]));
+    const bounds = (vertices: number[][]) => ({ min: [0, 1, 2].map(axis => Math.min(...vertices.map(p => p[axis]))),
+      max: [0, 1, 2].map(axis => Math.max(...vertices.map(p => p[axis]))) });
+    const tools = equipment.tools.map(tool => {
+      const vertices: number[][] = [];
+      for (const part of tool.parts) {
+        const mesh = equipment!.batches[part.batchIndex].mesh;
+        const data = positions.get(mesh)!;
+        for (let i = 0; i < data.length; i += 3) vertices.push(transform(
+          transform(Array.from(data.subarray(i, i + 3)), mesh.thinInstances!.matrices, part.instanceIndex * 16), mesh.worldMatrix));
+      }
+      return { instanceId: tool.instanceId, recordId: tool.recordId, vertices, bounds: bounds(vertices) };
+    });
+    const yellow = structure?.parts.filter(part => part.name === 'native-zone-0' || part.name.startsWith('original-amber-panel-'))
+      .map(part => {
+        const data = getMeshGeometry(part.mesh)!.positions;
+        const vertices: number[][] = [];
+        for (let i = 0; i < data.length; i += 3) {
+          let p = Array.from(data.subarray(i, i + 3));
+          if (part.mesh.thinInstances) p = transform(p, part.mesh.thinInstances.matrices, part.instanceIndex * 16);
+          vertices.push(transform(p, part.mesh.worldMatrix));
+        }
+        return { name: part.name, vertices, bounds: bounds(vertices) };
+      });
+    return { tools, yellow, viewProjection: Array.from(getViewProjectionMatrix(camera, canvas.width / canvas.height)),
+      camera: { position: [camera.worldMatrix[12], camera.worldMatrix[13], camera.worldMatrix[14]],
+        target: [camera.target.x, camera.target.y, camera.target.z], fov: camera.fov },
+      viewport: { width: canvas.width, height: canvas.height } };
   },
 };
 Object.assign(window, { __liteAcceptance: acceptance });
 if (structureScene) {
   const controls = document.createElement('nav');
   controls.setAttribute('aria-label', 'Static scene layers');
+  for (const [label, action] of [['ISO', acceptance.isoView], ['TOP', acceptance.topView]] as const) {
+    const button = document.createElement('button'); button.textContent = label;
+    button.addEventListener('click', action); controls.append(button);
+  }
   for (const view of ['l1', 'b1', 'dual', 'ffu'] as const) {
     const button = document.createElement('button'); button.textContent = view.toUpperCase();
-    button.addEventListener('click', () => acceptance.structureView(view)); controls.append(button);
+    button.addEventListener('click', () => {
+      void acceptance.structureView(view).catch(error => gpuErrors.push(String(error)));
+    }); controls.append(button);
   }
   document.body.append(controls);
 }

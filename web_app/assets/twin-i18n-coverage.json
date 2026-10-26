@@ -100,6 +100,7 @@
       "web_app/src/process-control.ts",
       "web_app/src/render/lite/geometry/static-structure.ts",
       "web_app/src/render/lite/geometry/tool-families.ts",
+      "web_app/src/render/lite/next-coordinate-frame.ts",
       "web_app/src/render/lite/runtime.ts",
       "web_app/src/research-replay.ts",
       "web_app/src/scenario.ts",

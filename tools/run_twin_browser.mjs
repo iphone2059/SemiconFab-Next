@@ -8,6 +8,7 @@ const suites = {
   lite: ['lite-runtime.browser.ts', 'runLiteRuntimeAcceptance'],
   'lite-equipment': ['lite-equipment.browser.ts', 'runLiteEquipmentAcceptance'],
   'lite-static': ['lite-static-structure.browser.ts', 'runLiteStaticStructureAcceptance'],
+  'lite-layout': ['lite-layout-parity.browser.ts', 'runLiteLayoutParityAcceptance'],
   wafer: ['twin-wafer.browser.ts', 'runWaferAcceptance'],
   level: ['twin-level.browser.ts', 'runLevelAcceptance'],
   tour: ['twin-tour.browser.ts', 'runTourAcceptance'],

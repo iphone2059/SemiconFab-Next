@@ -68,4 +68,6 @@ node tools/run_twin_browser.mjs lite 9493 http://127.0.0.1:5177 .local/lite-runt
 
 决定：按 P2 静态几何完成门禁继续，完整产品接入、光照/阴影、Golden、性能留在 P3–P10；代价是 `/twin` 尚不能换为纯 Lite。离线数据资产增加载荷，性能收益需 P10 同机 A/B。初始化上传中丢失分支通过生命周期双替身验证，未故意制造真实 GPU 崩溃；审查也未独立重跑全套/浏览器，执行证据来自本记录。
 
-延后 Minor：测试预览入口在 attachControl 后、HDR cleanup catch 前若同步创建静态场景失败，可能遗漏 canvas 控件监听的 disposer；默认产品入口未受此变更影响。后续接入应统一 composition 的异常清理，避免失败预览重挂载保留旧监听。本项未计为已修复。
+历史 Minor：测试预览入口在 attachControl 后、HDR cleanup catch 前同步失败可能遗漏控件 disposer；已在后续 [布局修复](./LAYOUT_PARITY.md) 中统一 composition 错误清理。
+
+后续对照还发现 P2 CPU 数据门禁遗漏的 RH/LH 与相机差异，以及旧预览 B1/DUAL 的错误显示逻辑。原本三组 GPU 检查只证明可绘制/恢复，不能接受屏幕布局；后续真实 Next 对照及纠正结论以 [LAYOUT_PARITY.md](./LAYOUT_PARITY.md) 为准。

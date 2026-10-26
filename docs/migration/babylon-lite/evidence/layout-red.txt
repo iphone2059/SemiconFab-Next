@@ -1,0 +1,16 @@
+node:internal/modules/run_main:111
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Layout screen bounds differ by 458.34 px
+    at Module.runLiteLayoutParityAcceptance (file:///C:/Users/han_qingyu/SemiconFab-Next/web_app/tests/lite-layout-parity.browser.ts:76:10)
+    at async file:///C:/Users/han_qingyu/SemiconFab-Next/tools/run_twin_browser.mjs:58:18 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v26.12.1

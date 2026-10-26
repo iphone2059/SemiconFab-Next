@@ -3,10 +3,11 @@ import {
   createPointLight, createStandardMaterial, createTransformNode, createDynamicTexture,
   setParent, setPbrEmissive, setPbrTransmission, setSubtreeVisible, setTextureTransform,
   setThinInstances, setThinInstanceColors, updateDynamicTexture, releaseTexture,
-  enableMaterialUvTransform, loadHdrEnvironment, decomposeMat4,
-  type DynamicTexture2D, type EngineContext, type Mat4, type Material, type Mesh, type PointLight, type SceneContext, type TransformNode,
+  enableMaterialUvTransform, loadHdrEnvironment, decomposeMat4, rebuildMaterial, markMaterialUboDirty,
+  type DynamicTexture2D, type EngineContext, type Mat4, type Material, type Mesh, type PbrMaterialProps, type PointLight, type SceneContext, type TransformNode,
 } from '@babylonjs/lite';
 import frozen from '../../../../assets/lite-static-structure.json';
+import { originalFloorOpacity } from '../../../twin-spatial';
 
 export type StaticLayer = 'shell' | 'ffu' | 'b1';
 export interface StaticSurfaceDefinition {
@@ -50,9 +51,11 @@ export interface LiteStaticStructure {
   readonly parts: StaticPart[];
   readonly batches: Mesh[];
   readonly roots: Record<StaticLayer, TransformNode>;
+  readonly lightRoot: TransformNode;
   readonly lights: PointLight[];
   setVisible(layer: StaticLayer, visible: boolean): void;
   setOffset(layer: StaticLayer, y: number): void;
+  setLevel(level: 'L1' | 'B1' | 'DUAL'): Promise<void>;
   prepareForDeviceRecovery(): void;
   dispose(): void;
 }
@@ -153,8 +156,9 @@ export function createLiteStaticStructure(scene: SceneContext, engine: EngineCon
         matrices.set(entity.matrix, instanceIndex * 16);
         parts.push({ name: entity.name, layer: entity.layer, mesh, instanceIndex });
       });
-      if (source.materials[first.material].alpha < 1) {
+      if (source.materials[first.material].alpha < 1 || first.name === 'procedural-floor') {
         // Lite sorts transparent draws by mesh.worldMatrix, excluding thin matrices.
+        // The cleanroom floor also becomes transparent on level changes.
         const { translation, rotation, scale } = decomposeMat4(matrices as unknown as Mat4);
         mesh.position.set(translation.x, translation.y, translation.z);
         mesh.rotationQuaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
@@ -173,9 +177,24 @@ export function createLiteStaticStructure(scene: SceneContext, engine: EngineCon
       return light;
     });
     return {
-      parts, batches, roots, lights, dispose,
+      parts, batches, roots, lightRoot, lights, dispose,
       setVisible(layer, visible) { setSubtreeVisible(roots[layer], visible); },
       setOffset(layer, y) { roots[layer].position.y = y; if (layer === 'b1') lightRoot.position.y = y; },
+      async setLevel(level) {
+        // Next legacy-site.ts:syncLevel: retain L1; DUAL never explodes B1.
+        setSubtreeVisible(roots.shell, true);
+        setSubtreeVisible(roots.b1, level !== 'L1');
+        roots.b1.position.y = 0; lightRoot.position.y = 0;
+        const slab = parts.find(part => part.name === 'procedural-slab')!.mesh;
+        setSubtreeVisible(slab, level === 'L1');
+        const floor = parts.find(part => part.name === 'procedural-floor')!.mesh;
+        const material = floor.material as PbrMaterialProps;
+        const blended = level !== 'L1', changed = !!material.alphaBlend !== blended;
+        material.alpha = originalFloorOpacity(level);
+        material.alphaBlend = blended;
+        if (changed) await rebuildMaterial(scene, material);
+        else markMaterialUboDirty(material);
+      },
       prepareForDeviceRecovery() {
         for (const mesh of batches) {
           const instances = mesh.thinInstances;

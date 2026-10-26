@@ -19,11 +19,13 @@
 | P0 基线 | PASS（源码/单测/构建）；完整 Golden NOT_RUN | 固定三方版本、冻结 fixtures；旧 Next 49 文件 / 190 项测试通过。原版/隔离旧 Next ISO/Top 参考已保留；没有完整 Golden 接受结论。 |
 | P1 原生生命周期 | PASS（独立夹具） | 23 项生命周期单测；支持等待原生异步上传，注册前设备丢失终止本次初始化；三组构建后硬件回归均通过，GPU/console 错误 0。不外推完整 FAB/加载中丢失的 GPU 崩溃行为。 |
 | P2 静态几何 | PASS（几何门禁） | P2a：121 台设备 / 51 批 / 936 零件实例。P2b：L1/区带/墙柱/FFU/B1 共 1648 部件 / 396 批，10 盏 B1 灯；冻结顶点、矩阵、包围盒和材质输入对照通过。构建后 L1/FFU/B1/展开、三次恢复及重挂载通过；完整像素对齐和生产拾取仍属后续门禁。见 [P2_EQUIPMENT.md](./P2_EQUIPMENT.md)、[P2_STATIC_STRUCTURE.md](./P2_STATIC_STRUCTURE.md)。 |
-| P3 后端/相机/拾取 | NOT_RUN | 保留 SceneBackend 领域接口；几何验证后接入完整 Lite 后端。 |
+| P3 后端/相机/拾取 | PARTIAL（预览相机） | 原 Next 相机/坐标框架已用于预览，五视角位置回归通过；完整 SceneBackend 产品接入和拾取未执行。见 [布局修复](./LAYOUT_PARITY.md)。 |
 | P4–P10 材质/阴影/动态/业务/性能 | NOT_RUN | 按指南逐模块实现；原生能力优先。 |
 | P11 删除旧引擎 | NOT_RUN | 完整模块替换和验证后再删除旧包，执行生产依赖图门禁。 |
 
 独立测试入口支持 P1 立方体、`?scene=equipment` 和 `?scene=structure`（含 L1/B1/DUAL/FFU 按钮）。当前 `/twin` 仍使用已有渲染器。新 Lite 路径没有 `@babylonjs/core`、compat、alias、WebGL 或自制引擎兼容类；旧引擎仅用于隔离的离线数据提取工具和既有产品路径。完整像素对照和性能 A/B 尚未执行。
+
+后续位置修复：设备继续由 `export const FAB_LAYOUT: readonly FabLayoutTool[]` 定义。旧 P2 CPU 数据门禁遗漏了 RH/LH 和预览相机差异；现补充真实 Next→Lite 的 ISO/TOP/L1/B1/DUAL 对照，121 台机台及 56 个黄光对象最大投影边界误差 < 0.00003 px。B1/DUAL 保留 L1 对象且 DUAL 不下移 B1。详见 [LAYOUT_PARITY.md](./LAYOUT_PARITY.md)。照明和阴影仍未对齐，不据此接受完整外观。
 
 ## 本轮实现决策
 

@@ -2,6 +2,8 @@
 
 当前验收独立原生生命周期、P2a 设备和 P2b 厂房静态几何。产品状态仍是 `IMPLEMENTING / NOT_PARITY_VERIFIED`。最新完整记录见 [P2_STATIC_STRUCTURE.md](./P2_STATIC_STRUCTURE.md)，P2a 历史记录见 [P2_EQUIPMENT.md](./P2_EQUIPMENT.md)。
 
+位置问题的后续修复见 [LAYOUT_PARITY.md](./LAYOUT_PARITY.md)：保留 TS 设备清单，修复坐标系/相机与楼层状态；实际 Next 与 Lite 五视角的 121 台机台、56 个黄光对象最大投影边界差 < 0.00003 px。此前 CPU 几何/可绘制性通过不能用于推断显示位置已对齐；本项也不接受照明、阴影和整图 Golden。
+
 | 检查 | 结果 | 证据 |
 |---|---|---|
 | 迁移前前端基线 | PASS：49 文件、190 测试，typecheck/build | [baseline-tests.txt](./evidence/baseline-tests.txt)、[baseline-typecheck.txt](./evidence/baseline-typecheck.txt)、[baseline-build.txt](./evidence/baseline-build.txt) |
