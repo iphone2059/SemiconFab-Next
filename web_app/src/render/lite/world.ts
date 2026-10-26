@@ -54,7 +54,8 @@ export interface LiteWorldDiagnostics {
       readonly fails: number; readonly lastHit: boolean | null; readonly lastThinInstance: number | null; readonly lastError: string | null } };
   readonly wafer: { readonly markerVisible: boolean; readonly position: Point; readonly rotationY: number;
     readonly lightIntensity: number; readonly trailVisible: boolean; readonly trailIndexCount: number };
-  readonly xray: { readonly filter: XRayFilter | null; readonly shaderMeshes: number; readonly shadowLinked: boolean };
+  readonly xray: { readonly filter: XRayFilter | null; readonly shaderMeshes: number; readonly shadowLinked: boolean;
+    readonly targets: { readonly equipment: number; readonly floor: number; readonly subfab: number; readonly oht: number } };
   readonly structure: { readonly floorAlpha: number; readonly slabVisible: boolean; readonly shellVisible: boolean;
     readonly b1Visible: boolean; readonly b1Offset: number; readonly shellOffset: number };
   readonly facility: { readonly ceilingVisible: boolean; readonly ceilingOffset: number };
@@ -223,6 +224,8 @@ export async function createLiteWorld(
   }
 
   try {
+    // Observe uncaptured GPU validation errors from the very first native allocation of this world.
+    detachGpuError = onEngineGpuError(engine, error => gpuErrors.push(error.message));
     stage('equipment');
     equipment = createLiteEquipment(scene, engine);
     stage('structure');
@@ -244,7 +247,6 @@ export async function createLiteWorld(
       getToolState: index => toolStateCache[index] ?? 'running',
       hoverPickMs: Math.max(0, Number(new URLSearchParams(location.search).get('hoverPickMs') ?? '50') || 0),
     });
-    detachGpuError = onEngineGpuError(engine, error => gpuErrors.push(error.message));
     lighting = createLiteLighting(scene, [...structure.lights, ...facility.lights]);
     const frameNodes: SceneNode[] = [
       ...equipment.batches.map(batch => batch.mesh),
@@ -518,7 +520,8 @@ export async function createLiteWorld(
           trailVisible: trail ? trail.visible !== false : false,
           trailIndexCount: trail ? getMeshIndexedDrawInfo(trail).indexCount ?? 0 : 0,
         },
-        xray: { filter: xrayFilter, shaderMeshes: xrayMeshes, shadowLinked: effects?.shadowLinked ?? false },
+        xray: { filter: xrayFilter, shaderMeshes: xrayMeshes, shadowLinked: effects?.shadowLinked ?? false,
+          targets: effects?.targetCounts ?? { equipment: 0, floor: 0, subfab: 0, oht: 0 } },
         structure: {
           floorAlpha: floorMaterial?.alpha ?? 1,
           slabVisible: slab ? slab.visible !== false : false,

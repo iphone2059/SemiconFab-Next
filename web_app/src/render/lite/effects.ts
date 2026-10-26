@@ -57,6 +57,8 @@ export interface LiteEffects {
   bindShadows(generator: ShadowGenerator): void;
   /** True once the CSM depth texture is actually bound (after the transition warm-up). */
   readonly shadowLinked: boolean;
+  /** Acceptance diagnostics: configured X-Ray target counts per source role. */
+  readonly targetCounts: { readonly equipment: number; readonly floor: number; readonly subfab: number; readonly oht: number };
   prepareForDeviceRecovery(): void;
   dispose(): void;
 }
@@ -713,6 +715,11 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
     setWaferTrail,
     bindShadows,
     get shadowLinked() { return shadowWarmupFrames === 0 && !!shadowTexture && !!shadowData; },
+    get targetCounts() {
+      const counts = { equipment: 0, floor: 0, subfab: 0, oht: 0 };
+      for (const target of xrayTargets) counts[target.role] += 1;
+      return counts;
+    },
     prepareForDeviceRecovery,
     dispose,
   };

@@ -210,3 +210,17 @@ residual risks, not merge blockers.
   after the frozen acceptance/perf/soak runs, so the recorded evidence still matches the tree.
 - Final tree verification after these docs edits: `tsc --noEmit` 0, `vitest run` 51 files / 238 tests
   pass, `vite build` 0; import/dangling scan 0; `git status` contains only migration work.
+
+## Post-review deltas (round 2, re-verified on a new final build)
+
+- GPU validation-error subscription moved to the very start of world composition (M-6 partial).
+- X-Ray target-count diagnostics added (equipment/floor/subfab/oht) for the visual investigation.
+- `tests/support/png.ts` now has direct unit tests (`png-support.test.ts`; suite is 52 files / 241 tests).
+- Stale unmapped `personnel-keyframes.browser.ts` removed; dangling `decodePng` imports repaired.
+- Frozen-clock visual A/B produced with the reference GOLDEN_CLOCK for 7 views; results and the
+  quantified X-Ray visual gap (43.86 mean abs vs 8.19–19.83 structural) recorded in the evidence
+  README §3 and FEATURE_GAPS item 2.
+- All acceptance gates were re-run on the new final build: Chrome 155 and Edge 156 product + UI
+  suites PASS with 0 errors; production perf A/B 57.2/52.2 vs 16.1/15.5 fps; 1-minute soak 56.3 fps
+  / 0 long tasks / 0 GPU+console errors. The reviewer's D-1 remains closed and no new blocker was
+  introduced.

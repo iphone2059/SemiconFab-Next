@@ -1,7 +1,7 @@
 {
   "suite": "lite-product",
   "baseUrl": "http://127.0.0.1:5178",
-  "capturedAt": "2026-10-26T15:26:33.242Z",
+  "capturedAt": "2026-10-26T15:55:48.189Z",
   "viewport": "1536x735 DPR1 foreground tab",
   "result": {
     "steps": [
@@ -122,7 +122,7 @@
         "name": "wafer",
         "ok": true,
         "value": {
-          "trailIndexCount": 6
+          "trailIndexCount": 4
         }
       },
       {
@@ -168,7 +168,7 @@
       "gpuErrors": 0
     },
     "lifecycle": {
-      "backendId": "1e14171a-af0e-4938-ba6f-3f1bd42aa12b",
+      "backendId": "cc28d543-5a4d-4a59-9fc4-c7fa8bf6e3c8",
       "statuses": [
         "initializing",
         "ready",

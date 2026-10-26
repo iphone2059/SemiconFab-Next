@@ -1,11 +1,10 @@
-# Native Lite product completion evidence — 2026-10-26
+# Native Lite product completion evidence — 2026-10-26 (final build)
 
 Status: **IMPLEMENTING / NOT_PARITY_VERIFIED**. This package records product-level evidence for the
-**/twin** page running the native Babylon Lite 1.36 renderer (not the bounded fixture preview). The
-final code freeze build is the one produced after the P11 cleanup and the device-loss disposal/queue
-fixes; the whole-product frozen-clock Golden, non-Chromium browser coverage, the user-directed
-60-minute soak replacement and the independent review status are stated explicitly below and in
-[VALIDATION.md](../VALIDATION.md).
+**/twin** page running the native Babylon Lite 1.36 renderer. The recorded build is the final code
+freeze after the P11 cleanup, the device-loss disposal/queue fixes, the GPU-error subscription move,
+the frozen-clock visual pass and the PNG-decoder unit tests. Full parity is **not** claimed: see
+§8 for open gates and the documented X-Ray visual gap.
 
 Environment: Chrome **155.0.8059.86** and Edge **156.0.4314.42** on Windows, viewport **1536x735
 DPR 1**, local API at 127.0.0.1:5080 (Development), Lite production preview at 127.0.0.1:5178,
@@ -15,25 +14,24 @@ frozen pre-migration Next reference worktree (commit `0b35ca5`) built and previe
 ## 1. Native product acceptance — PASS (0 console errors, Chrome + Edge)
 
 `web_app/tests/twin-lite.browser.ts` driven by `node tools/run_twin_browser.mjs lite-product`.
-Final-build evidence: [acceptance-final-run.json](./acceptance-final-run.json),
-[acceptance-final-run.png](./acceptance-final-run.png); Edge run:
-[acceptance-edge.json](./acceptance-edge.json), [acceptance-edge.png](./acceptance-edge.png).
+Final-build evidence: [acceptance.json](./acceptance.json), [acceptance.png](./acceptance.png);
+Edge run: [acceptance-edge.json](./acceptance-edge.json), [acceptance-edge.png](./acceptance-edge.png).
 
 | Area | Assertion |
 |---|---|
-| First frame | status reaches `WebGPU · 程序化 FAB · 121 台设备`; screenshot at the asserted 1536x735 runner viewport; 0 console errors |
+| First frame | status reaches `WebGPU · 程序化 FAB · 121 台设备`; runner viewport 1536x735; 0 console errors |
 | Picking | projected tool caught by native GPU pick; hover card, inspector, selection wireframe box visible; ESC clears |
 | Focus | double-click focuses the selected tool (camera target = selection visual centre, reflected Z once) |
 | Camera | ISO `[38,48,58]`, Top `[0,95,0.1]`, Litho `[-21,3.6,-12.5]`, Airlock `[-12.5,4.2,7.5]` presets exact; orbit drag changes pose; wheel zoom is page-owned; live resize to 1280x640 |
 | Levels | L1 floor alpha 1 / B1 0.2 / DUAL 0.35 / EXPLODED 0.55, slab+ceiling+subfab visibility, ceiling lift >15 m, subfab drop <-13 m, offsets reset |
-| Layers | roof (assertion: >0 native exhaust particle sprites; source data has 70), ceiling, subfab/piping, heatmap texture updates, airflow clock advances, AMHS layer hide/show |
+| Layers | roof (>0 native exhaust particle sprites; source data has 70), ceiling, subfab/piping, heatmap texture updates, airflow clock advances, AMHS layer hide/show |
 | Tool states | inspector MAINT reaches the native frame loop within the up-to-5 s frame-sync poll window; 121 states after each recovery |
 | X-Ray | all/vac filters, hologram materials active, subfab forced visible, restore removes all `fab-xray-*` materials and returns L1 |
 | Section cut | Z +12 => `[0,0,-1,-12]`; invert => `[0,0,1,12]`; exclusive spatial mode clears cut for X-Ray; cut off => null |
 | Wafer | marker visible/moving, additive trail draws (>0 indices), follow camera targets the marker, close hides marker/trail |
 | Tour / patrol | tour card animates the camera and closes; patrol focus targets the walking engineer |
 | Language | zh <-> en product toggle keeps the scene ready |
-| Device loss x3 | cut / X-Ray / no-spatial-mode rounds; after each of three real WebGPU device losses: 0 GPU validation errors, all 121 tool states present, camera pose preserved, cut plane or X-Ray materials restored, roof layer restored, and in the no-mode round the **canvas selection index + wireframe** are restored; Redux tool-state sync resumes afterwards. A loss during the replacement build queues another rebuild instead of silently falling back to in-place native recovery. |
+| Device loss x3 | cut / X-Ray / no-spatial-mode rounds; after each of three real WebGPU device losses: 0 GPU validation errors, all 121 tool states present, camera pose preserved, cut plane or X-Ray materials restored, roof layer restored, and in the no-mode round the canvas selection index + wireframe are restored; Redux tool-state sync resumes. A loss during the replacement build queues another rebuild instead of silently falling back to in-place native recovery. |
 
 Product device-loss strategy (documented integration decision): the native scene is **rebuilt on the
 replacement device** and the user camera pose/selection are restored; Lite in-place scene recovery is
@@ -44,29 +42,38 @@ Standard materials are deliberate, documented exclusions (see [FEATURE_GAPS.md](
 
 `web_app/tests/twin.browser.ts` runs unchanged against the Lite /twin page: controls, exclusive
 spatial modes, ESC behavior, English-only sweep, font floor, modals, wafer panel, tour card,
-singleton page. Evidence: [ui-final-run.json](./ui-final-run.json),
-[ui-edge.json](./ui-edge.json), screenshots alongside.
+singleton page. Evidence: [ui.json](./ui.json), [ui-edge.json](./ui-edge.json), screenshots alongside.
 
-## 3. Visual A/B against the frozen pre-migration Next renderer
+## 3. Frozen-clock visual A/B against the frozen pre-migration Next renderer
 
-Method: same Chrome/profile, same viewport 1536x735 DPR 1, both pages at `WebGPU ·`, HUD visible
-(outside the ROI), default dynamic demo state, screenshots captured view-by-view with the same HUD
-buttons. ROI `[400,120,1500,680]`, Pillow absolute RGB difference, no colour correction. Raw:
-[pixel-diff.json](./pixel-diff.json), [screenshot-manifest.json](./screenshot-manifest.json),
-screenshots `ref-*.png` / `lite-*.png`. Capture/diff tooling lives in the session `.local/` scratch
-scripts and is not committed; the method above is reproducible from those files.
+Method: both pages are captured under the frozen clock from the reference golden harness
+(`GOLDEN_CLOCK`: fixed 16.667 ms virtual frames, seeded `Math.random`, fixed `Date.now`), injected
+via CDP `Page.addScriptToEvaluateOnNewDocument` before load and advanced only by
+`__twinGoldenClock.step(n)` to the same virtual frame counts on both sides: 180 settle frames after
+`WebGPU ·`, then ISO, Top, B1, Dual, L1→Exploded, Cut, X-Ray views with 120–700 frames each for
+camera/level/explosion easing. Same Chrome/profile, viewport 1536x735 DPR 1, HUD visible outside the
+ROI, ROI `[400,120,1500,680]`, Pillow absolute RGB difference, no colour correction. Raw:
+[frozen-clock-diff.json](./frozen-clock-diff.json),
+[frozen-clock-manifest.json](./frozen-clock-manifest.json), screenshots `ref-*.png` / `lite-*.png`.
 
 | View | mean abs channel diff | pixels changed >24 |
 |---|---|---|
-| ISO | 10.301 | 15.6% |
-| TOP | 13.721 | 20.9% |
-| B1 | 17.666 | 29.1% |
-| DUAL | 20.480 | 37.9% |
-| EXPLODED | 14.593 | 22.4% |
+| ISO | 9.834 | 15.0% |
+| TOP | 13.406 | 20.3% |
+| B1 | 17.668 | 29.0% |
+| DUAL | 19.834 | 37.1% |
+| EXPLODED | 8.191 | 10.9% |
+| CUT (X axis) | 5.111 | 7.9% |
+| X-RAY (all) | 43.860 | 56.3% |
 
-Residual comes from (a) AMHS/personnel/demo animation phase not being clock-frozen across the two
-separate pages, (b) known hologram/cut exclusions, (c) remaining light/shadow response differences.
-This is a **comparison, not a Golden PASS**; a frozen-clock product golden run is still NOT_RUN.
+Free-running earlier captures (no frozen clock) are superseded: ISO 10.301 / TOP 13.721 / B1 17.666 /
+DUAL 20.480 / EXPLODED 14.593. Freezing removed the dynamic-phase noise (notably EXPLODED
+14.593 → 8.191) and exposed the real remaining gaps. **X-Ray is a known visual gap**: the product
+palette does not sample the CSM depth texture (WebGPU usage conflict in refit frames) and the frozen
+frame is much lighter than the reference hologram; it is recorded as a limitation, not a pass.
+
+This is a **frozen-clock comparison, not a Golden PASS**: the migration guide does not define a
+whole-product golden threshold and the X-Ray gap is visible. Whole-product Golden remains NOT_RUN.
 
 ## 4. Performance A/B on production preview builds
 
@@ -76,20 +83,20 @@ Method: 5 s warmup, 8 s idle + 6 s orbit sampling of rAF deltas, same Chrome/vie
 
 | Renderer | idle fps | orbit fps |
 |---|---|---|
-| Native Lite (production) | 54.3 | 51.4 |
-| Frozen Next 0b35ca5 (production) | 15.9 | 12.9 |
+| Native Lite (production) | 57.2 | 52.2 |
+| Frozen Next 0b35ca5 (production) | 16.1 | 15.5 |
 
 Both runs 0 console errors. Raw JS payload: Lite `gpu` chunk 396,492 B (Lite engine only;
 `lite-backend` 2,359,121 B includes the 2.28 MB frozen static-structure data) vs frozen old renderer
-`gpu` chunk 2,528,822 B (old core). No old-engine symbols in the Lite dist. Gzip sizes are not
-asserted in this report (they vary with the compressor used).
+`gpu` chunk 2,528,822 B (old core). No old-engine symbols in the Lite dist; gzip sizes are not
+asserted here.
 
 ## 5. Soak (user-directed 1-minute run; 60-minute NOT_RUN)
 
 The session owner explicitly replaced the planned 60-minute soak with a 1-minute soak. Final-build
-result: 3,330 frames, mean frame 18.01 ms (**55.5 fps**), p95 33.4 ms, p99 33.5 ms, **0 long tasks**,
-heap 42.9 MB, 0 GPU validation errors, 0 console errors, status stable at
-`WebGPU · 程序化 FAB · 121 台设备`. Raw: [soak-final.json](./soak-final.json).
+result: 3,379 frames, mean frame 17.75 ms (**56.3 fps**), p95 33.4 ms, p99 33.5 ms, **0 long tasks**,
+heap 29.6 MB, 0 GPU validation errors, 0 console errors, status stable at
+`WebGPU · 程序化 FAB · 121 台设备`. Raw: [soak.json](./soak.json).
 A 60-minute soak remains **NOT_RUN** by instruction; it is not reported as passed.
 
 ## 6. Browser matrix
@@ -107,23 +114,27 @@ downloaded; non-Chromium coverage is **NOT_RUN**.
 - 17 obsolete legacy renderer sources deleted after import-graph verification (old
   `babylon-webgpu`/`legacy-site` backend, procedural/original builders, native static shadows,
   aerodynamics, xray-hologram, babylon-lifecycle).
-- Legacy internal-scene acceptance/unit modules and their capture helpers deleted or rewritten; the
-  retained suite is 51 Vitest files / 238 tests plus the CDP product suites above.
-  `lite-facility.test.ts` now compares the native facility against a frozen reference fixture
-  (sha256 provenance of the deleted source).
+- Legacy internal-scene acceptance/unit modules and capture helpers deleted or rewritten; the
+  retained suite is **52 Vitest files / 241 tests** plus the CDP product suites above.
+  `lite-facility.test.ts` compares the native facility against a frozen reference fixture (sha256
+  provenance of the deleted source); `png-support.test.ts` covers the acceptance PNG decoder.
 - Stale CDP suites and `tools/run_twin_browser.mjs` mappings removed; the product matrix is
-  `twin-lite.browser.ts`, DOM regression is `twin.browser.ts`. `decodePng` now lives in
+  `twin-lite.browser.ts`, DOM regression is `twin.browser.ts`. `decodePng` lives in
   `tests/support/png.ts`.
 - `@babylonjs/core` removed from `web_app/package.json`; lockfile updated with the repo-pinned pnpm
   and validated with `--frozen-lockfile`.
 - Import gate: 0 `@babylonjs/core`/`lite-compat`/three/legacy-module imports in `web_app/src`,
   `web_app/tests`, vite configs and `tools`; dist grep for `WebGPUEngine`/`NullEngine`/
   `SceneInstrumentation`/old plugin symbols returns 0.
-- Verification after cleanup: `tsc --noEmit` 0; `vitest run` 51 files / 238 tests; `vite build` 0.
+- Verification after cleanup and final fixes: `tsc --noEmit` 0; `vitest run` 52 files / 241 tests;
+  `vite build` 0.
 
-## 8. Still open
+## 8. Still open / limitations
 
-- Frozen-clock whole-product Golden: **NOT_RUN**.
-- 60-minute soak: **NOT_RUN** (replaced by the user-directed 1-minute soak).
-- Non-Chromium browser coverage: **NOT_RUN** (browser unavailable).
-- Independent review: findings closed in `REVIEW.md` when the reviewer finalises against this freeze.
+- Whole-product frozen-clock **Golden: NOT_RUN**; frozen-clock comparison above is the closest
+  recorded evidence. **X-Ray visual gap** (frozen mean diff 43.86) is accepted as a documented
+  limitation.
+- 60-minute soak: **NOT_RUN** (user-directed 1-minute soak instead).
+- Non-Chromium browser coverage: **NOT_RUN** (no such browser available).
+- Residual review items (camera-restore timer ordering, cascading-loss queue untested, clip scope for
+  Standard/overlay surfaces, cut not pixel-asserted) remain tracked in [REVIEW.md](./REVIEW.md).

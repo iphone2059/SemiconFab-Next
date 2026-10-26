@@ -25,11 +25,11 @@ P4/P5 审查修复另证实 [LITE-GAP-RECOVERY-002](./LITE-GAP-RECOVERY-002.md)�
 ## 产品完成阶段（P3/P6–P11）新增缺口与决策 — 2026-10-26
 
 1. **整产品设备丢失策略 = 替换设备上重建原生场景**。Lite 1.36 原生 in-place Scene 恢复会重放记录的材质组/Standard MaterialPlugin UBO；产品一旦启用过 X-Ray 的 ShaderMaterial 调色板并要求稳定恢复，该路径会抛错（`rebuilding material groups`/missing sampler/旧 device buffer）。产品 backend 因此在 lost 时释放旧 runtime 与新设备上重建 world，并恢复相机位姿、选中项；React/Redux 重新施加楼层/图层/X-Ray/剖切/工具状态。bounded `lite-*` 夹具继续验证原生 in-place 恢复路径。产品三次丢失、0 GPU/console 错误、状态保持已实测（证据包）。
-2. **X-Ray 全息不再采样 CSM 深度**。1.36 在 X-Ray 激活的材质重建帧里，同一 2 层 depth texture 既是 CSM render attachment 又是全息 sampler，WebGPU 拒绝该 usage scope（每次激活约 16 条 validation error）。产品调色板绑定自有的 1×1 sampled depth，关闭 `xrayShadowEnabled`；原生 PBR/Standard 表面保持完整阴影。全息描边/扫描线主外观保留，损失源全息中的阴影调制。
+2. **X-Ray 全息不再采样 CSM 深度**。1.36 在 X-Ray 激活的材质重建帧里，同一 2 层 depth texture 既是 CSM render attachment 又是全息 sampler，WebGPU 拒绝该 usage scope（每次激活约 16 条 validation error）。产品调色板绑定自有的 1×1 sampled depth，关闭 `xrayShadowEnabled`；原生 PBR/Standard 表面保持完整阴影。全息描边/扫描线主外观保留，损失源全息中的阴影调制。冻结时钟视觉 A/B 显示该缺口可量化：X-Ray 视角 ROI 均值差 43.86（其余结构视角 8.19–19.83），产品全息帧整体偏亮；作为已知视觉缺口记录，不宣布 X-Ray 视觉通过。
 3. **剖切仅裁剪原生 PBR 材质**。Standard MaterialPlugin 的 plugin UBO 不由 1.36 原生恢复重建；为避免产品恢复路径被破坏，产品不对 Standard 材质（OHT/人员等动态 actor）挂剖切插件，保留其源外观。整厂房/设备/设施/地板/环境等 PBR 表面均被裁剪。
 4. **X-Ray/剖切互斥与楼层/爆炸组合** 沿用冻结 `spatialState` 语义（单一 spatialMode），产品验收已覆盖。
 5. **旧引擎验收套件清退**：删除 `twin-wafer/level/exploded/parity/goldens/tour/xray-acceptance/original-lighting/native-static-shadows` 等依赖旧 Scene 内部结构或已删除构建器的套件；产品行为由 `tests/twin-lite.browser.ts`（真实 /twin）覆盖，DOM 回归保留 `twin.browser.ts`。冻结时钟的 tour 时序 Golden 因此 NOT_RUN。
 6. **跨浏览器矩阵 PARTIAL**：Chrome 155 与 Edge 156（Chromium/WebGPU 实测）产品验收与 UI 回归均 PASS；非 Chromium WebGPU 浏览器本机不可用且未下载，NOT_RUN。
-7. **整产品 Golden NOT_RUN**：对照为同机逐视角截图比较（证据包 §3），动态系统时钟未冻结，不能当 Golden PASS；生产构建验收、性能 A/B、三次恢复已通过。按用户指示以 1 分钟 soak 替代 60 分钟（最终生产构建 55.5 fps、0 long task、0 GPU/console 错误）；60 分钟 soak 因此 NOT_RUN。
+7. **整产品 Golden NOT_RUN**：已用参考 golden 的 GOLDEN_CLOCK 手动步进做冻结时钟 7 视角比较（证据包 §3：ISO 9.83 / TOP 13.41 / B1 17.67 / DUAL 19.83 / EXPLODED 8.19 / CUT 5.11 / X-RAY 43.86），但迁移指南未定义整产品 Golden 阈值且 X-Ray 缺口可见，不能当 Golden PASS；生产构建验收、性能 A/B、三次恢复已通过。按用户指示以 1 分钟 soak 替代 60 分钟（最终生产构建 56.3 fps、0 long task、0 GPU/console 错误、heap 29.6 MB）；60 分钟 soak 因此 NOT_RUN。
 8. **独立审查**：无 Critical/阻塞缺陷；1 项 docs-only Important（文档与冻结证据口径，本轮已修）与 10 项 Minor 残留风险（camera 恢复计时顺序、restartPending 无自动化覆盖、gpuErrors 订阅时机、cut 无像素断言、decodePng 无单测等）记录于 [REVIEW.md](./evidence/product-completion-2026-10-26/REVIEW.md)。
 
