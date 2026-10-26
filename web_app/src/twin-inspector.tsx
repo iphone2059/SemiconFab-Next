@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useTwinLocale } from './twin-i18n';
-import { useAppDispatch, useAppSelector } from './store/hooks';
-import { twinPageActions } from './store/twinUiSlice';
+import { useTwinPageStore, twinPageActions } from './state/twinPageStore';
+import { useTwinDemoStore } from './state/twinDemoStore';
 import { ORIGINAL_TWIN_UI, localizedEquipment, type TwinSelection } from './original-twin-data';
 import type { FabToolState } from './fab-layout';
 import { OriginalElevation } from './twin-elevation';
@@ -25,14 +25,13 @@ export function OriginalInspector({selection,states,onClose,onManualKey,onSelect
   const equipment = selection.kind==='reference' ? localizedEquipment(selection.id,language) ?? ORIGINAL_TWIN_UI.equipment.find(row=>row.id===selection.id) : undefined;
   const oem = selection.kind==='oem' ? ORIGINAL_TWIN_UI.oem.find(row=>row.id===selection.id) : undefined;
   const processEquipment = selection.kind==='reference' ? ORIGINAL_TWIN_UI.equipment.find(row=>row.id===selection.id) : undefined;
-  const telemetry = useAppSelector(state=>processEquipment ? state.twinDemo.telemetry[processEquipment.id] : undefined);
+  const telemetry = useTwinDemoStore(state=>processEquipment ? state.telemetry[processEquipment.id] : undefined);
   const spc = useMemo(()=>telemetry?computeSpc(telemetry.history,telemetry.sensors[0],(states[equipment?.id??'']??'running')==='down'):undefined,[telemetry,states,equipment?.id]);
-  const dispatch=useAppDispatch();
-  const storedMes=useAppSelector(state=>equipment ? state.twinPage.inspectorMes[equipment.id] : undefined);
+  const storedMes=useTwinPageStore(state=>equipment ? state.inspectorMes[equipment.id] : undefined);
   const initialMes=useMemo(()=>processEquipment?createProcessMesJob(processEquipment):undefined,[processEquipment]);
   const mes=storedMes??initialMes;
-  useEffect(()=>{if(processEquipment&&initialMes&&!storedMes)dispatch(twinPageActions.inspectorMesSet({id:processEquipment.id,job:initialMes}));},[processEquipment,initialMes,storedMes,dispatch]);
-  const setMes=(update:(current:MesJob|undefined)=>MesJob|undefined)=>{const job=update(mes)??mes;if(equipment&&job)dispatch(twinPageActions.inspectorMesSet({id:equipment.id,job}));};
+  useEffect(()=>{if(processEquipment&&initialMes&&!storedMes)twinPageActions.inspectorMesSet({id:processEquipment.id,job:initialMes});},[processEquipment,initialMes,storedMes]);
+  const setMes=(update:(current:MesJob|undefined)=>MesJob|undefined)=>{const job=update(mes)??mes;if(equipment&&job)twinPageActions.inspectorMesSet({id:equipment.id,job});};
   if(selection.kind==='layout')return null;
   if(selection.kind==='oem'&&oem) {
     return <aside className="twin-inspector original-inspector" aria-label={t('设备详情')}>

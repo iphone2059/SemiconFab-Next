@@ -1,11 +1,16 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { expect, it } from 'vitest';
+import { beforeEach, expect, it } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Provider } from 'react-redux';
 import type { CatalogEntryDto } from '../src/contracts';
 import { CatalogComparison, CatalogPage, RecordFields } from '../src/catalog-page';
 import { catalogQueryOptions } from '../src/api/queries/catalog.queries';
-import { store } from '../src/store/store';
+import { resetCatalogStore } from '../src/state/catalogStore';
+import { resetLocaleStore } from '../src/state/localeStore';
+
+beforeEach(() => {
+  resetCatalogStore();
+  resetLocaleStore();
+});
 
 const entry: CatalogEntryDto = {
   recordId: '3acd7b05-e6e8-5312-bb5b-045e7dd3074b',
@@ -92,11 +97,9 @@ it('renders the migrated catalog page from the shared Query cache', () => {
     items: [serverEntry],
   });
   const html = renderToStaticMarkup(
-    <Provider store={store}>
-      <QueryClientProvider client={queryClient}>
-        <CatalogPage view="catalog" />
-      </QueryClientProvider>
-    </Provider>,
+    <QueryClientProvider client={queryClient}>
+      <CatalogPage view="catalog" />
+    </QueryClientProvider>,
   );
   expect(html).toContain('FPA');
   expect(html).toContain('SNAPSHOT legacy-test');

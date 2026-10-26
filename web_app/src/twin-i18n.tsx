@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, type PropsWithChildren } from 'react';
-import { useAppDispatch, useAppSelector } from './store/hooks';
-import { localeActions } from './store/localeSlice';
+import { useLocaleStore, localeActions } from './state/localeStore';
 import { TWIN_EN } from './twin-translations';
 import { GENERATED_TWIN_EN } from './twin-translations.generated';
 import { languageTag } from './preferences';
@@ -28,8 +27,7 @@ const TwinLocale = createContext({ language: 'zh' as TwinLanguage, t: twinTransl
 export const useTwinLocale = () => useContext(TwinLocale);
 
 export function TwinLocaleProvider({ children }: PropsWithChildren) {
-  const dispatch = useAppDispatch();
-  const language = useAppSelector((state) => state.locale.language);
+  const language = useLocaleStore((state) => state.language);
   useEffect(() => {
     try { persistTwinLanguage(localStorage, language); } catch { /* Storage getter can also be denied. */ }
     document.documentElement.lang = languageTag(language);
@@ -38,6 +36,6 @@ export function TwinLocaleProvider({ children }: PropsWithChildren) {
     url.searchParams.set('lang', languageTag(language));
     history.replaceState({}, '', url);
   }, [language]);
-  const value = useMemo(() => ({ language, t: twinTranslator(language), toggleLanguage: () => dispatch(localeActions.languageToggled()) }), [language, dispatch]);
+  const value = useMemo(() => ({ language, t: twinTranslator(language), toggleLanguage: () => localeActions.languageToggled() }), [language]);
   return <TwinLocale.Provider value={value}>{children}</TwinLocale.Provider>;
 }

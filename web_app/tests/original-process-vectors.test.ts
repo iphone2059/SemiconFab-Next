@@ -4,7 +4,7 @@ import { createProcessTelemetry, createProcessMesJob, advanceProcessTelemetry, a
 import { createDemoState, demoReducer } from '../src/twin-equipment';
 import { computeFabYield, YIELD_SCENARIOS } from '../src/fab-yield';
 import { generateWaferMap, stdfSummary, type DefectPattern, type WaferDie } from '../src/wafer-map';
-import { twinDemoSlice } from '../src/store/twinDemoSlice';
+import { initialTwinDemoState } from '../src/state/twinDemoStore';
 
 type SourceTelemetry = Omit<Telemetry, 'sensors' | 'soh'> & {
   soh: string; sensors: { name: string; unit: string; val: number; min: number; max: number }[];
@@ -16,8 +16,8 @@ function randomStream(seed: number) {
 }
 const normalize = (value: SourceTelemetry): Telemetry => ({ ...value, soh: Number(value.soh), sensors: value.sensors.map(({ val, ...sensor }) => ({ ...sensor, value: val })) });
 
-it('starts the actual Redux slice at the certified initialization without an extra scenario draw', () => {
-  const state = twinDemoSlice.getInitialState();
+it('starts the actual demo store at the certified initialization without an extra scenario draw', () => {
+  const state = initialTwinDemoState;
   expect(state.seed).toBe(fixture.trace[0].seed);
   expect(Object.keys(state.keys)).toEqual(Object.keys(fixture.trace[0].states));
 });

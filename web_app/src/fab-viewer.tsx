@@ -1,8 +1,7 @@
 import { useTwinLocale } from './twin-i18n';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { useAppDispatch, useAppSelector } from './store/hooks';
-import { runtimeActions } from './store/runtimeSlice';
-import { createCoalescedDispatcher } from './store/telemetry-buffer';
+import { useRuntimeStore, runtimeActions } from './state/runtimeStore';
+import { createCoalescedDispatcher } from './state/telemetry-buffer';
 import type { FabDto, SiteDto } from './contracts';
 import { bindViewerZoom } from './viewer-zoom';
 import { SceneFacade, type AmhsStats, type CutAxis, type HoveredTool, type PickedTool, type SceneLayer, type SceneViewPreset, type XRayFilter } from './fab-scene';
@@ -20,7 +19,7 @@ export interface FabViewportProps {
   dual: boolean;
   onStatusChange?: (status: string) => void;
   onAmhsStatsChange?: (stats: AmhsStats) => void;
-  /** Optional frame-loop source read directly from Redux without a React prop pass. */
+  /** Optional frame-loop source read directly from the store without a React prop pass. */
   getToolStates?: () => readonly FabToolState[];
 }
 
@@ -55,10 +54,9 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
   const canvas = useRef<HTMLCanvasElement>(null);
   const surface = useRef<HTMLDivElement>(null);
   const facade = useRef<SceneFacade | undefined>(undefined);
-  const dispatch = useAppDispatch();
-  const status = useAppSelector(state => state.runtime.viewer.status);
-  const generation = useAppSelector(state => state.runtime.viewer.generation);
-  const hoveredTool = useAppSelector(state => state.runtime.viewer.hover);
+  const status = useRuntimeStore(state => state.viewer.status);
+  const generation = useRuntimeStore(state => state.viewer.generation);
+  const hoveredTool = useRuntimeStore(state => state.viewer.hover);
   const ready = status.startsWith('WebGPU ·') || status.startsWith('WebGPU 设备');
 
   useEffect(() => {
@@ -71,15 +69,15 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
     if (!element) return;
     const controller = new AbortController();
     const epoch = crypto.randomUUID();
-    dispatch(runtimeActions.viewerMounted(epoch));
+    runtimeActions.viewerMounted(epoch);
     const hoverBatcher = createCoalescedDispatcher<HoveredTool | undefined>(hover => {
-      dispatch(runtimeActions.viewerHoverReceived({ epoch, hover }));
+      runtimeActions.viewerHoverReceived({ epoch, hover });
     }, 50);
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       hoverBatcher.cancel();
       facade.current?.clearSelection();
-      dispatch(runtimeActions.viewerHoverCleared());
+      runtimeActions.viewerHoverCleared();
     };
     window.addEventListener('keydown', onKeyDown);
     let scene: SceneFacade | undefined;
@@ -94,7 +92,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
           [{ fabId: fab.fabId, code: fab.code, position: [0, 0, 0] }],
           (value) => {
             if (controller.signal.aborted) return;
-            dispatch(runtimeActions.viewerStatusReceived({ epoch, status: value }));
+            runtimeActions.viewerStatusReceived({ epoch, status: value });
             onStatusChange?.(value);
           },
           (tool) => { onToolChange?.(tool ?? undefined); },
@@ -106,7 +104,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
           const status = error instanceof Error ? error.message : t("场景初始化失败");
-          dispatch(runtimeActions.viewerStatusReceived({ epoch, status }));
+          runtimeActions.viewerStatusReceived({ epoch, status });
           onStatusChange?.(status);
         }
       });
@@ -114,7 +112,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
       controller.abort();
       hoverBatcher.cancel();
       window.removeEventListener('keydown', onKeyDown);
-      dispatch(runtimeActions.viewerUnmounted(epoch));
+      runtimeActions.viewerUnmounted(epoch);
       if (facade.current === scene) facade.current = undefined;
       scene?.dispose();
     };
@@ -128,7 +126,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
       getCameraPose: () => facade.current?.getCameraPose() ?? null,
       zoom: (deltaY) => facade.current?.zoom(deltaY),
       resize: () => facade.current?.resize(),
-      reload: () => { dispatch(runtimeActions.viewerReloadRequested()); },
+      reload: () => { runtimeActions.viewerReloadRequested(); },
       selectTool: (index, focus) => facade.current?.selectTool(index, focus),
       clearSelection: () => facade.current?.clearSelection(),
       setLayer: (layer, visible) => facade.current?.setLayer(layer, visible),
@@ -175,7 +173,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
         <strong>{hovered.vendor} {hovered.model}</strong>
         <span>{t(FAB_TOOL_STATE_META[toolStates[hovered.index] ?? hovered.state].label)} · #{hovered.index + 1}</span>
       </div>}
-      {!ready && <div className="twin-render-status" role="status">{status}<button type="button" onClick={() => dispatch(runtimeActions.viewerReloadRequested())}>{t("重新加载")}</button></div>}
+      {!ready && <div className="twin-render-status" role="status">{status}<button type="button" onClick={() => runtimeActions.viewerReloadRequested()}>{t("重新加载")}</button></div>}
     </div>
   );
 });

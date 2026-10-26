@@ -6,12 +6,11 @@ import { Metric } from './widgets';
 import { CompletionBar } from './charting';
 import { ScopeGate } from './state-sync';
 import { validateScenario } from './scenario';
-import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
 import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from './api/queries/runs.queries';
 import { createRun, invalidateRuns } from './api/mutations/runs.mutations';
 import { sitesQueryOptions } from './api/queries/sites.queries';
 import { fab3dPath } from './app/router/url-mapping';
-import { workbenchActions } from './store/workbenchSlice';
+import { useWorkbenchStore, workbenchActions } from './state/workbenchStore';
 const message = (error: unknown): string => {
   if (error instanceof Error) return error.message;
   if (error && typeof error === 'object') {
@@ -30,9 +29,7 @@ const complete = (status: string) => status.toUpperCase() === 'COMPLETED';
 const count = (value: string) => BigInt(value).toLocaleString('zh-CN');
 
 function Workbench({ site }: { site: SiteDto }) {
-  const dispatch = useAppDispatch();
-  const store = useAppStore();
-  const { runId, form, submitError } = useAppSelector((state) => state.workbench);
+  const { runId, form, submitError } = useWorkbenchStore();
   const { lotCount, processTimeUs, durationUs, warmupUs, masterSeed } = form;
   const fab = site.fabs[0];
   const submissionScope = useMemo(() => new ScopeGate(), []);
@@ -58,19 +55,19 @@ function Workbench({ site }: { site: SiteDto }) {
   const submitting = createRunMutation.isPending;
   useEffect(() => () => submissionScope.dispose(), [submissionScope]);
   useEffect(() => {
-    dispatch(workbenchActions.runsReceived({ siteId: site.siteId, runIds: scopedRuns.map((value) => value.runId) }));
-  }, [scopedRuns, site.siteId, dispatch]);
+    workbenchActions.runsReceived({ siteId: site.siteId, runIds: scopedRuns.map((value) => value.runId) });
+  }, [scopedRuns, site.siteId]);
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    dispatch(workbenchActions.submitErrorSet(''));
+    workbenchActions.submitErrorSet('');
     if (!fab) {
-      dispatch(workbenchActions.submitErrorSet('当前站点没有可用的 FAB'));
+      workbenchActions.submitErrorSet('当前站点没有可用的 FAB');
       return;
     }
     const validationError = validateScenario({ lotCount, processTimeUs, durationUs, warmupUs, masterSeed });
     if (validationError) {
-      dispatch(workbenchActions.submitErrorSet(validationError));
+      workbenchActions.submitErrorSet(validationError);
       return;
     }
     const request: CreateRunRequest = {
@@ -80,21 +77,21 @@ function Workbench({ site }: { site: SiteDto }) {
       },
     };
     const json = JSON.stringify(request);
-    dispatch(workbenchActions.submissionPrepared({ json, key: crypto.randomUUID() }));
-    const key = store.getState().workbench.pendingSubmission!.key;
+    workbenchActions.submissionPrepared({ json, key: crypto.randomUUID() });
+    const key = useWorkbenchStore.getState().pendingSubmission!.key;
     const token = submissionScope.begin(site.siteId);
     try {
       const created = await createRunMutation.mutateAsync({ request, idempotencyKey: key });
       if (submissionScope.accepts(token)) {
-        dispatch(workbenchActions.submissionCompleted({ siteId: site.siteId, key, runId: created.runId }));
+        workbenchActions.submissionCompleted({ siteId: site.siteId, key, runId: created.runId });
       }
     } catch (error: unknown) {
-      if (submissionScope.accepts(token)) dispatch(workbenchActions.submitErrorSet(message(error)));
+      if (submissionScope.accepts(token)) workbenchActions.submitErrorSet(message(error));
     }
   }
 
 
-  const setField = (field: 'lotCount' | 'processTimeUs' | 'durationUs' | 'warmupUs' | 'masterSeed', value: string) => dispatch(workbenchActions.formFieldSet({ field, value }));
+  const setField = (field: 'lotCount' | 'processTimeUs' | 'durationUs' | 'warmupUs' | 'masterSeed', value: string) => workbenchActions.formFieldSet({ field, value });
   const displayedRun = run?.runId === runId && run.siteId === site.siteId ? run : undefined;
   const displayedResult = displayedRun && result?.runId === runId ? result : undefined;
   const completedLots = displayedResult?.fabs.reduce(
@@ -275,7 +272,7 @@ function Workbench({ site }: { site: SiteDto }) {
                     <StatusPill status={value.status} />
                   </td>
                   <td>
-                    <button className="text-button" onClick={() => dispatch(workbenchActions.runIdSet(value.runId))}>
+                    <button className="text-button" onClick={() => workbenchActions.runIdSet(value.runId)}>
                       {runId === value.runId ? '当前运行' : '查看运行'} →
                     </button>
                   </td>
@@ -295,16 +292,15 @@ function Workbench({ site }: { site: SiteDto }) {
 }
 
 export default function WorkbenchApp() {
-  const dispatch = useAppDispatch();
-  const siteId = useAppSelector((state) => state.workbench.siteId);
+  const siteId = useWorkbenchStore((state) => state.siteId);
   const sitesQuery = useQuery(sitesQueryOptions());
   const sites = sitesQuery.data ?? [];
   const loading = sitesQuery.isLoading;
   const error = sitesQuery.error ? message(sitesQuery.error) : '';
   useEffect(() => {
     if (sites.length === 0) return;
-    if (!sites.some((value) => value.siteId === siteId)) dispatch(workbenchActions.siteIdSet(sites[0].siteId));
-  }, [sites, siteId, dispatch]);
+    if (!sites.some((value) => value.siteId === siteId)) workbenchActions.siteIdSet(sites[0].siteId);
+  }, [sites, siteId]);
   const site = sites.find((value) => value.siteId === siteId);
   // The 3D link points at the final canonical URL for the selected site's FAB.
   const fabId = site?.fabs[0]?.fabId;
@@ -363,7 +359,7 @@ export default function WorkbenchApp() {
               当前基地
               <select
                 value={siteId}
-                onChange={(event) => dispatch(workbenchActions.siteIdSet(event.target.value))}
+                onChange={(event) => workbenchActions.siteIdSet(event.target.value)}
                 disabled={!sites.length}
               >
                 {!sites.length && <option>等待 API 数据</option>}

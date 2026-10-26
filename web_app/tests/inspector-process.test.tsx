@@ -1,26 +1,32 @@
-import { renderToStaticMarkup } from 'react-dom/server';
-import { Provider } from 'react-redux';
-import { expect, it } from 'vitest';
+// @vitest-environment jsdom
+import { afterEach, beforeEach, expect, it } from 'vitest';
+import { act, cleanup, render } from '@testing-library/react';
 import { OriginalInspector } from '../src/twin-inspector';
 import { ORIGINAL_TWIN_UI } from '../src/original-twin-data';
 import { TwinLocaleProvider } from '../src/twin-i18n';
-import { localeActions } from '../src/store/localeSlice';
-import { store } from '../src/store/store';
-import { twinDemoActions } from '../src/store/twinDemoSlice';
+import { localeActions, resetLocaleStore } from '../src/state/localeStore';
+import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '../src/state/twinDemoStore';
 import { createProcessMesJob } from '../src/process-control';
+
+beforeEach(() => {
+  resetTwinDemoStore();
+  resetLocaleStore();
+});
+afterEach(cleanup);
 
 it('renders clock-owned FDC values and source MES identifiers across ticks and locale switches', () => {
   const equipment = ORIGINAL_TWIN_UI.equipment[0];
-  const render = () => renderToStaticMarkup(<Provider store={store}><TwinLocaleProvider><OriginalInspector
-    selection={{ kind: 'reference', id: equipment.id }} states={store.getState().twinDemo.keys}
-    onClose={() => {}} onManualKey={() => {}} /></TwinLocaleProvider></Provider>);
-  const before = render();
-  expect(before).toContain(createProcessMesJob(equipment, 1000).recipeId);
-  store.dispatch(twinDemoActions.tick());
-  const value = store.getState().twinDemo.telemetry[equipment.id].sensors[0].value.toFixed(2);
-  const after = render();
-  expect(after).toContain(value);
-  expect(after).not.toBe(before);
-  store.dispatch(localeActions.languageToggled());
-  expect(render()).toContain(value);
+  // A client render (unlike static markup) reads the live Zustand snapshot, so
+  // the FDC telemetry below reflects ticks applied after mounting.
+  const { container } = render(<TwinLocaleProvider><OriginalInspector
+    selection={{ kind: 'reference', id: equipment.id }} states={useTwinDemoStore.getState().keys}
+    onClose={() => {}} onManualKey={() => {}} /></TwinLocaleProvider>);
+  expect(container.innerHTML).toContain(createProcessMesJob(equipment, 1000).recipeId);
+  const before = container.innerHTML;
+  act(() => { twinDemoActions.tick(); });
+  const value = useTwinDemoStore.getState().telemetry[equipment.id].sensors[0].value.toFixed(2);
+  expect(container.innerHTML).toContain(value);
+  expect(container.innerHTML).not.toBe(before);
+  act(() => { localeActions.preferencesSet({ language: 'zh', theme: 'light' }); });
+  expect(container.innerHTML).toContain(value);
 });

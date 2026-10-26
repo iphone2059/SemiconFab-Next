@@ -1,9 +1,9 @@
 # 状态管理（State Management）
 
 - 版本：V2.1 / 2026-10-27
-- 状态：**M2a 已实现（服务端数据全部归 TanStack Query）；M2b（Zustand）未开始**（M2a implemented / M2b pending）
+- 状态：**M2 已实现：服务端数据归 TanStack Query，客户端 UI 状态归 Zustand；Redux/react-redux 已删除**（M2 implemented）
 - 依据：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)、[ADR-0010](adr/0010-command-event-bridge.md)；总览见 [架构基线](architecture.md)；路由/Query 细则见 [路由与查询集成](router-query-integration.md)
-- 当前实现：全部 HTTP 端点已由 TanStack Query 拥有，RTK Query 已在 M2a 删除；Redux Toolkit 仅临时承载 7 个客户端 UI slice（M2b 迁 Zustand）。迁移完成前 ADR-0008 对客户端状态的描述仍是代码事实
+- 当前实现：全部 HTTP 端点由 TanStack Query 拥有；客户端 UI 状态由 `web_app/src/state/` 下的 Zustand stores 承载（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale）；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已删除。ADR-0008 已被取代
 - 本文不含任何已完成验证的声明
 
 ## 1. 状态分类与唯一所有权
@@ -144,13 +144,21 @@ HTTP 写入:  用户操作 -> mutation -> HTTP API -> 成功 -> invalidateQuerie
 
 | ADR-0008 内容 | V2.1 处置 |
 |---|---|
-| Redux Toolkit 拥有全部可序列化应用状态 | 迁移后由 Query（服务端）、Router（URL）、Zustand（UI）、XState（工作流）分担；Redux 在 M6 退役 |
+| Redux Toolkit 拥有全部可序列化应用状态 | **已完成（M2b）**：服务端归 Query、UI 归 Zustand、工作流归 XState；Redux 已删除 |
 | RTK Query 拥有服务端缓存 | **已由 TanStack Query 取代（M2a，2026-10-27）**；RTK Query 模块删除，无双缓存 |
 | “Babylon 对象不进入 Redux、遥测合批、帧状态与渲染循环分离” | 原则保留；ARCH-11 进一步要求高频遥测不经过 Query/Zustand/XState，落地形态为 Worker/TypedArray 旁路。当前 `telemetry-buffer.ts` 的 100ms 合批是过渡实现，不等于满足目标 |
 | 页面选择/表单/幂等键在 Redux | 选择/表单可进 URL/组件；命令提交与幂等键归命令链路/`CommandGateway` 管理 |
 
+## 11. M2b 实现记录（2026-10-27）
+
+- Store（`web_app/src/state/`）：`twinUiStore`、`twinPageStore`、`twinDemoStore`、`catalogStore`、`workbenchStore`、`runtimeStore`、`localeStore`；公共 helper `createImmerStore` 用 Immer 承载迁移过来的 reducer 逻辑，actions 为普通 store 方法。
+- 工具：`state/telemetry-buffer.ts` 保留 100ms 合批（ARCH-11 的过渡实现，M5 迁 Worker/TypedArray）。
+- 已删除：`src/store/`（7 slice、hooks、store、api 残留）、`react-redux`、`@reduxjs/toolkit`；`AppProviders` 只保留 QueryClientProvider + ErrorBoundary。
+- 测试：`redux-store.test.ts` 改写为 Zustand 状态/action 测试；需要已挂载状态的组件测试改用 jsdom + Testing Library（Zustand SSR 快照为初始状态）。
+- 证据：`tsc --noEmit` 0；`npx vitest run` 57 文件 / 260 测试 PASS；`vite build` 0；`./scripts/verify.ps1` exit 0。
+- 遗留：目录筛选/对比选择与 Twin 的 `siteId/modal/mode` 仍在页面直接读写 `location`，未迁 Router search；不影响 M2 出口门禁，列入后续清理。
 ## 10. 验证与证据状态
 
-- 状态所有权目前**没有自动化测试**；ARCH-02/05/11 的检查在 M6 前由评审承担，之后计划纳入架构检查（[架构基线](architecture.md) 第 11 节 R-09）。
-- RQ-03（mutation 失效）与 RQ-04（FAB 隔离）是服务端状态规则的主要门禁，当前 SPECIFIED / NOT RUN。
-- 本文档不声称 Zustand/Query/XState 已安装或已接入；仓库 `web_app/package.json` 当前没有这些依赖。
+- Zustand store 与 action 行为由 `web_app/tests/redux-store.test.ts`（已改写为 state-store 测试）、`remaining-state.test.ts` 等覆盖；ARCH-02/05 的自动化静态检查仍在 M6 计划中（[架构基线](architecture.md) R-09）。
+- RQ-03（mutation 失效）与 RQ-04（FAB 隔离）**已运行 PASS**（M2a）。
+- 当前依赖与实现：TanStack Query/Zustand/immer/XState v6 alpha 均已安装；`src/store` 与 Redux/react-redux 已删除（M2b，见 §11）。

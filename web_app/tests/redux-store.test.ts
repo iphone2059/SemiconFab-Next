@@ -1,49 +1,76 @@
-import { expect, it } from 'vitest';
-import { store } from '../src/store/store';
-import { twinUiActions, twinPageActions } from '../src/store/twinUiSlice';
-import { twinDemoActions } from '../src/store/twinDemoSlice';
-import { workbenchActions } from '../src/store/workbenchSlice';
-import { catalogActions } from '../src/store/catalogSlice';
-import { runtimeActions } from '../src/store/runtimeSlice';
+import { beforeEach, expect, it } from 'vitest';
+import { resetTwinUiStore, twinUiActions, useTwinUiStore } from '../src/state/twinUiStore';
+import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '../src/state/twinPageStore';
+import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '../src/state/twinDemoStore';
+import { catalogActions, resetCatalogStore, useCatalogStore } from '../src/state/catalogStore';
+import { resetWorkbenchStore, useWorkbenchStore, workbenchActions } from '../src/state/workbenchStore';
+import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '../src/state/runtimeStore';
+import { resetLocaleStore, useLocaleStore } from '../src/state/localeStore';
 
-it('keeps only the temporary client-UI slices after the M2 RTK Query removal', () => {
-  const state = store.getState();
+/**
+ * M2b replaced the Redux Toolkit store with seven independent Zustand stores.
+ * This historical filename now certifies the replacement: the same seven
+ * client-UI state keys, representative action behaviour and serializable
+ * snapshots, without react-redux or the Redux store.
+ */
+const snapshot = () => ({
+  catalog: useCatalogStore.getState(),
+  locale: useLocaleStore.getState(),
+  runtime: useRuntimeStore.getState(),
+  twinDemo: useTwinDemoStore.getState(),
+  twinPage: useTwinPageStore.getState(),
+  twinUi: useTwinUiStore.getState(),
+  workbench: useWorkbenchStore.getState(),
+});
+
+beforeEach(() => {
+  resetTwinUiStore();
+  resetTwinPageStore();
+  resetTwinDemoStore();
+  resetCatalogStore();
+  resetWorkbenchStore();
+  resetRuntimeStore();
+  resetLocaleStore();
+});
+
+it('keeps the seven client-UI Zustand stores after the M2 RTK Query removal', () => {
+  const state = snapshot();
   expect(Object.keys(state).sort()).toEqual(['catalog', 'locale', 'runtime', 'twinDemo', 'twinPage', 'twinUi', 'workbench']);
   // M2 removed RTK Query entirely; every HTTP endpoint is a TanStack Query module.
   expect('twinApi' in state).toBe(false);
-  expect(typeof store.dispatch).toBe('function');
+  for (const slice of Object.values(state)) expect(typeof slice).toBe('object');
+  expect(() => JSON.stringify(state)).not.toThrow();
 });
 
-it('routes all Twin mode changes through typed slice actions', () => {
-  store.dispatch(twinUiActions.modeSet('visitor'));
-  store.dispatch(twinUiActions.levelSet('B1'));
-  store.dispatch(twinUiActions.spatialToggle('xray'));
-  store.dispatch(twinUiActions.xraySet('gas'));
-  const state = store.getState().twinUi;
+it('routes all Twin mode changes through typed store actions', () => {
+  twinUiActions.modeSet('visitor');
+  twinUiActions.levelSet('B1');
+  twinUiActions.spatialToggle('xray');
+  twinUiActions.xraySet('gas');
+  const state = useTwinUiStore.getState();
   expect(state.entryMode).toBe('visitor');
   expect(state.spatialMode).toBe('xray');
   expect(state.xray).toBe('gas');
   expect(state.level).toBe('B1');
-  store.dispatch(twinUiActions.escape());
-  expect(store.getState().twinUi.onboarding.open).toBe(false);
+  twinUiActions.escape();
+  expect(useTwinUiStore.getState().onboarding.open).toBe(false);
 });
 
 it('keeps page, demo and workbench state serializable and action-owned', () => {
-  store.dispatch(runtimeActions.viewerMounted('test'));
-  store.dispatch(runtimeActions.viewerStatusReceived({ epoch: 'test', status: 'WebGPU · test' }));
-  store.dispatch(twinPageActions.siteIdSet('site-test'));
-  store.dispatch(twinPageActions.layerToggled('roof'));
-  store.dispatch(twinDemoActions.playingSet(false));
-  store.dispatch(workbenchActions.formFieldSet({ field: 'lotCount', value: '12' }));
-  store.dispatch(catalogActions.domainSet('FAB'));
-  store.dispatch(catalogActions.selectedToggled('record-a'));
-  const state = store.getState();
-  expect(state.runtime.viewer.status).toBe('WebGPU · test');
-  expect(state.twinPage.siteId).toBe('site-test');
-  expect(state.twinPage.layerPreferences.roof).toBe(true);
-  expect(state.twinDemo.playing).toBe(false);
-  expect(state.workbench.form.lotCount).toBe('12');
-  expect(state.catalog.domain).toBe('FAB');
-  expect(state.catalog.selected).toEqual(['record-a']);
-  expect(() => JSON.stringify(state)).not.toThrow();
+  runtimeActions.viewerMounted('test');
+  runtimeActions.viewerStatusReceived({ epoch: 'test', status: 'WebGPU · test' });
+  twinPageActions.siteIdSet('site-test');
+  twinPageActions.layerToggled('roof');
+  twinDemoActions.playingSet(false);
+  workbenchActions.formFieldSet({ field: 'lotCount', value: '12' });
+  catalogActions.domainSet('FAB');
+  catalogActions.selectedToggled('record-a');
+  expect(useRuntimeStore.getState().viewer.status).toBe('WebGPU · test');
+  expect(useTwinPageStore.getState().siteId).toBe('site-test');
+  expect(useTwinPageStore.getState().layerPreferences.roof).toBe(true);
+  expect(useTwinDemoStore.getState().playing).toBe(false);
+  expect(useWorkbenchStore.getState().form.lotCount).toBe('12');
+  expect(useCatalogStore.getState().domain).toBe('FAB');
+  expect(useCatalogStore.getState().selected).toEqual(['record-a']);
+  expect(() => JSON.stringify(snapshot())).not.toThrow();
 });

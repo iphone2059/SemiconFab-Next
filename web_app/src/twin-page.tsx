@@ -1,7 +1,7 @@
 import { OriginalIcon } from './original-icons';
 import { useTwinLocale, TwinLocaleProvider } from './twin-i18n';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { shallowEqual } from 'react-redux';
+import { useShallow } from 'zustand/react/shallow';
 import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus, type EquipmentStatusSnapshot } from './equipment-status';
 import { FAB_LAYOUT, FAB_TOOL_STATE_META, type FabToolState } from './fab-layout';
 import type { AmhsStats, CutAxis, PickedTool, SceneLayer, XRayFilter } from './fab-scene';
@@ -22,17 +22,18 @@ import { cleanroomPressureField } from './cleanroom-pressure';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from './original-tour';
 import { buildTourScenario, TOUR_INITIAL_CAMERA, TOUR_INITIAL_TARGET } from './tour-scenario';
 import { createTourTimeline, createWaferTimeline, type TourFrame, type TourTimeline, type WaferTimeline, type WaferHud } from './tour-wafer-timeline';
-import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
+import { useTwinUiStore, twinUiActions } from './state/twinUiStore';
+import { useTwinPageStore, twinPageActions } from './state/twinPageStore';
+import { useTwinDemoStore, twinDemoActions } from './state/twinDemoStore';
+import { useRuntimeStore, runtimeActions } from './state/runtimeStore';
+import { useLocaleStore } from './state/localeStore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SiteDto } from './contracts';
 import { sitesQueryOptions } from './api/queries/sites.queries';
 import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from './api/queries/equipment.queries';
 import { researchEventsQueryOptions } from './api/queries/research.queries';
 import { waferRoutesQueryOptions } from './api/queries/wafer.queries';
-import { twinUiActions, twinPageActions } from './store/twinUiSlice';
-import { twinDemoActions } from './store/twinDemoSlice';
-import { runtimeActions } from './store/runtimeSlice';
-import { createCoalescedDispatcher } from './store/telemetry-buffer';
+import { createCoalescedDispatcher } from './state/telemetry-buffer';
 const ONBOARDING_KEY = 'semicon_twin_onboarding_dismissed';
 const ONBOARDING_STEPS = [
   { title: '一个单 FAB 洁净室', body: '121 台设备、双环 OHT、天花板 FFU 与 Subfab 都在同一场景中。' },
@@ -76,15 +77,13 @@ const XRAY_FILTERS: { filter: XRayFilter; label: string }[] = [
 function TwinContent({ fabId }: { fabId?: string }) {
   const { t, language, toggleLanguage } = useTwinLocale();
   const scene = useRef<FabViewportHandle>(null);
-  const dispatch = useAppDispatch();
-  const store = useAppStore();
   const queryClient = useQueryClient();
-  const ui = useAppSelector((state) => state.twinUi);
-  const demo = useAppSelector((state) => state.twinDemo);
+  const ui = useTwinUiStore((state) => state);
+  const demo = useTwinDemoStore((state) => state);
   // Playback progress/trail are store-owned, but do not rerender the full HUD
   // every frame. Subscribe only to the control values below.
-  const page = useAppSelector((state) => { const { wafer: _wafer, ...page } = state.twinPage; return page; }, shallowEqual);
-  const status = useAppSelector(state => state.runtime.viewer.status);
+  const page = useTwinPageStore(useShallow((state) => { const { wafer: _wafer, ...page } = state; return page; }));
+  const status = useRuntimeStore(state => state.viewer.status);
   const mode = ui.entryMode;
   const view = ui.view;
   const level = ui.level;
@@ -104,10 +103,10 @@ function TwinContent({ fabId }: { fabId?: string }) {
   const researchPlaying = ui.research.playing;
   const researchSpeed = ui.research.speed;
   const { siteId, siteError: error, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, amhs, infoDialog, showResearchUtil, onboardingDontShow } = page;
-  const waferProduct = useAppSelector(state => state.twinPage.wafer.product);
-  const waferHud = useAppSelector(state => state.twinPage.wafer.hud);
-  const waferCompleted = useAppSelector(state => state.twinPage.wafer.completed);
-  const waferFollow = useAppSelector(state => state.twinPage.wafer.follow);
+  const waferProduct = useTwinPageStore(state => state.wafer.product);
+  const waferHud = useTwinPageStore(state => state.wafer.hud);
+  const waferCompleted = useTwinPageStore(state => state.wafer.completed);
+  const waferFollow = useTwinPageStore(state => state.wafer.follow);
   const { open: ymsOpen, tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, yieldInput, yieldScenario, stdfCopied } = page.yms;
 
   const sitesQuery = useQuery(sitesQueryOptions());
@@ -141,47 +140,47 @@ function TwinContent({ fabId }: { fabId?: string }) {
       const value = snapshot.tools[index]?.state;
       return value === 'running' || value === 'idle' || value === 'down' || value === 'maint' ? value : 'idle';
     });
-    dispatch(twinPageActions.liveSnapshotReceived({ states, updatedAt: snapshot.generatedAt }));
-  }, 100), [dispatch]);
-  const amhsBatcher = useMemo(() => createCoalescedDispatcher<AmhsStats>((stats) => dispatch(twinPageActions.amhsSet(stats)), 100), [dispatch]);
+    twinPageActions.liveSnapshotReceived({ states, updatedAt: snapshot.generatedAt });
+  }, 100), []);
+  const amhsBatcher = useMemo(() => createCoalescedDispatcher<AmhsStats>((stats) => twinPageActions.amhsSet(stats), 100), []);
   useEffect(() => () => { liveSnapshotBatcher.cancel(); amhsBatcher.cancel(); }, [liveSnapshotBatcher, amhsBatcher]);
 
-  const setSelected = (value?: PickedTool) => dispatch(twinPageActions.selectedSet(value));
-  const setSelection = (value?: TwinSelection) => dispatch(twinPageActions.selectionSet(value));
-  const setReplayBase = (value: readonly FabToolState[]) => dispatch(twinPageActions.replayBaseSet(value));
-  const setInfoDialog = (value: 'architecture' | 'database' | null) => dispatch(twinPageActions.infoDialogSet(value));
-  const toggleResearchUtil = () => dispatch(twinPageActions.showResearchUtilToggled());
-  const setOnboardingDontShow = (value: boolean) => dispatch(twinPageActions.onboardingDontShowSet(value));
-  const setYmsOpen = (value: boolean) => dispatch(twinPageActions.ymsOpenSet(value));
-  const setYmsTab = (value: 'map' | 'yield') => dispatch(twinPageActions.ymsTabSet(value));
-  const selectWaferPattern = (value: DefectPattern) => dispatch(twinPageActions.ymsRandomize(value));
-  const setHoverDie = (value: { r: number; c: number; bin: BinCode } | undefined) => dispatch(twinPageActions.ymsHoverDieSet(value));
-  const setDieArea = (value: number) => dispatch(twinPageActions.ymsDieAreaSet(value));
-  const setDefectD0 = (value: number) => dispatch(twinPageActions.ymsDefectD0Set(value));
-  const setClusterAlpha = (value: number) => dispatch(twinPageActions.ymsClusterAlphaSet(value));
+  const setSelected = (value?: PickedTool) => twinPageActions.selectedSet(value);
+  const setSelection = (value?: TwinSelection) => twinPageActions.selectionSet(value);
+  const setReplayBase = (value: readonly FabToolState[]) => twinPageActions.replayBaseSet(value);
+  const setInfoDialog = (value: 'architecture' | 'database' | null) => twinPageActions.infoDialogSet(value);
+  const toggleResearchUtil = () => twinPageActions.showResearchUtilToggled();
+  const setOnboardingDontShow = (value: boolean) => twinPageActions.onboardingDontShowSet(value);
+  const setYmsOpen = (value: boolean) => twinPageActions.ymsOpenSet(value);
+  const setYmsTab = (value: 'map' | 'yield') => twinPageActions.ymsTabSet(value);
+  const selectWaferPattern = (value: DefectPattern) => twinPageActions.ymsRandomize(value);
+  const setHoverDie = (value: { r: number; c: number; bin: BinCode } | undefined) => twinPageActions.ymsHoverDieSet(value);
+  const setDieArea = (value: number) => twinPageActions.ymsDieAreaSet(value);
+  const setDefectD0 = (value: number) => twinPageActions.ymsDefectD0Set(value);
+  const setClusterAlpha = (value: number) => twinPageActions.ymsClusterAlphaSet(value);
   const setYieldInput = (value: YieldInput | ((current: YieldInput) => YieldInput)) => {
-    if (typeof value === 'function') dispatch(twinPageActions.ymsYieldInputSet(value(yieldInput)));
-    else dispatch(twinPageActions.ymsYieldInputSet(value));
+    if (typeof value === 'function') twinPageActions.ymsYieldInputSet(value(yieldInput));
+    else twinPageActions.ymsYieldInputSet(value);
   };
-  const setYieldScenario = (value: string) => dispatch(twinPageActions.ymsYieldScenarioSet(value));
-  const setStdfCopied = (value: boolean) => dispatch(twinPageActions.ymsStdfCopiedSet(value));
-  const setWaferFollow = (value: boolean) => dispatch(twinPageActions.waferFollowSet(value));
+  const setYieldScenario = (value: string) => twinPageActions.ymsYieldScenarioSet(value);
+  const setStdfCopied = (value: boolean) => twinPageActions.ymsStdfCopiedSet(value);
+  const setWaferFollow = (value: boolean) => twinPageActions.waferFollowSet(value);
   const setMesJobs = (updater: (current: Record<number, MesJob>) => Record<number, MesJob>) => {
     const next = updater(mesJobs);
-    for (const [index, job] of Object.entries(next)) dispatch(twinPageActions.mesJobSet({ index: Number(index), job }));
+    for (const [index, job] of Object.entries(next)) twinPageActions.mesJobSet({ index: Number(index), job });
   };
   const setLayers = (updater: (current: Record<SceneLayer, boolean>) => Record<SceneLayer, boolean>) => {
     const next = updater(layerPreferences);
-    for (const layer of Object.keys(next) as SceneLayer[]) if (next[layer] !== layerPreferences[layer]) dispatch(twinPageActions.layerToggled(layer));
+    for (const layer of Object.keys(next) as SceneLayer[]) if (next[layer] !== layerPreferences[layer]) twinPageActions.layerToggled(layer);
   };
-  const setWaferPlaying = (playing: boolean) => dispatch(twinUiActions.waferPlay(playing));
+  const setWaferPlaying = (playing: boolean) => twinUiActions.waferPlay(playing);
   const setWaferSpeed = (speed: 1 | 4 | 16) => {
     waferTimelineRef.current?.setSpeed(speed);
-    dispatch(twinUiActions.waferSpeedSet(speed));
+    twinUiActions.waferSpeedSet(speed);
   };
-  const setResearchPlaying = (playing: boolean) => dispatch(twinUiActions.researchPlay(playing));
-  const setResearchTime = (timeSec: number) => dispatch(twinUiActions.researchSeek(timeSec));
-  const setResearchSpeed = (speed: 1 | 10 | 100 | 500) => dispatch(twinUiActions.researchSpeedSet(speed));
+  const setResearchPlaying = (playing: boolean) => twinUiActions.researchPlay(playing);
+  const setResearchTime = (timeSec: number) => twinUiActions.researchSeek(timeSec);
+  const setResearchSpeed = (speed: 1 | 10 | 100 | 500) => twinUiActions.researchSpeedSet(speed);
 
 
   useEffect(() => { scene.current?.setLanguage(language); }, [language, status]);
@@ -196,7 +195,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
     if (fabId) {
       next = sitesQuery.data.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
       if (!next) {
-        dispatch(twinPageActions.siteErrorSet(t("指定的 FAB 不存在：{0}", [fabId])));
+        twinPageActions.siteErrorSet(t("指定的 FAB 不存在：{0}", [fabId]));
         return;
       }
     } else if (siteId) {
@@ -204,19 +203,19 @@ function TwinContent({ fabId }: { fabId?: string }) {
     } else {
       next = legacySiteId ? sitesQuery.data.find((value) => value.siteId === legacySiteId) : sitesQuery.data[0];
       if (!next) {
-        dispatch(twinPageActions.siteErrorSet(legacySiteId ? t("指定的 FAB 站点不存在：{0}", [legacySiteId]) : t("没有可用的 FAB 站点")));
+        twinPageActions.siteErrorSet(legacySiteId ? t("指定的 FAB 站点不存在：{0}", [legacySiteId]) : t("没有可用的 FAB 站点"));
         return;
       }
     }
-    if (next.fabs.length !== 1) { dispatch(twinPageActions.siteErrorSet(t("当前产品必须只有一个 FAB"))); return; }
-    if (store.getState().twinPage.siteId !== next.siteId) dispatch(twinPageActions.siteIdSet(next.siteId));
-    if (store.getState().twinPage.siteError !== undefined) dispatch(twinPageActions.siteErrorSet(undefined));
-  }, [sitesQuery.data, siteId, fabId, t, dispatch, store]);
+    if (next.fabs.length !== 1) { twinPageActions.siteErrorSet(t("当前产品必须只有一个 FAB")); return; }
+    if (useTwinPageStore.getState().siteId !== next.siteId) twinPageActions.siteIdSet(next.siteId);
+    if (useTwinPageStore.getState().siteError !== undefined) twinPageActions.siteErrorSet(undefined);
+  }, [sitesQuery.data, siteId, fabId, t]);
 
   useEffect(() => {
     if (!sitesQuery.error) return;
-    dispatch(twinPageActions.siteErrorSet(sitesQuery.error instanceof Error ? sitesQuery.error.message : t('FAB 数据加载失败')));
-  }, [sitesQuery.error, t, dispatch]);
+    twinPageActions.siteErrorSet(sitesQuery.error instanceof Error ? sitesQuery.error.message : t('FAB 数据加载失败'));
+  }, [sitesQuery.error, t]);
 
   useEffect(() => {
     if (!siteId) { statusConsumer.current = undefined; return; }
@@ -224,17 +223,17 @@ function TwinContent({ fabId }: { fabId?: string }) {
       siteId,
       FAB_LAYOUT.length,
       (snapshot) => liveSnapshotBatcher.push(snapshot),
-      () => dispatch(twinPageActions.statusFeedStale()),
+      () => twinPageActions.statusFeedStale(),
     );
     return () => { statusConsumer.current = undefined; };
-  }, [siteId, liveSnapshotBatcher, dispatch]);
+  }, [siteId, liveSnapshotBatcher]);
 
   useEffect(() => {
     if (statusQuery.data) statusConsumer.current?.(statusQuery.data);
   }, [statusQuery.data]);
 
   useEffect(() => {
-    if (statusQuery.isError) dispatch(twinPageActions.statusFeedStale());
+    if (statusQuery.isError) twinPageActions.statusFeedStale();
   }, [statusQuery.isError]);
 
   useEffect(() => {
@@ -246,20 +245,20 @@ function TwinContent({ fabId }: { fabId?: string }) {
       // Exactly one server cache: live frames overwrite the polling fallback's
       // entry instead of living in a parallel store.
       queryClient.setQueryData(equipmentStatusQueryKey(siteId), snapshot);
-    }, () => dispatch(twinPageActions.statusFeedStale()), controller.signal);
+    }, () => twinPageActions.statusFeedStale(), controller.signal);
     return () => controller.abort();
-  }, [siteId, queryClient, dispatch]);
+  }, [siteId, queryClient]);
 
   useEffect(() => {
     const modal = new URL(location.href).searchParams.get('modal');
-    if (modal === 'database' || modal === 'catalog') dispatch(twinPageActions.infoDialogSet('database'));
-    else if (modal === 'arch') dispatch(twinPageActions.infoDialogSet('architecture'));
-    else if (modal === 'yms') { dispatch(twinPageActions.ymsOpenSet(true)); dispatch(twinPageActions.ymsTabSet('map')); }
+    if (modal === 'database' || modal === 'catalog') twinPageActions.infoDialogSet('database');
+    else if (modal === 'arch') twinPageActions.infoDialogSet('architecture');
+    else if (modal === 'yms') { twinPageActions.ymsOpenSet(true); twinPageActions.ymsTabSet('map'); }
   }, []);
 
   useEffect(() => {
     if (ui.statusSource !== 'demo' || !demo.playing) return;
-    const timer = window.setInterval(() => dispatch(twinDemoActions.tick()), DEMO_TICK_MS);
+    const timer = window.setInterval(() => twinDemoActions.tick(), DEMO_TICK_MS);
     return () => window.clearInterval(timer);
   }, [ui.statusSource, demo.playing]);
 
@@ -295,7 +294,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
   useEffect(() => {
     if (!status.startsWith('WebGPU')) return;
     scene.current?.setTour(ui.tour.active);
-    // Escape/mode/level actions can stop Tour through Redux without clicking
+    // Escape/mode/level actions can stop Tour through the store without clicking
     // its Stop button. Cancel the controller too, or its next waypoint revives UI.
     if (!ui.tour.active && tourTimelineRef.current) finishTour();
   }, [status, ui.tour.active]);
@@ -312,7 +311,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
       const now = performance.now();
       const elapsed = ((now - last) / 1000) * researchSpeed;
       last = now;
-      dispatch(twinUiActions.researchAdvance({ deltaSec: elapsed, durationSec: research.durationSec }));
+      twinUiActions.researchAdvance({ deltaSec: elapsed, durationSec: research.durationSec });
     }, 100);
     return () => window.clearInterval(timer);
   }, [researchPlaying, research, researchSpeed]);
@@ -323,16 +322,15 @@ function TwinContent({ fabId }: { fabId?: string }) {
     : ui.statusSource === 'demo' ? demo.states : liveToolStates;
   const setMode = (value: EntryMode): void => {
     if (value === 'research' && mode !== 'research') setReplayBase(toolStates);
-    dispatch(twinUiActions.modeSet(value));
+    twinUiActions.modeSet(value);
   };
-  // The scene frame loop reads the Redux snapshot directly for demo/live modes.
+  // The scene frame loop reads the Zustand snapshots directly for demo/live modes.
   // Research replay keeps its derived array in a ref until the query state lands.
   const directToolStates = useRef<readonly FabToolState[]>(toolStates);
   directToolStates.current = toolStates;
   const getToolStates = useMemo(() => (): readonly FabToolState[] => {
-    const state = store.getState();
-    if (state.twinUi.entryMode === 'research') return directToolStates.current;
-    return state.twinUi.statusSource === 'demo' ? state.twinDemo.states : state.twinPage.liveToolStates;
+    if (useTwinUiStore.getState().entryMode === 'research') return directToolStates.current;
+    return useTwinUiStore.getState().statusSource === 'demo' ? useTwinDemoStore.getState().states : useTwinPageStore.getState().liveToolStates;
   }, []);
 
   const selectedTelemetry = useMemo(() => selected ? buildTelemetry(FAB_LAYOUT[selected.index], selected.index) : undefined, [selected?.index]);
@@ -388,8 +386,8 @@ function TwinContent({ fabId }: { fabId?: string }) {
     // changes. Paused frames still apply the source camera, never a waypoint snap.
     let controller = waferTimelineRef.current;
     if (!controller) {
-      controller = createWaferTimeline(buildWaferScenario(waferRoutes, store.getState().locale.language));
-      controller.setSpeed(store.getState().twinUi.wafer.speed);
+      controller = createWaferTimeline(buildWaferScenario(waferRoutes, useLocaleStore.getState().language));
+      controller.setSpeed(useTwinUiStore.getState().wafer.speed);
       waferTimelineRef.current = controller;
     }
     controller.open();
@@ -405,7 +403,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
       const current = controller.readFrame();
       const { x, y, z } = current.position;
       scene.current?.setWaferPoint(x, y, z, true, false, current.rotationY);
-      if (store.getState().twinPage.wafer.follow) {
+      if (useTwinPageStore.getState().wafer.follow) {
         scene.current?.setCameraPose([current.camera.x, current.camera.y, current.camera.z], [x, y, z], 0);
       }
       scene.current?.setWaferTrail(controller.readTrailPoints().map(point => [point.x, point.y, point.z]));
@@ -429,7 +427,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
   useEffect(() => {
     try {
       const modal = new URL(location.href).searchParams.get('modal');
-      if (!modal && localStorage.getItem(ONBOARDING_KEY) !== '1') dispatch(twinUiActions.onboardingOpen());
+      if (!modal && localStorage.getItem(ONBOARDING_KEY) !== '1') twinUiActions.onboardingOpen();
     } catch {
       // Storage may be blocked; the page still works without onboarding memory.
     }
@@ -444,7 +442,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (event.key === 'Escape') {
-        dispatch(twinUiActions.escape());
+        twinUiActions.escape();
         scene.current?.clearSelection();
         setSelected(undefined);
         setSelection(undefined);
@@ -471,20 +469,20 @@ function TwinContent({ fabId }: { fabId?: string }) {
   const pressure = cleanroomPressureField(selected?.x ?? 0, selected?.z ?? 0);
 
   function setCamera(next: CameraView): void {
-    dispatch(twinUiActions.viewSet(next));
+    twinUiActions.viewSet(next);
     // Repeating the active preset still re-centres a manually moved camera.
     if (next === view) scene.current?.setView(next);
   }
   function toggleLayer(layer: SceneLayer): void {
-    if (layer === 'airflow') { dispatch(twinUiActions.spatialToggle('aerodynamics')); return; }
-    if (layer === 'heatmap') { dispatch(twinUiActions.aeroHeatmapToggle()); return; }
-    if (layer === 'xray') { dispatch(twinUiActions.spatialToggle('xray')); return; }
+    if (layer === 'airflow') { twinUiActions.spatialToggle('aerodynamics'); return; }
+    if (layer === 'heatmap') { twinUiActions.aeroHeatmapToggle(); return; }
+    if (layer === 'xray') { twinUiActions.spatialToggle('xray'); return; }
     setLayers((current) => ({ ...current, [layer]: !current[layer] }));
   }
-  function applyXRayFilter(filter: XRayFilter | null): void { dispatch(twinUiActions.xraySet(filter)); }
-  function toggleCut(): void { dispatch(twinUiActions.spatialToggle('cut')); }
+  function applyXRayFilter(filter: XRayFilter | null): void { twinUiActions.xraySet(filter); }
+  function toggleCut(): void { twinUiActions.spatialToggle('cut'); }
   function updateCut(axis: CutAxis, position: number, invert: boolean): void {
-    dispatch(twinUiActions.cutSet({ axis, positionM: position, invert }));
+    twinUiActions.cutSet({ axis, positionM: position, invert });
   }
   function flyLevel(next: 'L1' | 'B1' | 'DUAL' | 'EXPLODED'): void {
     const poses = {
@@ -498,25 +496,25 @@ function TwinContent({ fabId }: { fabId?: string }) {
   }
   // Frozen switchFabLevel/activateSpatialMode semantics: entering Exploded always targets 100%,
   // leaving it resets the preset to 0%; any level switch away also closes the exploded mode.
-  function leaveExploded(): void { if (exploded) dispatch(twinUiActions.explodeSet(0)); }
-  function setL1(): void { leaveExploded(); dispatch(twinUiActions.levelSet('L1')); flyLevel('L1'); }
-  function setB1(): void { const next = level === 'B1' ? 'L1' : 'B1'; leaveExploded(); dispatch(twinUiActions.levelSet(next)); flyLevel(next); }
-  function setDual(): void { const next = level === 'DUAL' ? 'L1' : 'DUAL'; leaveExploded(); dispatch(twinUiActions.levelSet(next)); flyLevel(next); }
+  function leaveExploded(): void { if (exploded) twinUiActions.explodeSet(0); }
+  function setL1(): void { leaveExploded(); twinUiActions.levelSet('L1'); flyLevel('L1'); }
+  function setB1(): void { const next = level === 'B1' ? 'L1' : 'B1'; leaveExploded(); twinUiActions.levelSet(next); flyLevel(next); }
+  function setDual(): void { const next = level === 'DUAL' ? 'L1' : 'DUAL'; leaveExploded(); twinUiActions.levelSet(next); flyLevel(next); }
   function toggleExploded(): void {
     if (exploded) {
-      dispatch(twinUiActions.explodeSet(0));
-      dispatch(twinUiActions.spatialToggle('exploded'));
+      twinUiActions.explodeSet(0);
+      twinUiActions.spatialToggle('exploded');
       flyLevel('L1');
     } else {
-      dispatch(twinUiActions.spatialToggle('exploded'));
+      twinUiActions.spatialToggle('exploded');
       flyLevel('EXPLODED');
-      dispatch(twinUiActions.explodeSet(100));
+      twinUiActions.explodeSet(100);
     }
   }
-  function changeExplode(percent: number): void { dispatch(twinUiActions.explodeSet(percent)); }
+  function changeExplode(percent: number): void { twinUiActions.explodeSet(percent); }
   function applyTourStep(index: number): void {
     const stop = TOUR_STOPS[index];
-    if (stop) dispatch(twinUiActions.tourStep({ waypoint: index, level: stop.level, view: 'iso' }));
+    if (stop) twinUiActions.tourStep({ waypoint: index, level: stop.level, view: 'iso' });
   }
   function chooseYieldScenario(id: string): void {
     setYieldScenario(id);
@@ -531,12 +529,12 @@ function TwinContent({ fabId }: { fabId?: string }) {
       setSelected(undefined);
       if (catalogIndex >= 0) {
         const token = crypto.randomUUID();
-        dispatch(runtimeActions.viewerSelectionSyncStarted(token));
+        runtimeActions.viewerSelectionSyncStarted(token);
         scene.current?.selectTool(catalogIndex, false);
-        window.setTimeout(() => dispatch(runtimeActions.viewerSelectionSyncFinished(token)), 0);
+        window.setTimeout(() => runtimeActions.viewerSelectionSyncFinished(token), 0);
       }
       else scene.current?.clearSelection();
-      if (row?.level === 'B1') { dispatch(twinUiActions.levelSet('B1')); flyLevel('B1'); scene.current?.setDual(false); scene.current?.setBasement(true); }
+      if (row?.level === 'B1') { twinUiActions.levelSet('B1'); flyLevel('B1'); scene.current?.setDual(false); scene.current?.setBasement(true); }
     } else if (next.kind === 'oem') {
       setSelected(undefined);
       scene.current?.clearSelection();
@@ -544,14 +542,14 @@ function TwinContent({ fabId }: { fabId?: string }) {
   }
   function handleToolChange(tool?: PickedTool): void {
     setSelected(tool);
-    const sync = store.getState().runtime.viewer.selectionSync;
-    if (sync) { dispatch(runtimeActions.viewerSelectionSyncFinished(sync)); return; }
+    const sync = useRuntimeStore.getState().viewer.selectionSync;
+    if (sync) { runtimeActions.viewerSelectionSyncFinished(sync); return; }
     if (tool && selection?.kind === 'reference' && FAB_LAYOUT[tool.index]?.recordId === selection.id) return;
     if (tool) setSelection({ kind: 'layout', index: tool.index });
     else if (selection?.kind === 'layout') setSelection(undefined);
   }
   function handleManualKey(key: string, state: FabToolState): void {
-    dispatch(twinDemoActions.manualKeySet({ key, state }));
+    twinDemoActions.manualKeySet({ key, state });
   }
   function runMesAction(action: MesAction): void {
     if (!selected) return;
@@ -564,8 +562,8 @@ function TwinContent({ fabId }: { fabId?: string }) {
   function chooseDemoScenario(id: string): void {
     const scenario = YIELD_SCENARIOS.find((entry) => entry.id === id);
     if (!scenario) return;
-    dispatch(twinUiActions.sourceSet('demo'));
-    dispatch(twinDemoActions.scenarioApplied(scenario));
+    twinUiActions.sourceSet('demo');
+    twinDemoActions.scenarioApplied(scenario);
     setYieldScenario('live');
     setYieldInput({ purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime });
   }
@@ -575,17 +573,17 @@ function TwinContent({ fabId }: { fabId?: string }) {
     const frame = controller.readFrame();
     if (frame.hud !== waferHudRef.current) {
       waferHudRef.current = frame.hud;
-      dispatch(twinPageActions.waferFrameReceived({ product: frame.product as WaferProduct, index: frame.index,
-        hud: frame.hud, completed: controller.readStats().completed }));
+      twinPageActions.waferFrameReceived({ product: frame.product as WaferProduct, index: frame.index,
+        hud: frame.hud, completed: controller.readStats().completed });
     }
-    if (frame.playing !== store.getState().twinUi.wafer.playing) setWaferPlaying(frame.playing);
+    if (frame.playing !== useTwinUiStore.getState().wafer.playing) setWaferPlaying(frame.playing);
   }
   function startWafer(): void {
     finishTour();
-    dispatch(twinUiActions.waferOpen());
+    twinUiActions.waferOpen();
   }
   function closeWafer(): void {
-    dispatch(twinUiActions.waferClose());
+    twinUiActions.waferClose();
     setWaferPlaying(false);
     scene.current?.setWaferPoint(0, 0, 0, false, false);
     scene.current?.setWaferTrail([]);
@@ -615,7 +613,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
     tourTimelineRef.current = null;
     tourIndexRef.current = -1;
     setTourHud(null);
-    dispatch(twinUiActions.tourStop());
+    twinUiActions.tourStop();
   }
   function startTour(): void {
     // The frozen controller tweens from the current camera pose, exactly like
@@ -673,7 +671,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
     tourTimelineRef.current?.prev();
   }
   function dismissOnboarding(): void {
-    dispatch(twinUiActions.onboardingClose());
+    twinUiActions.onboardingClose();
     try { if (onboardingDontShow) localStorage.setItem(ONBOARDING_KEY, '1'); } catch { /* ignore storage denial */ }
   }
   function finishOnboarding(): void {
@@ -720,7 +718,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
             {LAYER_LABELS.filter(({ layer }) => layer !== 'airflow').map(({ layer, label }) => (
               <button id={layer === 'amhs' ? 'btn-toggle-oht' : layer === 'ceiling' ? 'btn-toggle-ceiling' : layer === 'roof' ? 'btn-toggle-roof' : layer === 'heatmap' ? 'btn-toggle-heatmap' : 'btn-toggle-piping'} type="button" key={layer} className={layers[layer] ? 'active' : ''} aria-pressed={!!layers[layer]} onClick={() => toggleLayer(layer)}><OriginalIcon name={layer === 'amhs' ? 'amhs' : layer === 'ceiling' || layer === 'roof' ? 'ffu' : 'heatmap'} />{layer === 'heatmap' ? t("气流热力图") : label}</button>
             ))}
-            <button id="btn-toggle-laminar" type="button" className={ui.spatialMode === 'aerodynamics' ? 'active' : ''} aria-pressed={ui.spatialMode === 'aerodynamics'} onClick={() => dispatch(twinUiActions.spatialToggle('aerodynamics'))}><OriginalIcon name="airflow" /> Airflow</button>
+            <button id="btn-toggle-laminar" type="button" className={ui.spatialMode === 'aerodynamics' ? 'active' : ''} aria-pressed={ui.spatialMode === 'aerodynamics'} onClick={() => twinUiActions.spatialToggle('aerodynamics')}><OriginalIcon name="airflow" /> Airflow</button>
             <button id="btn-toggle-xray" type="button" className={xrayFilter ? 'active' : ''} aria-pressed={!!xrayFilter} onClick={() => applyXRayFilter(xrayFilter ? null : 'all')}><OriginalIcon name="xray" />{t("全息透视")}</button>
           </div>
           <button id="lang-toggle-btn" className="twin-language-toggle" type="button" title={language === 'zh' ? 'Switch to English' : '切换为中文'} onClick={toggleLanguage}>{language === 'zh' ? '中文' : 'English'}</button>
@@ -731,7 +729,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
         <button id="header-yield-val" className="twin-yield-pill" type="button" title="Cascading Yield Model" onClick={() => { setYmsOpen(true); setYmsTab('yield'); }}>{(fabYield.totalYield * 100).toFixed(2)}%⌄</button>
         <span id="header-wpm-val" className="twin-throughput">{fabYield.wpm.toLocaleString('en-US')}<small>{t("片/月")}</small></span>
         <section className="twin-simulation" aria-label={t("B01 场景控制")}>
-          <button id="btn-sim-play" type="button" disabled={ui.statusSource !== 'demo'} title={ui.statusSource !== 'demo' ? t("请选择本地 DEMO 状态来源") : 'Toggle Sim Clock · 1600 ms'} onClick={() => dispatch(twinDemoActions.playingSet(!demo.playing))} aria-pressed={ui.statusSource === 'demo' && demo.playing}>{demo.playing ? 'Ⅱ' : '▶'} <span id="lbl-sim-cycle">#{demo.cycle}</span></button>
+          <button id="btn-sim-play" type="button" disabled={ui.statusSource !== 'demo'} title={ui.statusSource !== 'demo' ? t("请选择本地 DEMO 状态来源") : 'Toggle Sim Clock · 1600 ms'} onClick={() => twinDemoActions.playingSet(!demo.playing)} aria-pressed={ui.statusSource === 'demo' && demo.playing}>{demo.playing ? 'Ⅱ' : '▶'} <span id="lbl-sim-cycle">#{demo.cycle}</span></button>
           <select id="dt-scenario-select" aria-label="Scenario" value={demo.scenarioId} disabled={ui.statusSource !== 'demo'} onChange={(event) => chooseDemoScenario(event.target.value)}>
             {YIELD_SCENARIOS.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
           </select>
@@ -739,7 +737,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
         <button type="button" className={`twin-yms-toggle${ymsOpen ? ' active' : ''}`} aria-pressed={ymsOpen} onClick={() => { setYmsTab('map'); setYmsOpen(!ymsOpen); }}><OriginalIcon name="wafer" />{t("YMS 晶圆图谱")}</button>
         <button id="btn-toggle-cut" type="button" className={`twin-cut-toggle${cutActive ? ' active' : ''}`} aria-pressed={cutActive} onClick={toggleCut}><OriginalIcon name="cut" />{t("动态剖切")}</button>
         <button id="btn-follow-wafer" type="button" className={`twin-wafer-toggle${waferActive ? ' active' : ''}`} aria-pressed={waferActive} onClick={() => { if (waferActive) closeWafer(); else startWafer(); }}><OriginalIcon name="wafer" />{t("跟随晶圆")}</button>
-        <label className="twin-source"><select aria-label={t("状态来源")} value={ui.preferredStatusSource} disabled={mode === 'research'} onChange={(event) => dispatch(twinUiActions.sourceSet(event.target.value as 'demo' | 'sse-live'))}>
+        <label className="twin-source"><select aria-label={t("状态来源")} value={ui.preferredStatusSource} disabled={mode === 'research'} onChange={(event) => twinUiActions.sourceSet(event.target.value as 'demo' | 'sse-live')}>
           <option value="sse-live">SSE</option><option value="demo">DEMO</option>
         </select></label>
         <span className={`twin-feed${mode === 'research' ? ' is-replay' : statusFeed?.stale ? ' is-stale' : ''}`}><i />{mode === 'research' ? 'REPLAY' : ui.statusSource === 'demo' ? 'DEMO' : !statusFeed ? 'CONNECTING' : statusFeed.stale ? 'CACHE' : 'LIVE'}</span>
@@ -772,7 +770,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
           <strong>{t("AERODYNAMICS · 层流与压差")}</strong>
           <span>{t("黄光区 +30 Pa → 主工艺区 +15 Pa → 灰区 0 Pa")}</span>
           <span>{selected ? `#${selected.index + 1}` : t("主工艺区")} · {pressure.pressure.toFixed(2)} Pa · ∂P/∂z {pressure.gradZ.toFixed(2)} Pa/m</span>
-          <button type="button" aria-pressed={ui.aeroHeatmap} onClick={() => dispatch(twinUiActions.aeroHeatmapToggle())}>{t("压差热力图")}</button>
+          <button type="button" aria-pressed={ui.aeroHeatmap} onClick={() => twinUiActions.aeroHeatmapToggle()}>{t("压差热力图")}</button>
           <small>{level === 'B1' ? t("B1 隐藏洁净室粒子") : t("1500 层流粒子 · 原版示意压差场")}{t("；非实测 CFD")}</small>
         </section>
       )}
@@ -821,7 +819,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
             </dl>
             <button type="button" className="twin-primary" onClick={() => scene.current?.selectTool(selected.index, true)}>{t("在场景中定位")}</button>
             <div className="twin-manual-state" role="group" aria-label={t("设备状态干预")}>
-              {(['running', 'idle', 'down', 'maint'] as const).map((state) => <button type="button" key={state} disabled={ui.statusSource !== 'demo'} aria-pressed={toolStates[selected.index] === state} onClick={() => dispatch(twinDemoActions.manualStateSet({ index: selected.index, state }))}>{state.toUpperCase()}</button>)}
+              {(['running', 'idle', 'down', 'maint'] as const).map((state) => <button type="button" key={state} disabled={ui.statusSource !== 'demo'} aria-pressed={toolStates[selected.index] === state} onClick={() => twinDemoActions.manualStateSet({ index: selected.index, state })}>{state.toUpperCase()}</button>)}
             </div>
             <p className="twin-data-note">{t("状态干预限本地 DEMO；MES / SPC 为页面演示，不持久化、不发送后端制造命令。")}</p>
 
@@ -1126,8 +1124,8 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
               <label className="twin-onboarding-dont-show"><input id="onboarding-dont-show" type="checkbox" checked={onboardingDontShow} onChange={(event) => setOnboardingDontShow(event.target.checked)} /><span id="onboarding-dont-show-text">{t("不再提示")}</span></label>
               <div className="twin-onboarding-actions">
                 <button type="button" onClick={dismissOnboarding}>{t("跳过")}</button>
-                <button id="onboarding-prev-btn" type="button" onClick={() => dispatch(twinUiActions.onboardingStep(onboardingStep - 1))} disabled={onboardingStep === 0}>{t("上一步")}</button>
-                <button id="onboarding-next-btn" type="button" className="primary" onClick={() => { if (onboardingStep === ONBOARDING_STEPS.length - 1) finishOnboarding(); else dispatch(twinUiActions.onboardingStep(onboardingStep + 1)); }}>{onboardingStep === ONBOARDING_STEPS.length - 1 ? t("开始导览") : t("下一步")}</button>
+                <button id="onboarding-prev-btn" type="button" onClick={() => twinUiActions.onboardingStep(onboardingStep - 1)} disabled={onboardingStep === 0}>{t("上一步")}</button>
+                <button id="onboarding-next-btn" type="button" className="primary" onClick={() => { if (onboardingStep === ONBOARDING_STEPS.length - 1) finishOnboarding(); else twinUiActions.onboardingStep(onboardingStep + 1); }}>{onboardingStep === ONBOARDING_STEPS.length - 1 ? t("开始导览") : t("下一步")}</button>
               </div>
             </div>
           </div>

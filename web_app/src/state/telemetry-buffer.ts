@@ -5,9 +5,9 @@ export interface CoalescedDispatcher<T> {
 }
 
 /**
- * Buffers high-frequency telemetry outside Redux and emits only the latest value
- * on a fixed cadence. The render loop can write into this buffer without causing
- * a React render for every frame.
+ * Buffers high-frequency telemetry outside the state containers and emits only
+ * the latest value on a fixed cadence. The render loop can write into this
+ * buffer without causing a React render for every frame (ARCH-11 transition).
  */
 export function createCoalescedDispatcher<T>(
   dispatch: (value: T) => void,

@@ -1,9 +1,9 @@
 # 路由与查询集成（Router / TanStack Query）
 
 - 版本：V2.1 / 2026-10-27
-- 状态：**M1 与 M2a 已实现；M2b 起迁 Zustand/页面 URL 状态**（M1+M2a implemented / M2b+ pending）
+- 状态：**M1/M2 已实现；Zustand 已在 M2b 接管客户端状态**（M2 implemented）
 - 依据：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)；总览见 [架构基线](architecture.md)；状态所有权见 [状态管理](state-management.md)
-- 当前实现：`main.tsx` 已改为 `AppProviders + RouterProvider`；TanStack Router 接管顶层路由；**全部 HTTP 端点**已由 TanStack Query 独占，RTK Query 已在 M2a 删除；Redux 仅剩临时客户端 UI slice
+- 当前实现：`main.tsx` 已改为 `AppProviders + RouterProvider`；TanStack Router 接管顶层路由；**全部 HTTP 端点**由 TanStack Query 独占；客户端 UI 状态由 Zustand 承载；Redux/RTK Query 已删除
 - 门禁状态：RQ-01..RQ-05 **均已真实运行（PASS）**。证据见 [架构基线](architecture.md) §15/§16、`tests/integration/router-query.test.tsx` 与 `tests/integration/query-cache.test.tsx`
 
 ## 1. 职责边界

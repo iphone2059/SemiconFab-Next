@@ -7,9 +7,8 @@ import {
   type MouseEvent,
 } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useAppDispatch, useAppSelector, useAppStore } from './store/hooks';
-import { catalogActions } from './store/catalogSlice';
-import { localeActions } from './store/localeSlice';
+import { catalogActions, useCatalogStore } from './state/catalogStore';
+import { localeActions, useLocaleStore } from './state/localeStore';
 import { catalogQueryOptions } from './api/queries/catalog.queries';
 import type { CatalogEntryDto } from './contracts';
 import {
@@ -316,13 +315,11 @@ function initialPreferences(): Preferences {
 }
 
 export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare' }) {
-  const dispatch = useAppDispatch();
-  const store = useAppStore();
   const {
     view, domain, category, query, hideDrafts, selected,
     detailId, page, localEntries, localImportId, importError, hydrated,
-  } = useAppSelector((state) => state.catalog);
-  const preferences = useAppSelector(state => state.locale);
+  } = useCatalogStore();
+  const preferences = useLocaleStore();
   const language = preferences.language;
   const t = (zh: string, en: string) => text(language, zh, en);
   const catalogQuery = useQuery(catalogQueryOptions());
@@ -358,9 +355,9 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
   useEffect(() => {
     // StrictMode replays this setup before a new render. Read the current store
     // instead of the first render's hydrated=false closure.
-    if (store.getState().catalog.hydrated) return;
+    if (useCatalogStore.getState().hydrated) return;
     const route = readCatalogRoute(new URL(location.href));
-    dispatch(catalogActions.hydrate({
+    catalogActions.hydrate({
       view: initialView,
       domain: route.domain,
       category: route.category,
@@ -368,35 +365,35 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
       hideDrafts: route.hideDrafts,
       selected: [...route.compare],
       page: 0,
-    }));
-    dispatch(localeActions.preferencesSet(initialPreferences()));
-  }, [dispatch, initialView, hydrated, store]);
+    });
+    localeActions.preferencesSet(initialPreferences());
+  }, [initialView, hydrated]);
 
   useEffect(() => {
     // The router owns /equipment vs /equipment/compare; keep page state aligned when
     // a route change (not the transitional pushState path) mounts this view.
-    if (store.getState().catalog.view !== initialView) dispatch(catalogActions.viewSet(initialView));
-  }, [initialView, dispatch, store]);
+    if (useCatalogStore.getState().view !== initialView) catalogActions.viewSet(initialView);
+  }, [initialView]);
 
   useEffect(() => {
     if (view !== 'compare' || selected.length > 0 || entries.length === 0) return;
     if (new URL(location.href).searchParams.has('compare')) return;
-    dispatch(catalogActions.selectedSet(entries.filter((entry) => entry.category === 'lithography').slice(0, 3).map((entry) => entry.recordId)));
-  }, [view, selected.length, entries, dispatch]);
+    catalogActions.selectedSet(entries.filter((entry) => entry.category === 'lithography').slice(0, 3).map((entry) => entry.recordId));
+  }, [view, selected.length, entries]);
 
   useEffect(() => {
     const restore = () => {
       const route = readCatalogRoute(new URL(location.href));
       if (route.view === 'workbench' || route.view === 'twin') { location.reload(); return; }
-      dispatch(catalogActions.hydrate({
+      catalogActions.hydrate({
         view: route.view, domain: route.domain, category: route.category, query: route.query,
         hideDrafts: route.hideDrafts, selected: [...route.compare], page: 0,
-      }));
-      dispatch(localeActions.preferencesSet(initialPreferences()));
+      });
+      localeActions.preferencesSet(initialPreferences());
     };
     window.addEventListener('popstate', restore);
     return () => window.removeEventListener('popstate', restore);
-  }, [dispatch]);
+  }, []);
 
   useEffect(() => {
     document.documentElement.lang = languageTag(language);
@@ -424,10 +421,10 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
   }, [language, preferences.theme, view, domain, category, query, selected, hideDrafts]);
 
   function toggle(id: string): void {
-    dispatch(catalogActions.selectedToggled(id));
+    catalogActions.selectedToggled(id);
   }
   function openView(next: 'catalog' | 'compare'): void {
-    // Transitional page-internal navigation: filters stay Redux-owned and are
+    // Transitional page-internal navigation: filters stay in the catalog store and are
     // mirrored into the canonical URL with history APIs. The pushState path is a
     // canonical /equipment/* path (never the legacy /catalog or /compare aliases);
     // the router owns every other top-level navigation.
@@ -435,7 +432,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
     url.pathname = next === 'compare' ? '/equipment/compare' : '/equipment';
     url.searchParams.set('compare', selected.join(','));
     if (location.pathname !== url.pathname) history.pushState(null, '', url);
-    dispatch(catalogActions.viewSet(next));
+    catalogActions.viewSet(next);
   }
   function navigate(event: MouseEvent<HTMLAnchorElement>, next: 'catalog' | 'compare'): void {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
@@ -448,16 +445,16 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
     event.currentTarget.value = '';
     if (!file) return;
     const requestId = crypto.randomUUID();
-    dispatch(catalogActions.importStarted(requestId));
+    catalogActions.importStarted(requestId);
     if (file.size > 10 * 1024 * 1024) {
-      dispatch(catalogActions.importFailed({ requestId, error: t('文件超过 10 MiB。', 'File exceeds 10 MiB.') }));
+      catalogActions.importFailed({ requestId, error: t('文件超过 10 MiB。', 'File exceeds 10 MiB.') });
       return;
     }
     try {
       const parsed = parseCatalogEntries(JSON.parse(await file.text()));
-      dispatch(catalogActions.localImportApplied({ requestId, entries: parsed, importId: file.name }));
+      catalogActions.localImportApplied({ requestId, entries: parsed, importId: file.name });
     } catch (reason: unknown) {
-      dispatch(catalogActions.importFailed({ requestId, error: reason instanceof Error ? reason.message : t('导入失败', 'Import failed') }));
+      catalogActions.importFailed({ requestId, error: reason instanceof Error ? reason.message : t('导入失败', 'Import failed') });
     }
   }
 
@@ -488,7 +485,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
         <div className="catalog-preferences">
           <button
             onClick={() =>
-              dispatch(localeActions.languageToggled())
+              localeActions.languageToggled()
             }
           >
             {language === 'zh' ? 'EN' : '中文'}
@@ -496,7 +493,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
           <button
             aria-label={t('切换主题', 'Toggle theme')}
             onClick={() =>
-              dispatch(localeActions.themeToggled())
+              localeActions.themeToggled()
             }
           >
             {preferences.theme === 'light' ? '◐' : '☀'}
@@ -538,7 +535,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
         {error && (
           <div className="catalog-error" role="alert">
             {error}{' '}
-            <button onClick={() => { dispatch(catalogActions.localImportCleared()); void catalogQuery.refetch(); }}>
+            <button onClick={() => { catalogActions.localImportCleared(); void catalogQuery.refetch(); }}>
               {t('重新读取服务端目录', 'Reload server catalog')}
             </button>
           </div>
@@ -563,9 +560,9 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
                   key={value}
                   aria-pressed={domain === value}
                   onClick={() => {
-                    dispatch(catalogActions.domainSet(value));
-                    dispatch(catalogActions.categorySet(''));
-                    dispatch(catalogActions.pageSet(0));
+                    catalogActions.domainSet(value);
+                    catalogActions.categorySet('');
+                    catalogActions.pageSet(0);
                   }}
                 >
                   {value === 'ALL' ? t('全部设备', 'All equipment') : value}
@@ -599,7 +596,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
               {t('导出目录', 'Export catalog')}
             </button>
             {localPreview && (
-              <button onClick={() => { dispatch(catalogActions.localImportCleared()); void catalogQuery.refetch(); }}>
+              <button onClick={() => { catalogActions.localImportCleared(); void catalogQuery.refetch(); }}>
                 {t('恢复服务端目录', 'Restore server catalog')}
               </button>
             )}
@@ -613,8 +610,8 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
                 maxLength={200}
                 placeholder={t('厂商、型号或分类…', 'Vendor, model or category…')}
                 onChange={(event) => {
-                  dispatch(catalogActions.querySet(event.target.value));
-                  dispatch(catalogActions.pageSet(0));
+                  catalogActions.querySet(event.target.value);
+                  catalogActions.pageSet(0);
                 }}
               />
             </label>
@@ -623,8 +620,8 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
               <select
                 value={category}
                 onChange={(event) => {
-                  dispatch(catalogActions.categorySet(event.target.value));
-                  dispatch(catalogActions.pageSet(0));
+                  catalogActions.categorySet(event.target.value);
+                  catalogActions.pageSet(0);
                 }}
               >
                 <option value="">{t('所有分类', 'All categories')}</option>
@@ -643,8 +640,8 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
                 type="checkbox"
                 checked={hideDrafts}
                 onChange={(event) => {
-                  dispatch(catalogActions.hideDraftsSet(event.target.checked));
-                  dispatch(catalogActions.pageSet(0));
+                  catalogActions.hideDraftsSet(event.target.checked);
+                  catalogActions.pageSet(0);
                 }}
               />
               {t('隐藏 draft 记录', 'Hide draft records')}
@@ -709,7 +706,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
                       </td>
                       <td>
                         <button
-                          onClick={() => dispatch(catalogActions.detailIdSet(entry.recordId))}
+                          onClick={() => catalogActions.detailIdSet(entry.recordId)}
                           aria-label={t(`查看 ${entry.model}`, `Inspect ${entry.model}`)}
                         >
                           {t('查看规格', 'Inspect')} ↗
@@ -731,7 +728,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
             </p>
           )}
           <div className="catalog-pagination">
-            <button disabled={currentPage === 0} onClick={() => dispatch(catalogActions.pageSet(currentPage - 1))}>
+            <button disabled={currentPage === 0} onClick={() => catalogActions.pageSet(currentPage - 1)}>
               {t('上一页', 'Previous')}
             </button>
             <span>
@@ -739,7 +736,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
             </span>
             <button
               disabled={currentPage >= pageCount - 1}
-              onClick={() => dispatch(catalogActions.pageSet(currentPage + 1))}
+              onClick={() => catalogActions.pageSet(currentPage + 1)}
             >
               {t('下一页', 'Next')}
             </button>
@@ -761,7 +758,7 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
         </footer>
       </main>
       {detail && (
-        <EquipmentDetails entry={detail} language={language} onClose={() => dispatch(catalogActions.detailIdSet(undefined))} />
+        <EquipmentDetails entry={detail} language={language} onClose={() => catalogActions.detailIdSet(undefined)} />
       )}
     </div>
   );

@@ -1,52 +1,60 @@
-import { configureStore } from '@reduxjs/toolkit';
-import { expect, it } from 'vitest';
-import { workbenchActions, workbenchSlice } from '../src/store/workbenchSlice';
+// @vitest-environment jsdom
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { cleanup, render } from '@testing-library/react';
 import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { Provider } from 'react-redux';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import WorkbenchApp from '../src/workbench';
 import { sitesQueryOptions } from '../src/api/queries/sites.queries';
 import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from '../src/api/queries/runs.queries';
-import { store as appStore } from '../src/store/store';
+import {
+  resetWorkbenchStore,
+  useWorkbenchStore,
+  workbenchActions,
+} from '../src/state/workbenchStore';
 
-const createStore = () => configureStore({ reducer: workbenchSlice.reducer });
 // Server state for sites/runs/run/results is owned by TanStack Query (ARCH G-02);
-// every test that renders gets its own isolated Query cache.
+// every test that renders gets its own isolated Query cache. Client UI state lives
+// in the Zustand workbench store and is reset between cases.
 const createQueryClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
+beforeEach(() => resetWorkbenchStore());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
 it('keeps a newly created or explicitly selected run while a stale list refreshes', () => {
-  const store = createStore();
-  store.dispatch(workbenchActions.siteIdSet('site-a'));
-  store.dispatch(workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['old-run'] }));
-  expect(store.getState().runId).toBe('old-run');
-  store.dispatch(workbenchActions.runIdSet('new-run'));
-  store.dispatch(workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['old-run'] }));
-  expect(store.getState().runId).toBe('new-run');
-  store.dispatch(workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['new-run', 'old-run'] }));
-  store.dispatch(workbenchActions.runIdSet('old-run'));
-  store.dispatch(workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['new-run', 'old-run'] }));
-  expect(store.getState().runId).toBe('old-run');
+  workbenchActions.siteIdSet('site-a');
+  workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['old-run'] });
+  expect(useWorkbenchStore.getState().runId).toBe('old-run');
+  workbenchActions.runIdSet('new-run');
+  workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['old-run'] });
+  expect(useWorkbenchStore.getState().runId).toBe('new-run');
+  workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['new-run', 'old-run'] });
+  workbenchActions.runIdSet('old-run');
+  workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['new-run', 'old-run'] });
+  expect(useWorkbenchStore.getState().runId).toBe('old-run');
 });
 
 it('clears the previous site selection and rejects its late list when the new site is empty', () => {
-  const store = createStore();
-  store.dispatch(workbenchActions.siteIdSet('site-a'));
-  store.dispatch(workbenchActions.runIdSet('a-run'));
-  store.dispatch(workbenchActions.siteIdSet('site-a'));
-  expect(store.getState().runId).toBe('a-run');
-  store.dispatch(workbenchActions.siteIdSet('site-b'));
-  expect(store.getState().runId).toBe('');
-  store.dispatch(workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['a-run'] }));
-  store.dispatch(workbenchActions.runsReceived({ siteId: 'site-b', runIds: [] }));
-  expect(store.getState().runId).toBe('');
-  store.dispatch(workbenchActions.runsReceived({ siteId: 'site-b', runIds: ['b-run'] }));
-  expect(store.getState().runId).toBe('b-run');
+  workbenchActions.siteIdSet('site-a');
+  workbenchActions.runIdSet('a-run');
+  workbenchActions.siteIdSet('site-a');
+  expect(useWorkbenchStore.getState().runId).toBe('a-run');
+  workbenchActions.siteIdSet('site-b');
+  expect(useWorkbenchStore.getState().runId).toBe('');
+  workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['a-run'] });
+  workbenchActions.runsReceived({ siteId: 'site-b', runIds: [] });
+  expect(useWorkbenchStore.getState().runId).toBe('');
+  workbenchActions.runsReceived({ siteId: 'site-b', runIds: ['b-run'] });
+  expect(useWorkbenchStore.getState().runId).toBe('b-run');
 });
 
 it('does not render cached run details or totals belonging to another site', () => {
-  appStore.dispatch(workbenchActions.siteIdSet('site-b'));
-  appStore.dispatch(workbenchActions.runIdSet('a-run'));
+  workbenchActions.siteIdSet('site-b');
+  workbenchActions.runIdSet('a-run');
+  // Keep background refetches pending instead of touching the network.
+  vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
   // Seed the shared Query cache instead of the removed RTK cache.
   const queryClient = createQueryClient();
   queryClient.setQueryData(sitesQueryOptions().queryKey, [{
@@ -61,7 +69,9 @@ it('does not render cached run details or totals belonging to another site', () 
     runId: 'a-run', fabs: [{ fabId: 'a-fab', completedLots: '999999', totalLots: '999999',
       simulationTimeUs: '1', busyTimeUs: '1', traceHash: 'hash', events: [] }],
   });
-  const html = renderToStaticMarkup(createElement(Provider, { store: appStore, children: createElement(QueryClientProvider, { client: queryClient, children: createElement(WorkbenchApp) }) }));
-  expect(html).toContain('AWAITING RUN');
-  expect(html).not.toContain('999,999');
+  const { container } = render(
+    createElement(QueryClientProvider, { client: queryClient, children: createElement(WorkbenchApp) }),
+  );
+  expect(container.innerHTML).toContain('AWAITING RUN');
+  expect(container.innerHTML).not.toContain('999,999');
 });

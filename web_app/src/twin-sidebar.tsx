@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useTwinLocale } from './twin-i18n';
-import { useAppDispatch, useAppSelector } from './store/hooks';
-import { twinPageActions } from './store/twinUiSlice';
+import { useTwinPageStore, twinPageActions } from './state/twinPageStore';
 import { ORIGINAL_TWIN_UI, filterOriginalOem, filterReferenceEquipment, localizedEquipment, type TwinSelection } from './original-twin-data';
 import type { FabToolState } from './fab-layout';
 import { OriginalIcon } from './original-icons';
@@ -28,13 +27,12 @@ export function TwinSidebar({selection,states,badgeCount=67,onSelect,onArchitect
   onSelect:(selection:TwinSelection)=>void;onArchitecture:()=>void;onDatabase:()=>void;
 }) {
   const {language}=useTwinLocale(); const zh=language==='zh';
-  const dispatch=useAppDispatch();
-  const {tab,query,category,segment,stateFilter,switched}=useAppSelector(state=>state.twinPage.sidebar);
-  const setTab=(value:'fab'|'oem')=>dispatch(twinPageActions.sidebarTabSet(value));
-  const setQuery=(value:string)=>dispatch(twinPageActions.sidebarQuerySet(value));
-  const setCategory=(value:string)=>dispatch(twinPageActions.sidebarCategorySet(value));
-  const setSegment=(value:string)=>dispatch(twinPageActions.sidebarSegmentSet(value));
-  const setStateFilter=(value:string)=>dispatch(twinPageActions.sidebarStateFilterToggle(value));
+  const {tab,query,category,segment,stateFilter,switched}=useTwinPageStore(state=>state.sidebar);
+  const setTab=(value:'fab'|'oem')=>twinPageActions.sidebarTabSet(value);
+  const setQuery=(value:string)=>twinPageActions.sidebarQuerySet(value);
+  const setCategory=(value:string)=>twinPageActions.sidebarCategorySet(value);
+  const setSegment=(value:string)=>twinPageActions.sidebarSegmentSet(value);
+  const setStateFilter=(value:string)=>twinPageActions.sidebarStateFilterToggle(value);
   const equipment=useMemo(()=>filterReferenceEquipment({query,category,state:stateFilter,language,states}),[query,category,stateFilter,language,states]);
   const oem=useMemo(()=>filterOriginalOem(query,segment),[query,segment]);
   const counts=useMemo(()=>{const result={running:0,idle:0,down:0,maint:0};for(const row of ORIGINAL_TWIN_UI.equipment)result[states[row.id]??'running']++;return result},[states]);

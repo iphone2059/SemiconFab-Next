@@ -1,10 +1,10 @@
 # SemiconFab Next V2.1 架构基线
 
 - 版本：V2.1（2026-10-27）
-- 状态：**基线已采纳；M1 与 M2a 已落地并验证（M2a：7 个端点迁 Query、RTK Query 退役、旧地址删除）；M2b（Zustand）与 M3–M6 未开始**（Baseline adopted / M1+M2a implemented / M2b-M6 pending）
+- 状态：**基线已采纳；M1、M2a、M2b 已落地并验证（M2b：Zustand 接管客户端状态、Redux/react-redux 删除）；M3–M6 未开始**（Baseline adopted / M1+M2 implemented / M3-M6 pending）
 - 适用对象：`web_app` 前端架构。后端 `fab_app`/`fab_shared` 的项目与命名空间边界沿用 ADR-0001…ADR-0007
 - 权威决策：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0010](adr/0010-command-event-bridge.md)（实时/命令/工作流边界）；本文档负责汇总、目录结构与迁移计划
-- 当前实现事实：所有 HTTP 端点已由 TanStack Query 独占，RTK Query 已在 M2a 删除；Redux Toolkit 仅剩临时客户端 UI slice（M2b 迁 Zustand，M6 删除）。XState 按用户指示直接锁定 6.0.0-alpha.70（无 stable v6），在 M4 接入工作流。详细证据见 [实施状态](IMPLEMENTATION-STATUS.md)、§15 与 §16。
+- 当前实现事实：所有 HTTP 端点由 TanStack Query 独占；客户端 UI 状态由 5 个 Zustand store（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale 归属其中）独占；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已全部删除。XState 按用户指示锁定 6.0.0-alpha.70（无 stable v6），在 M4 接入工作流。详细证据见 [实施状态](IMPLEMENTATION-STATUS.md)、§15–§17。
 
 > RQ-01..RQ-05 均已真实运行（见 §12.2）；CE-01..CE-08 与性能门禁仍为 **SPECIFIED / NOT RUN**。任何“已通过/已验证”的表述都必须指向真实测试记录。
 
@@ -234,7 +234,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | ARCH-11 | 高频遥测不得经过 Query/Zustand/XState | ADR-0010 + Engineering 09/15 | 架构评审 + 性能测试；渲染路径禁止读状态容器 | 性能门禁（计划） |
 | ARCH-12 | Babylon Lite 是唯一 3D 引擎，且只允许 WebGPU | ADR-0003/Engineering 09 + ADR-0010 高频路径 | `tools/check_architecture.py` 禁止 WebGL；渲染评审 | 渲染验收（现有） |
 
-规则的可执行检查在 M1..M6 逐步补齐。M1 已为 ARCH-03（router 配置 + 断言测试）与 ARCH-04（loader 只调用 `queryOptions`）提供可复核代码/测试；ARCH-02 的 sites 单端点由 G-02 保证无双缓存；其余规则在 M2–M6 补齐自动化检查前仍由评审负责。
+规则的可执行检查在 M1..M6 逐步补齐。M1 已为 ARCH-03（router 配置 + 断言测试）与 ARCH-04（loader 只调用 `queryOptions`）提供可复核代码/测试；ARCH-02 由 RQ-03/RQ-04 与“全部端点只有 Query 一处缓存”的代码事实覆盖；ARCH-05 由 M2b 的 store 清单/评审覆盖（Zustand 只含 UI 字段，无 Query DTO 副本），自动化静态检查留待 M6。其余规则在 M3–M6 补齐自动化检查前仍由评审负责。
 
 补充说明：ARCH-03 的 `defaultPreloadStaleTime: 0` 只是让 Router 不再否决 loader 重跑，是**必要但不充分**条件；Query 的 `staleTime`/`gcTime`、同源 Query Options、页面订阅、失效与显式 `fetchQuery` 共同决定数据新鲜度（见 [ADR-0009](adr/0009-tanstack-router-query-boundary.md) 第 3 节）。
 
@@ -255,8 +255,8 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | ADR | 状态 | 与 V2.1 的关系 |
 |---|---|---|
 | [ADR-0001](adr/0001-flat-project-layout.md)…[ADR-0007](adr/0007-read-only-legacy-catalog.md) | 已采纳 | 保留。项目布局、单后端、只读目录等与前端 V2.1 不冲突 |
-| [ADR-0008](adr/0008-redux-toolkit-rtk-query.md) | 已采纳，**当前实现** | V2.1 **部分取代**：RTK Query 的服务端缓存与 Redux slice 的页面状态仅在迁移落地后由 ADR-0009/0010 取代；渲染循环约束按 ARCH-11 收紧。迁移完成前 ADR-0008 仍是代码事实 |
-| [ADR-0009](adr/0009-tanstack-router-query-boundary.md) | 已采纳，M1+M2a 已落地 | Router/Query 边界、全部 RQ 门禁已运行；Redux UI slice 留待 M2b |
+| [ADR-0008](adr/0008-redux-toolkit-rtk-query.md) | **已被取代（M2）** | RTK Query 由 ADR-0009 取代（M2a）；Redux Toolkit/react-redux 由 V2.1 的 Zustand store 取代（M2b）。仅保留“Babylon 对象不入状态容器、遥测合批”等原则（ARCH-11） |
+| [ADR-0009](adr/0009-tanstack-router-query-boundary.md) | 已采纳，M1+M2 已落地 | Router/Query 边界、全部 RQ 门禁已运行；Zustand 已在 M2b 接管客户端 UI |
 | [ADR-0010](adr/0010-command-event-bridge.md) | 已采纳，实施未开始 | 实时/命令/工作流/运行时边界、CE 门禁 |
 
 ### 8.2 Engineering v1.1 对账（外部规范不修改）
@@ -276,16 +276,16 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 |---|---|---|---|---|
 | 路由 | TanStack Router 已接管顶层路由；生成式路由树 + 最终 URL（M1）；旧地址与重定向已在 M2 删除 | TanStack Router + 类型化 URL + intent 预加载 | M1 | **M1/M2 PASS** |
 | HTTP 服务端缓存 | 全部端点已由 TanStack Query 独占（M2a）；RTK Query/api.ts 已删除，无双缓存 | TanStack Query 唯一缓存；loader 复用 Query Options | M1/M2 | **M2a PASS** |
-| 客户端状态 | Redux Toolkit 临时保留 7 个 UI slice；服务端字段已随端点迁走 | Zustand/组件局部；不复制 Query 数据 | M2b | M2a 已移除 RTK Query；Zustand 未开始 |
-| 实时推送 | 仅设备状态 SSE（`EventSource` -> 有序消费者 -> Redux） | WebSocket -> Decoder -> RxJS -> 类型化流 | M3 | 未开始 |
+| 客户端状态 | 5 个 Zustand store（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale 字段）承载 UI 状态；Redux/react-redux 已删除 | Zustand/组件局部；不复制 Query 数据 | M2b | **M2b PASS** |
+| 实时推送 | 仅设备状态 SSE（`EventSource` -> 有序消费者 -> Zustand/Query 缓存；无 WebSocket 命令流） | WebSocket -> Decoder -> RxJS -> 类型化流 | M3 | 未开始 |
 | 命令链路 | 无（无 WS、无命令桥、无 actor） | CommandEventBridge + CommandWorkflow + 恢复 | M3/M4 | 未开始 |
 | XState | 未安装/未使用 | XState v6（隐藏在 `CommandWorkflow` 后） | M4 | 未开始 |
 | FabRuntime | 无；单站点页面直接装配 | `FabRuntime` 等四件套，按 FAB 装配/销毁 | M4 | 未开始 |
 | 多 FAB | 产品为单 FAB（121 台设备布局，`fab-layout.ts`） | 三 FAB 隔离：独立 actor、订阅、复合身份 | M4 | 未开始（依赖产品/后端） |
-| 高频遥测 | 现有 `store/telemetry-buffer.ts` 100ms 合批后进 Redux | Worker/TypedArray -> Babylon Lite，不进 Query/Zustand/XState | M5 | 未开始 |
+| 高频遥测 | 现有 `state/telemetry-buffer.ts` 100ms 合批后进 Zustand（非逐帧框架状态） | Worker/TypedArray -> Babylon Lite，不进 Query/Zustand/XState | M5 | 过渡实现；M5 迁 Worker/TypedArray |
 | 渲染 | Babylon Lite 1.36 已在 `src/render/lite`，WebGPU-only 校验已有 | 保留；渲染目录归位 `rendering` | M5 | 部分（引擎已就位） |
-| 依赖 | TanStack Router 1.170.46 / Query 5.105.0 / Router plugin 1.168.48、Zustand 5.0.16、RxJS 7.8.2、Zod 4.6.7、XState 6.0.0-alpha.70（用户指示直接用 v6）；jsdom 30.1.3 + Testing Library（dev） | 按阶段引入并锁版本；v6 当前仅 alpha，M4 前评估升级但不回退 v5 | M1..M4 | M2a 已锁定 v6 alpha |
-| 测试基建 | Vitest + jsdom + Testing Library；`tests/integration` RQ-01..05 已真实运行 | RQ/CE 集成与契约测试；性能测试目录 | M1 起 | **M1/M2a PASS**；CE/性能未开始 |
+| 依赖 | TanStack Router 1.170.46 / Query 5.105.0 / Router plugin 1.168.48、Zustand 5.0.16 + immer 11.2.9、RxJS 7.8.2、Zod 4.6.7、XState 6.0.0-alpha.70（用户指示直接用 v6）；jsdom 30.1.3 + Testing Library（dev）；Redux/react-redux 已移除 | 按阶段引入并锁版本；XState v6 当前仅 alpha，M4 前评估升级但不回退 v5 | M1..M4 | M2b 已移除 Redux；v6 alpha 锁定 |
+| 测试基建 | Vitest + jsdom + Testing Library；RQ-01..05 与 Zustand store 行为已真实运行 | RQ/CE 集成与契约测试；性能测试目录 | M1 起 | **M1/M2a/M2b PASS**；CE/性能未开始 |
 | 架构检查 | `tools/check_architecture.py` 只查既有前端边界（TS/TSX、禁止 WebGL、单 web_app） | 增加 ARCH 依赖方向/双缓存/契约位置检查 | M6 | 未开始 |
 | 文档 | V2.1 基线 + ADR-0009/0010 + 7 篇专项已合入 main（e18595f）；本文档补充 M1 证据 | 本基线 + ADR-0009/0010 + 7 篇专项 | M0 | **M0 PASS；M1 增量已更新** |
 
@@ -297,11 +297,11 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 |---|---|---|---|---|---|
 | M0 | 架构基线文档 | 本文件、ADR-0009/0010、7 篇专项、实施状态指针 | 文档评审通过；ARCH/RQ/CE/目录/数据流可追踪 | 无 | **完成并推送（e18595f）** |
 | M1 | 路由与查询地基 | 依赖、`app/providers`、`app/router`、`api/queries`、最终 URL（旧地址 M2 删除）、sites 端点迁移、RQ-01/RQ-05 集成测试 | typecheck/build/test 通过；RQ-01/RQ-05 首次运行；无双缓存；vite server/build 参数未变 | 已解除（OPEN-V21-01/02/03 已决策） | **PASS（2026-10-27，§15）** |
-| M2 | 客户端状态与 RTK 退役 | **M2a（完成）**：全部端点迁 Query、RTK Query 删除、RQ-02/03/04 运行、旧地址删除。**M2b（待做）**：Zustand store、Redux slice 迁移、ARCH-05 检查 | M2a：无 RTK Query 端点；RQ-02/03/04 PASS。M2b：ARCH-05 检查通过、Redux 只剩临时入口或删除 | M1 | **M2a PASS（§16）；M2b 未开始** |
+| M2 | 客户端状态与 RTK 退役 | **M2a（完成）**：全部端点迁 Query、RTK Query 删除、RQ-02/03/04 运行、旧地址删除。**M2b（完成）**：5 个 Zustand store、Redux/react-redux/store 删除、测试迁移 jsdom | 无 RTK Query 端点；RQ-02/03/04 PASS；Zustand 不含 Query 副本；Redux 依赖为零 | M1 | **M2 PASS（§16/§17）** |
 | M3 | 实时协议与命令桥 | `application/contracts`、`realtime/transport`、`realtime/protocol`、`realtime/streams`、`application/coordination`、假源集成测试 | CE-01..CE-05、CE-08 在假源上运行；ARCH-06/07 检查通过 | M1；后端流协议 OPEN-V21-06（真实链路） | 未开始 |
 | M4 | XState 工作流与 FabRuntime | `workflows/equipment` 四文件、`runtime` 四件套、`RuntimeProvider`、三 FAB 隔离测试 | CE-06/CE-07 在测试源上运行；ARCH-08/09/10 检查通过；单 FAB 回归通过 | M3；OPEN-V21-07/08；多 FAB 产品范围 | 未开始 |
 | M5 | 高频渲染管线与目录归位 | Worker/TypedArray 缓冲、Lite 渲染接入、`rendering`/`features` 等目录迁移、性能测试 | ARCH-11 检查通过；性能测试基线记录；无 WebGL；现有 Lite 验收不回退 | M1；现有 Twin/Lite 迁移工作完成 | 未开始 |
-| M6 | 收口与退役 | 删除 Redux/RTK 依赖与 `store`、ADR-0008 标记 Superseded、架构检查更新、文档更新 | `pnpm verify` 实际通过并留有记录；ARCH-01..12 检查可执行；CE-06/CE-07 真实链路证据（若后端就绪） | M2/M4/M5；后端实时服务 | 未开始 |
+| M6 | 收口与退役 | ARCH-01..12 自动化检查、旧迁移文档/证据/测试清理、CE-06/CE-07 真实链路证据（若后端就绪） | `pnpm verify` 实际通过并留有记录；ARCH 检查可执行；CE-06/CE-07 真实链路证据（若后端就绪） | M2/M4/M5；后端实时服务 | 未开始（Redux/RTK 与 ADR-0008 状态已在 M2 完成） |
 
 **关键路径**：M1 -> M2 -> M3 -> M4 为主链；M5 可与 M3/M4 并行，但依赖现有 Twin/Lite 工作收尾。真实后端 WebSocket 是 CE-04/CE-06 的硬依赖，前端不得用假源证据替代生产链路验收。
 
@@ -431,11 +431,11 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 - Twin 的 `?siteId=`/`?modal=`/`?mode=` 仍直接读写 `location.search`；路由参数 `$fabId` 优先于旧 `siteId`，M2 迁到 Router search。
 - 仅 `/api/v1/sites` 迁到 TanStack Query；其余 7 个 RTK Query 端点与 Redux slice 按 M2 的“同一变更内逐端点切换、无双缓存”执行。
 - XState 稳定版为 5.33.3（6.0 仅 alpha）；已按用户批准安装 5.33.3，M4 前必须复核是否升级 v6。
-- M2–M6 未开始；CE-01..08、RQ-02..04、性能门禁仍为 SPECIFIED / NOT RUN。
+- 以上是 M1 当时的记录；M2a/M2b 之后已由 §16/§17 取代。CE-01..08、性能门禁仍为 SPECIFIED / NOT RUN。
 
 ## 16. M2a 落地记录（2026-10-27）
 
-> 本轮只完成 M2 的数据层（M2a）；Zustand/Redux 退役（M2b）未开始。
+> 本节记录 M2 的数据层（M2a）；Zustand/Redux 退役（M2b）见 §17。
 
 ### 16.1 交付
 
@@ -455,11 +455,34 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 ### 16.3 过渡与遗留
 
-- Redux Toolkit 仍承载 7 个客户端 UI slice；M2b 迁 Zustand 并删除 Redux/react-redux。
-- 目录/对比页内部筛选、Twin 的 `?siteId/?modal/?mode` 仍是 history/直接 location 过渡，M2b 迁 Router search。
+- ~~Redux Toolkit 仍承载 7 个客户端 UI slice~~：M2b 已迁 Zustand 并删除 Redux/react-redux（§17）。
+- 目录/对比页内部筛选、Twin 的 `?siteId/?modal/?mode` 仍是 history/直接 location 过渡；这项 Router search 迁移未随 M2b 完成，留待后续清理。
 - XState v6 为 alpha：M4 需复核 API 并在 `CommandWorkflow` 实现内隔离，不向页面泄漏 actor。
 - CE-01..08、性能门禁、M3–M6 未开始。
 
+## 17. M2b 落地记录（2026-10-27）
+
+> 本轮完成客户端状态迁移与 Redux 退役；Router search 迁移（目录筛选/Twin URL 参数）未包含在本轮，作为后续清理项。
+
+### 17.1 交付
+
+- **Zustand 接管客户端状态**：新增 `web_app/src/state/`：`twinUiStore`、`twinPageStore`、`twinDemoStore`、`catalogStore`、`workbenchStore`、`runtimeStore`、`localeStore`，以及 `state/telemetry-buffer.ts`；状态更新使用 Immer，actions 为 store 方法（无 Redux dispatch）。
+- **Redux 彻底删除**：删除 `web_app/src/store/`（7 个 slice、hooks、store、api 残留）、`react-redux`/`@reduxjs/toolkit` 依赖；`AppProviders` 仅保留 QueryClientProvider + ErrorBoundary。
+- **Twin 保留性能边界**：twin-page 仍用 wafer-excluded shallow 订阅避免逐帧 HUD 更新触发整页渲染；帧循环通过 `getState()` 读取 live 状态，不新增 React 状态。
+- **测试迁移**：Redux slice 测试改写为 Zustand store/action 测试；需要已挂载状态的组件测试改为 jsdom + Testing Library（Zustand SSR 快照为初始状态）；telemetry-buffer 路径迁移。
+- **依赖**：新增 `immer@11.2.9`；`react-redux`、`@reduxjs/toolkit` 移除。XState 仍为 6.0.0-alpha.70。
+
+### 17.2 证据（本次实际运行）
+
+- `npx tsc --noEmit` → 0；`npx vitest run` → **57 文件 / 260 测试 PASS**；`vite build` → 0（1,562 modules）。
+- `./scripts/verify.ps1` → exit 0（契约/架构、16 Python、3 .NET + 67、冻结向量、前端全量）。
+- 代码事实：无 `react-redux`/`@reduxjs/toolkit`/`useAppSelector`/`dispatch(` 引用；`src/store/` 不存在；服务端数据仅存在于 Query 缓存（ARCH-02/05 评审通过）。
+
+### 17.3 遗留
+
+- 目录筛选、对比选择与 Twin 的 `siteId/modal/mode` 仍由页面直接读写 `location`，尚未迁到 Router search；不影响 M2 出口门禁，列入后续清理（可与 M3/M5 同批完成）。
+- ARCH-02/05 的自动化静态检查留待 M6（当前由“无第二缓存/无 DTO 副本”的代码审查与 RQ-03/04 覆盖）。
+- M3–M6 未开始；CE-01..08、性能门禁仍为 SPECIFIED / NOT RUN。
 ## 附录 A. 关键术语
 
 | 术语 | 含义 |
