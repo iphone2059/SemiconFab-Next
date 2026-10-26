@@ -1,0 +1,16 @@
+Check: build_twin_process_vectors.cjs
+Original process vectors: 15 initial, 29 directory ticks, 26 recipe ticks, 28 MES actions, 14 SPC, 6 Scenarios, 7 wafer/STDF cases
+Check: build_twin_dynamics_vectors.cjs
+Dynamics vectors stable: 548 events, 121 snapshots
+Check: build_twin_i18n_vectors.cjs
+Twin i18n vectors stable: 132 keys, 176 dynamic, 6 missing, 16 skipped
+Check: build_twin_personnel_vectors.cjs
+Personnel vectors stable: 6 personnel, 6 phases, 27 as-built events, 46 preserved events, 176 as-built frames, 176 preserved frames
+Check: build_twin_exploded_links.cjs
+Exploded link vectors stable: 12 B1 pairs from 69 source records
+Check: build_twin_translations.cjs
+Twin translations stable: 281 entries, 9 collisions, 308 source pairs
+Check: audit_twin_i18n_coverage.mjs
+Twin i18n coverage stable: 182 literal pairs (41 explicit), 0 matched, 0 contradictions (0 allowlisted), 41 absent from both maps, 0 missing English arguments
+Check: build_twin_motion_vectors.cjs
+Tour/wafer vectors stable: tour 5 waypoints, 378 events, 849 frames; wafer 5 traces, 364 frames

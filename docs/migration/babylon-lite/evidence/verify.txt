@@ -2,7 +2,7 @@ Contracts: C# / TypeScript match JSON Schema.
 PASS: 3 independent .NET projects (fab_shared + fab_app + fab_tests) / 1 self-contained frontend project; flat layout, reference rules, DAG and module records.
 ................
 ----------------------------------------------------------------------
-Ran 16 tests in 1.686s
+Ran 16 tests in 1.422s
 
 OK
 {"transformVersion": "semiconfab-legacy-import-v1", "importId": "c76486dc1c8049c9e5cb6d43b16c383e1d79dada1b5071c07ba35c12469f51cf", "inputCount": 253, "acceptedCount": 253, "rejectedCount": 0, "counts": {"catalog": 253, "oem": 116, "osat": 86, "prices": 167, "bom": 103, "layout": 121}, "issues": [], "snapshotSha256": "90c16a18c5143672bf74b7849083e16ef821a6e5e5860b22ca327cd03d0bae5c", "files": [{"path": "catalog.json", "bytes": 691042, "sha256": "b21829a25baed932a96b373478d764dd80a84fab6ce4ce53c978a985230af4e7"}, {"path": "data/semiconductor_equipment_database.json", "bytes": 69137, "sha256": "a650d187876e4579764cd22ae80653b99280b9e24407bf0b7f437f7e14d01b61"}, {"path": "data/osat-86-ground-truth.json", "bytes": 86651, "sha256": "7dc2da0e4055317cff19dd39dc9fa4ec0a4947e0ce49d62fd0c83c41c327c418"}, {"path": "data/price_estimates.json", "bytes": 54234, "sha256": "b8ed3e89918eef0ee80d863b8f4cd01e9d8fa5891f4b0b99b9064156e63ac8ed"}, {"path": "data/twin_bom_costs.json", "bytes": 58813, "sha256": "d89d59da3a371f4efaee7f2f16ce2572c2e595deadaef28e9454f33bb2093fd0"}, {"path": "twin/layout-default.json", "bytes": 30972, "sha256": "5b1d03f741ec6733fd33bc058b88132dcf3d8caa9657cbebe3dcdf5ef3d3334e"}, {"path": "schema.json", "bytes": 11515, "sha256": "dd108062a103a775bff8eeeb5a629c719b6ecc0598f59678594c715ed1dd43e5"}, {"path": "LICENSE", "bytes": 4637, "sha256": "8e6982187c93b0a47cb126cc83f697e17f34f62bfa1006000bc94d45bae43225"}]}
@@ -17,7 +17,7 @@ Build succeeded.
     0 Warning(s)
     0 Error(s)
 
-Time Elapsed 00:00:02.86
+Time Elapsed 00:00:01.93
   Determining projects to restore...
   All projects are up-to-date for restore.
 C:\Program Files\dotnet\sdk\11.0.100-rc.2.26504.105\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(385,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [C:\Users\han_qingyu\SemiconFab-Next\fab_shared\fab_shared.csproj]
@@ -27,7 +27,7 @@ Build succeeded.
     0 Warning(s)
     0 Error(s)
 
-Time Elapsed 00:00:00.24
+Time Elapsed 00:00:00.10
   Determining projects to restore...
   All projects are up-to-date for restore.
 C:\Program Files\dotnet\sdk\11.0.100-rc.2.26504.105\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(385,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [C:\Users\han_qingyu\SemiconFab-Next\fab_tests\fab_tests.csproj]
@@ -40,14 +40,14 @@ Build succeeded.
     0 Warning(s)
     0 Error(s)
 
-Time Elapsed 00:00:01.73
+Time Elapsed 00:00:01.09
 Test run for C:\Users\han_qingyu\SemiconFab-Next\fab_tests\bin\Release\net11.0\fab_tests.dll (.NETCoreApp,Version=v11.0)
 A total of 1 test files matched the specified pattern.
 
 Passed!  - Failed:     0, Passed:    67, Skipped:     0, Total:    67, Duration: 2 s - fab_tests.dll (net11.0)
-✓ Lockfile passes supply-chain policies (verified 8m ago)
+✓ Lockfile passes supply-chain policies (verified 20m ago)
 Lockfile is up to date, resolution step is skipped
-Done in 19ms using pnpm v12.15.0
+Done in 14ms using pnpm v12.15.0
 $ tsc --noEmit
 $ vitest run
 
@@ -55,12 +55,12 @@ $ vitest run
 
 
  Test Files  50 passed (50)
-      Tests  200 passed (200)
-   Start at  10:41:33
-   Duration  2.60s (tests 46%, import 44%, transform 7%, worker 3%)
+      Tests  207 passed (207)
+   Start at  10:53:37
+   Duration  2.55s (tests 46%, import 44%, transform 7%, worker 2%)
 
-    Isolate  50 workers spawned · ~329ms startup each (spawn + environment, per file)
-             at least ~538ms faster with isolate: false — reuses workers across files instead of one per file
+    Isolate  50 workers spawned · ~324ms startup each (spawn + environment, per file)
+             at least ~528ms faster with isolate: false — reuses workers across files instead of one per file
 
 $ vite build
 vite v8.3.5 building client environment for production...
@@ -77,7 +77,7 @@ dist/assets/react-DQRdLZIQ.js               293.78 kB │ gzip:  92.97 kB
 dist/assets/index-cbUY7Qv0.js               438.65 kB │ gzip: 117.25 kB
 dist/assets/gpu-Byl7fYvq.js               2,529.08 kB │ gzip: 591.28 kB
 
-✓ built in 442ms
+✓ built in 422ms
 [plugin builtin:vite-reporter] 
 (!) Some chunks are larger than 500 kB after minification. Consider:
 - Using dynamic import() to code-split the application

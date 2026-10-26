@@ -17,10 +17,13 @@ let context: { engine: EngineContext; scene: SceneContext } | undefined;
 
 async function mount(abortImmediately = false) {
   runtime?.dispose();
+  context = undefined;
   const controller = new AbortController();
   const next = createLiteRuntime(canvas, {
     signal: controller.signal,
     compose(scene, engine) {
+      // Track this generation at acquisition, including mounts aborted before ready resolves.
+      context = { engine, scene };
       scene.clearColor = { r: 0.86, g: 0.93, b: 0.99, a: 1 };
       const camera = createArcRotateCamera(-Math.PI / 2, Math.PI / 2.5, 8, { x: 0, y: 0, z: 0 });
       scene.camera = camera;

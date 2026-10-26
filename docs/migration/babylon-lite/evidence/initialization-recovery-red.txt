@@ -1,0 +1,35 @@
+npm notice run web_app@0.1.0 test
+npm notice run vitest run tests/lite-runtime.test.ts
+
+ RUN  v5.0.5 C:/Users/han_qingyu/SemiconFab-Next/web_app
+
+ ❯ tests/lite-runtime.test.ts (17 tests | 1 failed) 448ms
+   × releases replacement resources after initialization fails during native recovery 70ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lite-runtime.test.ts > releases replacement resources after initialization fails during native recovery
+AssertionError: expected 3 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 3
+
+ ❯ tests/lite-runtime.test.ts:220:25
+    218|   expect(gpu.live.has('engine')).toBe(true);
+    219|   gpu.recovery.onRecovered?.();
+    220|   expect(gpu.live.size).toBe(0);
+       |                         ^
+    221|   expect(runtime.status).toBe('failed');
+    222| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 passed (17)
+   Start at  10:52:52
+   Duration  673ms (tests 89%, transform 7%, import 3%, worker 1%)
+

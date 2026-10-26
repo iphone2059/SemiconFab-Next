@@ -144,3 +144,79 @@ it('releases a failed recovery and reports the failure to the owner', async () =
   expect(reported).toBe(error);
   expect(gpu.live.size).toBe(0);
 });
+
+it.each(['recover', 'fail'] as const)('waits for in-flight recovery to %s before disposing its replacement device', async outcome => {
+  const states: string[] = [];
+  const runtime = createLiteRuntime(canvas, { compose: () => {}, onStatus: status => states.push(status) });
+  await runtime.ready;
+  gpu.recovery.onLost?.({ reason: 'unknown', message: 'test loss' });
+  runtime.dispose();
+  expect(runtime.status).toBe('disposed');
+  // Lite disable() cannot cancel a captured requestAdapter/requestDevice operation.
+  expect(gpu.live.has('engine')).toBe(true);
+  expect(gpu.events).toEqual([]);
+  if (outcome === 'recover') gpu.recovery.onRecovered?.();
+  else gpu.recovery.onRecoveryFailed?.(new Error('replacement failed'));
+  expect(gpu.live.size).toBe(0);
+  expect(states).toEqual(['initializing', 'ready', 'lost']);
+});
+
+it('finishes initialization from a recovered first frame when the original RAF was canceled', async () => {
+  gpu.startEngine.mockReturnValue(new Promise(() => {}));
+  const runtime = createLiteRuntime(canvas, { compose: () => {} });
+  await vi.waitFor(() => expect(gpu.startEngine).toHaveBeenCalledOnce());
+  gpu.recovery.onLost?.({ reason: 'unknown', message: 'first frame lost' });
+  gpu.recovery.onRecovered?.();
+  const result = await Promise.race([runtime.ready.then(() => 'ready'), new Promise(resolve => setTimeout(() => resolve('pending'), 100))]);
+  expect(result).toBe('ready');
+  runtime.dispose();
+});
+
+it('rechecks cancellation after a ready observer synchronously aborts its owner', async () => {
+  const controller = new AbortController();
+  const runtime = createLiteRuntime(canvas, {
+    signal: controller.signal, compose: () => {},
+    onStatus: status => { if (status === 'ready') controller.abort(); },
+  });
+  await expect(runtime.ready).rejects.toMatchObject({ name: 'AbortError' });
+  expect(gpu.live.size).toBe(0);
+});
+
+it('retries the first-frame GPU boundary on the replacement device after loss during submission', async () => {
+  let rejectSubmission!: (error: Error) => void;
+  gpu.waitForGpuIdle.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectSubmission = reject; }));
+  const runtime = createLiteRuntime(canvas, { compose: () => {} });
+  await vi.waitFor(() => expect(gpu.waitForGpuIdle).toHaveBeenCalledOnce());
+  gpu.recovery.onLost?.({ reason: 'unknown', message: 'submitted device lost' });
+  rejectSubmission(new Error('old device lost'));
+  gpu.recovery.onRecovered?.();
+  await runtime.ready;
+  expect(gpu.waitForGpuIdle).toHaveBeenCalledTimes(2);
+  expect(runtime.status).toBe('ready');
+  runtime.dispose();
+});
+
+it('avoids acquiring a device when an initializing observer synchronously aborts the mount', async () => {
+  const controller = new AbortController();
+  const runtime = createLiteRuntime(canvas, {
+    signal: controller.signal, compose: () => {},
+    onStatus: status => { if (status === 'initializing') controller.abort(); },
+  });
+  await expect(runtime.ready).rejects.toMatchObject({ name: 'AbortError' });
+  expect(gpu.createEngine).not.toHaveBeenCalled();
+});
+
+it('releases replacement resources after initialization fails during native recovery', async () => {
+  const registration = deferred();
+  const failure = new Error('registration rejected');
+  gpu.registerScene.mockImplementation(async () => { await registration.promise; throw failure; });
+  const runtime = createLiteRuntime(canvas, { compose: () => {} });
+  await vi.waitFor(() => expect(gpu.registerScene).toHaveBeenCalledOnce());
+  gpu.recovery.onLost?.({ reason: 'unknown', message: 'registration device lost' });
+  registration.resolve();
+  await expect(runtime.ready).rejects.toBe(failure);
+  expect(gpu.live.has('engine')).toBe(true);
+  gpu.recovery.onRecovered?.();
+  expect(gpu.live.size).toBe(0);
+  expect(runtime.status).toBe('failed');
+});

@@ -97,6 +97,7 @@
       "web_app/src/preferences.ts",
       "web_app/src/procedural-fab.ts",
       "web_app/src/process-control.ts",
+      "web_app/src/render/lite/runtime.ts",
       "web_app/src/research-replay.ts",
       "web_app/src/scenario.ts",
       "web_app/src/state-sync.ts",

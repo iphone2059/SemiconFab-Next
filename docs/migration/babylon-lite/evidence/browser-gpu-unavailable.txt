@@ -1,0 +1,10 @@
+file:///C:/Users/han_qingyu/SemiconFab-Next/web_app/tests/lite-runtime.browser.ts:14
+      if (snapshot?.gpuErrors.length) throw new Error(JSON.stringify(snapshot));
+                                            ^
+
+Error: {"status":"failed","states":["initializing","failed"],"gpuErrors":["Error: #50","Error: #50"],"frames":0,"drawCalls":0,"registeredContexts":0,"surfaces":0,"meshes":0,"width":300,"height":150}
+    at until (file:///C:/Users/han_qingyu/SemiconFab-Next/web_app/tests/lite-runtime.browser.ts:14:45)
+    at async Module.runLiteRuntimeAcceptance (file:///C:/Users/han_qingyu/SemiconFab-Next/web_app/tests/lite-runtime.browser.ts:21:19)
+    at async file:///C:/Users/han_qingyu/SemiconFab-Next/tools/run_twin_browser.mjs:55:18
+
+Node.js v26.12.1

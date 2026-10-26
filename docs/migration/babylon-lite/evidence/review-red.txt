@@ -1,0 +1,116 @@
+npm notice run web_app@0.1.0 test
+npm notice run vitest run tests/lite-runtime.test.ts
+
+ RUN  v5.0.5 C:/Users/han_qingyu/SemiconFab-Next/web_app
+
+ ❯ tests/lite-runtime.test.ts (16 tests | 6 failed) 486ms
+   × waits for in-flight recovery to recover before disposing its replacement device 4ms
+   × waits for in-flight recovery to fail before disposing its replacement device 1ms
+   × finishes initialization from a recovered first frame when the original RAF was canceled 168ms
+   × rechecks cancellation after a ready observer synchronously aborts its owner 6ms
+   × retries the first-frame GPU boundary on the replacement device after loss during submission 53ms
+   × avoids acquiring a device when an initializing observer synchronously aborts the mount 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/lite-runtime.test.ts > waits for in-flight recovery to recover before disposing its replacement device
+ FAIL  tests/lite-runtime.test.ts > waits for in-flight recovery to fail before disposing its replacement device
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/lite-runtime.test.ts:156:34
+    154|   expect(runtime.status).toBe('disposed');
+    155|   // Lite disable() cannot cancel a captured requestAdapter/requestDev…
+    156|   expect(gpu.live.has('engine')).toBe(true);
+       |                                  ^
+    157|   expect(gpu.events).toEqual([]);
+    158|   if (outcome === 'recover') gpu.recovery.onRecovered?.();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  tests/lite-runtime.test.ts > finishes initialization from a recovered first frame when the original RAF was canceled
+AssertionError: expected 'pending' to be 'ready' // Object.is equality
+
+Expected: "ready"
+Received: "pending"
+
+ ❯ tests/lite-runtime.test.ts:171:18
+    169|   gpu.recovery.onRecovered?.();
+    170|   const result = await Promise.race([runtime.ready.then(() => 'ready')…
+    171|   expect(result).toBe('ready');
+       |                  ^
+    172|   runtime.dispose();
+    173| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/lite-runtime.test.ts > rechecks cancellation after a ready observer synchronously aborts its owner
+AssertionError: promise resolved "{ engine: {}, scene: {} }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "engine": {},
++   "scene": {},
+  }
+
+ ❯ tests/lite-runtime.test.ts:181:30
+    179|     onStatus: status => { if (status === 'ready') controller.abort(); …
+    180|   });
+    181|   await expect(runtime.ready).rejects.toMatchObject({ name: 'AbortErro…
+       |                              ^
+    182|   expect(gpu.live.size).toBe(0);
+    183| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  tests/lite-runtime.test.ts > retries the first-frame GPU boundary on the replacement device after loss during submission
+Error: old device lost
+ ❯ tests/lite-runtime.test.ts:191:20
+    189|   await vi.waitFor(() => expect(gpu.waitForGpuIdle).toHaveBeenCalledOn…
+    190|   gpu.recovery.onLost?.({ reason: 'unknown', message: 'submitted devic…
+    191|   rejectSubmission(new Error('old device lost'));
+       |                    ^
+    192|   gpu.recovery.onRecovered?.();
+    193|   await runtime.ready;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  tests/lite-runtime.test.ts > avoids acquiring a device when an initializing observer synchronously aborts the mount
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {},
+    ]
+
+
+Number of calls: 1
+
+ ❯ tests/lite-runtime.test.ts:206:32
+    204|   });
+    205|   await expect(runtime.ready).rejects.toMatchObject({ name: 'AbortErro…
+    206|   expect(gpu.createEngine).not.toHaveBeenCalled();
+       |                                ^
+    207| });
+    208|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 10 passed (16)
+   Start at  10:47:01
+   Duration  656ms (tests 90%, transform 7%, import 3%, worker 1%)
+

@@ -26,6 +26,11 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
   let detach: (() => void) | undefined;
   let initializing = true;
   let firstFrameReady = false;
+  let recovering = false;
+  let lossGeneration = 0;
+  let recoverySettled: Promise<void> = Promise.resolve();
+  let finishRecovery: (() => void) | undefined;
+  let resumedFirstFrame: (() => void) | undefined;
   let disposed = false;
   let released = false;
   const cancellation = new AbortController();
@@ -58,8 +63,9 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
     disposed = true;
     status = 'disposed';
     cancellation.abort();
-    // createEngine/registerScene may still be writing resources. Release after they settle.
-    if (!initializing) release();
+    // Lite disable() does not cancel a captured recovery. It may still replace the device.
+    // Keep ownership until both initialization and native recovery have settled.
+    if (!initializing && !recovering) release();
   }
   async function firstFrameBoundary(operation: Promise<void>) {
     const signal = cancellation.signal;
@@ -79,15 +85,30 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
     try {
       cancellation.signal.throwIfAborted();
       report('initializing');
+      cancellation.signal.throwIfAborted();
       engine = await createEngine(canvas);
       cancellation.signal.throwIfAborted();
       // Enable capture before creating any geometry or textures.
       recovery = enableDeviceLostSceneRecovery(engine, {
-        onLost: () => report('lost'),
+        onLost: () => {
+          if (released) return;
+          recovering = true;
+          lossGeneration++;
+          recoverySettled = new Promise(resolve => { finishRecovery = resolve; });
+          report('lost');
+        },
         // Lite invokes this only after the rebuilt scene's first resumed frame.
-        onRecovered: () => { if (firstFrameReady) report('ready'); },
+        onRecovered: () => {
+          recovering = false;
+          finishRecovery?.();
+          resumedFirstFrame?.();
+          if (!initializing && (disposed || status === 'failed')) release();
+          else if (firstFrameReady) report('ready');
+        },
         onRecoveryFailed: error => {
-          if (disposed || released) return;
+          recovering = false;
+          finishRecovery?.();
+          if (released) return;
           if (initializing) cancellation.abort(error);
           else { try { report('failed', error); } finally { release(); } }
         },
@@ -97,19 +118,35 @@ export function createLiteRuntime(canvas: HTMLCanvasElement, options: LiteRuntim
       cancellation.signal.throwIfAborted();
       await registerScene(scene);
       cancellation.signal.throwIfAborted();
+      if (recovering) await firstFrameBoundary(recoverySettled);
+      cancellation.signal.throwIfAborted();
       // stopEngine cancels RAF without resolving startEngine; cancellation must race this wait.
-      await firstFrameBoundary(startEngine(engine));
-      await firstFrameBoundary(waitForGpuIdle(engine));
+      // A loss before that RAF also cancels it; native recovery supplies a different first frame.
+      const recoveredFrame = new Promise<void>(resolve => { resumedFirstFrame = resolve; });
+      await firstFrameBoundary(Promise.race([startEngine(engine), recoveredFrame]));
+      resumedFirstFrame = undefined;
+      for (;;) {
+        if (recovering) await firstFrameBoundary(recoverySettled);
+        const submittedGeneration = lossGeneration;
+        try { await firstFrameBoundary(waitForGpuIdle(engine)); }
+        catch (error) {
+          if (cancellation.signal.aborted || submittedGeneration === lossGeneration) throw error;
+          continue;
+        }
+        if (!recovering && submittedGeneration === lossGeneration) break;
+      }
       cancellation.signal.throwIfAborted();
       firstFrameReady = true;
       report('ready');
+      cancellation.signal.throwIfAborted();
       return { engine, scene };
     } catch (error) {
-      try { report('failed', error); } finally { release(); }
+      try { report('failed', error); } finally { if (!recovering) release(); }
       throw error;
     } finally {
       initializing = false;
-      if (disposed) release();
+      resumedFirstFrame = undefined;
+      if (disposed && !recovering) release();
     }
   })();
   return { ready, get status() { return status; }, dispose };

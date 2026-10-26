@@ -19,6 +19,7 @@ export async function runLiteRuntimeAcceptance(command, baseUrl) {
   }
   await command('Page.navigate', { url: baseUrl });
   const initial = await until(s => s.status === 'ready' && s.frames > 2, 'initial Lite frame');
+  console.log('Lite acceptance: initial frame ready');
   assert.equal(initial.meshes, 1);
   assert.ok(initial.drawCalls > 0);
   assert.equal(initial.registeredContexts, 1);
@@ -35,10 +36,36 @@ export async function runLiteRuntimeAcceptance(command, baseUrl) {
       && s.states.filter(state => state === 'ready').length === loss + 1, `device recovery ${loss}`);
     await until(s => s.frames > recovered.frames + 2, 'resumed frames');
     recoveries.push(recovered);
+    console.log(`Lite acceptance: recovery ${loss} ready`);
   }
   const sizeBefore = await evaluate('__liteAcceptance.snapshot()');
   await command('Emulation.setDeviceMetricsOverride', { width: 1024, height: 640, deviceScaleFactor: 1, mobile: false });
   const resized = await until(s => s.width !== sizeBefore.width && s.width === 1024 && s.height === 640, 'resize');
+  console.log('Lite acceptance: resized');
+  const disposalDuringRecovery = await evaluate(`(async () => {
+    const original = navigator.gpu.requestAdapter;
+    let release;
+    let notify;
+    const requested = new Promise(resolve => { notify = resolve; });
+    navigator.gpu.requestAdapter = function(...args) {
+      return new Promise((resolve, reject) => {
+        release = () => Reflect.apply(original, this, args).then(resolve, reject);
+        notify();
+      });
+    };
+    try {
+      __liteAcceptance.loseDevice();
+      await requested;
+      const pending = __liteAcceptance.dispose();
+      release();
+      return pending;
+    } finally { navigator.gpu.requestAdapter = original; }
+  })()`);
+  assert.equal(disposalDuringRecovery.status, 'disposed');
+  console.log('Lite acceptance: disposed while replacement acquisition pending');
+  assert.equal(disposalDuringRecovery.surfaces, 1, 'replacement acquisition still owns resources');
+  await until(s => s.surfaces === 0, 'dispose after native recovery settles');
+  console.log('Lite acceptance: replacement resources released');
   // A committed PNG is collected by the runner separately; this suite checks actual rendering/lifetime state.
   const disposed = await evaluate('__liteAcceptance.dispose()');
   assert.equal(disposed.status, 'disposed');
@@ -55,5 +82,20 @@ export async function runLiteRuntimeAcceptance(command, baseUrl) {
   assert.equal(remounted.registeredContexts, 1);
   assert.equal(remounted.meshes, 1);
   await until(s => s.frames > remounted.frames + 2, 'remounted frames');
-  return { status: 'PASS', scope: 'P1 cube lifecycle only; FAB parity NOT_RUN', gpu, initial, recoveries, resized, disposed, aborted, remounted };
+  console.log('Lite acceptance: remounted');
+  const firstFrameLoss = await evaluate(`(async () => {
+    __liteAcceptance.dispose();
+    const original = window.requestAnimationFrame;
+    let interrupted = false;
+    window.requestAnimationFrame = function(callback) {
+      if (!interrupted) { interrupted = true; queueMicrotask(() => __liteAcceptance.loseDevice()); }
+      return original.call(window, callback);
+    };
+    try {
+      return await Promise.race([__liteAcceptance.mount(), new Promise((_resolve, reject) => setTimeout(() => reject(new Error('first-frame recovery hung')), 30000))]);
+    } finally { window.requestAnimationFrame = original; }
+  })()`);
+  assert.equal(firstFrameLoss.status, 'ready');
+  assert.equal(firstFrameLoss.states.filter(s => s === 'lost').length, 5);
+  return { status: 'PASS', scope: 'P1 cube lifecycle only; FAB parity NOT_RUN', gpu, initial, recoveries, resized, disposalDuringRecovery, disposed, aborted, remounted, firstFrameLoss };
 }
