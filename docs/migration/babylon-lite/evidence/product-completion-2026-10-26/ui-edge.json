@@ -1,7 +1,7 @@
 {
   "suite": "ui",
   "baseUrl": "http://127.0.0.1:5178",
-  "capturedAt": "2026-10-26T15:58:20.212Z",
+  "capturedAt": "2026-10-26T16:20:42.381Z",
   "viewport": "1536x735 DPR1 foreground tab",
   "result": {
     "controls": true,
@@ -19,6 +19,6 @@
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0",
     "V8-Version": "15.6.12.6",
     "WebKit-Version": "537.36 (@57559ad176e613cfedd7dff5fe6856590a39eb3b)",
-    "webSocketDebuggerUrl": "ws://127.0.0.1:9492/devtools/browser/5f232d99-318e-4887-9adb-a920eea3e2fe"
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9492/devtools/browser/c67267aa-05ac-481e-9236-a61c620100e6"
   }
 }

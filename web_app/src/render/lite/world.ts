@@ -236,8 +236,6 @@ export async function createLiteWorld(
     facility = createLiteFacility(scene, engine, { frames: () => motion!.readAirShowerFrames() });
     stage('environment');
     environment = createLiteEnvironment(scene, engine);
-    stage('effects');
-    effects = createLiteEffects(scene, engine, { sampledDepthFallback: true });
     stage('tool-states');
     toolStates = createLiteToolStates(scene, engine, equipment);
     toolStates.applyAll(toolStateCache);
@@ -248,6 +246,12 @@ export async function createLiteWorld(
       hoverPickMs: Math.max(0, Number(new URLSearchParams(location.search).get('hoverPickMs') ?? '50') || 0),
     });
     lighting = createLiteLighting(scene, [...structure.lights, ...facility.lights]);
+    // The X-Ray palette borrows the CSM receiver, so the native shadow generator must exist before
+    // the effects module creates its palette materials and binds the depth texture + uniforms.
+    stage('shadows');
+    shadows = await createLiteShadows(scene, engine, lighting.key);
+    stage('effects');
+    effects = createLiteEffects(scene, engine, { shadows: shadows.generator });
     const frameNodes: SceneNode[] = [
       ...equipment.batches.map(batch => batch.mesh),
       ...Object.values(structure.roots), structure.lightRoot,
@@ -267,13 +271,7 @@ export async function createLiteWorld(
     await enableMirroredMeshes(scene);
     stage('environment-ibl');
     await prepareStaticStructureEnvironment(scene);
-    stage('shadows');
-    shadows = await createLiteShadows(scene, engine, lighting.key);
     stage('xray-targets');
-    // NOTE: Lite 1.36 rejects CSM-refit frames in which a ShaderMaterial samples the receiver
-    // depth texture being re-rendered (WebGPU usage conflict). The product X-Ray palette therefore
-    // does not borrow the CSM depth; native PBR/Standard surfaces keep full shadows (FEATURE_GAPS).
-    void effects; // effects.shadowLinked stays false; shadows.generator remains native-owned.
     allCasters = unique([
       ...equipment.batches.map(batch => batch.mesh),
       ...structure.parts.filter(part => part.layer !== 'ffu').map(part => part.mesh),

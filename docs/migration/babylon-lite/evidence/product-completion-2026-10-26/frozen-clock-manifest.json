@@ -1,72 +1,45 @@
 {
-  "capturedAt": "2026-10-26T15:49:20.080Z",
-  "method": "GOLDEN_CLOCK manual stepping via Page.addScriptToEvaluateOnNewDocument; 180 settle frames + per-view frames; viewport 1536x735 DPR1; ROI [400,120,1500,680]",
-  "ref": {
-    "tag": "ref",
-    "views": {
-      "iso": {
-        "file": ".local/lite-frozen-compare/ref-iso.png",
-        "timeMs": 5233.333333333339
-      },
-      "top": {
-        "file": ".local/lite-frozen-compare/ref-top.png",
-        "timeMs": 7733.333333333385
-      },
-      "b1": {
-        "file": ".local/lite-frozen-compare/ref-b1.png",
-        "timeMs": 12733.333333333228
-      },
-      "dual": {
-        "file": ".local/lite-frozen-compare/ref-dual.png",
-        "timeMs": 17733.333333333194
-      },
-      "exploded": {
-        "file": ".local/lite-frozen-compare/ref-exploded.png",
-        "timeMs": 32733.333333334285
-      },
-      "cut": {
-        "file": ".local/lite-frozen-compare/ref-cut.png",
-        "timeMs": 46899.9999999989
-      },
-      "xray": {
-        "file": ".local/lite-frozen-compare/ref-xray.png",
-        "timeMs": 54566.66666666445
-      }
-    },
-    "errors": []
+  "capturedAt": "2026-10-26T16:23:04.930Z",
+  "method": "frozen GOLDEN_CLOCK manual stepping via Page.addScriptToEvaluateOnNewDocument; both sides 180 settle frames after WebGPU ready, per-view frames 120-700; viewport 1536x735 DPR1; ROI [400,120,1500,680]; Pillow absolute RGB. Lite build: native CSM receiver sampled by the X-Ray palette (viewDimension 2d-array, comparison sampler) with a depth-only Standard caster override.",
+  "reference": {
+    "site": "http://127.0.0.1:5176",
+    "commit": "0b35ca5"
   },
   "lite": {
-    "tag": "lite",
-    "views": {
-      "iso": {
-        "file": ".local/lite-frozen-compare/lite-iso.png",
-        "timeMs": 5200.0000000000055
-      },
-      "top": {
-        "file": ".local/lite-frozen-compare/lite-top.png",
-        "timeMs": 7700.000000000051
-      },
-      "b1": {
-        "file": ".local/lite-frozen-compare/lite-b1.png",
-        "timeMs": 12699.999999999896
-      },
-      "dual": {
-        "file": ".local/lite-frozen-compare/lite-dual.png",
-        "timeMs": 17699.999999999858
-      },
-      "exploded": {
-        "file": ".local/lite-frozen-compare/lite-exploded.png",
-        "timeMs": 32700.00000000095
-      },
-      "cut": {
-        "file": ".local/lite-frozen-compare/lite-cut.png",
-        "timeMs": 46866.66666666557
-      },
-      "xray": {
-        "file": ".local/lite-frozen-compare/lite-xray.png",
-        "timeMs": 54533.333333331124
+    "site": "http://127.0.0.1:5178",
+    "productionPreview": true
+  },
+  "views": [
+    "iso",
+    "top",
+    "b1",
+    "dual",
+    "exploded",
+    "cut",
+    "xray"
+  ],
+  "liteCapture": {
+    "iso": 5200,
+    "top": 7700,
+    "b1": 12700,
+    "dual": 17700,
+    "exploded": 32700,
+    "cut": 46866.667,
+    "xray": 54533.333,
+    "xrayDiagnostics": {
+      "filter": "all",
+      "shaderMeshes": 251,
+      "shadowLinked": true,
+      "targets": {
+        "equipment": 51,
+        "floor": 1,
+        "subfab": 179,
+        "oht": 21
       }
-    },
-    "errors": []
+    }
+  },
+  "errors": {
+    "reference": 0,
+    "lite": 0
   }
 }

@@ -1,5 +1,4 @@
 {
-  "method": "frozen GOLDEN_CLOCK manual stepping; ROI [400,120,1500,680]; Pillow absolute RGB",
   "roi": [
     400,
     120,
@@ -8,32 +7,32 @@
   ],
   "views": {
     "iso": {
-      "meanAbsChannel": 9.834,
-      "changedFraction": 0.15015
+      "meanAbsChannel": 9.831,
+      "changedFraction": 0.15007
     },
     "top": {
-      "meanAbsChannel": 13.406,
-      "changedFraction": 0.20278
+      "meanAbsChannel": 13.401,
+      "changedFraction": 0.20272
     },
     "b1": {
-      "meanAbsChannel": 17.668,
-      "changedFraction": 0.29047
+      "meanAbsChannel": 17.67,
+      "changedFraction": 0.29048
     },
     "dual": {
-      "meanAbsChannel": 19.834,
-      "changedFraction": 0.37136
+      "meanAbsChannel": 19.826,
+      "changedFraction": 0.37125
     },
     "exploded": {
-      "meanAbsChannel": 8.191,
-      "changedFraction": 0.10915
+      "meanAbsChannel": 8.182,
+      "changedFraction": 0.10903
     },
     "cut": {
-      "meanAbsChannel": 5.111,
-      "changedFraction": 0.07945
+      "meanAbsChannel": 5.108,
+      "changedFraction": 0.07936
     },
     "xray": {
-      "meanAbsChannel": 43.86,
-      "changedFraction": 0.56281
+      "meanAbsChannel": 34.976,
+      "changedFraction": 0.56004
     }
   }
 }

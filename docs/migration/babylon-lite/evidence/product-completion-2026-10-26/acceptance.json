@@ -1,7 +1,7 @@
 {
   "suite": "lite-product",
   "baseUrl": "http://127.0.0.1:5178",
-  "capturedAt": "2026-10-26T15:55:48.189Z",
+  "capturedAt": "2026-10-26T16:15:52.606Z",
   "viewport": "1536x735 DPR1 foreground tab",
   "result": {
     "steps": [
@@ -82,8 +82,8 @@
         "name": "level-EXPLODED",
         "ok": true,
         "value": {
-          "ceilingOffset": 19.88626993402309,
-          "b1Offset": -17.89764294062078
+          "ceilingOffset": 19.853946553719965,
+          "b1Offset": -17.868551898347967
         }
       },
       {
@@ -122,7 +122,7 @@
         "name": "wafer",
         "ok": true,
         "value": {
-          "trailIndexCount": 4
+          "trailIndexCount": 2
         }
       },
       {
@@ -168,7 +168,7 @@
       "gpuErrors": 0
     },
     "lifecycle": {
-      "backendId": "cc28d543-5a4d-4a59-9fc4-c7fa8bf6e3c8",
+      "backendId": "e54389bb-ed91-45d1-9095-bec50edafa42",
       "statuses": [
         "initializing",
         "ready",

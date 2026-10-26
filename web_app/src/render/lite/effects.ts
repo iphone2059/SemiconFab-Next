@@ -13,11 +13,11 @@
  */
 import {
   addToScene, createBox, createMeshFromData, createPbrMaterial, createPointLight,
-  createShaderMaterial, createTransformNode, enableShaderMaterialInstanceWorld,
+  createShaderMaterial, createStandardMaterial, createTransformNode, enableShaderMaterialInstanceWorld,
   getCsmReceiverTexture, getShaderTexture, onCsmReceiverUpdate, onSceneDispose,
-  setClipPlane, setLightIntensity, setMeshDrawRange, setParent, setPbrEmissive,
-  createRenderTargetTexture, setShaderTexture, setShaderUniform, setSubtreeVisible, updateMeshColors,
-  updateMeshPositions, withSampledDepthTexture,
+  setClipPlane, setLightIntensity, setMeshDrawRange, setParent, setPbrEmissive, setShadowCasterMaterial,
+  setShaderTexture, setShaderUniform, setSubtreeVisible, updateMeshColors,
+  updateMeshPositions,
   type ClipPlane, type EngineContext, type Material, type Mesh, type PointLight,
   type SceneContext, type ShadowGenerator, type ShaderMaterial, type Texture2D,
   type TransformNode,
@@ -118,11 +118,10 @@ fn xrayCsmFallOff(value: f32, clipSpace: vec2<f32>, frustumEdgeFalloff: f32) -> 
   let mask = smoothstep(1.0 - frustumEdgeFalloff, 1.00000012, clamp(dot(clipSpace, clipSpace), 0.0, 1.0));
   return mix(value, 1.0, mask);
 }
-fn xrayDepthCompare(uv: vec2<f32>, depthRef: f32) -> f32 {
-  // Plain (non-comparison) depth sampling: the product palette samples its own 1x1 depth target;
-  // the CSM comparison path is not bound in the product composition.
-  let sampleDepth = textureSampleLevel(xrayDepth, xrayDepthSampler, uv, 0);
-  return select(0.0, 1.0, sampleDepth >= depthRef);
+fn xrayDepthCompare(uv: vec2<f32>, layer: i32, depthRef: f32) -> f32 {
+  // CSM receiver: 2-layer depth32float array sampled with its comparison sampler, exactly like
+  // Lite's own PBR/Standard CSM receivers (shadow-fragment-pcf / csm-shadow-fragment-core).
+  return textureSampleCompareLevel(xrayDepth, xrayDepthSampler, uv, layer, depthRef);
 }
 fn xrayCsmSampleWith(cascadeTransform: mat4x4<f32>, layer: i32, worldPosition: vec4<f32>) -> f32 {
   let posFromLight = cascadeTransform * worldPosition;
@@ -140,15 +139,15 @@ fn xrayCsmSampleWith(cascadeTransform: mat4x4<f32>, layer: i32, worldPosition: v
   let u = vec3<f32>((3.0 - 2.0 * st.x) / uvw0.x - 2.0, (3.0 + st.x) / uvw1.x, st.x / uvw2.x + 2.0) * invMapSz;
   let v = vec3<f32>((3.0 - 2.0 * st.y) / uvw0.y - 2.0, (3.0 + st.y) / uvw1.y, st.y / uvw2.y + 2.0) * invMapSz;
   var shadow = 0.0;
-  shadow += uvw0.x * uvw0.y * xrayDepthCompare(base + vec2<f32>(u[0], v[0]), depthRef);
-  shadow += uvw1.x * uvw0.y * xrayDepthCompare(base + vec2<f32>(u[1], v[0]), depthRef);
-  shadow += uvw2.x * uvw0.y * xrayDepthCompare(base + vec2<f32>(u[2], v[0]), depthRef);
-  shadow += uvw0.x * uvw1.y * xrayDepthCompare(base + vec2<f32>(u[0], v[1]), depthRef);
-  shadow += uvw1.x * uvw1.y * xrayDepthCompare(base + vec2<f32>(u[1], v[1]), depthRef);
-  shadow += uvw2.x * uvw1.y * xrayDepthCompare(base + vec2<f32>(u[2], v[1]), depthRef);
-  shadow += uvw0.x * uvw2.y * xrayDepthCompare(base + vec2<f32>(u[0], v[2]), depthRef);
-  shadow += uvw1.x * uvw2.y * xrayDepthCompare(base + vec2<f32>(u[1], v[2]), depthRef);
-  shadow += uvw2.x * uvw2.y * xrayDepthCompare(base + vec2<f32>(u[2], v[2]), depthRef);
+  shadow += uvw0.x * uvw0.y * xrayDepthCompare(base + vec2<f32>(u[0], v[0]), layer, depthRef);
+  shadow += uvw1.x * uvw0.y * xrayDepthCompare(base + vec2<f32>(u[1], v[0]), layer, depthRef);
+  shadow += uvw2.x * uvw0.y * xrayDepthCompare(base + vec2<f32>(u[2], v[0]), layer, depthRef);
+  shadow += uvw0.x * uvw1.y * xrayDepthCompare(base + vec2<f32>(u[0], v[1]), layer, depthRef);
+  shadow += uvw1.x * uvw1.y * xrayDepthCompare(base + vec2<f32>(u[1], v[1]), layer, depthRef);
+  shadow += uvw2.x * uvw1.y * xrayDepthCompare(base + vec2<f32>(u[2], v[1]), layer, depthRef);
+  shadow += uvw0.x * uvw2.y * xrayDepthCompare(base + vec2<f32>(u[0], v[2]), layer, depthRef);
+  shadow += uvw1.x * uvw2.y * xrayDepthCompare(base + vec2<f32>(u[1], v[2]), layer, depthRef);
+  shadow += uvw2.x * uvw2.y * xrayDepthCompare(base + vec2<f32>(u[2], v[2]), layer, depthRef);
   shadow /= 144.0;
   shadow = mix(shaderUniforms.xrayShadowsInfo.x, 1.0, shadow);
   return xrayCsmFallOff(shadow, clipSpace.xy, shaderUniforms.xrayShadowsInfo.w);
@@ -224,9 +223,9 @@ const XRAY_UNIFORMS = [
   { name: 'xrayShadowsInfo', type: 'vec4<f32>' },
   { name: 'xrayCsmParams', type: 'vec4<f32>' },
 ] as const;
-// Product composition binds the palette to an owned 1x1 sampled depth target (never to the
-// 2-layer CSM receiver), so the declared dimension is a plain 2D depth view.
-const XRAY_SAMPLERS = [{ name: 'xrayDepth', sampleType: 'depth', viewDimension: '2d', comparison: false }] as const;
+// Product composition borrows the live 2-layer CSM receiver; the palette casts through a
+// depth-only Standard material so the caster pass never binds a sampler on the writable depth map.
+const XRAY_SAMPLERS = [{ name: 'xrayDepth', sampleType: 'depth', viewDimension: '2d-array', comparison: true }] as const;
 
 // Wafer trail: one bounded, additive line-list; all 30 vertices and all 58 indices are
 // allocated once (babylon-webgpu.ts:534-546 allocates a bounded, updatable line once).
@@ -265,14 +264,12 @@ interface SavedXrayTarget {
 }
 
 export interface LiteEffectsOptions {
-  /** Frames to wait after an X-Ray activation before sampling the CSM depth texture.
-   *  Lite 1.36 can record the CSM pass that writes that texture in the same frame as the
-   *  hologram's first bindings, which WebGPU rejects as a texture usage conflict.
-   *  Product integration passes a small warm-up; standalone fixtures keep 0. */
-  readonly shadowWarmupFrames?: number;
-  /** Product composition: always own a valid sampled depth target so the palette sampler is never
-   *  unbound while renderables/rebuilds are in flight (Lite 1.36 throws on a missing sampler). */
-  readonly sampledDepthFallback?: boolean;
+  /** Product composition: borrow the live CSM receiver (2-layer depth32float + comparison sampler)
+   * so the hologram is modulated by the same shadow map as native PBR. Palette materials cast
+   * through a depth-only Standard material, which keeps the CSM caster pass free of the receiver
+   * sampler (Lite 1.36 otherwise reports a writable+sampled usage conflict inside refit frames).
+   * Standalone unit fixtures omit it and never render the palette. */
+  readonly shadows?: ShadowGenerator;
 }
 
 export function createLiteEffects(scene: SceneContext, engine: EngineContext, options: LiteEffectsOptions = {}): LiteEffects {
@@ -350,24 +347,12 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
   let shadowTexture: Texture2D | null = null;
   let shadowData: Float32Array | null = null;
   let detachCsmReceiver: (() => void) | undefined;
-  const shadowWarmupTotal = Math.max(0, options.shadowWarmupFrames ?? 0);
-  let shadowWarmupFrames = 0;
-  let fallbackDepth: Texture2D | null = null;
-  function ensureFallbackDepth(): Texture2D | null {
-    if (!options.sampledDepthFallback) return null;
-    if (!fallbackDepth) {
-      const result = createRenderTargetTexture(engine,
-        { dFormat: 'depth32float', samples: 1, size: { width: 1, height: 1 } }, withSampledDepthTexture);
-      fallbackDepth = result.depthTexture ?? result.texture;
-    }
-    return fallbackDepth;
-  }
 
   function applyShadowBinding(material: ShaderMaterial): void {
-    const texture = shadowWarmupFrames > 0 ? ensureFallbackDepth() : shadowTexture ?? ensureFallbackDepth();
-    const bound = getShaderTexture(material, 'xrayDepth');
-    if (bound !== texture) setShaderTexture(material, 'xrayDepth', texture);
-    setShaderUniform(material, 'xrayShadowEnabled', texture && shadowData ? 1 : 0);
+    if (shadowTexture && getShaderTexture(material, 'xrayDepth') !== shadowTexture) {
+      setShaderTexture(material, 'xrayDepth', shadowTexture);
+    }
+    setShaderUniform(material, 'xrayShadowEnabled', shadowTexture && shadowData ? 1 : 0);
     if (shadowData) writeCsmUniforms(material, shadowData);
   }
 
@@ -405,6 +390,9 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
     });
     enableShaderMaterialInstanceWorld(material);
     paletteMaterials.push(material);
+    // CSM casters use a depth-only Standard view so the shadow pass never binds the palette's
+    // receiver sampler while writing the same depth texture (Lite 1.36 usage-scope conflict).
+    if (casterMaterial) setShadowCasterMaterial(material, casterMaterial);
     setShaderUniform(material, 'xrayTint', XRAY_TINT);
     setShaderUniform(material, 'xrayGlow', XRAY_GLOW);
     if (line) {
@@ -420,7 +408,18 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
     return material;
   }
 
+  const casterMaterial: Material | null = options.shadows
+    ? (() => {
+      const material = createStandardMaterial();
+      material.name = 'fab-xray-shadow-caster';
+      material.diffuseColor = [0.5, 0.5, 0.5];
+      material.alpha = 1;
+      return material;
+    })()
+    : null;
   const lineMaterial = createHologramMaterial('fab-xray-line', true);
+  // Product composition: bind the live CSM receiver before the first rendered frame.
+  if (options.shadows) bindShadows(options.shadows);
   function meshMaterial(state: LiteXraySurfaceState): ShaderMaterial {
     // xray-hologram.ts:136-151: one material instance per ghost/highlight state.
     const key = state.highlight + ':' + state.ghostAlpha + ':' + state.rimPower;
@@ -456,7 +455,7 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
       if (disposed) return;
       shadowData = new Float32Array(data);
       for (const material of paletteMaterials) {
-        setShaderUniform(material, 'xrayShadowEnabled', shadowTexture && shadowWarmupFrames === 0 ? 1 : 0);
+        setShaderUniform(material, 'xrayShadowEnabled', shadowTexture ? 1 : 0);
         writeCsmUniforms(material, shadowData);
       }
     });
@@ -650,7 +649,6 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
 
   function setXrayFilter(filter: LiteXrayFilter | null): void {
     if (disposed) return;
-    if (filter !== null && filter !== activeFilter && shadowWarmupTotal > 0) shadowWarmupFrames = shadowWarmupTotal;
     applyXray(filter);
   }
 
@@ -661,11 +659,7 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
     // recovery preserves both) so the CSM transforms resync on the replacement device.
     shadowTexture = null;
     shadowData = null;
-    fallbackDepth = null;
-    for (const material of paletteMaterials) {
-      setShaderTexture(material, 'xrayDepth', null);
-      setShaderUniform(material, 'xrayShadowEnabled', 0);
-    }
+    for (const material of paletteMaterials) setShaderUniform(material, 'xrayShadowEnabled', 0);
     // Force the next trail replay through the retained CPU geometry; no buffers reallocate.
     lastTrailCount = -1;
     lastTrailLength = -1;
@@ -693,14 +687,6 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
     root, meshes, lights,
     update(_deltaMs: number, nowMs: number) {
       if (disposed) return;
-      if (shadowWarmupFrames > 0) {
-        shadowWarmupFrames -= 1;
-        if (shadowWarmupFrames === 0) {
-          // Sampling may start once the X-Ray material rebuild/CSM refit frames have settled.
-          syncShadowTexture();
-          for (const material of paletteMaterials) applyShadowBinding(material);
-        }
-      }
       if (Number.isFinite(nowMs)) xrayClock = nowMs / 1000;
       if (activeFilter !== null) {
         for (const material of paletteMaterials) setShaderUniform(material, 'xrayTime', xrayClock);
@@ -714,7 +700,7 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
     setWaferPoint,
     setWaferTrail,
     bindShadows,
-    get shadowLinked() { return shadowWarmupFrames === 0 && !!shadowTexture && !!shadowData; },
+    get shadowLinked() { return !!shadowTexture && !!shadowData; },
     get targetCounts() {
       const counts = { equipment: 0, floor: 0, subfab: 0, oht: 0 };
       for (const target of xrayTargets) counts[target.role] += 1;

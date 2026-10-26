@@ -26,7 +26,7 @@ Edge run: [acceptance-edge.json](./acceptance-edge.json), [acceptance-edge.png](
 | Levels | L1 floor alpha 1 / B1 0.2 / DUAL 0.35 / EXPLODED 0.55, slab+ceiling+subfab visibility, ceiling lift >15 m, subfab drop <-13 m, offsets reset |
 | Layers | roof (>0 native exhaust particle sprites; source data has 70), ceiling, subfab/piping, heatmap texture updates, airflow clock advances, AMHS layer hide/show |
 | Tool states | inspector MAINT reaches the native frame loop within the up-to-5 s frame-sync poll window; 121 states after each recovery |
-| X-Ray | all/vac filters, hologram materials active, subfab forced visible, restore removes all `fab-xray-*` materials and returns L1 |
+| X-Ray | all/vac filters, hologram materials active, **CSM receiver sampled (`shadowLinked` true)**, subfab forced visible, restore removes all `fab-xray-*` materials and returns L1 |
 | Section cut | Z +12 => `[0,0,-1,-12]`; invert => `[0,0,1,12]`; exclusive spatial mode clears cut for X-Ray; cut off => null |
 | Wafer | marker visible/moving, additive trail draws (>0 indices), follow camera targets the marker, close hides marker/trail |
 | Tour / patrol | tour card animates the camera and closes; patrol focus targets the walking engineer |
@@ -58,19 +58,23 @@ ROI, ROI `[400,120,1500,680]`, Pillow absolute RGB difference, no colour correct
 
 | View | mean abs channel diff | pixels changed >24 |
 |---|---|---|
-| ISO | 9.834 | 15.0% |
-| TOP | 13.406 | 20.3% |
-| B1 | 17.668 | 29.0% |
-| DUAL | 19.834 | 37.1% |
-| EXPLODED | 8.191 | 10.9% |
-| CUT (X axis) | 5.111 | 7.9% |
-| X-RAY (all) | 43.860 | 56.3% |
+| ISO | 9.831 | 15.0% |
+| TOP | 13.401 | 20.3% |
+| B1 | 17.670 | 29.0% |
+| DUAL | 19.826 | 37.1% |
+| EXPLODED | 8.182 | 10.9% |
+| CUT (X axis) | 5.108 | 7.9% |
+| X-RAY (all) | 34.976 | 56.0% |
 
 Free-running earlier captures (no frozen clock) are superseded: ISO 10.301 / TOP 13.721 / B1 17.666 /
 DUAL 20.480 / EXPLODED 14.593. Freezing removed the dynamic-phase noise (notably EXPLODED
-14.593 → 8.191) and exposed the real remaining gaps. **X-Ray is a known visual gap**: the product
-palette does not sample the CSM depth texture (WebGPU usage conflict in refit frames) and the frozen
-frame is much lighter than the reference hologram; it is recorded as a limitation, not a pass.
+14.593 → 8.182) and exposed the real remaining gaps. The X-Ray palette now **samples the native CSM
+receiver** (2-layer `depth32float` array with its comparison sampler) and casts through a depth-only
+Standard caster material, which avoids Lite 1.36's writable+sampled usage conflict: `shadowLinked`
+is true, the three device-loss rounds still report 0 GPU errors, and the frozen X-Ray diff improved
+from 43.860 (no shadow sampling) to **34.976**. X-Ray remains a **known visual gap** — the product
+hologram is still lighter than the frozen source's custom depth-pass hologram — and is recorded as a
+limitation, not a pass.
 
 This is a **frozen-clock comparison, not a Golden PASS**: the migration guide does not define a
 whole-product golden threshold and the X-Ray gap is visible. Whole-product Golden remains NOT_RUN.
@@ -83,8 +87,8 @@ Method: 5 s warmup, 8 s idle + 6 s orbit sampling of rAF deltas, same Chrome/vie
 
 | Renderer | idle fps | orbit fps |
 |---|---|---|
-| Native Lite (production) | 57.2 | 52.2 |
-| Frozen Next 0b35ca5 (production) | 16.1 | 15.5 |
+| Native Lite (production) | 57.9 | 53.9 |
+| Frozen Next 0b35ca5 (production) | 15.8 | 14.0 |
 
 Both runs 0 console errors. Raw JS payload: Lite `gpu` chunk 396,492 B (Lite engine only;
 `lite-backend` 2,359,121 B includes the 2.28 MB frozen static-structure data) vs frozen old renderer
@@ -94,8 +98,8 @@ asserted here.
 ## 5. Soak (user-directed 1-minute run; 60-minute NOT_RUN)
 
 The session owner explicitly replaced the planned 60-minute soak with a 1-minute soak. Final-build
-result: 3,379 frames, mean frame 17.75 ms (**56.3 fps**), p95 33.4 ms, p99 33.5 ms, **0 long tasks**,
-heap 29.6 MB, 0 GPU validation errors, 0 console errors, status stable at
+result: 3,471 frames, mean frame 17.27 ms (**57.9 fps**), p95 33.3 ms, p99 33.5 ms, **0 long tasks**,
+heap 85.7 MB, 0 GPU validation errors, 0 console errors, status stable at
 `WebGPU · 程序化 FAB · 121 台设备`. Raw: [soak.json](./soak.json).
 A 60-minute soak remains **NOT_RUN** by instruction; it is not reported as passed.
 
@@ -132,8 +136,8 @@ downloaded; non-Chromium coverage is **NOT_RUN**.
 ## 8. Still open / limitations
 
 - Whole-product frozen-clock **Golden: NOT_RUN**; frozen-clock comparison above is the closest
-  recorded evidence. **X-Ray visual gap** (frozen mean diff 43.86) is accepted as a documented
-  limitation.
+  recorded evidence. **X-Ray visual gap** (frozen mean diff 34.98 with CSM shadow sampling, down
+  from 43.86 without it) is accepted as a documented limitation.
 - 60-minute soak: **NOT_RUN** (user-directed 1-minute soak instead).
 - Non-Chromium browser coverage: **NOT_RUN** (no such browser available).
 - Residual review items (camera-restore timer ordering, cascading-loss queue untested, clip scope for

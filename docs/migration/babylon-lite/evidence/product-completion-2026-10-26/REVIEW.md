@@ -224,3 +224,20 @@ residual risks, not merge blockers.
   suites PASS with 0 errors; production perf A/B 57.2/52.2 vs 16.1/15.5 fps; 1-minute soak 56.3 fps
   / 0 long tasks / 0 GPU+console errors. The reviewer's D-1 remains closed and no new blocker was
   introduced.
+
+## Post-review delta (round 3): X-Ray shadow parity attempt
+
+- The X-Ray palette now samples the native CSM receiver (2-layer `depth32float` array + comparison
+  sampler) instead of an owned 1x1 plain depth target; `shadowLinked` is true in product diagnostics.
+- To avoid Lite 1.36's writable+sampled usage conflict inside CSM refit frames, palette materials are
+  registered with `setShadowCasterMaterial(material, depthOnlyStandardMaterial)` so the shadow pass
+  renders a depth-only no-colour view; `lShadowTask` no longer binds the receiver sampler in caster draws.
+- World composition order changed: lighting -> native CSM generator -> effects (palette binds the
+  receiver before its first rendered frame); the shadow generator is still disposed/owned by the
+  world and the replacement-device rebuild path.
+- Frozen-clock X-Ray visual diff improved 43.860 -> 34.976 with 0 activation GPU errors; the other six
+  frozen views are unchanged (ISO 9.831, TOP 13.401, B1 17.670, DUAL 19.826, EXPLODED 8.182, CUT 5.108).
+- All gates were re-run on this build: Chrome 155 + Edge 156 product and UI suites PASS with 0 errors
+  (including the three real device losses with the CSM-bound palette), production perf A/B 57.9/53.9
+  vs 15.8/14.0 fps, 1-minute soak 57.9 fps / 0 long tasks / 0 GPU+console errors. X-Ray remains a
+  documented visual gap (product hologram still lighter than the source custom depth pass).
