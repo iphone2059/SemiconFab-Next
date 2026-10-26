@@ -46,33 +46,36 @@ singleton page. Evidence: [ui.json](./ui.json), [ui-edge.json](./ui-edge.json), 
 
 ## 3. Frozen-clock visual A/B against the frozen pre-migration Next renderer
 
-Method: both pages are captured under the frozen clock from the reference golden harness
-(`GOLDEN_CLOCK`: fixed 16.667 ms virtual frames, seeded `Math.random`, fixed `Date.now`), injected
-via CDP `Page.addScriptToEvaluateOnNewDocument` before load and advanced only by
-`__twinGoldenClock.step(n)` to the same virtual frame counts on both sides: 180 settle frames after
-`WebGPU ·`, then ISO, Top, B1, Dual, L1→Exploded, Cut, X-Ray views with 120–700 frames each for
-camera/level/explosion easing. Same Chrome/profile, viewport 1536x735 DPR 1, HUD visible outside the
-ROI, ROI `[400,120,1500,680]`, Pillow absolute RGB difference, no colour correction. Raw:
-[frozen-clock-diff.json](./frozen-clock-diff.json),
-[frozen-clock-manifest.json](./frozen-clock-manifest.json), screenshots `ref-*.png` / `lite-*.png`.
+Method (reproducible from the repository, no scratch scripts): `node tools/frozen_visual_compare.mjs
+--ref http://127.0.0.1:5179 --lite http://127.0.0.1:5178 --port 9490 --out .local/frozen-visual`.
+Both pages run under the reference golden harness clock (`GOLDEN_CLOCK`: fixed 16.667 ms virtual
+frames, seeded `Math.random`, fixed `Date.now`), injected via CDP
+`Page.addScriptToEvaluateOnNewDocument`; the clock is held at 0 until the shell loads, readiness is
+padded to a fixed 120-frame budget on both sides, then +180 settle frames and identical per-view frame
+counts for ISO, Top, B1, Dual, L1→Exploded, Cut and X-Ray. Sites are captured sequentially in one
+foreground tab so a second tab cannot blank/occlude the canvas. Viewport 1536x735 DPR 1, HUD visible
+outside the ROI, ROI `[400,120,1500,680]`, absolute RGB difference computed in Node, no colour
+correction. Raw: [frozen-clock-diff.json](./frozen-clock-diff.json), screenshots `ref-*.png` /
+`lite-*.png`. Because demo data advances on real-time intervals during load, repeated runs vary by
+about ±0.5 mean channel; the values below are one recorded run (both sides on identical frames).
 
 | View | mean abs channel diff | pixels changed >24 |
 |---|---|---|
-| ISO | 9.831 | 15.0% |
-| TOP | 13.401 | 20.3% |
-| B1 | 17.670 | 29.0% |
-| DUAL | 19.826 | 37.1% |
-| EXPLODED | 8.182 | 10.9% |
-| CUT (X axis) | 5.108 | 7.9% |
-| X-RAY (all) | 34.976 | 56.0% |
+| ISO | 10.011 | 15.3% |
+| TOP | 13.571 | 20.6% |
+| B1 | 17.688 | 29.1% |
+| DUAL | 20.146 | 37.5% |
+| EXPLODED | 8.459 | 11.3% |
+| CUT (X axis) | 5.703 | 8.5% |
+| X-RAY (all) | 34.004 | 56.1% |
 
 Free-running earlier captures (no frozen clock) are superseded: ISO 10.301 / TOP 13.721 / B1 17.666 /
 DUAL 20.480 / EXPLODED 14.593. Freezing removed the dynamic-phase noise (notably EXPLODED
-14.593 → 8.182) and exposed the real remaining gaps. The X-Ray palette now **samples the native CSM
+14.593 → 8.46) and exposed the real remaining gaps. The X-Ray palette now **samples the native CSM
 receiver** (2-layer `depth32float` array with its comparison sampler) and casts through a depth-only
 Standard caster material, which avoids Lite 1.36's writable+sampled usage conflict: `shadowLinked`
 is true, the three device-loss rounds still report 0 GPU errors, and the frozen X-Ray diff improved
-from 43.860 (no shadow sampling) to **34.976**. X-Ray remains a **known visual gap** — the product
+from 43.860 (no shadow sampling) to **≈34** (34.004 in this run). X-Ray remains a **known visual gap** — the product
 hologram is still lighter than the frozen source's custom depth-pass hologram — and is recorded as a
 limitation, not a pass.
 
@@ -137,6 +140,8 @@ downloaded; non-Chromium coverage is **NOT_RUN**.
 - Stale CDP suites and `tools/run_twin_browser.mjs` mappings removed; the product matrix is
   `twin-lite.browser.ts`, DOM regression is `twin.browser.ts`. `decodePng` lives in
   `tests/support/png.ts`.
+- The frozen-clock visual evidence is reproducible from the repository: `tools/frozen_visual_compare.mjs`
+  captures both pages on identical virtual frames and computes the ROI diff in Node (see §3).
 - `@babylonjs/core` removed from `web_app/package.json`; lockfile updated with the repo-pinned pnpm
   and validated with `--frozen-lockfile`.
 - Import gate: 0 `@babylonjs/core`/`lite-compat`/three/legacy-module imports in `web_app/src`,
@@ -148,8 +153,9 @@ downloaded; non-Chromium coverage is **NOT_RUN**.
 ## 8. Still open / limitations
 
 - Whole-product frozen-clock **Golden: NOT_RUN**; frozen-clock comparison above is the closest
-  recorded evidence. **X-Ray visual gap** (frozen mean diff 34.98 with CSM shadow sampling, down
-  from 43.86 without it) is accepted as a documented limitation.
+  recorded evidence and is reproducible with `tools/frozen_visual_compare.mjs`. **X-Ray visual gap**
+  (frozen mean diff ≈34 with CSM shadow sampling, down from 43.86 without it) is accepted as a
+  documented limitation.
 - 60-minute soak: **NOT_RUN** (user-directed 1-minute soak instead).
 - Non-Chromium browser coverage: **NOT_RUN** (no such browser available).
 - Residual review items (camera-restore timer ordering, cascading-loss queue untested, clip scope for

@@ -1,38 +1,73 @@
 {
-  "roi": [
-    400,
-    120,
-    1500,
-    680
-  ],
+  "capturedAt": "2026-10-26T16:51:31.692Z",
+  "method": "GOLDEN_CLOCK manual stepping via CDP Page.addScriptToEvaluateOnNewDocument; clock held at 0 until the shell loads, readiness padded to a fixed 120-frame budget on both sites, +180 settle frames, identical per-view frame counts; one foreground tab captured at a time; viewport 1536x735 DPR1; ROI [400,120,1500,680]; absolute RGB diff computed in Node.",
+  "reference": {
+    "url": "http://127.0.0.1:5179",
+    "commit": "0b35ca5"
+  },
+  "lite": {
+    "url": "http://127.0.0.1:5178"
+  },
+  "roi": {
+    "x0": 400,
+    "y0": 120,
+    "x1": 1500,
+    "y1": 680
+  },
   "views": {
     "iso": {
-      "meanAbsChannel": 9.831,
-      "changedFraction": 0.15007
+      "meanAbsChannel": 10.011,
+      "changedFraction": 0.15313
     },
     "top": {
-      "meanAbsChannel": 13.401,
-      "changedFraction": 0.20272
+      "meanAbsChannel": 13.571,
+      "changedFraction": 0.2059
     },
     "b1": {
-      "meanAbsChannel": 17.67,
-      "changedFraction": 0.29048
+      "meanAbsChannel": 17.688,
+      "changedFraction": 0.29069
     },
     "dual": {
-      "meanAbsChannel": 19.826,
-      "changedFraction": 0.37125
+      "meanAbsChannel": 20.146,
+      "changedFraction": 0.37464
     },
     "exploded": {
-      "meanAbsChannel": 8.182,
-      "changedFraction": 0.10903
+      "meanAbsChannel": 8.459,
+      "changedFraction": 0.11263
     },
     "cut": {
-      "meanAbsChannel": 5.108,
-      "changedFraction": 0.07936
+      "meanAbsChannel": 5.703,
+      "changedFraction": 0.08451
     },
     "xray": {
-      "meanAbsChannel": 34.976,
-      "changedFraction": 0.56004
+      "meanAbsChannel": 34.004,
+      "changedFraction": 0.56094
     }
+  },
+  "timing": {
+    "referenceFrames": 3380,
+    "liteFrames": 3380,
+    "reference": {
+      "iso": 7000.000000000038,
+      "top": 9500.000000000013,
+      "b1": 14499.99999999983,
+      "dual": 19499.99999999999,
+      "exploded": 34500.000000000706,
+      "cut": 48666.66666666531,
+      "xray": 56333.33333333086
+    },
+    "lite": {
+      "iso": 7000.000000000038,
+      "top": 9500.000000000013,
+      "b1": 14499.99999999983,
+      "dual": 19499.99999999999,
+      "exploded": 34500.000000000706,
+      "cut": 48666.66666666531,
+      "xray": 56333.33333333086
+    }
+  },
+  "errors": {
+    "reference": 0,
+    "lite": 0
   }
 }

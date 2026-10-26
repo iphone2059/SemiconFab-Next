@@ -261,3 +261,17 @@ residual risks, not merge blockers.
   which stalls demo timers (wafer-follow step timed out until the CDP browser was restarted fresh).
   All final gates were re-run after the restart: Chrome 155 + Edge 156 product/UI PASS (0 errors),
   1-minute soak 52.1 fps / 0 long tasks / 0 GPU+console errors.
+
+## Post-review delta (round 5): committed visual-comparison tool
+
+- M-3 (visual capture/diff tooling only in scratch scripts) is resolved: `tools/frozen_visual_compare.mjs`
+  now performs the frozen-clock capture and Node/Pillow-compatible PNG diff from the repository, with a
+  usage header, fixed 120-frame readiness alignment on both sites, identical per-view frame counts,
+  sequential single-foreground-tab capture, console-error failure, and a JSON manifest in one file.
+- Re-ran it against the frozen reference: ISO 10.011 / TOP 13.571 / B1 17.688 / DUAL 20.146 /
+  EXPLODED 8.459 / CUT 5.703 / X-RAY 34.004 mean channel diff (both sides on identical 3,380-frame
+  schedules; errors 0/0). Evidence PNGs and JSON were regenerated from this tool; the older scratch
+  numbers differed by ≤0.6 and are superseded but noted as reproducible within that tolerance.
+- An intermediate simultaneous-two-tab variant produced blank reference canvases (background tab
+  presentation); the shipped tool captures sites sequentially to avoid it. This is documented in the
+  tool header and the evidence README.
