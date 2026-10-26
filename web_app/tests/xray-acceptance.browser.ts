@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { inflateSync } from 'node:zlib';
 
-function decodePng(buffer: Buffer) {
+export function decodePng(buffer: Buffer) {
   if (buffer.readUInt32BE(0) !== 0x89504e47) throw new Error('PNG signature mismatch');
   let offset = 8; let width = 0; let height = 0; let colorType = 0; let bitDepth = 0;
   const idat: Buffer[] = [];

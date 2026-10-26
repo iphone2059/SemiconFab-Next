@@ -336,6 +336,38 @@ Evidence and exact scope/limitations: [2026-10-26 README](evidence/golden-2026-1
 [production acceptance](evidence/golden-2026-10-26/acceptance.json).
 **60-minute soak and device-loss matrix remain skipped by user decision.**
 
+## 2026-10-26 material and lighting alignment
+
+Previous Wafer/Golden repairs were committed first as `09abdbf`. This increment restores frozen
+Lambert diffuse and source dielectric diffuse energy, source local-light decay/cone response and
+always-on B1 lighting; adds four missing B1 fluorescent strips/points; maps the Wafer carrier to
+source PBR values; and applies the source response to live status lamps. Key/fill retain two native
+light slots, with key first for native shadows. Local lights share the material UBO (capacity 24),
+avoiding both the old eight-light cutoff and GPU limits on separate per-light uniform bindings.
+LinearEncoding/no tone mapping/no IBL and the native `depth32float` shadow path are preserved.
+
+Real production WebGPU agrees exactly with the frozen original at five independent material center
+samples and four ninth-light decay samples (1/1.2/1.5/2 -> RGB 129/112/91/64). This is sampled material
+and attenuation evidence, not complete BRDF/specular or whole-frame parity. All nine production browser
+suites pass with zero collected console/runtime errors; GPU-aware suites record zero device errors.
+Current frontend/tooling checks: **190/190 Vitest (49 files), TypeScript, production build, 16/16 Python
+tests, architecture/contracts/import and eight frozen-source gates pass**. Concurrent GPU/49-worker
+contention caused initial timeouts; unchanged code passed at the original thresholds when run separately.
+
+Seven targeted fresh Next Goldens reuse byte-identical frozen source PNGs from the prior capture.
+Full-frame SSIM before -> after: ISO **69.2% -> 72.0%**, Litho **63.7% -> 70.2%**, B1 **56.7% -> 69.3%**,
+Dual **63.6% -> 68.1%**, Wafer **58.5% -> 61.9%**, Tour **71.4% -> 73.0%**, X-Ray **61.4% -> 61.7%**.
+Scene ROI after: **67.9%-85.1%**. Seven-pair capture console errors: **0**. These are seven targeted
+cases, not a refresh of the complete 19-case inventory. Source clock/setup/random limitations persist.
+
+Remaining StandardMaterial approximations, airlock assembly/light inventory, transparent/shadow
+coverage, camera/selection state and HUD layout keep status **IMPLEMENTING / NOT_PARITY_VERIFIED**.
+Evidence: [material/light README](evidence/material-lighting-2026-10-26/README.md),
+[comparison](evidence/material-lighting-2026-10-26/comparison.json),
+[production acceptance](evidence/material-lighting-2026-10-26/acceptance.json),
+[independent material response](evidence/material-lighting-2026-10-26/material-response.json).
+**60-minute soak and device-loss matrix remain skipped by user decision.**
+
 ## Earlier GPU evidence interpretation
 
 `evidence/native-shadow-acceptance.json` measures cache behavior, visible shadow contrast, ambient isolation and validation errors. `cut-shadow-acceptance.json` measures clipped depth coverage and exact restoration. `device-loss-acceptance.json` requires a new device, a new native pass, the **completed** WebGPU status, unchanged manual camera and no new-device validation errors. Waiting text does not qualify. Readback acquires the current presentation frame; a previously presented swap texture must not be reused.

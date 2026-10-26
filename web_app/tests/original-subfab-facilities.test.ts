@@ -60,6 +60,22 @@ it('renders the frozen industrial B1 floor at -7m with its slate PBR material', 
   } finally { closeSubfab(fixture); }
 });
 
+it('keeps source basement lights on when its meshes are hidden and moves them with exploded B1', () => {
+  const fixture = createSubfab();
+  try {
+    fixture.controller.setVisible(false);
+    expect(fixture.scene.getLightByName('subfab-highbay-light-0')!.isEnabled()).toBe(true);
+    const soft = fixture.scene.getLightByName('subfab-soft-light-0') as PointLight;
+    expect(soft.position.asArray()).toEqual([0, -2.5, -24]);
+    expect(soft.intensity).toBe(1.2);
+    expect(soft.range).toBe(35);
+    fixture.controller.setOffset(-18);
+    soft.parent!.computeWorldMatrix(true);
+    soft.computeTransformedInformation();
+    expect(soft.getAbsolutePosition().y).toBeCloseTo(-20.5, 6);
+  } finally { closeSubfab(fixture); }
+});
+
 function closeSubfab(fixture: SubfabFixture): void {
   fixture.scene.dispose();
   fixture.engine.dispose();
@@ -158,7 +174,7 @@ describe('original B1 subfab industrial facilities', () => {
       expect(display.emissiveIntensity).toBeCloseTo(ORIGINAL_SUBFAB_CHILLER.display.emissiveIntensity, 10);
 
       // 13 shared + 5 secondary pipe + 30 valve wheel + 4 louver + 4 display + floor.
-      expect(scene.materials).toHaveLength(57);
+      expect(scene.materials).toHaveLength(58);
       expect(scene.materials.every(material => material instanceof PBRMaterial && material.usePhysicalLightFalloff === false)).toBe(true);
     } finally {
       closeSubfab(fixture);
@@ -371,7 +387,7 @@ describe('original B1 subfab industrial facilities', () => {
   it('ports the yellow safety walkways/bollards and six high-bay point lights', () => {
     const fixture = createSubfab();
     try {
-      const { scene, controller } = fixture;
+      const { scene } = fixture;
       ORIGINAL_SUBFAB_WALKWAYS.forEach((walkway, index) => {
         const walkwayMesh = mesh(scene, 'subfab-walkway-' + index);
         expectPoint(walkwayMesh.position, [walkway.x, ORIGINAL_SUBFAB_BOLLARD.walkwayY, walkway.z]);
@@ -395,32 +411,32 @@ describe('original B1 subfab industrial facilities', () => {
         expectPoint(light.position, [config.x, ORIGINAL_SUBFAB_LIGHT.y, config.z]);
         expect(light.intensity).toBeCloseTo(config.intensity, 10);
         expect(light.range).toBeCloseTo(ORIGINAL_SUBFAB_LIGHT.range, 10);
-        expect(light.parent).toBe(controller.group);
+        expect(light.parent?.name).toBe('subfab-source-lights');
       });
     } finally {
       closeSubfab(fixture);
     }
   });
 
-  it('keeps the source B1 level switch on the whole industrial group and its lights', () => {
+  it('hides industrial meshes while retaining source basement illumination', () => {
     const fixture = createSubfab();
     try {
       const { scene, controller } = fixture;
       expect(controller.group.isEnabled()).toBe(true);
       expect(controller.group.getChildMeshes()).toHaveLength(ORIGINAL_SUBFAB_COUNTS.meshes);
-      expect(ORIGINAL_SUBFAB_COUNTS.meshes).toBe(794);
-      expect(scene.meshes).toHaveLength(794);
+      expect(ORIGINAL_SUBFAB_COUNTS.meshes).toBe(798);
+      expect(scene.meshes).toHaveLength(798);
 
       // Only the three source castShadow ducts are shadow casters.
       const casters = controller.group.getChildMeshes().filter(candidate => (candidate.metadata as { staticShadowCaster?: boolean } | null)?.staticShadowCaster !== false);
       expect(casters.map(candidate => candidate.name)).toEqual(['subfab-duct-0', 'subfab-duct-1', 'subfab-duct-2']);
       const nonCasters = controller.group.getChildMeshes().filter(candidate => (candidate.metadata as { staticShadowCaster?: boolean } | null)?.staticShadowCaster === false);
-      expect(nonCasters).toHaveLength(791);
+      expect(nonCasters).toHaveLength(795);
 
       controller.setVisible(false);
       expect(controller.group.isEnabled()).toBe(false);
       expect(mesh(scene, 'subfab-duct-0').isEnabled()).toBe(false);
-      expect((scene.getLightByName('subfab-highbay-light-0') as PointLight).isEnabled()).toBe(false);
+      expect((scene.getLightByName('subfab-highbay-light-0') as PointLight).isEnabled()).toBe(true);
 
       controller.setVisible(true);
       expect(controller.group.isEnabled()).toBe(true);

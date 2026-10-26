@@ -9,7 +9,7 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { ICanvasRenderingContext } from '@babylonjs/core/Engines/ICanvas';
 import type { Scene } from '@babylonjs/core/scene';
-import { OriginalLegacyLightFalloff } from './original-lighting';
+import { OriginalLegacyLightFalloff, OriginalPointLight } from './original-lighting';
 import type { AirShowerFrame } from './personnel-timeline';
 
 // Read-only port of the frozen original page (SemiconFab/twin.html):
@@ -528,7 +528,7 @@ function buildOriginalFacilityArchitectureInternal(
 
     // 7. Interior cleanroom point light.
     const innerLightConfig = ORIGINAL_AIR_SHOWER.innerLight;
-    const innerLight = new PointLight(chamberName + '-light', new Vector3(0, height - innerLightConfig.yOffset, 0), scene);
+    const innerLight = new OriginalPointLight(chamberName + '-light', new Vector3(0, height - innerLightConfig.yOffset, 0), scene);
     const lightColor = rgba(config.isAmber ? 0xfef08a : 0xe0f2fe);
     innerLight.diffuse = lightColor;
     innerLight.specular = lightColor;

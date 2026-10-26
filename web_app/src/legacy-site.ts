@@ -12,8 +12,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import '@babylonjs/core/Meshes/instancedMesh';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
-import { PointLight } from '@babylonjs/core/Lights/pointLight';
-import { SpotLight } from '@babylonjs/core/Lights/spotLight';
+import { OriginalLegacyLightFalloff, OriginalPointLight, OriginalSpotLight } from './original-lighting';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from './fab-layout';
 import type { AmhsStats, XRayFilter } from './fab-scene';
@@ -330,7 +329,8 @@ function addToolStatusLights(scene: Scene): StatusLightRuntime {
       material.emissiveColor = material.albedoColor.scale(catalog ? 0.85 : 0.9);
       material.metallic = 0; material.roughness = catalog ? 1 : 0.2;
       material.ambientColor = Color3.White(); material.directIntensity = Math.PI;
-      material.environmentIntensity = 0; material.maxSimultaneousLights = 8;
+      material.environmentIntensity = 0;
+      new OriginalLegacyLightFalloff(material);
       materials.set(key, material);
     }
     return material;
@@ -356,6 +356,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   const fill = new DirectionalLight('legacy-fill', new Vector3(40, -35, 30), scene);
   fill.diffuse = color('#94a3b8');
   fill.intensity = 0.32;
+  fill.renderPriority = 90; // Key (100) and fill own the two native PBR light slots.
 
   scene.imageProcessingConfiguration.toneMappingEnabled = false;
   // The original renderer outputs LinearEncoding with NoToneMapping.
@@ -407,7 +408,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
   scene.onBeforeRenderObservable.add(() => { const now = performance.now(); roofHvac.update(now); architecture.update(now); });
   // Original PBR surfaces already receive scene.ambientColor. A hemispheric
   // light here would add a second ambient term (most obvious on floor/columns).
-  ambient.excludedMeshes = scene.meshes.filter(mesh => mesh.material instanceof PBRMaterial);
+  ambient.includedOnlyMeshes = scene.meshes.filter(mesh => mesh.material instanceof StandardMaterial);
   fab.ceiling.setEnabled(false);
   fab.subfab.setEnabled(false);
 
@@ -420,16 +421,17 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     [-27.5, -20, 2.6, 16], [-27.5, -10, 2.6, 16], [-27.5, 0, 2.4, 16], [-23.5, -15, 2.2, 14], [-23.5, 3.5, 1.8, 12],
   ].entries()) {
     const [x, z, intensity, range] = value;
-    const light = new PointLight(`original-litho-amber-${index}`, new Vector3(x, 5.2, z), scene);
+    const light = new OriginalPointLight(`original-litho-amber-${index}`, new Vector3(x, 5.2, z), scene, 2);
     light.diffuse = color('#f59e0b'); light.intensity = intensity; light.range = range;
   }
-  const lithoSpot = new SpotLight('original-litho-spot', new Vector3(-27, 8.5, -9), Vector3.Down(), Math.PI * 4 / 9, 2, scene);
+  const lithoSpot = new OriginalSpotLight('original-litho-spot', new Vector3(-27, 8.5, -9), Vector3.Down(), Math.PI * 4 / 9, 2, scene);
   lithoSpot.diffuse = color('#f59e0b'); lithoSpot.intensity = 3.2; lithoSpot.range = 24;
   lithoSpot.innerAngle = lithoSpot.angle * 0.55;
   const statusLights = addToolStatusLights(scene);
   const airflow = createAerodynamics(scene);
   const heatmap = airflow.heatmap;
   const amhsGroup = addAnimatedAmhs(scene, onAmhsStats);
+  ambient.includedOnlyMeshes = scene.meshes.filter(mesh => mesh.material instanceof StandardMaterial);
   // These static meshes are created once; keep the caster list stable to avoid
   // allocating flatMap/filter arrays on every animation frame.
   const staticCasters = [fab.equipment, fab.shell, fab.subfab, roofHvac.group, subfabDense.group]
@@ -562,7 +564,7 @@ export async function loadLegacyFab(scene: Scene, onAmhsStats?: (stats: AmhsStat
     const placement = explodedPlacement(explodeFactor);
     architecture.ceilingGroup.position.y = placement.ceilingY;
     fab.subfab.position.y = placement.subfabY;
-    subfabDense.group.position.y = placement.subfabY;
+    subfabDense.setOffset(placement.subfabY);
     const visibleNow = explodeModeActive || explodeFactor > 0.01 || targetExplodeFactor > 0.01;
     // Avoid traversing thousands of meshes on every easing frame.
     if (previousVisible !== visibleNow) syncLevel();

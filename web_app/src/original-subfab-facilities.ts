@@ -1,12 +1,11 @@
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
-import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
-import { OriginalLegacyLightFalloff } from './original-lighting';
+import { OriginalLegacyLightFalloff, OriginalPointLight } from './original-lighting';
 
 // Read-only port of the frozen original page (SemiconFab/twin.html),
 // buildSubfabIndustrialFacilities (lines 8270-8706): the B1 subfab dense
@@ -260,8 +259,9 @@ export const ORIGINAL_SUBFAB_COUNTS = {
   walkways: ORIGINAL_SUBFAB_WALKWAYS.length,
   bollards: ORIGINAL_SUBFAB_BOLLARDS.length,
   lights: ORIGINAL_SUBFAB_LIGHTS.length,
+  softLights: 4,
   meshes:
-    1 + // Industrial floor (twin.html:8741-8752).
+    5 + // Industrial floor + four soft fluorescent strips (twin.html:8741-8805).
     ORIGINAL_SUBFAB_DUCTS.length * (1 + DUCT_RING_COUNT + DUCT_HANGER_COUNT * 3 + DUCT_BRANCH_COUNT * 2) +
     ORIGINAL_SUBFAB_SECONDARY_PIPES.length * (1 + VALVE_COUNT * 2) +
     ORIGINAL_SUBFAB_PUMPS.length * PUMP_MESH_COUNT +
@@ -275,8 +275,9 @@ export const ORIGINAL_SUBFAB_COUNTS = {
 export interface OriginalSubfabFacilitiesController {
   /** Source "subfabDenseIndustrialFacilities" group. */
   readonly group: TransformNode;
-  /** Source B1 level switch: group + the six high-bay point lights. */
+  /** Mesh visibility is independent of the source's always-on basement lights. */
   setVisible(visible: boolean): void;
+  setOffset(y: number): void;
 }
 
 export function buildOriginalSubfabFacilities(
@@ -285,6 +286,8 @@ export function buildOriginalSubfabFacilities(
 ): OriginalSubfabFacilitiesController {
   const group = new TransformNode(SUBFAB_FACILITIES_GROUP_NAME, scene);
   group.parent = parent;
+  const lightGroup = new TransformNode('subfab-source-lights', scene);
+  lightGroup.parent = parent;
 
   const shaded = (name: string, color: number, metalness = 0, roughness = 1): PBRMaterial => {
     const material = new PBRMaterial(name, scene);
@@ -654,24 +657,27 @@ export function buildOriginalSubfabFacilities(
 
   // 8. Industrial high-bay daylight point lights (source decay 1.2 has no Babylon
   // equivalent; the project legacy-light-falloff PBR materials are used instead).
-  const lights: PointLight[] = [];
   for (const [lightIndex, config] of ORIGINAL_SUBFAB_LIGHTS.entries()) {
-    const light = new PointLight('subfab-highbay-light-' + lightIndex, new Vector3(config.x, ORIGINAL_SUBFAB_LIGHT.y, config.z), scene);
+    const light = new OriginalPointLight('subfab-highbay-light-' + lightIndex, new Vector3(config.x, ORIGINAL_SUBFAB_LIGHT.y, config.z), scene, 1.2);
     light.diffuse = Color3.FromInts(config.color >> 16 & 255, config.color >> 8 & 255, config.color & 255);
     light.specular = light.diffuse.clone();
     light.intensity = config.intensity;
     light.range = ORIGINAL_SUBFAB_LIGHT.range;
-    light.parent = group;
-    lights.push(light);
+    light.parent = lightGroup;
   }
 
-  const setVisible = (visible: boolean): void => {
-    group.setEnabled(visible);
-    // Lights ignore TransformNode enabling for illumination; gate them explicitly.
-    for (const light of lights) {
-      light.setEnabled(visible);
-    }
-  };
+  // Source createCleanroomEnvironment: four additional fluorescent lights.
+  // Level changes never turn these or the six industrial high-bays off.
+  const stripMaterial = emissive(shaded('subfab-soft-strip-material', 0x38bdf8), 0x38bdf8, 0.6);
+  for (const [index, z] of [-24, -8, 8, 24].entries()) {
+    const strip = addBox('subfab-soft-strip-' + index, [90, 0.15, 0.3], [0, -1.5, z], stripMaterial, group);
+    strip.metadata = noCaster;
+    const light = new OriginalPointLight('subfab-soft-light-' + index, new Vector3(0, -2.5, z), scene, 1.5);
+    light.diffuse = Color3.FromHexString('#bae6fd'); light.specular = light.diffuse.clone();
+    light.intensity = 1.2; light.range = 35; light.parent = lightGroup;
+  }
+  const setVisible = (visible: boolean): void => { group.setEnabled(visible); };
+  const setOffset = (y: number): void => { group.position.y = y; lightGroup.position.y = y; };
 
-  return { group, setVisible };
+  return { group, setVisible, setOffset };
 }

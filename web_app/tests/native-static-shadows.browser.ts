@@ -10,6 +10,9 @@ export async function runNativeShadowAcceptance(command) {
     return result.result.value;
   }
   await evaluate(`(async () => {
+    const perf=window.__SEMICONFAB_PERF__;
+    let scene;
+    if (perf?.getScene) { scene=perf.getScene(); } else {
     const entry = performance.getEntriesByType('resource').findLast(r => r.name.includes('/@babylonjs_core_Engines_webgpuEngine.js')).name;
     const source = await (await fetch(entry)).text();
     const path = source.match(/import \\{[^}]* as EngineStore[^}]*\\} from "([^"]+)"/)[1];
@@ -21,7 +24,8 @@ export async function runNativeShadowAcceptance(command) {
       if (performance.now() > deadline) throw new Error('Native shadow scene did not become ready');
       await new Promise(requestAnimationFrame);
     }
-    const scene = store.LastCreatedScene;
+    scene = store.LastCreatedScene;
+    }
     const engine = scene.getEngine();
     const shadow = scene.metadata.staticShadows;
     const errors = [];
