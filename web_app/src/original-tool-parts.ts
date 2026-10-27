@@ -1,4 +1,4 @@
-// Geometry literals from the frozen original; preserve source attribution in docs/migration/twin-parity/attribution.md.
+// Geometry literals from the frozen original; preserve source attribution in docs/attribution.md.
 import type { FabLayoutTool } from './fab-layout';
 
 type Triple = readonly [number, number, number];

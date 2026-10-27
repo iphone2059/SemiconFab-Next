@@ -6,7 +6,7 @@ import { ResearchReplay } from '../src/research-replay';
 import { YIELD_SCENARIOS } from '../src/fab-yield';
 
 it('reproduces all original instance aliases and last-writer collision targets', () => {
-  const reference = JSON.parse(readFileSync(new URL('../../docs/migration/twin-parity/layout-identities.json', import.meta.url), 'utf8'));
+  const reference = JSON.parse(readFileSync(new URL('./fixtures/twin-layout-identities.json', import.meta.url), 'utf8'));
   const actual = buildLayoutIdentities();
   expect(actual).toHaveLength(121);
   expect(new Set(actual.map((row) => row.instanceId)).size).toBe(121);

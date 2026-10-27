@@ -85,13 +85,13 @@ try {
             if ($fabApiProcess.HasExited) { throw "API exited. Inspect $fabApiLog and $fabApiErrorLog." }
             if ($fabWebProcess.HasExited) { throw "Web exited with code $($fabWebProcess.ExitCode). Inspect $fabWebLog and $fabWebErrorLog." }
             try {
-                $fabPage = Invoke-WebRequest "$fabWebUrl/twin" -UseBasicParsing -TimeoutSec 1
+                $fabPage = Invoke-WebRequest "$fabWebUrl/" -UseBasicParsing -TimeoutSec 1
                 if ($fabPage.StatusCode -eq 200) { $fabWebReady = $true; break }
             } catch { }
             Start-Sleep -Milliseconds 250
         }
         if (-not $fabWebReady) { throw "Web did not become ready. Inspect $fabWebLog and $fabWebErrorLog." }
-        Write-Host "Web ready: $fabWebUrl/twin"
+        Write-Host "Web ready: $fabWebUrl/"
     }
     Write-Host "Logs: $fabLocalDirectory; press Ctrl+C to stop this invocation."
     while ($true) {

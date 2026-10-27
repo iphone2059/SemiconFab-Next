@@ -1,5 +1,5 @@
 // Source roof data/drawing from frozen SemiconFab twin.html b3666132.
-// PolyForm Noncommercial 1.0.0; see docs/migration/twin-parity/attribution.md.
+// PolyForm Noncommercial 1.0.0; see docs/attribution.md.
 export type RoofHvacLanguage = 'zh' | 'en';
 
 export interface RoofHvacMau {

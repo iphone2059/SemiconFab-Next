@@ -1,2 +1,0 @@
-npm notice run web_app@0.1.0 typecheck
-npm notice run tsc --noEmit

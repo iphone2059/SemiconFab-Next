@@ -1,5 +1,5 @@
 // Parametric canvas drawing ported from SemiconFab twin.html b3666132.
-// PolyForm Noncommercial 1.0.0; see docs/migration/twin-parity/attribution.md.
+// PolyForm Noncommercial 1.0.0; see docs/attribution.md.
 export function renderAirflowHeatmapCanvas(canvas: HTMLCanvasElement, timeSec = 0) {
   canvas.width = 1024;
   canvas.height = 768;

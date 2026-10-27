@@ -1,5 +1,5 @@
 // Replays the declared scenario in web_app/tests/fixtures/original-personnel-vectors.json
-// (generated from the frozen twin.html by tools/build_twin_personnel_vectors.cjs)
+// (generated from the frozen twin.html by the frozen personnel fixture)
 // against the pure controller. Both producers round to 6 decimal digits, which is
 // the only declared float tolerance; every compared value is then exact.
 import { readFileSync } from 'node:fs';
@@ -26,7 +26,7 @@ const round = (value: number, digits = 6): number => Math.round(value * 10 ** di
 
 const manifest = JSON.parse(
   readFileSync(
-    new URL('../../docs/migration/twin-parity/source-manifest.json', import.meta.url),
+    new URL('./fixtures/twin-source-manifest.json', import.meta.url),
     'utf8',
   ),
 );

@@ -6,7 +6,7 @@
 ./scripts/start-dev.ps1
 ```
 
-默认启动 API `http://127.0.0.1:5080` 与 Web `http://127.0.0.1:5173/twin`，自动生成并复用 `.local/development-key`。需已安装仓库指定的 .NET SDK、Node.js/npm，并完成 `web_app` 依赖安装。前端沿用 `npm run dev`，无需全局 pnpm shim。
+默认启动 API `http://127.0.0.1:5080` 与 Web `http://127.0.0.1:5173/`，自动生成并复用 `.local/development-key`。需已安装仓库指定的 .NET SDK、Node.js/npm，并完成 `web_app` 依赖安装。前端沿用 `npm run dev`，无需全局 pnpm shim。
 
 脚本等待 API 与 Web 就绪后显示地址。API、Web 输出分别写入 `.local/api.log`、`.local/web.log`，错误输出在同目录的 `*-error.log`；可在另一终端用 `Get-Content .local/web.log -Wait` 查看。按 Ctrl+C 会清理本次启动的 API、npm 与 Vite 子进程。端口占用会直接报错，已有服务不会被停止。
 

@@ -1,7 +1,7 @@
 # SemiconFab Next V2.1 架构基线
 
 - 版本：V2.1（2026-10-27）
-- 状态：**基线已采纳；M1–M4 已落地并验证；M5a/M5b 已完成（产品 XState 接线、多 FAB UI、rendering 归位、TypedArray/Worker 骨架与 CPU 性能基线）；M6 未开始**（M1-M5 implemented / M6 pending）
+- 状态：**基线已采纳；M1–M5 已落地并验证；M6 清理收口已完成（旧迁移文档/证据/parity 工具与测试删除，旧路径/依赖/XState 边界检查可执行）**（M1-M6 implemented / legacy migration assets removed）
 - 适用对象：`web_app` 前端架构。后端 `fab_app`/`fab_shared` 的项目与命名空间边界沿用 ADR-0001…ADR-0007
 - 权威决策：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0010](adr/0010-command-event-bridge.md)（实时/命令/工作流边界）；本文档负责汇总、目录结构与迁移计划
 - 当前实现事实：所有 HTTP 端点由 TanStack Query 独占；客户端 UI 状态由 5 个 Zustand store（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale 归属其中）独占；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已全部删除。XState 按用户指示锁定 6.0.0-alpha.70（无 stable v6），在 M4 接入工作流。详细证据见 [实施状态](IMPLEMENTATION-STATUS.md)、§15–§17。
@@ -301,7 +301,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | M3 | 实时协议与命令桥 | 契约、解码/序列、类型化流、WebSocket 传输骨架、CommandEventBridge/恢复队列、假源集成测试、ARCH 边界静态检查 | CE-01..CE-05、CE-08 在假源上运行；ARCH-06/07 检查通过 | M1；后端流协议 OPEN-V21-06（真实链路） | **PASS（2026-10-27，§19）；真实 WebSocket M4+** |
 | M4 | XState 工作流与 FabRuntime | `workflows/equipment` 四文件、`runtime` 四件套、`RuntimeProvider` seam、三 FAB 隔离测试 | CE-06/CE-07 在测试源上运行；ARCH-08/09/10 检查通过；单 FAB 产品回归通过（现有 290 测试） | M3；OPEN-V21-07/08；多 FAB 产品范围 | **PASS（2026-10-27，§20）** |
 | M5 | 高频渲染管线与目录归位 | **M5a（完成）**：XState v6 产品 Runtime 接线 + 多 FAB 数据驱动 UI + 工作流只读投影。**M5b（完成）**：`rendering/lite` 目录归位、FrameRingBuffer/Worker 协议骨架、ARCH-11 静态检查、CPU 性能基线 | M5a：产品 bundle/生命周期接入 XState、runtime/FAB UI 可见、投影 API 只读；M5b：ARCH-11 检查、性能基线记录、Lite 回归 | M1/M4 | **M5a/M5b PASS（§21/§22）**；真实 Worker/遥测接线与 GPU 性能门禁留待后续 |
-| M6 | 收口与退役 | ARCH-01..12 自动化检查、旧迁移文档/证据/测试清理、CE-06/CE-07 真实链路证据（若后端就绪） | `pnpm verify` 实际通过并留有记录；ARCH 检查可执行；CE-06/CE-07 真实链路证据（若后端就绪） | M2/M4/M5；后端实时服务 | 未开始（Redux/RTK 与 ADR-0008 状态已在 M2 完成） |
+| M6 | 收口与退役 | 旧迁移文档/证据/parity 工具与测试删除、旧路径/依赖/XState/ARCH-11 静态检查、README/状态文档收口 | `./scripts/verify.ps1` 实际通过并留有记录；ARCH 检查可执行 | M2/M4/M5；后端实时服务 | **PASS（2026-10-27，§23）**；CE-06 真实链路需后端 |
 
 **关键路径**：M1 -> M2 -> M3 -> M4 为主链；M5 可与 M3/M4 并行，但依赖现有 Twin/Lite 工作收尾。真实后端 WebSocket 是 CE-04/CE-06 的硬依赖，前端不得用假源证据替代生产链路验收。
 
@@ -316,7 +316,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | R-05 | 多 FAB 产品范围未定 | FabRuntime 三 FAB 隔离只能测试床验证 | 以复合身份与假 FAB 源覆盖 CE-07；产品范围由 Lead 决策 | 需求变化 |
 | R-06 | XState v6 仅有 alpha（6.0.0-alpha.70） | 工作流实现或 API 变化返工 | 按用户指示锁定 v6 alpha 并隔离在 `CommandWorkflow` 实现内；M4 前复核 API/升级，不回退 v5 | alpha 破坏性变更/构建失败 |
 | R-07 | intent 预加载在 loader 误用 `fetchQuery` 时放大请求 | 性能与后端压力 | RQ-01/RQ-05 请求计数断言；loader 评审 | 预加载请求数异常 |
-| R-08 | 迁移与正在进行的 Twin/Lite parity 工作冲突 | 返工、合并冲突 | M1/M5 排期避开 `docs/migration/twin-parity` 与 `docs/migration/progress.md` 的活跃改动；文件搬迁放 M5 | 合并冲突 |
+| R-08 | ~~迁移与 Twin/Lite parity 工作冲突~~ | **已关闭（M6）**：旧迁移/parity 文档与测试已删除，渲染目录已归位 | — |
 | R-09 | 架构检查滞后，ARCH 规则只靠人工评审 | 规则漂移 | M6 前把 ARCH-02/05/06/08/09 纳入 `tools/check_architecture.py` | 评审发现违规 |
 | R-10 | 文档与实现漂移 | 错误基线误导后续开发 | 每阶段更新 `IMPLEMENTATION-STATUS` 与本文件差距表；门禁证据可追踪 | 文档状态与代码不符 |
 
@@ -354,8 +354,8 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ### 12.3 当前测试基建事实
 
 - 已安装 jsdom 30.1.3、@testing-library/react 16.3.3、TanStack Router/Query、Zustand、XState 6.0.0-alpha.70、RxJS、Zod，并建立 `web_app/tests/integration`。
-- RQ-01..RQ-05 已真实运行；M3/M4 新增实时/桥接/工作流/Runtime 测试；M5a 新增产品装配/投影测试；M5b 新增 `realtime-frame-buffer.test.ts`、`tests/performance/telemetry-frame-buffer.test.ts` 与 ARCH-11/M5b 目录断言。M5b 后共 **67 文件 / 300 测试 PASS**。
-- CE-01..CE-08 已在测试源/假 gateway 上运行 PASS；GPU/浏览器性能门禁与真实后端 WebSocket/命令状态端点仍缺（CPU 缓冲基线已有）。
+- RQ-01..RQ-05、CE-01..CE-08、ARCH-01..12 的静态检查与产品装配测试均在真实运行；M6 删除旧 parity/browser 测试后共 **60 文件 / 267 测试 PASS**。
+- CE-06 的生产链路、真实遥测 Worker 接线与 GPU/浏览器性能门禁仍缺；CPU TypedArray 基线已有。
 
 ## 13. 文档地图
 
@@ -597,6 +597,41 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 - **真实高频链路未接**：Worker 入口未被产品引用；遥测源/SharedArrayBuffer/COOP-COEP 策略（OPEN-V21-14）与渲染器消费 TypedArray 的接线未做。
 - **GPU/浏览器性能门禁**：现只有 CPU 缓冲基线；WebGPU 帧时间/显存/长任务门禁需真实浏览器/GPU 证据。
 - `features` 目录与页面级 feature 归位尚未做（M5 范围剩余部分）；真实后端实时命令流仍缺。
+## 23. M6 落地记录：收口与退役（2026-10-27）
+
+> M6 删除旧迁移/parity 文档、证据、chromium/frozen 测试与工具，保留产品运行所需资产、i18n 生成物、原版署名与当前渲染回归 fixture；`./scripts/verify.ps1` 已重跑通过。
+
+### 23.1 删除
+
+- `docs/migration/`（283 文件，约 51 MB：twin-parity/babylon-lite 证据与计划）、`docs/repair/`、`docs/superpowers/plans/`、根目录旧 parity spec（.md/.docx）、Babylon Lite 迁移指南。
+- 旧 parity/frozen/browser 测试与配置：`tests/*.browser.ts`、`tests/frozen-visual.test.ts`、`tests/frozen-preview.vite.config.ts`、`tests/lite-*-runtime/effects-color` 浏览器夹具、`tests/renderer-acceptance.test.ts`、`tests/original-*.test.ts`。
+- 旧 parity 工具：`frozen_visual_compare.mjs`、`compare_twin_goldens.py`、`serve_twin_reference.py`、`run_twin_browser.mjs`、`audit_twin_i18n_coverage.mjs`、旧 vector builders 等。
+- `scripts/verify.ps1` 的 frozen-original 向量门禁与其 coverage 资产；`web_app/assets/twin-i18n-coverage.json`。
+
+### 23.2 保留与归位
+
+- 产品运行资产：`assets/original-twin-hud.css`、`original-twin-ui.json`、`original-twin-i18n.json`、`twin-translations.generated.ts`、`lite-static-structure.json`、`legacy-LICENSE.txt`。
+- 法律署名：`docs/attribution.md`（原版 PolyForm 来源）；相关源文件注释已改为指向该文件。
+- 当前渲染回归所需 fixture：`web_app/tests/fixtures/*`；`twin-source-manifest.json`、`twin-layout-identities.json` 从旧迁移目录迁入 tests/fixtures 并由测试直接引用。
+- 工具：`generate_contracts.py`、`check_architecture.py`、`migrate_legacy_data.py` 及其测试；`build_twin_translations.cjs` 仅保留用于产品 i18n 生成。
+
+### 23.3 可执行检查
+
+- `tools/check_architecture.py` 新增 V2.1 终态检查：旧路径（`docs/migration`、`docs/repair`、`docs/superpowers`、`src/render`、`src/store`）不存在；旧依赖（react-redux/RTK/immer/@babylonjs/core）不存在；xstate 只在 `workflows/`；workflow 实现只被 `runtime/` 导入；rendering/buffers/workers 不 import 状态容器。
+- `scripts/verify.ps1` 现在 = 契约检查 + 架构检查 + Python 工具测试 + 数据导入检查 + 3 个 .NET 项目构建/测试 + 前端 install --frozen-lockfile/typecheck/test/build。
+
+### 23.4 证据
+
+- `./scripts/verify.ps1` exit 0；`tsc --noEmit` 0；Vitest **60 文件 / 267 测试 PASS**；`vite build` 0；.NET 67/67；8 个 Python 工具测试；契约/架构检查 PASS。
+- 仍存在的边界：真实后端命令流/命令状态端点、真实遥测 Worker 接线、GPU/浏览器性能门禁；见 §24 已知边界。
+## 24. 最终已知边界（M6 后）
+
+- **后端实时命令链路**：`fab_app -- --realtime` 仍是占位（退出码 2），没有 WebSocket 命令流/命令状态查询端点；产品 `RuntimeBootstrap` 使用空/可替换命令源，命令提交 UI 未提供。CE-06 的生产证据需后端就绪。
+- **Worker/遥测接线**：`FrameRingBuffer`、Worker handler/entry 与 CPU 基线已完成；真实遥测源、SharedArrayBuffer/COOP-COEP（OPEN-V21-14）与渲染器消费尚未接线。
+- **GPU/浏览器性能门禁**：当前只有 CPU TypedArray 基线；WebGPU 帧时间/显存/长任务门禁需真实 GPU 浏览器环境。
+- **目录收口**：`rendering/lite` 已归位；页面级 `features/` 目录迁移未作为功能交付执行，页面仍位于 `web_app/src` 顶层，按现有相对导入工作。
+- **XState v6**：使用 6.0.0-alpha.70（用户指定 v6），实现隔离在 `workflows/`；升级 alpha 版本需重跑 workflow/contract 测试。
+- **历史保留**：旧代码与旧迁移证据已从工作树删除，但保留在 Git 历史中；仓库只有一个 `main` 分支，无旧 URL 重定向。
 ## 附录 A. 关键术语
 
 | 术语 | 含义 |

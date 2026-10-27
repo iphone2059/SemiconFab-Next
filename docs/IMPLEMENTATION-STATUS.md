@@ -1,14 +1,54 @@
-# 实施状态
+# 实施状态（V2.1 最终）
 
-2026-10-24 最终布局：前端 9 包 → 1 个站点（ADR-0003）；共享库与仿真内核 → 单一 `fab_shared`（ADR-0004/0005）；全部域服务、平台服务与宿主 → 单一 `fab_app`，测试 → 单一 `fab_tests`（ADR-0006）。当前 .NET 项目 3 个、前端项目 1 个；C# 命名空间保持 `Fab.*` 不变。
+- 状态：**M0–M6 已落地；旧 Redux/RTK/Babylon 旧迁移证据已退役；仅保留 V2.1 所需实现与测试。**
+- 最后验证：`./scripts/verify.ps1` exit 0
+  - 契约/架构检查 PASS
+  - 8 个 Python 工具测试 PASS
+  - 3 个 .NET 项目 Release 构建 + 67 测试 PASS
+  - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **60 文件 / 267 测试 PASS**、`vite build` 0
 
-首切片：框架、独立仿真、本地开发编排、React/WebGPU。其余能力待实现；本地文件适配器仅限 Development，不能声明 PostgreSQL/工业协议/共享容量已验收。
+## 当前架构
 
-后续迁移首批已实现设备目录的数据导入、完整原文件保留、只读 API、目录/详情/对比页面；前端源码、测试和资产已分开。功能状态、验证证据及待办以 [迁移实施记录](migration/progress.md) 为准；这不代表 44 项原版功能全部迁移完成。
+```text
+React 19 + Vite 8 + TS 7
+TanStack Router     URL/search/生成式路由树（canonical URL only）
+TanStack Query      唯一 HTTP 缓存
+Zustand             客户端 UI 状态
+RxJS + Zod          实时类型化流/解码（CommandEventBridge 输入）
+XState v6           命令工作流（CommandWorkflow 契约后；FabRuntime 按 FAB 装配）
+Babylon Lite 1.36   WebGPU-only 渲染
+```
 
-## V2.1 架构基线（2026-10-27）
+- 产品 URL：`/`、`/fabs/{fabId}/3d`、`/equipment`、`/equipment/compare`；旧地址无重定向。
+- 目录：`src/app`、`src/api`、`src/state`、`src/application`、`src/realtime`、`src/workflows`、`src/runtime`、`src/rendering/lite`。
+- 旧 `src/render`、Redux/`src/store`、RTK Query、immer、Babylon 旧代码/旧迁移文档/parity 工具与测试均已删除（Git 历史保留）。
 
-- 基线文档：[架构基线](architecture.md)、[ADR-0009](adr/0009-tanstack-router-query-boundary.md)、[ADR-0010](adr/0010-command-event-bridge.md)，以及 [路由与查询集成](router-query-integration.md)、[状态管理](state-management.md)、[实时协议](realtime-protocol.md)、[命令事件桥](command-event-bridge.md)、[命令核对](command-reconciliation.md)、[FAB 运行时](fab-runtime.md)、[渲染管线](rendering.md) 7 篇专项文档。
-- 状态：**M1–M4 已落地并验证；M5a/M5b 已完成（XState v6 产品接线、多 FAB 数据驱动 UI、只读投影、rendering/lite 目录归位、TypedArray/Worker 骨架与 CPU 基线）；M6 未开始**。TanStack Router 接管顶层路由与 URL/search 状态（最终 URL 见 [架构基线](architecture.md) §4.1；目录筛选/Twin modal/mode/siteId 已迁 Router search），**全部 HTTP 端点由 TanStack Query 独占，RTK Query 已删除；客户端 UI 状态由 5 类 Zustand store 独占，Redux/react-redux/`src/store` 已删除**。旧产品 URL 与重定向已删除（无别名）。已安装 TanStack Router/Query、Zustand 5.0.16、RxJS 7.8.2、Zod 4.6.7、**XState 6.0.0-alpha.70**（用户指示直接用 v6）、jsdom/Testing Library。M3/M4 已实现命令契约/类型化流/桥接/恢复/XState v6/FabRuntime；M5a 把 XState v6 正式接入 AppProviders（每 FAB runtime、可替换命令源、多 FAB 选择器、`useCommandProjection` 只读投影）；M5b 完成 `src/rendering/lite` 目录归位、`FrameRingBuffer`/Worker 协议骨架与 ARCH-11 静态检查。真实 WebSocket 命令管道仍未接（后端 `--realtime` 占位），Worker 尚未接真实遥测/渲染器。Vite 仅新增路由生成插件，`server`/`build` 参数未变。
-- 验证：RQ-01..RQ-05 **全部 PASS**；CE-01..CE-08 **PASS（测试源/假 gateway/三 FAB）**；GPU/浏览器性能门禁仍缺。M5b 实际运行：`tsc --noEmit` 0、`npx vitest run` 67 文件 / 300 测试 PASS、`vite build` 0、`./scripts/verify.ps1` exit 0（含 16 Python 工具、3 .NET 项目 + 67/67、冻结向量门禁）。详见 [架构基线](architecture.md) §15–§22。
-- 迁移阶段、里程碑、风险与开放问题见 [架构基线](architecture.md) 的 §10–§14。功能迁移的既有状态仍以 [迁移实施记录](migration/progress.md) 为准；本次未修改该记录及相关迁移路径。
+## 里程碑
+
+| 阶段 | 结果 |
+|---|---|
+| M0 | V2.1 架构基线、ADR-0009/0010、专项文档 |
+| M1 | Router/Query 基础设施、最终 URL、RQ-01/05 |
+| M2a/b/c | 全端点 Query、RTK/Redux 删除、Zustand 接管 UI 状态、Router search、最终 URL |
+| M3 | 实时契约、MessageDecoder/SequenceTracker、类型化流、CommandEventBridge/恢复（假源） |
+| M4 | XState v6 工作流、FabRuntime/Factory/Registry/Lifecycle、三 FAB 隔离（测试源） |
+| M5a | XState v6 正式产品接线、RuntimeBootstrap、多 FAB 数据驱动 UI、只读投影 |
+| M5b | `src/rendering/lite` 归位、FrameRingBuffer/Worker 骨架、ARCH-11 检查、CPU 性能基线 |
+| M6 | 旧迁移文档/证据/parity 工具与测试删除、verify 收口、README/架构/状态文档收口 |
+
+## 测试与门禁
+
+- RQ-01..RQ-05：真实 QueryClient + Router 集成测试 PASS。
+- CE-01..CE-05、CE-08：假源/假 gateway 集成测试 PASS。
+- CE-06/CE-07：M4 测试源/假 gateway PASS；CE-06 生产链路待后端。
+- ARCH-01..12：`web_app/tests/architecture-boundaries.test.ts` + `tools/check_architecture.py` 可执行检查。
+- 高频路径：`tests/realtime-frame-buffer.test.ts` 与 `tests/performance/telemetry-frame-buffer.test.ts`（CPU 基线；GPU/浏览器门禁未建立）。
+- 渲染：`tests/lite-*.test.ts` 等当前实现回归测试保留；旧 frozen/browser parity 套件已删除。
+
+## 已知边界
+
+- 后端实时命令流/命令状态端点仍是占位；产品命令源为空/可替换，命令提交 UI 未提供。
+- Worker/遥测未接真实数据源；SharedArrayBuffer/COOP-COEP 策略未定（OPEN-V21-14）。
+- GPU/WebGPU 性能门禁需真实 GPU 浏览器环境。
+- 当前产品数据为单 FAB；多 FAB runtime/UI 已数据驱动实现。
+- XState v6 为 alpha（6.0.0-alpha.70），升级需重跑契约/集成测试。

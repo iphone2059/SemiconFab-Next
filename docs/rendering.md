@@ -4,7 +4,7 @@
 - 状态：**M5b 已完成 rendering/lite 目录归位与 TypedArray/Worker 骨架；真实高频源/渲染消费与 GPU/浏览器性能门禁未完成**（当前使用 Babylon Lite 1.36）
 - 依据：[ADR-0010](adr/0010-command-event-bridge.md) 的 `ARCH-11`、[ADR-0003](adr/0003-single-web-app.md) 的 WebGPU-only、宿主规范 [09-WEBGPU-RENDERING](SemiconFab-Next-Engineering-v1.1/09-WEBGPU-RENDERING.md) 与 [15-FRONTEND](SemiconFab-Next-Engineering-v1.1/engineering/15-FRONTEND-AND-WEBGPU-PROJECTS.md)
 - 总览：[架构基线](architecture.md)；状态所有权：[状态管理](state-management.md)；实时协议：[实时协议](realtime-protocol.md)
-- 现有实现与迁移证据以仓库的 [Babylon Lite 迁移指南](SemiconFab-Next_Babylon-Lite_Native-Migration_Guide_2026-10-26.md) 与 [babylon-lite 迁移目录](migration/babylon-lite/) 为准；M5b 新增 `realtime/buffers/FrameRingBuffer` 与 Worker handler 仅提供基础设施/CPU 基线，不代表 GPU 验收。
+- 原版资产署名见 [attribution](attribution.md)。M5b 新增 `realtime/buffers/FrameRingBuffer` 与 Worker handler 仅提供基础设施/CPU 基线，不代表 GPU 验收；旧迁移证据已在 M6 删除。
 
 ## 1. 强制约束
 
@@ -73,7 +73,7 @@ WebSocket -> realtime/transport -> MessageDecoder（或在 Worker 内）
 
 - `src/rendering/lite` 已有 Babylon Lite 运行时、场景/几何/光照/选择/裁剪等模块（M5b 从 `src/render/lite` 归位）；`lite-backend.ts` 在挂载前检查 `isSecureContext`/`navigator.gpu`/adapter 与纹理限制，并实现设备丢失后的场景重建策略（代码注释说明 Native 1.36 就地恢复路径的库限制）。
 - 当前场景是原版 121 台设备的**单 FAB** 布局（`src/fab-layout.ts` 注释与数据）；不是三 FAB 同屏。
-- 现有浏览器验收、视觉冻结/差分测试与迁移证据记录在 `docs/migration/babylon-lite/` 与 `docs/migration/twin-parity/`；它们的状态以那些文档为准，本文档不复制其结论。
+- M6 已删除旧迁移/parity 证据与浏览器验收脚本；当前验收以 `scripts/verify.ps1` 的契约/架构/前端测试与真实浏览器人工检查为准。GPU/浏览器性能门禁尚未建立。
 - **V2.1 的高频 Worker/TypedArray 旁路尚未实现**：当前仍有 `store/telemetry-buffer.ts` 的 100ms 合批进 Redux 的过渡实现；这不等价于 ARCH-11 目标，属于 M5 迁移项。
 
 ## 6. V2.1 迁移落点（M5）
@@ -93,7 +93,7 @@ WebSocket -> realtime/transport -> MessageDecoder（或在 Worker 内）
 - Engineering 09 第 5 节的 60 FPS、首屏 p95 < 5s 等是**候选目标**，不是已验证事实；V2.1 不重复声明。
 - 性能测试必须在明确硬件/浏览器/分辨率/设备数/活跃实体比例/更新率下记录；无 GPU 的 CI 结果不能作为 WebGPU 性能证据（Engineering 12）。
 - 当前 V2.1 未运行任何渲染性能门禁；计划文件位置 `web_app/tests/performance`，状态 **SPECIFIED / NOT RUN**。
-- 现有 `tests/lite-*.test.ts`、`tests/*.browser.ts`、`tests/frozen-visual.test.ts` 是当前实现的测试资产；它们是否通过以仓库运行记录为准，本基线不把它们当作 V2.1 验收。
+- 现有 `tests/lite-*.test.ts` 是当前渲染实现的单元/回归测试；原 frozen/browser parity 套件已在 M6 删除。
 
 ## 8. 与命令/Runtime 的边界
 
@@ -111,6 +111,6 @@ WebSocket -> realtime/transport -> MessageDecoder（或在 Worker 内）
 | 设备丢失重建 | 视觉/状态回退 | 现有 Lite 策略 + 快照/相机恢复；回归测试 |
 | 三 FAB 同屏规模 | 显存/帧率 | 分 FAB 订阅/LOD；单 FAB 先验收 |
 | 测试硬件不可用 | 无法声称性能达标 | 记录环境；无 GPU CI 不作为证据 |
-| 与 twin-parity 迁移并行 | 文件/行为冲突 | M5 排期避让（R-08） |
+| 原版资产署名/许可见 [attribution](attribution.md) | 许可合规 | 保留署名文件；渲染数据来源记录在代码注释 |
 
 开放问题：OPEN-V21-14（SharedArrayBuffer）、OPEN-V21-15（topic/订阅范围）、OPEN-V21-06（实时协议）；见 [架构基线](architecture.md) 第 14 节。

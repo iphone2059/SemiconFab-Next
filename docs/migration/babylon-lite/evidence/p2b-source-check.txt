@@ -1,2 +1,0 @@
-BJS - [14:34:22]: Babylon.js v9.32.0 - Null engine
-{"entities":1648,"geometries":222,"materials":59,"lights":10,"directory":"C:\\Users\\han_qingyu\\SemiconFab-Next\\.local\\lite-static-capture"}

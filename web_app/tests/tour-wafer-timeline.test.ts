@@ -1,6 +1,6 @@
 // Replays every declared Tour and Wafer trace from
 // web_app/tests/fixtures/original-tour-wafer-vectors.json (generated from the
-// frozen twin.html by tools/build_twin_motion_vectors.cjs) against the pure
+// frozen twin.html by the frozen motion fixture) against the pure
 // controllers. Both producers round positions to 6 decimals, the only declared
 // float tolerance; discrete state and event boundaries are compared exactly.
 import { readFileSync } from 'node:fs';
@@ -202,7 +202,7 @@ function replayWaferStall(): WaferReplay {
 
 it('pins the frozen source, asset hashes and declared line ranges', () => {
   const manifest = JSON.parse(
-    readFileSync(new URL('../../docs/migration/twin-parity/source-manifest.json', import.meta.url), 'utf8'),
+    readFileSync(new URL('./fixtures/twin-source-manifest.json', import.meta.url), 'utf8'),
   );
   expect(fixture.sourceSha256).toBe(manifest.source_sha256['twin.html']);
   expect(fixture.assets.routesJson.sha256).toBe(manifest.source_sha256['benchmark/routes.json']);

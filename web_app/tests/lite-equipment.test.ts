@@ -7,7 +7,7 @@ import {
   type EngineContext, type Mesh, type PbrMaterialProps,
 } from '@babylonjs/lite';
 import reference from './fixtures/original-tool-reference.json';
-import identities from '../../docs/migration/twin-parity/layout-identities.json';
+import identities from './fixtures/twin-layout-identities.json';
 import { createLiteEquipment } from '../src/rendering/lite/geometry/tool-families';
 
 // Only WebGPU buffer allocation is doubled. Geometry, transforms, materials,
