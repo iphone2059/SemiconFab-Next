@@ -1,10 +1,9 @@
 # FAB 运行时（Fab Runtime）
 
 - 版本：V2.1 / 2026-10-27
-- 状态：**SPECIFIED，未实现**（Decision accepted / implementation pending）
+- 状态：**M4 已实现（测试源验证；产品接线待 M5）**（M4 implemented / product wiring pending）
 - 依据：[ADR-0010](adr/0010-command-event-bridge.md)；桥见 [命令事件桥](command-event-bridge.md)；恢复见 [命令核对](command-reconciliation.md)；协议见 [实时协议](realtime-protocol.md)
-- 当前实现：没有 FabRuntime；页面直接装配 SSE/Redux（ADR-0008）。本文档是目标设计
-- 目标目录：`web_app/src/runtime/`；门禁 CE-07/CE-08 均为 **SPECIFIED / NOT RUN**
+- 当前实现：`web_app/src/runtime/` 已有 FabRuntime/Factory/Registry/LifecycleCoordinator，并在测试源上通过 CE-06/CE-07/CE-08；`RuntimeProvider` 仅提供 React seam，未挂到 AppProviders。页面仍直接装配设备状态 SSE，真实命令流/多 FAB UI 待 M5+。
 
 ## 1. 定位
 

@@ -92,7 +92,7 @@ Zustand 只保存**不影响服务端事实**的客户端状态，例如：HUD/�
 
 ## 5. 工作流状态（XState v6）
 
-- 命令生命周期（提交、accepted/executing、终态、取消、失败重试/核对）由 XState actor 拥有；实现文件见 [命令事件桥](command-event-bridge.md) 第 4 节。
+- 命令生命周期由 XState v6 actor 拥有（M4 已实现 `workflows/equipment/equipmentCommand.machine.ts` + `XStateCommandWorkflowAdapter`），经 `CommandWorkflow` 契约暴露，由 `FabRuntime` 装配；UI 只读投影仍待 M5。
 - 公共契约只有 `CommandWorkflow`（`receive`/`reconcile`/`dispose`）；页面不得直接 import actor/machine。
 - **工作流状态如何只读暴露给 UI**：本基线不虚构额外公共接口。M4 需要决定一种方式（例如 workflows/equipment 提供的专用 hook，经 RuntimeProvider 暴露只读快照），并明确它不是第二份权威状态；在此之前页面用“提交态组件局部状态 + Query 权威状态”展示命令结果。该问题登记为 OPEN-V21-13（[架构基线](architecture.md) 第 14 节）。
 - 工作流状态不写入 Zustand/Redux/Query 缓存；如果 UI 需要缓存展示，只能缓存“展示投影”，且不得反写工作流。

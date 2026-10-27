@@ -47,6 +47,28 @@ it('ARCH-07: application coordination depends on contracts only (no realtime/Rea
   }
 });
 
+it('ARCH-08: XState and workflow implementations stay inside workflows/', () => {
+  for (const file of sourceFiles(sourceRoot)) {
+    const path = relative(sourceRoot, file).replaceAll('\\', '/');
+    for (const specifier of importsOf(file)) {
+      if (specifier === 'xstate') expect(path, path).toMatch(/^workflows\//);
+      if (specifier.includes('workflows/equipment')) {
+        expect(path === 'app/providers/RuntimeProvider.tsx' || path.startsWith('runtime/') || path.startsWith('workflows/'), path).toBe(true);
+      }
+    }
+  }
+});
+
+it('ARCH-09: runtime imports realtime/application/workflows as the assembly layer only', () => {
+  for (const file of files('runtime')) {
+    const path = relative(sourceRoot, file).replaceAll('\\', '/');
+    for (const specifier of importsOf(file)) {
+      expect(specifier, path).not.toMatch(/^xstate$/);
+      expect(specifier, path).not.toMatch(/^(react|@tanstack|zustand)/);
+    }
+  }
+});
+
 it('ARCH-08: the public CommandWorkflow contract is defined only once', () => {
   const declarations = files('application').filter((file) =>
     readFileSync(file, 'utf8').includes('export interface CommandWorkflow '),

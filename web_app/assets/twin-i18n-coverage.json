@@ -72,6 +72,7 @@
       "web_app/src/api/queries/wafer.queries.ts",
       "web_app/src/app/providers/AppProviders.tsx",
       "web_app/src/app/providers/QueryProvider.tsx",
+      "web_app/src/app/providers/RuntimeProvider.tsx",
       "web_app/src/app/router/route-data.ts",
       "web_app/src/app/router/routeTree.gen.ts",
       "web_app/src/app/router/router.tsx",
@@ -141,6 +142,10 @@
       "web_app/src/render/lite/tool-states.ts",
       "web_app/src/render/lite/world.ts",
       "web_app/src/research-replay.ts",
+      "web_app/src/runtime/FabLifecycleCoordinator.ts",
+      "web_app/src/runtime/FabRuntime.ts",
+      "web_app/src/runtime/FabRuntimeFactory.ts",
+      "web_app/src/runtime/FabRuntimeRegistry.ts",
       "web_app/src/scenario.ts",
       "web_app/src/state-sync.ts",
       "web_app/src/state/catalogStore.ts",
@@ -171,7 +176,11 @@
       "web_app/src/wafer-route.ts",
       "web_app/src/wafer-scenario.ts",
       "web_app/src/widgets.tsx",
-      "web_app/src/workbench.tsx"
+      "web_app/src/workbench.tsx",
+      "web_app/src/workflows/equipment/CommandReconciler.ts",
+      "web_app/src/workflows/equipment/XStateCommandWorkflowAdapter.ts",
+      "web_app/src/workflows/equipment/equipmentCommand.logic.ts",
+      "web_app/src/workflows/equipment/equipmentCommand.machine.ts"
     ],
     "twinUiFiles": [
       "web_app/src/fab-viewer.tsx",

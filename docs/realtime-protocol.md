@@ -1,11 +1,11 @@
 # 实时协议（Realtime Protocol）
 
 - 版本：V2.1 / 2026-10-27
-- 状态：**M3 契约与假源实现（真实 WebSocket 未接）**（M3 contracts implemented / real transport pending）
+- 状态：**M3/M4 契约、类型化流与 Runtime 装配（测试源；真实 WebSocket 未接）**（M3/M4 implemented / real transport pending）
 - 依据：[ADR-0010](adr/0010-command-event-bridge.md)；总览见 [架构基线](architecture.md)；命令桥见 [命令事件桥](command-event-bridge.md)；恢复见 [命令核对](command-reconciliation.md)；渲染旁路见 [渲染管线](rendering.md)
 - 上位规范：[08-API-EVENT-CONTRACTS](SemiconFab-Next-Engineering-v1.1/08-API-EVENT-CONTRACTS.md)、[14-CONTRACTS-AND-EVENT-FLOWS](SemiconFab-Next-Engineering-v1.1/engineering/14-CONTRACTS-AND-EVENT-FLOWS.md)（本前端协议不得另造第二套语义）
 - 当前实现：产品链路仍只有设备状态 SSE（`EventSource` -> 有序消费者 -> Zustand/Query 缓存）；M3 已实现 `realtime/protocol`（MessageDecoder/SequenceTracker）、`realtime/streams`（EventRouter + CommandResult/Alarm/Telemetry 流）与未装配的 `realtime/transport/WebSocketClient` 骨架；后端 `--realtime` 仍是占位，真实命令结果流未接。
-- 门禁：解码/序列/路由与 CE-01..05/08 已在假源上 PASS（`tests/realtime-protocol.test.ts`、`tests/integration/command-event-bridge.test.ts`）；真实 WebSocket/重连（CE-06）为 M4+。
+- 门禁：解码/序列/路由、CE-01..05/08 已在假源上 PASS；CE-06/07 已在 M4 测试源/假 gateway 上 PASS（`tests/integration/fab-runtime.test.ts`）；真实 WebSocket/后端命令状态端点仍缺。
 
 ## 1. 范围与边界
 

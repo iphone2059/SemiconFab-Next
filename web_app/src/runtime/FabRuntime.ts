@@ -1,0 +1,93 @@
+import type { CommandEventSource } from '../application/contracts/CommandEvents';
+import type { CommandGateway } from '../application/contracts/CommandGateway';
+import type { CommandWorkflow, CommandWorkflowRegistry } from '../application/contracts/CommandWorkflow';
+import { CommandEventBridge } from '../application/coordination/CommandEventBridge';
+import { CommandReconciler } from '../workflows/equipment/CommandReconciler';
+import { XStateCommandWorkflowAdapter } from '../workflows/equipment/XStateCommandWorkflowAdapter';
+
+export type CommandWorkflowFactory = (fabId: string, commandId: string) => CommandWorkflow;
+
+export interface FabRuntimeOptions {
+  readonly fabId: string;
+  readonly source: CommandEventSource;
+  readonly gateway?: CommandGateway;
+  /** Test seam; production defaults to XStateCommandWorkflowAdapter. */
+  readonly createWorkflow?: CommandWorkflowFactory;
+}
+
+/**
+ * Per-FAB assembly layer: the only place that wires the realtime source, the
+ * application CommandEventBridge and the workflow implementations together
+ * (ARCH-09). One runtime exists per FAB; all command identities stay scoped to
+ * (fabId, commandId).
+ */
+export class FabRuntime {
+  readonly fabId: string;
+  private readonly workflows = new Map<string, CommandWorkflow>();
+  private readonly bridge: CommandEventBridge;
+  private readonly reconciler?: CommandReconciler;
+  private readonly createWorkflow: CommandWorkflowFactory;
+  private started = false;
+
+  constructor(options: FabRuntimeOptions) {
+    this.fabId = options.fabId;
+    this.reconciler = options.gateway ? new CommandReconciler(options.gateway) : undefined;
+    this.createWorkflow = options.createWorkflow ?? ((fabId, commandId) => new XStateCommandWorkflowAdapter(fabId, commandId, this.reconciler));
+    const registry: CommandWorkflowRegistry = {
+      get: (fabId, commandId) => (fabId === this.fabId ? this.workflows.get(commandId) : undefined),
+    };
+    this.bridge = new CommandEventBridge(options.source, registry, { fabId: options.fabId });
+  }
+
+  start(): void {
+    if (this.started) return;
+    this.bridge.start();
+    this.started = true;
+  }
+
+  stop(): void {
+    if (!this.started) return;
+    this.bridge.stop();
+    this.started = false;
+  }
+
+  /** Create the workflow for a submitted command; replays results held before registration. */
+  trackCommand(commandId: string): CommandWorkflow {
+    const existing = this.workflows.get(commandId);
+    if (existing) return existing;
+    const workflow = this.createWorkflow(this.fabId, commandId);
+    this.workflows.set(commandId, workflow);
+    this.bridge.flushRecovery();
+    return workflow;
+  }
+
+  getWorkflow(commandId: string): CommandWorkflow | undefined {
+    return this.workflows.get(commandId);
+  }
+
+  /** Converge one command with the backend after a disconnect/missed frame. */
+  async reconcileCommand(commandId: string): Promise<boolean> {
+    const workflow = this.workflows.get(commandId);
+    if (!workflow || !this.reconciler) return false;
+    return this.reconciler.reconcile(workflow, this.fabId, commandId);
+  }
+
+  dispose(): void {
+    this.stop();
+    for (const workflow of this.workflows.values()) workflow.dispose();
+    this.workflows.clear();
+    this.bridge.dispose();
+  }
+
+  get workflowCount(): number {
+    return this.workflows.size;
+  }
+
+  get pendingCount(): number {
+    return this.bridge.pendingCount;
+  }
+
+  get running(): boolean {
+    return this.started;
+  }
+}
