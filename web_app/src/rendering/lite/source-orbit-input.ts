@@ -32,7 +32,8 @@ const MAX_POLAR_ANGLE = Math.PI / 2 - 0.03;
 
 export function createSourceOrbitMotion(
   read: () => OrbitPose,
-  apply: (position: OrbitPoint, target: OrbitPoint) => void,
+  /** `radius` carries the exact clamped distance so the adapter does not re-derive it from rounded position components. */
+  apply: (position: OrbitPoint, target: OrbitPoint, radius?: number) => void,
 ): SourceOrbitMotion {
   let thetaDelta = 0, phiDelta = 0;
   let panX = 0, panY = 0, panZ = 0;
@@ -102,7 +103,7 @@ export function createSourceOrbitMotion(
         nextTarget[0] + radius * sinPhi * Math.sin(theta),
         nextTarget[1] + radius * Math.cos(phi),
         nextTarget[2] + radius * sinPhi * Math.cos(theta),
-      ], nextTarget);
+      ], nextTarget, radius);
       thetaDelta *= RETENTION; phiDelta *= RETENTION;
       panX *= RETENTION; panY *= RETENTION; panZ *= RETENTION;
       scale = 1; // r128 zoom has no damping.
