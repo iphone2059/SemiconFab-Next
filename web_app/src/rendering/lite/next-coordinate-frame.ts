@@ -42,7 +42,7 @@ export function createNextReferenceCamera(view: NextReferenceView = 'iso') {
   const camera = createArcRotateCamera(0, Math.PI / 4, 1, { x: 0, y: 0, z: 0 });
   camera.fov = Math.PI / 4; camera.nearPlane = 0.5; camera.farPlane = 600;
   // The r128 orbit adapter owns inertia; no native Lite input hook is installed.
-  camera.inertia = 0; camera.panningSensibility = 45;
+  camera.inertia = 0;
   applyNextReferenceView(camera, view);
   return camera;
 }
