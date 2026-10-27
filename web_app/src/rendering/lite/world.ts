@@ -137,7 +137,7 @@ export async function createLiteWorld(
   const cameraControl = createLiteCamera(scene, camera);
   const detachControl = cameraControl.attachInput(canvas);
   const detachLimits = setCameraLimits(camera, {
-    lowerBetaLimit: 0.001, upperBetaLimit: Math.PI / 2 - 0.03, lowerRadiusLimit: 4, upperRadiusLimit: 180,
+    lowerBetaLimit: 0.000001, upperBetaLimit: Math.PI / 2 - 0.03, lowerRadiusLimit: 4, upperRadiusLimit: 180,
   });
   // Source r128 input exclusively owns wheel, drag and touch events.
   const detachResize = enableSurfaceResizeObserver(engine);
