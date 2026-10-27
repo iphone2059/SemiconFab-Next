@@ -18,6 +18,8 @@ export interface FabViewportProps {
   dual: boolean;
   onStatusChange?: (status: string) => void;
   onAmhsStatsChange?: (stats: AmhsStats) => void;
+  /** Match source OrbitControls start: stop guided camera ownership on user input. */
+  onCameraInteraction?: () => void;
   /** Optional frame-loop source read directly from the store without a React prop pass. */
   getToolStates?: () => readonly FabToolState[];
 }
@@ -46,7 +48,7 @@ export interface FabViewportHandle {
 }
 
 export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(function FabViewport(
-  { site, fab, toolStates, onToolChange, layers, explodeFactor, explodeMode, basement, dual, onStatusChange, onAmhsStatsChange, getToolStates },
+  { site, fab, toolStates, onToolChange, layers, explodeFactor, explodeMode, basement, dual, onStatusChange, onAmhsStatsChange, onCameraInteraction, getToolStates },
   ref,
 ) {
   const { t } = useTwinLocale();
@@ -163,7 +165,10 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
   const hovered = hoveredTool?.tool;
   return (
     <div className="scene twin-canvas">
-      <canvas ref={canvas} aria-label={t("FAB WebGPU 场景")} />
+      <canvas ref={canvas} aria-label={t("FAB WebGPU 场景")}
+        onPointerDownCapture={event => { if (event.pointerType !== "touch" && event.button >= 0 && event.button <= 2) onCameraInteraction?.(); }}
+        onTouchStartCapture={() => onCameraInteraction?.()}
+        onWheelCapture={() => onCameraInteraction?.()} />
       {hovered && <div className="twin-hovercard" style={{ left: hoveredTool.x + 12, top: hoveredTool.y + 12 }}>
         <strong>{hovered.vendor} {hovered.model}</strong>
         <span>{t(FAB_TOOL_STATE_META[toolStates[hovered.index] ?? hovered.state].label)} · #{hovered.index + 1}</span>
