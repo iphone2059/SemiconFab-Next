@@ -1,5 +1,5 @@
 import type { HoveredTool } from '../fab-scene';
-import { createImmerStore } from './createImmerStore';
+import { createSliceStore } from './createSliceStore';
 
 export interface RuntimeState {
   viewer: { epoch?: string; generation: number; status: string; hover?: HoveredTool; selectionSync?: string };
@@ -9,39 +9,26 @@ export interface RuntimeState {
 export const PREPARING_STATUS = '准备 WebGPU 视图…';
 export const initialRuntimeState: RuntimeState = { viewer: { generation: 0, status: PREPARING_STATUS } };
 
-const runtime = createImmerStore(initialRuntimeState, {
-  viewerMounted(state, action) {
-    state.viewer.epoch = action.payload;
-    state.viewer.status = PREPARING_STATUS;
-    state.viewer.hover = undefined;
-    state.viewer.selectionSync = undefined;
-  },
-  viewerStatusReceived(state, action) {
-    if (state.viewer.epoch === action.payload.epoch) state.viewer.status = action.payload.status;
-  },
-  viewerHoverReceived(state, action) {
-    if (state.viewer.epoch === action.payload.epoch) state.viewer.hover = action.payload.hover;
-  },
-  viewerHoverCleared(state) { state.viewer.hover = undefined; },
-  viewerSelectionSyncStarted(state, action) { state.viewer.selectionSync = action.payload; },
-  viewerSelectionSyncFinished(state, action) {
-    if (state.viewer.selectionSync === action.payload) state.viewer.selectionSync = undefined;
-  },
-  viewerReloadRequested(state) {
-    state.viewer.generation++;
-    state.viewer.epoch = undefined;
-    state.viewer.status = PREPARING_STATUS;
-    state.viewer.hover = undefined;
-    state.viewer.selectionSync = undefined;
-  },
-  viewerUnmounted(state, action) {
-    if (state.viewer.epoch !== action.payload) return;
-    state.viewer.epoch = undefined;
-    state.viewer.status = PREPARING_STATUS;
-    state.viewer.hover = undefined;
-    state.viewer.selectionSync = undefined;
-  },
-  fatalErrorSet(state, action) { state.fatalError = action.payload; },
+const clearedViewer = (generation: number): RuntimeState['viewer'] => ({ generation, status: PREPARING_STATUS });
+
+const runtime = createSliceStore(initialRuntimeState, {
+  viewerMounted: (state, action) => ({ ...state, viewer: { ...clearedViewer(state.viewer.generation), epoch: action.payload } }),
+  viewerStatusReceived: (state, action) => state.viewer.epoch !== action.payload.epoch
+    ? state
+    : { ...state, viewer: { ...state.viewer, status: action.payload.status } },
+  viewerHoverReceived: (state, action) => state.viewer.epoch !== action.payload.epoch
+    ? state
+    : { ...state, viewer: { ...state.viewer, hover: action.payload.hover } },
+  viewerHoverCleared: (state) => ({ ...state, viewer: { ...state.viewer, hover: undefined } }),
+  viewerSelectionSyncStarted: (state, action) => ({ ...state, viewer: { ...state.viewer, selectionSync: action.payload } }),
+  viewerSelectionSyncFinished: (state, action) => state.viewer.selectionSync !== action.payload
+    ? state
+    : { ...state, viewer: { ...state.viewer, selectionSync: undefined } },
+  viewerReloadRequested: (state) => ({ ...state, viewer: { ...clearedViewer(state.viewer.generation + 1) } }),
+  viewerUnmounted: (state, action) => state.viewer.epoch !== action.payload
+    ? state
+    : { ...state, viewer: { ...clearedViewer(state.viewer.generation) } },
+  fatalErrorSet: (state, action) => ({ ...state, fatalError: action.payload }),
 });
 
 export const useRuntimeStore = runtime.useStore;

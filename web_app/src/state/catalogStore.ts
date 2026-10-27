@@ -1,6 +1,6 @@
 import type { CatalogEntryDto } from '../contracts';
 import type { CatalogDomain } from '../catalog-data';
-import { createImmerStore } from './createImmerStore';
+import { createSliceStore } from './createSliceStore';
 
 export interface CatalogState {
   view: 'catalog' | 'compare';
@@ -34,44 +34,46 @@ export const initialCatalogState: CatalogState = {
   hydrated: false,
 };
 
-const catalog = createImmerStore(initialCatalogState, {
-  viewSet(state, action) { state.view = action.payload; },
-  domainSet(state, action) { state.domain = action.payload; },
-  categorySet(state, action) { state.category = action.payload; },
-  querySet(state, action) { state.query = action.payload; },
-  hideDraftsSet(state, action) { state.hideDrafts = action.payload; },
-  selectedSet(state, action) { state.selected = action.payload; },
-  selectedToggled(state, action) {
+const catalog = createSliceStore(initialCatalogState, {
+  viewSet: (state, action) => ({ ...state, view: action.payload }),
+  domainSet: (state, action) => ({ ...state, domain: action.payload }),
+  categorySet: (state, action) => ({ ...state, category: action.payload }),
+  querySet: (state, action) => ({ ...state, query: action.payload }),
+  hideDraftsSet: (state, action) => ({ ...state, hideDrafts: action.payload }),
+  selectedSet: (state, action) => ({ ...state, selected: action.payload }),
+  selectedToggled: (state, action) => {
     const id = action.payload as string;
-    state.selected = state.selected.includes(id)
+    const selected = state.selected.includes(id)
       ? state.selected.filter((value) => value !== id)
       : state.selected.length < 4 ? [...state.selected, id] : state.selected;
+    return { ...state, selected };
   },
-  detailIdSet(state, action) { state.detailId = action.payload; },
-  pageSet(state, action) { state.page = Math.max(0, action.payload); },
-  importStarted(state, action) { state.importRequestId = action.payload; state.importPending = true; state.importError = ''; },
-  importFailed(state, action) {
-    if (state.importRequestId !== action.payload.requestId) return;
-    state.importError = action.payload.error;
-    state.importPending = false;
-  },
-  localImportApplied(state, action) {
-    if (state.importRequestId !== action.payload.requestId) return;
-    state.localEntries = action.payload.entries;
-    state.localImportId = action.payload.importId;
-    state.detailId = undefined;
-    state.importError = '';
-    state.page = 0;
-    state.importPending = false;
-  },
-  localImportCleared(state) {
-    state.localEntries = null;
-    state.localImportId = '';
-    state.importError = '';
-    state.importRequestId = undefined;
-    state.importPending = false;
-  },
-  hydrate(state, action) { Object.assign(state, action.payload); state.hydrated = true; },
+  detailIdSet: (state, action) => ({ ...state, detailId: action.payload }),
+  pageSet: (state, action) => ({ ...state, page: Math.max(0, action.payload) }),
+  importStarted: (state, action) => ({ ...state, importRequestId: action.payload, importPending: true, importError: '' }),
+  importFailed: (state, action) => state.importRequestId !== action.payload.requestId
+    ? state
+    : { ...state, importError: action.payload.error, importPending: false },
+  localImportApplied: (state, action) => state.importRequestId !== action.payload.requestId
+    ? state
+    : {
+        ...state,
+        localEntries: action.payload.entries,
+        localImportId: action.payload.importId,
+        detailId: undefined,
+        importError: '',
+        page: 0,
+        importPending: false,
+      },
+  localImportCleared: (state) => ({
+    ...state,
+    localEntries: null,
+    localImportId: '',
+    importError: '',
+    importRequestId: undefined,
+    importPending: false,
+  }),
+  hydrate: (state, action) => ({ ...state, ...action.payload, hydrated: true }),
 });
 
 export const useCatalogStore = catalog.useStore;

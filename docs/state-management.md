@@ -151,7 +151,7 @@ HTTP 写入:  用户操作 -> mutation -> HTTP API -> 成功 -> invalidateQuerie
 
 ## 11. M2b 实现记录（2026-10-27）
 
-- Store（`web_app/src/state/`）：`twinUiStore`、`twinPageStore`、`twinDemoStore`、`catalogStore`、`workbenchStore`、`runtimeStore`、`localeStore`；公共 helper `createImmerStore` 用 Immer 承载迁移过来的 reducer 逻辑，actions 为普通 store 方法。
+- Store（`web_app/src/state/`）：`twinUiStore`、`twinPageStore`、`twinDemoStore`、`catalogStore`、`workbenchStore`、`runtimeStore`、`localeStore`；公共 helper `createSliceStore` 用纯不可变 reducer（`state + action -> state`，无 Immer），actions 为普通 store 方法。
 - 工具：`state/telemetry-buffer.ts` 保留 100ms 合批（ARCH-11 的过渡实现，M5 迁 Worker/TypedArray）。
 - 已删除：`src/store/`（7 slice、hooks、store、api 残留）、`react-redux`、`@reduxjs/toolkit`；`AppProviders` 只保留 QueryClientProvider + ErrorBoundary。
 - 测试：`redux-store.test.ts` 改写为 Zustand 状态/action 测试；需要已挂载状态的组件测试改用 jsdom + Testing Library（Zustand SSR 快照为初始状态）。
@@ -161,4 +161,4 @@ HTTP 写入:  用户操作 -> mutation -> HTTP API -> 成功 -> invalidateQuerie
 
 - Zustand store 与 action 行为由 `web_app/tests/redux-store.test.ts`（已改写为 state-store 测试）、`remaining-state.test.ts` 等覆盖；ARCH-02/05 的自动化静态检查仍在 M6 计划中（[架构基线](architecture.md) R-09）。
 - RQ-03（mutation 失效）与 RQ-04（FAB 隔离）**已运行 PASS**（M2a）。
-- 当前依赖与实现：TanStack Query/Zustand/immer/XState v6 alpha 均已安装；`src/store` 与 Redux/react-redux 已删除（M2b，见 §11）。
+- 当前依赖与实现：TanStack Query/Zustand/XState v6 alpha 均已安装，未引入 Immer；`src/store` 与 Redux/react-redux 已删除（M2b，见 §11）。

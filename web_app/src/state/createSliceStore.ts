@@ -1,15 +1,14 @@
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
-import { produce } from 'immer';
-import type { Draft } from 'immer';
 
 /**
  * Small Zustand store helper for the state that used to live in Redux Toolkit
- * slices. Reducer bodies stay mutation-style via Immer, but there is no Redux
- * store, no action dispatch and no react-redux dependency. Actions are bound
- * store methods so components can call them directly.
+ * slices. Reducers are now plain pure functions (state + action -> new state);
+ * there is no Immer, no Redux store, no action dispatch and no react-redux
+ * dependency. Actions are bound store methods so components can call them
+ * directly.
  */
 export type SliceAction = { readonly type: string; readonly payload?: any };
-export type SliceReducer<S> = (state: Draft<S>, action: SliceAction) => void;
+export type SliceReducer<S> = (state: S, action: SliceAction) => S;
 
 const clone = <T,>(value: T): T => {
   if (typeof structuredClone === 'function') return structuredClone(value);
@@ -22,7 +21,7 @@ export interface SliceStore<S extends object> {
   readonly reset: () => void;
 }
 
-export function createImmerStore<S extends object>(
+export function createSliceStore<S extends object>(
   initial: S,
   reducers: Record<string, SliceReducer<S>>,
 ): SliceStore<S> {
@@ -30,9 +29,7 @@ export function createImmerStore<S extends object>(
   const actions: Record<string, (payload?: any) => void> = {};
   for (const [name, reducer] of Object.entries(reducers)) {
     actions[name] = (payload?: any) => {
-      useStore.setState(produce(useStore.getState(), (draft) => {
-        reducer(draft, { type: name, payload });
-      }));
+      useStore.setState(reducer(useStore.getState(), { type: name, payload }));
     };
   }
   const reset = () => useStore.setState(clone(initial), true);

@@ -130,7 +130,7 @@
       "web_app/src/scenario.ts",
       "web_app/src/state-sync.ts",
       "web_app/src/state/catalogStore.ts",
-      "web_app/src/state/createImmerStore.ts",
+      "web_app/src/state/createSliceStore.ts",
       "web_app/src/state/localeStore.ts",
       "web_app/src/state/runtimeStore.ts",
       "web_app/src/state/telemetry-buffer.ts",

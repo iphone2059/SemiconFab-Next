@@ -1,4 +1,4 @@
-import { createImmerStore } from './createImmerStore';
+import { createSliceStore } from './createSliceStore';
 
 export interface WorkbenchFormState {
   lotCount: string;
@@ -22,30 +22,26 @@ export const initialWorkbenchState: WorkbenchState = {
   submitError: '',
 };
 
-const workbench = createImmerStore(initialWorkbenchState, {
-  siteIdSet(state, action) {
-    if (state.siteId === action.payload) return;
-    state.siteId = action.payload;
-    state.runId = '';
-    state.submitError = '';
-    state.pendingSubmission = undefined;
-  },
-  runsReceived(state, action) {
-    if (state.siteId === action.payload.siteId && !state.runId) state.runId = action.payload.runIds[0] ?? '';
-  },
-  runIdSet(state, action) { state.runId = action.payload; state.submitError = ''; },
-  submissionPrepared(state, action) {
-    if (state.pendingSubmission?.json !== action.payload.json) state.pendingSubmission = action.payload;
-  },
-  submissionCompleted(state, action) {
-    if (state.siteId !== action.payload.siteId || state.pendingSubmission?.key !== action.payload.key) return;
-    state.runId = action.payload.runId;
-    state.pendingSubmission = undefined;
-    state.submitError = '';
-  },
-  formFieldSet(state, action) { state.form[action.payload.field as keyof WorkbenchFormState] = action.payload.value; },
-  submitErrorSet(state, action) { state.submitError = action.payload; },
-  formReset(state) { state.form = initialWorkbenchState.form; state.submitError = ''; },
+const workbench = createSliceStore(initialWorkbenchState, {
+  siteIdSet: (state, action) => state.siteId === action.payload
+    ? state
+    : { ...state, siteId: action.payload, runId: '', submitError: '', pendingSubmission: undefined },
+  runsReceived: (state, action) => state.siteId === action.payload.siteId && !state.runId
+    ? { ...state, runId: action.payload.runIds[0] ?? '' }
+    : state,
+  runIdSet: (state, action) => ({ ...state, runId: action.payload, submitError: '' }),
+  submissionPrepared: (state, action) => state.pendingSubmission?.json === action.payload.json
+    ? state
+    : { ...state, pendingSubmission: action.payload },
+  submissionCompleted: (state, action) => state.siteId !== action.payload.siteId || state.pendingSubmission?.key !== action.payload.key
+    ? state
+    : { ...state, runId: action.payload.runId, pendingSubmission: undefined, submitError: '' },
+  formFieldSet: (state, action) => ({
+    ...state,
+    form: { ...state.form, [action.payload.field as keyof WorkbenchFormState]: action.payload.value },
+  }),
+  submitErrorSet: (state, action) => ({ ...state, submitError: action.payload }),
+  formReset: (state) => ({ ...state, form: initialWorkbenchState.form, submitError: '' }),
 });
 
 export const useWorkbenchStore = workbench.useStore;
