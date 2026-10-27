@@ -1,0 +1,68 @@
+{
+  "review": "Review-3 follow-up: coalesce RunStore submit wakeups so large batches do not accumulate stale notifications",
+  "baseCommit": "a05ca0a948d75fb78b6c69f0918a1ba83b9a57d2",
+  "changeCommits": {
+    "coalescedWakeups": "194a42c9fd4e7792ab7c8b52bb3c29dc1a46efbb"
+  },
+  "verifiedAt": "2026-10-27T15:33:17+08:00",
+  "environment": {
+    "os": "Windows",
+    "backend": ".NET 11 Release",
+    "frontend": "React 19 / Vite 8 / TypeScript 7 / @babylonjs/lite 1.36.0",
+    "node": "26.12.1",
+    "browser": "Chrome/155.0.8059.86 (headless, localhost secure context)"
+  },
+  "automatedVerification": {
+    "command": "./scripts/verify.ps1",
+    "exitCode": 0,
+    "frontend": {
+      "typecheck": "tsc --noEmit exit 0",
+      "tests": {
+        "files": 73,
+        "passed": 374,
+        "failed": 0
+      },
+      "build": "vite build exit 0 (1804 modules)"
+    },
+    "backend": {
+      "passed": 170,
+      "failed": 0,
+      "total": 170
+    },
+    "pythonToolTests": {
+      "passed": 8,
+      "failed": 0
+    },
+    "renderGateUnitTests": {
+      "passed": 13,
+      "failed": 0
+    },
+    "contractsArchitecture": "PASS"
+  },
+  "fix": {
+    "finding": "FileRunStore.Release() ran on every Submit (including idempotent replays) while the worker only waits when no work is available, so a large batch left one stale semaphore permit per Submit. After the batch drained, the worker performed that many unnecessary TryClaim calls (store-lock acquisitions and pending-index reads) before blocking again.",
+    "change": "The work signal is now a capacity-one SemaphoreSlim. Submit (and replay) call SignalSubmittedWork(), which coalesces a burst into at most one pending wakeup (SemaphoreFullException is swallowed). WaitForWorkAsync returns bool (true = notification consumed, false = timeout). The durable pending index remains the source of truth; the worker's 1 s timeout fallback still covers cross-process submits and expired leases.",
+    "tests": [
+      "Batched_submits_leave_at_most_one_pending_wakeup: 20 submissions, then process all work without waiting; after the batch the worker performs at most 2 consecutive empty claims (old design allowed one per historical Submit).",
+      "Repeated_idempotent_submits_coalesce_into_one_wakeup: 10 replays of the same idempotency key leave exactly one wakeup; the next wait times out.",
+      "Existing WaitForWorkAsync wake/timeout/cancellation tests remain green."
+    ],
+    "measured": {
+      "batchSubmits": 20,
+      "staleWakeupsBefore": "up to 1 per Submit (20 for the test batch; 10,000 for a 10,000-Run batch)",
+      "staleWakeupsAfter": "at most 1 outstanding notification (1-2 consecutive empty claims incl. the current poll)",
+      "scope": "Submit work-signal only; claim/complete/lease semantics unchanged."
+    }
+  },
+  "browserEvidence": {
+    "status": "not re-run for review-3: the change is backend-only (FileRunStore / SimulationWorker); no frontend or rendering code changed.",
+    "reference": "docs/evidence/perf-2026-10-27-review2.json (600-frame dev/60 Hz WebGPU gates, Worker 500/2000/5000 stress, RunStore 10k benchmark)."
+  },
+  "knownBoundaries": [
+    "Steady-state Submit is O(entries in its idempotency shard) — roughly 1/256 of idempotency records under uniform hashing — not strictly O(1); the single-file index it replaced was O(R) per Submit.",
+    "The first Submit after process start still pays the one-time O(R) reconciliation + shard rebuild on the worker-startup path (RecoverIndexes), about 2.0 s at 10,000 historical Runs.",
+    "Telemetry pending-frame merge is entity-level (full numeric record per entityId); field-level delta semantics are not defined.",
+    "The product render path consumes 16 telemetry slots; the 5000-entity Worker stress validates Worker throughput/memory only, not an end-to-end 5000-device business path.",
+    "Browser gate numbers remain single-machine headless Chrome baselines and are not part of this backend-only verification."
+  ]
+}

@@ -1,16 +1,16 @@
 # 实施状态（V2.1 最终）
 
-- 状态：**M0–M6 与后续 review 修复（多 FAB、SSE 游标/缺口、命令保留/幂等/能力、FAB 级遥测/设备状态、真实 GPU/Worker 压力门禁）已完成；性能优化专项（渲染热路径、遥测传输、RunStore 索引、静态资源打包、门禁加强、仿真值类型）已完成；review-2 修复（Submit 去历史扫描 + 幂等索引分片、启动索引恢复、遥测增量背压合并、灯光残分配、堆门禁 fail-closed）已完成；PostgreSQL/Outbox/生产身份因基础设施缺失保留边界。**
+- 状态：**M0–M6 与后续 review 修复（多 FAB、SSE 游标/缺口、命令保留/幂等/能力、FAB 级遥测/设备状态、真实 GPU/Worker 压力门禁）已完成；性能优化专项（渲染热路径、遥测传输、RunStore 索引、静态资源打包、门禁加强、仿真值类型）已完成；review-2 修复（Submit 去历史扫描 + 幂等索引分片、启动索引恢复、遥测增量背压合并、灯光残分配、堆门禁 fail-closed）已完成；review-3 修复（RunStore 提交通知合并唤醒，批量提交后不再积压信号/空转）已完成；PostgreSQL/Outbox/生产身份因基础设施缺失保留边界。**
 - 最后验证（提交前）：
   - 契约/架构检查 PASS
   - 8 个 Python 工具测试 + 13 个渲染门禁单元测试 PASS
-  - 3 个 .NET 项目 Release 构建 + **168/168 测试 PASS**
+  - 3 个 .NET 项目 Release 构建 + **170/170 测试 PASS**
   - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **73 文件 / 374 测试 PASS**、`vite build` 0（1804 modules）
   - `./scripts/verify.ps1` exit 0
   - 真实 Chrome/WebGPU dev 门禁：600 帧，p95 8.5ms，114.5fps，1 个按需 Worker，heap growth 6.82MB，rendererFrames 631，drawCalls 903，gpuErrors []（`.local/render-perf-final2.json`）
   - 真实 Chrome/WebGPU 60Hz profile：600 帧，p95 8.5ms，p99 16.6ms，heap growth 11.82MB，failures []
   - Worker 压力：500/2000/5000 entities × 60Hz × 5s，真实浏览器 Worker 收发 100%，p95 0.4/0.8/1.2ms
-  - 性能优化证据：`docs/evidence/perf-2026-10-27.json`（base `536b44e`，9 个主题提交）；review-2 修复证据：`docs/evidence/perf-2026-10-27-review2.json`（base `6cdfc7a`，4 个修复提交；RunStore 10k 历史 Submit steady p50 6.2ms）
+  - 性能优化证据：`docs/evidence/perf-2026-10-27.json`（base `536b44e`，9 个主题提交）；review-2 修复证据：`docs/evidence/perf-2026-10-27-review2.json`（base `6cdfc7a`，4 个修复提交；RunStore 10k 历史 Submit steady p50 6.2ms）；review-3 修复证据：`docs/evidence/perf-2026-10-27-review3.json`（base `a05ca0a`，提交通知合并唤醒）
 
 ## 当前架构
 
