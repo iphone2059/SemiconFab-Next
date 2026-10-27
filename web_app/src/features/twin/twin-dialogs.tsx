@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import { useMemo } from 'react';
 import { useTwinLocale } from './twin-i18n';
 import { ORIGINAL_TWIN_UI, filterOriginalOem, type OriginalOem } from '../../original-twin-data';
 import { useTwinPageStore, twinPageActions } from '../../state/twinPageStore';
-import { useDialogFocusTrap } from '../../dialog-focus';
+import { Modal, ModalTitle } from '../../components/modal';
+import { classNames } from '../../class-names';
 
 const ARCH_LAYERS = [
   {
@@ -42,18 +42,11 @@ const DATA_ROWS = [
   ['Visualization & Dashboards', 'Siemens Opcenter Intelligence', 'Grafana / Apache Superset', 'Live fab OEE, chamber SOH, Shewhart SPC control charts and yield waterfall monitoring'],
 ];
 
-export function TwinInfoDialog({ mode, onClose, onSelectOem }: { mode: 'architecture' | 'database'; onClose: () => void; onSelectOem: (id: string) => void }) {
+export function TwinInfoDialog({ mode, onClose, onSelectOem, portalContainer }: { mode: 'architecture' | 'database'; onClose: () => void; onSelectOem: (id: string) => void; portalContainer?: HTMLElement | null }) {
   const { t, language } = useTwinLocale();
   const zh = language === 'zh';
   const oemDialog = useTwinPageStore((state) => state.oemDialog);
   const archQuery = useTwinPageStore((state) => state.archQuery);
-  const dialog = useRef<HTMLDivElement>(null);
-  useDialogFocusTrap(dialog);
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); onClose(); } };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
   const allOem = ORIGINAL_TWIN_UI.oem;
   const segments = useMemo(() => [...new Set(allOem.map((row) => row.segment))], [allOem]);
   const vendors = useMemo(() => [...new Set(allOem.map((row) => row.vendor))].sort(), [allOem]);
@@ -65,12 +58,13 @@ export function TwinInfoDialog({ mode, onClose, onSelectOem }: { mode: 'architec
   async function copyRecord(row: OriginalOem): Promise<void> {
     try { await navigator.clipboard?.writeText(JSON.stringify(row, null, 2)); } catch { /* clipboard may be blocked */ }
   }
-  return createPortal(
-    <div id={mode === 'database' ? 'oem-database-modal' : 'open-architecture-modal'} className="twin-yms-backdrop" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section ref={dialog} className="twin-yms twin-dialog-wide" role="dialog" aria-modal="true" aria-label={mode === 'database' ? t('OEM 数据库') : t('开放软件架构')}>
+  return (
+    <Modal id={mode === 'database' ? 'oem-database-modal' : 'open-architecture-modal'} overlayClassName="twin-yms-backdrop"
+      className="twin-yms twin-dialog-wide" label={mode === 'database' ? t('OEM 数据库') : t('开放软件架构')}
+      onClose={onClose} portalContainer={portalContainer}>
         <header className="twin-yms-head">
           <div>
-            <strong>{mode === 'database' ? 'GLOBAL SEMICONDUCTOR EQUIPMENT DATABASE (BETA)' : 'OPEN SEMICONDUCTOR SOFTWARE ARCHITECTURE & STANDARDS'}</strong>
+            <ModalTitle asChild><strong>{mode === 'database' ? 'GLOBAL SEMICONDUCTOR EQUIPMENT DATABASE (BETA)' : 'OPEN SEMICONDUCTOR SOFTWARE ARCHITECTURE & STANDARDS'}</strong></ModalTitle>
             <span>{mode === 'database' ? '116 Verified OEM Models · SEMI-E72 physical data' : 'ISA-95 Level 1-4 · SEMI Protocols'}</span>
           </div>
           <button type="button" className="twin-yms-close" onClick={onClose} autoFocus aria-label={t('关闭')}>×</button>
@@ -108,7 +102,7 @@ export function TwinInfoDialog({ mode, onClose, onSelectOem }: { mode: 'architec
             <span className="twin-dialog-sources">Sources: <b>Awesome-Semiconductor-MES</b><b>Process-Control</b><b>Yield-Management</b></span>
           </div>
           <div className="twin-dialog-arch" id="arch-cards-container">
-            {showArch && ARCH_LAYERS.map((layer) => <article className={`twin-arch-card ${layer.color}`} key={layer.title}>
+            {showArch && ARCH_LAYERS.map((layer) => <article className={classNames('twin-arch-card', layer.color)} key={layer.title}>
               <div className="twin-arch-meta"><span>{layer.level}</span><small>{layer.meta}</small></div>
               <h3>{layer.title}</h3><p>{layer.body}</p>
               <div className="twin-arch-tools">{layer.tools.map(([tool, tag]) => <div key={tool}><b>{tool}</b><span>{tag}</span></div>)}</div>
@@ -123,8 +117,6 @@ export function TwinInfoDialog({ mode, onClose, onSelectOem }: { mode: 'architec
           </div>
           <footer className="twin-dialog-foot">{zh ? '参考架构；不包含生产级部署配置。' : 'Reference architecture only; production deployment configuration is out of scope.'}</footer>
         </>}
-      </section>
-    </div>,
-    document.body,
+    </Modal>
   );
 }

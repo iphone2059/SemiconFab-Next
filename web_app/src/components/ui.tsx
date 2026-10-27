@@ -1,4 +1,5 @@
 import type { AriaRole, PropsWithChildren, ReactNode, Ref } from 'react';
+import { classNames } from '../class-names';
 
 type PanelProps = PropsWithChildren<{
   title: string;
@@ -25,7 +26,7 @@ export function Panel({
   return (
     <section
       ref={containerRef}
-      className={`panel ${className}`}
+      className={classNames('panel', className)}
       role={role}
       aria-modal={ariaModal}
       aria-label={ariaLabel}

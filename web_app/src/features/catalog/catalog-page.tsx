@@ -2,7 +2,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
-  useRef,
+  useState,
   type ChangeEvent,
   type MouseEvent,
 } from 'react';
@@ -27,6 +27,7 @@ import {
 } from '../../app/router/search';
 import '../../../assets/catalog.css';
 import legacyLicenseUrl from '../../../assets/legacy-LICENSE.txt';
+import { Modal, ModalTitle } from '../../components/modal';
 
 type Language = Preferences['language'];
 const text = (language: Language, zh: string, en: string) => (language === 'zh' ? zh : en);
@@ -243,28 +244,24 @@ function EquipmentDetails({
   entry,
   language,
   onClose,
+  portalContainer,
 }: {
   entry: CatalogEntryDto;
   language: Language;
   onClose: () => void;
+  portalContainer: HTMLElement | null;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const element = dialog.current;
-    element?.showModal();
-    return () => element?.close();
-  }, []);
   return (
-    <dialog
+    <Modal
       className="catalog-dialog"
-      ref={dialog}
-      onCancel={onClose}
-      aria-labelledby="equipment-title"
+      overlayClassName="catalog-dialog-overlay"
+      onClose={onClose}
+      portalContainer={portalContainer}
     >
       <div className="catalog-dialog-head">
         <div>
           <span className="catalog-eyebrow">{entry.vendor}</span>
-          <h2 id="equipment-title">{entry.model}</h2>
+          <ModalTitle asChild><h2>{entry.model}</h2></ModalTitle>
           <span className="catalog-muted">{entry.recordId}</span>
         </div>
         <button onClick={onClose} autoFocus>
@@ -307,7 +304,7 @@ function EquipmentDetails({
           {text(language, '下载设备记录 JSON', 'Download equipment record JSON')}
         </button>
       </div>
-    </dialog>
+    </Modal>
   );
 }
 
@@ -329,6 +326,7 @@ export interface CatalogPageProps {
 }
 
 export function CatalogPage({ view: initialView, search, onSearchChange, onViewChange }: CatalogPageProps) {
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
   const catalogState = useCatalogStore();
   const {
     view, domain, category, query, hideDrafts, selected,
@@ -467,7 +465,7 @@ export function CatalogPage({ view: initialView, search, onSearchChange, onViewC
   }
 
   return (
-    <div className="catalog-shell" data-theme={preferences.theme}>
+    <div className="catalog-shell" data-theme={preferences.theme} ref={setPortalContainer}>
       <header className="catalog-header">
         <a className="catalog-brand" href="/">
           SEMICON<span>FAB</span>
@@ -766,7 +764,7 @@ export function CatalogPage({ view: initialView, search, onSearchChange, onViewC
         </footer>
       </main>
       {detail && (
-        <EquipmentDetails entry={detail} language={language} onClose={() => catalogActions.detailIdSet(undefined)} />
+        <EquipmentDetails entry={detail} language={language} onClose={() => catalogActions.detailIdSet(undefined)} portalContainer={portalContainer} />
       )}
     </div>
   );

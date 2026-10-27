@@ -310,8 +310,16 @@
   background: var(--catalog-panel);
   border: 1px solid var(--catalog-border);
   border-radius: 10px;
+  overflow: auto;
 }
-.catalog-dialog::backdrop {
+.catalog-dialog-overlay {
+  position: fixed;
+  z-index: 200;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3vh 3vw;
   background: #20395680;
   backdrop-filter: blur(4px);
 }

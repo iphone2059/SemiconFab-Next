@@ -14,6 +14,7 @@ import { AmhsOhtReadout, AmhsResearchBadge } from './twin-amhs-hud';
 import { TwinTourHud, type TourHudSnapshot, type TwinTourHudHandle } from './twin-tour-hud';
 import { TwinWaferHud } from './twin-wafer-hud';
 import { TwinYmsPanel, TwinYieldPill } from './twin-yms';
+import { classNames } from '../../class-names';
 import { ORIGINAL_TWIN_UI, type TwinSelection } from '../../original-twin-data';
 import { ResearchReplay, researchClock } from '../../research-replay';
 import type { WaferProduct } from '../../wafer-route';
@@ -295,6 +296,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const tourHudRef = useRef<TwinTourHudHandle>(null);
   // Mount-time seed for the tour HUD; later frames are pushed through tourHudRef.
   const [tourHudSeed, setTourHudSeed] = useState<TourHudSnapshot | null>(null);
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
   const amhsBatcher = useMemo(() => createCoalescedDispatcher<AmhsStats>((stats) => twinPageActions.amhsSet(stats), 100), []);
   useEffect(() => () => amhsBatcher.cancel(), [amhsBatcher]);
 
@@ -552,6 +554,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       const target = event.target as HTMLElement | null;
       if (event.key === 'Escape') {
         twinUiActions.escape();
@@ -793,7 +796,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   }
 
   return (
-    <main className="twin-page" data-spatial-mode={ui.spatialMode ?? 'none'}>
+    <main className="twin-page" data-spatial-mode={ui.spatialMode ?? 'none'} ref={setPortalContainer}>
       {statusSiteId && selectedFabId && <EquipmentStatusPipeline siteId={statusSiteId} fabId={selectedFabId} />}
       <header className="twin-topbar">
         <a className="twin-brand" href="/" aria-label={t("首页")}>
@@ -841,12 +844,12 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
           </select>
         </section>
         <button type="button" className={`twin-yms-toggle${ymsOpen ? ' active' : ''}`} aria-pressed={ymsOpen} onClick={() => { setYmsTab('map'); setYmsOpen(!ymsOpen); }}><OriginalIcon name="wafer" />{t("YMS 晶圆图谱")}</button>
-        <button id="btn-toggle-cut" type="button" className={`twin-cut-toggle${cutActive ? ' active' : ''}`} aria-pressed={cutActive} onClick={toggleCut}><OriginalIcon name="cut" />{t("动态剖切")}</button>
-        <button id="btn-follow-wafer" type="button" className={`twin-wafer-toggle${waferActive ? ' active' : ''}`} aria-pressed={waferActive} onClick={() => { if (waferActive) closeWafer(); else startWafer(); }}><OriginalIcon name="wafer" />{t("跟随晶圆")}</button>
+        <button id="btn-toggle-cut" type="button" className={classNames('twin-cut-toggle', { active: cutActive })} aria-pressed={cutActive} onClick={toggleCut}><OriginalIcon name="cut" />{t("动态剖切")}</button>
+        <button id="btn-follow-wafer" type="button" className={classNames('twin-wafer-toggle', { active: waferActive })} aria-pressed={waferActive} onClick={() => { if (waferActive) closeWafer(); else startWafer(); }}><OriginalIcon name="wafer" />{t("跟随晶圆")}</button>
         <label className="twin-source"><select aria-label={t("状态来源")} value={ui.preferredStatusSource} disabled={mode === 'research'} onChange={(event) => twinUiActions.sourceSet(event.target.value as 'demo' | 'sse-live')}>
           <option value="sse-live">SSE</option><option value="demo">DEMO</option>
         </select></label>
-        <span className={`twin-feed${mode === 'research' ? ' is-replay' : statusFeed?.stale ? ' is-stale' : ''}`}><i />{mode === 'research' ? 'REPLAY' : ui.statusSource === 'demo' ? 'DEMO' : !statusFeed ? 'CONNECTING' : statusFeed.stale ? 'CACHE' : 'LIVE'}</span>
+        <span className={classNames('twin-feed', { 'is-replay': mode === 'research', 'is-stale': mode !== 'research' && statusFeed?.stale })}><i />{mode === 'research' ? 'REPLAY' : ui.statusSource === 'demo' ? 'DEMO' : !statusFeed ? 'CONNECTING' : statusFeed.stale ? 'CACHE' : 'LIVE'}</span>
       </div>
 
       {level === 'EXPLODED' && (
@@ -1057,7 +1060,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
         )}
 
         {ymsOpen && (
-          <TwinYmsPanel toolStates={toolStates} />
+          <TwinYmsPanel toolStates={toolStates} portalContainer={portalContainer} />
         )}
         <div id="hud-grid-badge" className="twin-grid-badge"><OriginalIcon name="ruler" />{t("网格: 6m × 6m · Subfab: -7.0m")}</div>
 
@@ -1098,6 +1101,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
         {infoDialog && (
           <TwinInfoDialog
             mode={infoDialog}
+            portalContainer={portalContainer}
             onClose={() => setInfoDialog(null)}
             onSelectOem={(id) => handleTwinSelection({ kind: 'oem', id })}
           />

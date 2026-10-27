@@ -11,6 +11,7 @@ import {
   type BinCode, type DefectPattern, type WaferDie,
 } from '../../wafer-map';
 import { useTwinLocale } from './twin-i18n';
+import { Modal, ModalTitle } from '../../components/modal';
 
 interface YmsProjectionProps {
   /** Page-projected tool states; the yield waterfall reuses the same live/demo/replay source as the scene. */
@@ -98,7 +99,7 @@ const WaferDieMap = memo(function WaferDieMap({ dies }: { dies: readonly WaferDi
  * cross-die hover rerenders only the readout instead of TwinContent and
  * FabViewport.
  */
-export function TwinYmsPanel({ toolStates }: YmsProjectionProps) {
+export function TwinYmsPanel({ toolStates, portalContainer }: YmsProjectionProps & { portalContainer?: HTMLElement | null }) {
   const { t } = useTwinLocale();
   const { tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, stdfCopied } = useTwinPageStore(useShallow((state) => ({
     tab: state.yms.tab,
@@ -132,10 +133,10 @@ export function TwinYmsPanel({ toolStates }: YmsProjectionProps) {
   }
 
   return (
-    <div className="twin-yms-backdrop" onClick={() => twinPageActions.ymsOpenSet(false)}>
-      <section className="twin-yms" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="YMS yield management">
+    <Modal overlayClassName="twin-yms-backdrop" className="twin-yms" label="YMS yield management"
+      onClose={() => twinPageActions.ymsOpenSet(false)} portalContainer={portalContainer}>
         <header className="twin-yms-head">
-          <div><strong>YMS · YIELD MANAGEMENT</strong><span>WM-811K SPATIAL CLASSIFIER · 8-STAGE CASCADING YIELD</span></div>
+          <div><ModalTitle asChild><strong>YMS · YIELD MANAGEMENT</strong></ModalTitle><span>WM-811K SPATIAL CLASSIFIER · 8-STAGE CASCADING YIELD</span></div>
           <nav>
             <button type="button" className={ymsTab === 'map' ? 'active' : ''} onClick={() => twinPageActions.ymsTabSet('map')}>Wafer Map</button>
             <button type="button" className={ymsTab === 'yield' ? 'active' : ''} onClick={() => twinPageActions.ymsTabSet('yield')}>Yield Waterfall</button>
@@ -218,7 +219,6 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
             </div>
           </div>
         )}
-      </section>
-    </div>
+    </Modal>
   );
 }
