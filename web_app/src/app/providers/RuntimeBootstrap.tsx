@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { CommandEventSource } from '../../application/contracts/CommandEvents';
 import { sitesQueryOptions } from '../../api/queries/sites.queries';
 import { FabLifecycleCoordinator } from '../../runtime/FabLifecycleCoordinator';
 import { FabRuntimeFactory } from '../../runtime/FabRuntimeFactory';
@@ -14,10 +15,11 @@ import { TelemetryProvider } from './TelemetryProvider';
 
 /**
  * Product runtime wiring: one FabRuntime per FAB discovered from the sites
- * document, backed by the backend SSE command stream + HTTP authoritative
- * gateway, plus one FAB-scoped telemetry runtime (SSE -> Worker -> typed frame)
- * per FAB. When the browser lacks EventSource/Worker (tests/jsdom), the runtime
- * falls back to the empty CommandEventSource seam.
+ * document, backed by one FAB-scoped backend command SSE stream (?fabId=) and
+ * one FAB-scoped telemetry runtime (SSE -> Worker -> typed frame) per FAB, plus
+ * the HTTP authoritative command gateway. When the browser lacks
+ * EventSource/Worker (tests/jsdom), the runtime falls back to the empty
+ * CommandEventSource seam.
  */
 export function RuntimeBootstrap({ children }: { children: ReactNode }) {
   const [registry] = useState(() => new FabRuntimeRegistry());
@@ -38,23 +40,26 @@ export function RuntimeBootstrap({ children }: { children: ReactNode }) {
     telemetryRegistry.disposeAll();
     registry.disposeAll();
 
-    const siteByFab = new Map(fabs.map((fab) => [fab.fabId, fab.siteId]));
-    const sources = new Map<string, ReturnType<typeof createSseCommandEventSource>>();
-    for (const site of sites) {
-      sources.set(
-        site.siteId,
+    // One command SSE stream per FAB: the backend scopes + authorizes the stream
+    // by the fabId query parameter and emits only that FAB's command results.
+    // No site-level shared source exists (that would cross FAB identities and
+    // fail FAB-scoped authorization).
+    const sourceByFab = new Map<string, CommandEventSource>();
+    for (const fab of fabs) {
+      sourceByFab.set(
+        fab.fabId,
         typeof EventSource === 'undefined'
           ? createPendingCommandEventSource()
-          : createSseCommandEventSource(`/api/v1/sites/${site.siteId}/commands/stream`),
+          : createSseCommandEventSource(
+            `/api/v1/sites/${encodeURIComponent(fab.siteId)}/commands/stream?fabId=${encodeURIComponent(fab.fabId)}`,
+          ),
       );
     }
     const gateway = typeof fetch === 'function' ? createHttpCommandGateway() : undefined;
     const factory = new FabRuntimeFactory({
-      sourceFor: (fabId) => {
-        const siteId = siteByFab.get(fabId);
-        return (siteId ? sources.get(siteId) : undefined) ?? createPendingCommandEventSource();
-      },
+      sourceFor: (fabId) => sourceByFab.get(fabId) ?? createPendingCommandEventSource(),
       gateway,
+      lazyCommandSubscription: true,
     });
     for (const fab of fabs) registry.register(factory.create(fab.fabId));
 

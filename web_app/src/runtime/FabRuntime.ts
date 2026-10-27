@@ -31,6 +31,8 @@ export interface FabRuntimeOptions {
   readonly createWorkflow?: CommandWorkflowFactory;
   /** Test seam for retention bounds/clock; production keeps the defaults. */
   readonly retention?: FabRuntimeRetentionOptions;
+  /** Defer opening the command SSE stream until the first command is tracked. */
+  readonly lazyCommandSubscription?: boolean;
 }
 
 interface ResolvedRetention {
@@ -84,6 +86,7 @@ export class FabRuntime {
   private readonly reconciler?: CommandReconciler;
   private readonly createWorkflow: CommandWorkflowFactory;
   private readonly source: CommandEventSource;
+  private readonly lazyCommandSubscription: boolean;
   private readonly retention: ResolvedRetention;
   private readonly reconciliations = new Map<string, Promise<boolean>>();
   private reconnectSubscription?: Subscription;
@@ -93,10 +96,12 @@ export class FabRuntime {
   private gapObserved = false;
   private disposed = false;
   private started = false;
+  private bridgeStarted = false;
 
   constructor(options: FabRuntimeOptions) {
     this.fabId = options.fabId;
     this.source = options.source;
+    this.lazyCommandSubscription = options.lazyCommandSubscription === true;
     this.retention = resolveRetention(options.retention);
     this.reconciler = options.gateway ? new CommandReconciler(options.gateway) : undefined;
     this.createWorkflow = options.createWorkflow ?? ((fabId, commandId) => new XStateCommandWorkflowAdapter(fabId, commandId, this.reconciler));
@@ -127,14 +132,21 @@ export class FabRuntime {
       this.scheduleReconcilePass();
     });
     this.reconnectSubscription = this.source.reconnected$?.subscribe(() => this.scheduleReconcilePass());
-    this.bridge.start();
+    // With lazy command streams, opening the SSE connection waits for the first
+    // tracked command (backend replays its journal on connect), keeping the page
+    // under browser HTTP/1.1 connection limits when no commands are active.
+    if (!this.lazyCommandSubscription || this.workflows.size > 0) {
+      this.bridge.start();
+      this.bridgeStarted = true;
+    }
     this.reconcileActive();
     this.scheduleSweep();
   }
 
   stop(): void {
     if (!this.started) return;
-    this.bridge.stop();
+    if (this.bridgeStarted) this.bridge.stop();
+    this.bridgeStarted = false;
     this.gapSubscription?.unsubscribe();
     this.gapSubscription = undefined;
     this.reconnectSubscription?.unsubscribe();
@@ -149,6 +161,10 @@ export class FabRuntime {
     if (existing) return existing;
     const workflow = this.createWorkflow(this.fabId, commandId);
     this.workflows.set(commandId, workflow);
+    if (!this.bridgeStarted && this.started && !this.disposed) {
+      this.bridge.start();
+      this.bridgeStarted = true;
+    }
     this.bridge.flushRecovery();
     this.afterDelivery();
     // A replay gap means the local stream may hold no evidence for this command;

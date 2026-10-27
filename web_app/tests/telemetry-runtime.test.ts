@@ -19,7 +19,18 @@ function harness(deferred = false) {
   const send = (sequence: number, state: number) => source.onmessage?.({ data: JSON.stringify({
     topic: 'telemetry.frame', sequence, payload: { fabId: 'fab-a', sequence, capturedAt: '2026-10-27T00:00:00Z', samples: [{ entityId: 'equipment-0', values: { state, utilization: 0.5 } }] },
   }) });
-  return { runtime, source, send, deliver: (index: number) => worker.onmessage?.({ data: replies[index] }) };
+  const sendSamples = (sequence: number, samples: Array<{ entityId: string; state: number; utilization?: number }>) =>
+    source.onmessage?.({ data: JSON.stringify({
+      topic: 'telemetry.frame', sequence,
+      payload: {
+        fabId: 'fab-a', sequence, capturedAt: '2026-10-27T00:00:00Z',
+        samples: samples.map((sample) => ({
+          entityId: sample.entityId,
+          values: { state: sample.state, utilization: sample.utilization ?? 0.5 },
+        })),
+      },
+    }) });
+  return { runtime, source, send, sendSamples, deliver: (index: number) => worker.onmessage?.({ data: replies[index] }) };
 }
 
 it('preserves wire sequence through the Worker and rejects older frames in the same connection', () => {
@@ -53,6 +64,67 @@ it('rejects a telemetry frame addressed to another FAB', () => {
   }) });
   expect(runtime.getSnapshot()?.sequence).toBe(1);
   expect(runtime.fabId).toBe('fab-a');
+  runtime.stop();
+});
+
+it('maps shuffled telemetry samples to stable equipment slots instead of array positions', () => {
+  const { runtime, sendSamples } = harness();
+  // Entity order deliberately reversed: slot identity must come from entityId.
+  sendSamples(1, [
+    { entityId: 'equipment-2', state: 2 },
+    { entityId: 'equipment-0', state: 1 },
+  ]);
+  expect(runtime.getToolStates()?.[0]).toBe('idle');
+  expect(runtime.getToolStates()?.[2]).toBe('down');
+  expect(runtime.getToolStates()?.[1]).toBe('running');
+
+  sendSamples(2, [
+    { entityId: 'equipment-0', state: 3 },
+    { entityId: 'equipment-2', state: 0 },
+  ]);
+  expect(runtime.getToolStates()?.[0]).toBe('maint');
+  expect(runtime.getToolStates()?.[2]).toBe('running');
+  runtime.stop();
+});
+
+it('retains previous tool state when an entity is missing from a later frame', () => {
+  const { runtime, sendSamples } = harness();
+  sendSamples(1, [
+    { entityId: 'equipment-0', state: 2 },
+    { entityId: 'equipment-5', state: 1 },
+  ]);
+  expect(runtime.getToolStates()?.[0]).toBe('down');
+  expect(runtime.getToolStates()?.[5]).toBe('idle');
+
+  // Only equipment-5 is sampled next: equipment-0 must keep 'down', not reset to running.
+  sendSamples(2, [{ entityId: 'equipment-5', state: 0 }]);
+  expect(runtime.getToolStates()?.[0]).toBe('down');
+  expect(runtime.getToolStates()?.[5]).toBe('running');
+  runtime.stop();
+});
+
+it('ignores unknown and duplicate telemetry entity ids', () => {
+  const { runtime, sendSamples } = harness();
+  sendSamples(1, [
+    { entityId: 'unknown-equipment', state: 2 },
+    { entityId: 'equipment-16', state: 2 }, // outside the 16 render slots
+    { entityId: 'equipment-4', state: 3 },
+    { entityId: 'equipment-4', state: 0 }, // duplicate: first occurrence wins
+  ]);
+  expect(runtime.getToolStates()?.[4]).toBe('maint');
+  expect(runtime.getToolStates()?.filter((state) => state === 'down')).toHaveLength(0);
+  runtime.stop();
+});
+
+it('keeps retained state across an SSE reconnect frame that omits sampled entities', () => {
+  const { runtime, source, sendSamples } = harness();
+  sendSamples(1, [{ entityId: 'equipment-3', state: 2 }]);
+  expect(runtime.getToolStates()?.[3]).toBe('down');
+  source.onopen?.();
+  sendSamples(1, [{ entityId: 'equipment-4', state: 1 }]);
+  expect(runtime.getSnapshot()?.sequence).toBe(1);
+  expect(runtime.getToolStates()?.[3]).toBe('down');
+  expect(runtime.getToolStates()?.[4]).toBe('idle');
   runtime.stop();
 });
 

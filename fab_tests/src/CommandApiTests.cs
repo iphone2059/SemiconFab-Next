@@ -79,7 +79,7 @@ public sealed class CommandApiTests
             new { fabId = Guid.NewGuid().ToString(), equipmentId = "equipment-0", action = "START" }, "unknown-site-1");
         Assert.Equal(HttpStatusCode.NotFound, submit.StatusCode);
 
-        using var stream = await client.GetAsync($"/api/v1/sites/{unknownSite}/commands/stream");
+        using var stream = await client.GetAsync($"/api/v1/sites/{unknownSite}/commands/stream?fabId={Guid.NewGuid()}");
         Assert.Equal(HttpStatusCode.NotFound, stream.StatusCode);
         Assert.Equal("application/problem+json", stream.Content.Headers.ContentType!.MediaType);
     }
@@ -119,7 +119,7 @@ public sealed class CommandApiTests
         var (siteId, fabId) = await SiteAsync(api);
 
         using var timeout = new CancellationTokenSource(StreamTimeout);
-        using var response = await streamClient.GetAsync($"/api/v1/sites/{siteId}/commands/stream",
+        using var response = await streamClient.GetAsync($"/api/v1/sites/{siteId}/commands/stream?fabId={fabId}",
             HttpCompletionOption.ResponseHeadersRead, timeout.Token);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("text/event-stream", response.Content.Headers.ContentType!.MediaType);
@@ -182,7 +182,7 @@ public sealed class CommandApiTests
 
         using var streamClient = Authorized(factory);
         using var timeout = new CancellationTokenSource(StreamTimeout);
-        var (commandIds, revisions) = await ReplayJournalAsync(streamClient, siteId, timeout.Token);
+        var (commandIds, revisions) = await ReplayJournalAsync(streamClient, siteId, fabId, timeout.Token);
         Assert.All(commandIds, id => Assert.Equal(commandId, id));
         Assert.Equal(new[] { 0, 1, 2 }, revisions);
     }
@@ -239,7 +239,7 @@ public sealed class CommandApiTests
 
         using var streamClient = Authorized(factory);
         using var streamTimeout = new CancellationTokenSource(StreamTimeout);
-        var (commandIds, revisions) = await ReplayJournalAsync(streamClient, siteId, streamTimeout.Token);
+        var (commandIds, revisions) = await ReplayJournalAsync(streamClient, siteId, fabId, streamTimeout.Token);
         Assert.All(commandIds, id => Assert.Equal(commandId, id));
         Assert.Equal(new[] { 0, 1, 2 }, revisions);
     }
@@ -340,7 +340,7 @@ public sealed class CommandApiTests
         var commandId = await CommandIdAsync(submit);
 
         using var timeout = new CancellationTokenSource(StreamTimeout);
-        using var response = await OpenCommandStreamAsync(client, siteId, lastEventId: null, timeout.Token);
+        using var response = await OpenCommandStreamAsync(client, siteId, fabId, lastEventId: null, timeout.Token);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("text/event-stream", response.Content.Headers.ContentType!.MediaType);
         await using var body = await response.Content.ReadAsStreamAsync(timeout.Token);
@@ -390,7 +390,7 @@ public sealed class CommandApiTests
 
         using var timeout = new CancellationTokenSource(StreamTimeout);
         string resumeFrom;
-        using (var firstResponse = await OpenCommandStreamAsync(client, siteId, lastEventId: null, timeout.Token))
+        using (var firstResponse = await OpenCommandStreamAsync(client, siteId, fabId, lastEventId: null, timeout.Token))
         {
             Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
             await using var firstBody = await firstResponse.Content.ReadAsStreamAsync(timeout.Token);
@@ -402,7 +402,7 @@ public sealed class CommandApiTests
             resumeFrom = first.Id!;
         }
 
-        using var resumed = await OpenCommandStreamAsync(client, siteId, resumeFrom, timeout.Token);
+        using var resumed = await OpenCommandStreamAsync(client, siteId, fabId, resumeFrom, timeout.Token);
         Assert.Equal(HttpStatusCode.OK, resumed.StatusCode);
         await using var resumedBody = await resumed.Content.ReadAsStreamAsync(timeout.Token);
         using var resumedReader = new StreamReader(resumedBody, Encoding.UTF8);
@@ -431,7 +431,7 @@ public sealed class CommandApiTests
         var lastEventId = foreignEpoch + ":1";
 
         using var timeout = new CancellationTokenSource(StreamTimeout);
-        using var response = await OpenCommandStreamAsync(client, siteId, lastEventId, timeout.Token);
+        using var response = await OpenCommandStreamAsync(client, siteId, fabId, lastEventId, timeout.Token);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         await using var body = await response.Content.ReadAsStreamAsync(timeout.Token);
         using var reader = new StreamReader(body, Encoding.UTF8);
@@ -544,7 +544,7 @@ public sealed class CommandApiTests
                 ("Fab:EquipmentCapabilities:Fabs:FAB-01:Equipment:equipment-0:Actions:1", "STOP"),
                 ("Fab:EquipmentCapabilities:Fabs:FAB-01:Equipment:equipment-0:Preconditions:STOP", "running")
             ],
-            stateProvider: new FixedEquipmentStateProvider("idle"));
+            stateProvider: new MutableEquipmentStateProvider("idle"));
         using var client = Authorized(factory);
         var (siteId, fabId) = await SiteAsync(client);
 
@@ -561,6 +561,221 @@ public sealed class CommandApiTests
         using var allowed = await PostCommandAsync(client, siteId,
             new { fabId, equipmentId = "equipment-0", action = "START" }, "capability-precondition-allowed-1");
         Assert.Equal(HttpStatusCode.Accepted, allowed.StatusCode);
+    }
+
+    [Fact]
+    public async Task IdempotencyReplaySkipsCurrentCapabilityAndStateValidation()
+    {
+        var state = new MutableEquipmentStateProvider("running");
+        using var factory = Factory(
+            capabilitySettings:
+            [
+                ("Fab:EquipmentCapabilities:Fabs:FAB-01:Equipment:equipment-0:Actions:0", "START"),
+                ("Fab:EquipmentCapabilities:Fabs:FAB-01:Equipment:equipment-0:Actions:1", "STOP"),
+                ("Fab:EquipmentCapabilities:Fabs:FAB-01:Equipment:equipment-0:Preconditions:STOP", "running")
+            ],
+            stateProvider: state);
+        using var client = Authorized(factory);
+        var (siteId, fabId) = await SiteAsync(client);
+        const string replayKey = "replay-before-validation-1";
+        var body = new { fabId, equipmentId = "equipment-0", action = "STOP" };
+
+        using var first = await PostCommandAsync(client, siteId, body, replayKey);
+        Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
+        var commandId = await CommandIdAsync(first);
+
+        // The equipment moves out of the precondition state; a same-key retry must still replay the original 202.
+        state.State = "idle";
+        using var replay = await PostCommandAsync(client, siteId, body, replayKey);
+        Assert.Equal(HttpStatusCode.Accepted, replay.StatusCode);
+        using var replayDocument = JsonDocument.Parse(await replay.Content.ReadAsStringAsync());
+        Assert.Equal(commandId, replayDocument.RootElement.GetProperty("commandId").GetString());
+        Assert.Equal(0, replayDocument.RootElement.GetProperty("revision").GetInt32());
+        Assert.Equal("accepted", replayDocument.RootElement.GetProperty("outcome").GetString());
+
+        // A brand-new command must fail the current precondition.
+        using var fresh = await PostCommandAsync(client, siteId, body, "replay-before-validation-2");
+        Assert.Equal(HttpStatusCode.BadRequest, fresh.StatusCode);
+        using var problem = JsonDocument.Parse(await fresh.Content.ReadAsStringAsync());
+        Assert.Equal("Command precondition not met", problem.RootElement.GetProperty("title").GetString());
+        Assert.Equal("INVALID_COMMAND", problem.RootElement.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public async Task CommandStreamRequiresFabScopeAndRejectsUnknownFab()
+    {
+        using var factory = Factory();
+        using var client = Authorized(factory);
+        var (siteId, _) = await SiteAsync(client);
+
+        using var missing = await client.GetAsync($"/api/v1/sites/{siteId}/commands/stream");
+        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
+        Assert.Equal("application/problem+json", missing.Content.Headers.ContentType!.MediaType);
+
+        using var invalid = await client.GetAsync($"/api/v1/sites/{siteId}/commands/stream?fabId=not-a-guid");
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        using var unknownFab = await client.GetAsync($"/api/v1/sites/{siteId}/commands/stream?fabId={Guid.NewGuid()}");
+        Assert.Equal(HttpStatusCode.NotFound, unknownFab.StatusCode);
+        Assert.Equal("application/problem+json", unknownFab.Content.Headers.ContentType!.MediaType);
+    }
+
+    [Fact]
+    public async Task CommandStreamEnforcesFabAuthorizationAndFiltersEvents()
+    {
+        var siteId = SiteDirectory.DemoSiteId.ToString("D");
+        var fab1 = SiteDirectory.CreateFab(1).Id.ToString("D");
+        var fab2 = SiteDirectory.CreateFab(2).Id.ToString("D");
+        using var factory = Factory(fabAuthorization: new FabScopedAuthorization(fab1));
+        using var client = Authorized(factory);
+
+        // Seed a FAB-02 command directly through the service; the endpoint would deny it.
+        var service = factory.Services.GetRequiredService<EquipmentCommandService>();
+        var seeded = service.Submit(Guid.Parse(siteId),
+            new EquipmentCommandRequest(fab2, "equipment-0", "START"), Principal, "seed-stream-fab2");
+        Assert.Equal(EquipmentCommandSubmitStatus.Accepted, seeded.Status);
+
+        using var submitFab1 = await PostCommandAsync(client, siteId,
+            new { fabId = fab1, equipmentId = "equipment-0", action = "START" }, "stream-fab-auth-1");
+        Assert.Equal(HttpStatusCode.Accepted, submitFab1.StatusCode);
+        var commandId = await CommandIdAsync(submitFab1);
+
+        using var denied = await client.GetAsync($"/api/v1/sites/{siteId}/commands/stream?fabId={fab2}");
+        Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+        Assert.Equal("application/problem+json", denied.Content.Headers.ContentType!.MediaType);
+
+        using var timeout = new CancellationTokenSource(StreamTimeout);
+        using var response = await OpenCommandStreamAsync(client, siteId, fab1, lastEventId: null, timeout.Token);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var body = await response.Content.ReadAsStreamAsync(timeout.Token);
+        using var reader = new StreamReader(body, Encoding.UTF8);
+
+        var fabIds = new List<string>();
+        while (fabIds.Count < 3)
+        {
+            var envelope = await ReadEnvelopeAsync(reader, timeout.Token)
+                ?? throw new XunitException("The FAB-scoped command stream ended before the lifecycle arrived.");
+            var payload = envelope.GetProperty("payload");
+            Assert.Equal(commandId, payload.GetProperty("commandId").GetString());
+            fabIds.Add(payload.GetProperty("fabId").GetString()!);
+        }
+        Assert.All(fabIds, eventFabId => Assert.Equal(fab1, eventFabId));
+        Assert.DoesNotContain(fab2, fabIds);
+    }
+
+    [Fact]
+    public async Task FabScopedStatusAndTelemetryEndpointsEnforceAuthorization()
+    {
+        var siteId = SiteDirectory.DemoSiteId.ToString("D");
+        var fab1 = SiteDirectory.CreateFab(1).Id.ToString("D");
+        var fab2 = SiteDirectory.CreateFab(2).Id.ToString("D");
+        using var factory = Factory(fabAuthorization: new FabScopedAuthorization(fab1));
+        using var client = Authorized(factory);
+
+        using var allowedStatus = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fab1}/equipment-status");
+        Assert.Equal(HttpStatusCode.OK, allowedStatus.StatusCode);
+        using var deniedStatus = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fab2}/equipment-status");
+        Assert.Equal(HttpStatusCode.NotFound, deniedStatus.StatusCode);
+        Assert.Equal("application/problem+json", deniedStatus.Content.Headers.ContentType!.MediaType);
+
+        using var timeout = new CancellationTokenSource(StreamTimeout);
+        using var allowedTelemetry = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fab1}/telemetry/stream",
+            HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        Assert.Equal(HttpStatusCode.OK, allowedTelemetry.StatusCode);
+        await using var telemetryBody = await allowedTelemetry.Content.ReadAsStreamAsync(timeout.Token);
+        using var telemetryReader = new StreamReader(telemetryBody, Encoding.UTF8);
+        Assert.NotNull(await ReadEnvelopeAsync(telemetryReader, timeout.Token));
+
+        using var deniedTelemetry = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fab2}/telemetry/stream");
+        Assert.Equal(HttpStatusCode.NotFound, deniedTelemetry.StatusCode);
+
+        using var deniedStatusStream = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fab2}/equipment-status/stream");
+        Assert.Equal(HttpStatusCode.NotFound, deniedStatusStream.StatusCode);
+    }
+
+    [Fact]
+    public async Task CommandStreamCursorAheadSignalsReplayGap()
+    {
+        using var factory = Factory();
+        using var client = Authorized(factory);
+        var (siteId, fabId) = await SiteAsync(client);
+        var service = factory.Services.GetRequiredService<EquipmentCommandService>();
+        using var submit = await PostCommandAsync(client, siteId,
+            new { fabId, equipmentId = "equipment-0", action = "START" }, "cursor-ahead-1");
+        Assert.Equal(HttpStatusCode.Accepted, submit.StatusCode);
+        var commandId = await CommandIdAsync(submit);
+        var latest = service.ReadJournal(Guid.Parse(siteId), null).LatestSequence;
+        var ahead = $"{service.JournalEpoch:D}:{latest + 100}";
+
+        using var timeout = new CancellationTokenSource(StreamTimeout);
+        using var response = await OpenCommandStreamAsync(client, siteId, fabId, ahead, timeout.Token);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var body = await response.Content.ReadAsStreamAsync(timeout.Token);
+        using var reader = new StreamReader(body, Encoding.UTF8);
+
+        var gap = await ReadSseEventAsync(reader, timeout.Token)
+            ?? throw new XunitException("The command stream ended before the ahead-cursor replay-gap signal.");
+        Assert.Equal("replay-gap", gap.Event);
+        Assert.Null(gap.Id);
+        Assert.NotNull(gap.Data);
+        var gapData = gap.Data!.Value;
+        Assert.True(gapData.GetProperty("replayGap").GetBoolean());
+        Assert.Equal(ahead, gapData.GetProperty("requestedLastEventId").GetString());
+        Assert.True(gapData.GetProperty("latestSequence").GetInt64() >= 1);
+
+        var replayed = await ReadSseEventAsync(reader, timeout.Token)
+            ?? throw new XunitException("The command stream ended before replaying retained events after the ahead-cursor gap.");
+        Assert.Null(replayed.Event);
+        Assert.Equal(commandId, replayed.Data!.Value.GetProperty("payload").GetProperty("commandId").GetString());
+    }
+
+    [Fact]
+    public async Task CommandStreamEmitsLiveReplayGapWhenJournalTrims()
+    {
+        using var factory = Factory(commandOptions: new EquipmentCommandOptions
+        {
+            ExecutingDelay = TimeSpan.FromMilliseconds(1),
+            SucceededDelay = TimeSpan.FromMilliseconds(2),
+            MaxJournalEventsPerSite = 1
+        });
+        using var client = Authorized(factory);
+        var (siteId, fabId) = await SiteAsync(client);
+
+        using var timeout = new CancellationTokenSource(StreamTimeout);
+        using var response = await OpenCommandStreamAsync(client, siteId, fabId, lastEventId: null, timeout.Token);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var body = await response.Content.ReadAsStreamAsync(timeout.Token);
+        using var reader = new StreamReader(body, Encoding.UTF8);
+
+        using var submit = await PostCommandAsync(client, siteId,
+            new { fabId, equipmentId = "equipment-0", action = "START" }, "live-gap-1");
+        Assert.Equal(HttpStatusCode.Accepted, submit.StatusCode);
+        var commandId = await CommandIdAsync(submit);
+        await PollUntilAsync(client, commandId, status => status.GetProperty("revision").GetInt32() == 2, PollTimeout);
+
+        var sawGap = false;
+        var gapFirstRetained = 0L;
+        JsonElement? retained = null;
+        while (retained is null)
+        {
+            var sse = await ReadSseEventAsync(reader, timeout.Token)
+                ?? throw new XunitException("The command stream ended before the live replay-gap was observed.");
+            if (sse.Event == "replay-gap")
+            {
+                sawGap = true;
+                gapFirstRetained = sse.Data!.Value.GetProperty("firstRetainedSequence").GetInt64();
+                continue;
+            }
+            if (!sawGap || sse.Data is null) continue;
+            retained = sse.Data;
+        }
+
+        Assert.True(sawGap);
+        Assert.True(gapFirstRetained > 1, "The retained journal must have trimmed away earlier events.");
+        var payload = retained!.Value.GetProperty("payload");
+        Assert.Equal(commandId, payload.GetProperty("commandId").GetString());
+        Assert.Equal(2, payload.GetProperty("revision").GetInt32());
+        Assert.Equal("succeeded", payload.GetProperty("outcome").GetString());
     }
 
     private static async Task<(string SiteId, string FabId)> SiteAsync(HttpClient client)
@@ -594,9 +809,9 @@ public sealed class CommandApiTests
 
     /// <summary>Opens the command SSE stream and returns the first three journaled command.result events.</summary>
     private static async Task<(string[] CommandIds, int[] Revisions)> ReplayJournalAsync(HttpClient client, string siteId,
-        CancellationToken cancellationToken)
+        string fabId, CancellationToken cancellationToken)
     {
-        using var response = await client.GetAsync($"/api/v1/sites/{siteId}/commands/stream",
+        using var response = await client.GetAsync($"/api/v1/sites/{siteId}/commands/stream?fabId={fabId}",
             HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("text/event-stream", response.Content.Headers.ContentType!.MediaType);
@@ -652,10 +867,10 @@ public sealed class CommandApiTests
         return document.RootElement.GetProperty("commandId").GetString()!;
     }
 
-    private static async Task<HttpResponseMessage> OpenCommandStreamAsync(HttpClient client, string siteId,
+    private static async Task<HttpResponseMessage> OpenCommandStreamAsync(HttpClient client, string siteId, string fabId,
         string? lastEventId, CancellationToken cancellationToken)
     {
-        using var message = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/sites/{siteId}/commands/stream");
+        using var message = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/sites/{siteId}/commands/stream?fabId={fabId}");
         if (lastEventId is not null) message.Headers.TryAddWithoutValidation("Last-Event-ID", lastEventId);
         return await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     }
@@ -694,7 +909,8 @@ public sealed class CommandApiTests
     }
 
     private static WebApplicationFactory<Program> Factory(bool denyFabAccess = false, EquipmentCommandOptions? commandOptions = null,
-        (string Setting, string Value)[]? capabilitySettings = null, IEquipmentStateProvider? stateProvider = null) =>
+        (string Setting, string Value)[]? capabilitySettings = null, IEquipmentStateProvider? stateProvider = null,
+        IFabAuthorization? fabAuthorization = null) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
         {
             host.UseEnvironment("Development");
@@ -712,11 +928,17 @@ public sealed class CommandApiTests
                     services.RemoveAll<IFabAuthorization>();
                     services.AddSingleton<IFabAuthorization>(new DenyingFabAuthorization());
                 }
+                if (fabAuthorization is not null)
+                {
+                    services.RemoveAll<IFabAuthorization>();
+                    services.AddSingleton<IFabAuthorization>(fabAuthorization);
+                }
                 if (commandOptions is not null)
                 {
                     services.RemoveAll<EquipmentCommandService>();
                     services.AddSingleton(provider => new EquipmentCommandService(
-                        provider.GetRequiredService<SiteDirectory>(), TimeProvider.System, commandOptions));
+                        provider.GetRequiredService<SiteDirectory>(), TimeProvider.System, commandOptions,
+                        provider.GetRequiredService<IEquipmentCommandValidator>()));
                 }
                 if (stateProvider is not null)
                 {
@@ -738,8 +960,16 @@ public sealed class CommandApiTests
         public bool IsAuthorized(Guid siteId, Guid fabId, ClaimsPrincipal principal) => false;
     }
 
-    private sealed class FixedEquipmentStateProvider(string state) : IEquipmentStateProvider
+    private sealed class MutableEquipmentStateProvider(string state) : IEquipmentStateProvider
     {
-        public string? GetState(Guid siteId, FabUnit fab, string equipmentId) => state;
+        public string State { get; set; } = state;
+
+        public string? GetState(Guid siteId, FabUnit fab, string equipmentId) => State;
+    }
+
+    private sealed class FabScopedAuthorization(string allowedFabId) : IFabAuthorization
+    {
+        public bool IsAuthorized(Guid siteId, Guid fabId, ClaimsPrincipal principal) =>
+            string.Equals(fabId.ToString("D"), allowedFabId, StringComparison.Ordinal);
     }
 }

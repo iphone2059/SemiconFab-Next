@@ -1,4 +1,5 @@
 using Fab.App;
+using Fab.Site;
 using Xunit;
 
 namespace Fab.Tests;
@@ -45,4 +46,37 @@ public sealed class EquipmentStatusTests
         Assert.Equal(2, service.Get(siteId, fabB, t0.AddSeconds(8)).Sequence);
         Assert.Equal(2, service.Get(siteId, fabB, t0.AddSeconds(8)).Sequence);
     }
+
+    [Fact]
+    public void TelemetryStateValuesMatchEquipmentStatusForSameFabAndEquipment()
+    {
+        var directory = new SiteDirectory();
+        var status = new EquipmentStatusService();
+        var telemetry = new TelemetrySimulationService(directory, status);
+        var siteId = SiteDirectory.DemoSiteId;
+        var fab = SiteDirectory.CreateFab(2);
+        var t0 = new DateTimeOffset(2026, 10, 24, 4, 0, 0, TimeSpan.Zero);
+
+        var snapshot = status.Get(siteId, fab.Id, t0);
+        var frame = telemetry.CreateFrame(siteId, fab.Id, 1, t0);
+
+        Assert.Equal(fab.Id.ToString("D"), frame.Payload.FabId);
+        Assert.Equal(16, frame.Payload.Samples.Length);
+        for (var index = 0; index < frame.Payload.Samples.Length; index++)
+        {
+            var sample = frame.Payload.Samples[index];
+            Assert.Equal($"equipment-{index}", sample.EntityId);
+            Assert.Equal(ExpectedTelemetryState(snapshot.Tools[index].State), sample.Values.State);
+            Assert.InRange(sample.Values.Utilization, 0d, 1d);
+        }
+    }
+
+    private static int ExpectedTelemetryState(string toolState) => toolState switch
+    {
+        "running" => 0,
+        "idle" => 1,
+        "down" => 2,
+        "maint" => 3,
+        _ => throw new InvalidOperationException("Unexpected synthetic tool state: " + toolState)
+    };
 }

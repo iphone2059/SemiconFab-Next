@@ -29,15 +29,20 @@ public enum EquipmentCommandSubmitStatus
     Accepted,
     UnknownSite,
     UnknownFab,
-    IdempotencyConflict
+    IdempotencyConflict,
+    InvalidCommand
 }
 
-public sealed record EquipmentCommandSubmitResult(EquipmentCommandSubmitStatus Status, EquipmentCommandStatus? Command);
+public sealed record EquipmentCommandSubmitResult(
+    EquipmentCommandSubmitStatus Status,
+    EquipmentCommandStatus? Command,
+    EquipmentCommandValidationResult? Validation = null);
 
 /// <summary>
 /// Result of reading the command journal for one SSE connection. <see cref="HasGap"/> is true
-/// when the client cursor cannot be served exactly (foreign/malformed epoch or pruned sequence)
-/// and a replay-gap signal must be emitted before the retained events.
+/// when the client cursor cannot be served exactly (foreign/malformed epoch, a pruned sequence
+/// or a cursor ahead of the journal) and a replay-gap signal must be emitted before the
+/// retained events. Events are already filtered to the requested FAB when a scope is supplied.
 /// </summary>
 public sealed record JournalReadResult(
     EquipmentCommandStreamEnvelope[] Events,
@@ -85,6 +90,10 @@ public sealed class EquipmentCommandOptions
 /// <see cref="EquipmentCommandOptions.MaxTerminalCommands"/> remain. Pruned commands are
 /// removed from authoritative GET and from idempotency replay, so callers get a clean 404
 /// and a retry after pruning creates a new command.
+///
+/// Submission is a single locked path: idempotency replay/conflict is decided before the
+/// capability/state validator runs, so a retry with the same key and payload always replays
+/// the original response even if the current equipment state no longer satisfies a precondition.
 /// </summary>
 public sealed class EquipmentCommandService
 {
@@ -100,6 +109,7 @@ public sealed class EquipmentCommandService
     private readonly SiteDirectory directory;
     private readonly TimeProvider clock;
     private readonly EquipmentCommandOptions options;
+    private readonly IEquipmentCommandValidator? validator;
     private readonly ConcurrentDictionary<Guid, EquipmentCommandStatus> commands = new();
     private readonly ConcurrentDictionary<Guid, SiteCommandJournal> journals = new();
     private readonly object submitGate = new();
@@ -108,12 +118,17 @@ public sealed class EquipmentCommandService
     private readonly ConcurrentDictionary<Guid, DateTimeOffset> terminalSince = new();
     private readonly Queue<Guid> terminalOrder = new();
 
-    public EquipmentCommandService(SiteDirectory directory, TimeProvider? clock = null, EquipmentCommandOptions? options = null)
+    public EquipmentCommandService(
+        SiteDirectory directory,
+        TimeProvider? clock = null,
+        EquipmentCommandOptions? options = null,
+        IEquipmentCommandValidator? validator = null)
     {
         ArgumentNullException.ThrowIfNull(directory);
         this.directory = directory;
         this.clock = clock ?? TimeProvider.System;
         this.options = options ?? new EquipmentCommandOptions();
+        this.validator = validator;
         if (this.options.ExecutingDelay <= TimeSpan.Zero || this.options.SucceededDelay <= this.options.ExecutingDelay)
             throw new ArgumentOutOfRangeException(nameof(options), "ExecutingDelay must be positive and SucceededDelay must be greater than ExecutingDelay.");
         if (this.options.TerminalTtl <= TimeSpan.Zero || this.options.MaxTerminalCommands < 1 ||
@@ -207,14 +222,12 @@ public sealed class EquipmentCommandService
     }
 
     /// <summary>
-    /// Validates Site/FAB membership, deduplicates retries by (Site, FAB, principal,
-    /// Idempotency-Key), records revision 0 (accepted), and schedules the background
-    /// simulation of revisions 1 (executing) and 2 (succeeded).
-    ///
-    /// A repeated key with an identical payload replays the original accepted response; a
-    /// repeated key with a different payload is an idempotency conflict. The lookup, the
-    /// conflict decision and the command creation happen inside one lock, so concurrent
-    /// retries of the same key create exactly one command and one journaled lifecycle.
+    /// Single atomic submission path. After Site/FAB membership is validated the lock decides,
+    /// in order: (1) idempotency replay for the same key+payload (returns the original accepted
+    /// snapshot without consulting current capability/state), (2) idempotency conflict for a
+    /// different payload, (3) capability/state validation for a brand-new command, (4) creation
+    /// and journaling. Concurrent retries of one key therefore create exactly one command and
+    /// cannot fail on state that changed after the original submission.
     /// </summary>
     public EquipmentCommandSubmitResult Submit(Guid siteId, EquipmentCommandRequest request, string principal, string idempotencyKey)
     {
@@ -233,10 +246,19 @@ public sealed class EquipmentCommandService
             PruneTerminalCommandsLocked();
             if (idempotentCommands.TryGetValue(scope, out var existing))
             {
-                return string.Equals(existing.EquipmentId, request.EquipmentId, StringComparison.Ordinal) &&
-                       string.Equals(existing.Action, request.Action, StringComparison.Ordinal)
-                    ? new(EquipmentCommandSubmitStatus.Accepted, existing.Accepted)
-                    : new(EquipmentCommandSubmitStatus.IdempotencyConflict, null);
+                if (string.Equals(existing.EquipmentId, request.EquipmentId, StringComparison.Ordinal) &&
+                    string.Equals(existing.Action, request.Action, StringComparison.Ordinal))
+                    return new(EquipmentCommandSubmitStatus.Accepted, existing.Accepted);
+
+                return new(EquipmentCommandSubmitStatus.IdempotencyConflict, null);
+            }
+
+            // Brand-new command: current capability and state preconditions must hold.
+            if (validator is not null)
+            {
+                var validation = validator.Validate(siteId, fab, request);
+                if (!validation.IsValid)
+                    return new(EquipmentCommandSubmitStatus.InvalidCommand, null, validation);
             }
 
             var commandId = Guid.NewGuid();
@@ -261,41 +283,25 @@ public sealed class EquipmentCommandService
     }
 
     /// <summary>
-    /// Returns the journal events for a Site whose per-Site sequence is greater than
-    /// <paramref name="sequenceExclusive"/>. Used for live polling after an initial replay.
+    /// Resolves one SSE connection's starting point from its Last-Event-ID cursor, optionally
+    /// filtered to one FAB. A fresh connection replays retained events without a gap; a
+    /// malformed/foreign epoch, a pruned cursor or a cursor ahead of the journal reports
+    /// <see cref="JournalReadResult.HasGap"/> so the stream can emit replay-gap.
     /// </summary>
-    public EquipmentCommandStreamEnvelope[] ReadJournalSince(Guid siteId, long sequenceExclusive)
-    {
-        if (!journals.TryGetValue(siteId, out var journal)) return [];
-        lock (journal.Gate)
-        {
-            return EventsAfter(journal.Events, sequenceExclusive);
-        }
-    }
+    public JournalReadResult ReadJournal(Guid siteId, string? lastEventId, string? fabId = null) =>
+        ReadJournalCore(siteId, lastEventId, fabId);
 
     /// <summary>
-    /// Resolves one SSE connection's starting point from its Last-Event-ID cursor. A fresh
-    /// connection replays the retained journal without a gap; a foreign/malformed epoch or a
-    /// cursor older than the retained journal reports <see cref="JournalReadResult.HasGap"/>.
+    /// Live-loop cursor validation: the SSE loop must call this while streaming instead of
+    /// silently continuing, so a retained-window trim, a cursor ahead of the journal or a
+    /// foreign epoch surfaces as <see cref="JournalReadResult.HasGap"/>. Events are already
+    /// filtered to <paramref name="fabId"/> when supplied; <paramref name="cursorEpoch"/> is
+    /// only used by tests/callers that hold a cursor from a previous process instance.
     /// </summary>
-    public JournalReadResult ReadJournal(Guid siteId, string? lastEventId)
+    public JournalReadResult ReadJournalSince(Guid siteId, long sequenceExclusive, string? fabId = null, Guid? cursorEpoch = null)
     {
-        if (!journals.TryGetValue(siteId, out var journal))
-            return new([], false, false, 0, 1, 0);
-        lock (journal.Gate)
-        {
-            var latest = journal.Sequence;
-            var firstRetained = journal.Events.Count == 0 ? latest + 1 : journal.Events[0].Sequence;
-            if (string.IsNullOrWhiteSpace(lastEventId))
-                return new(EventsAfter(journal.Events, 0), false, false, 0, firstRetained, latest);
-            if (!TryParseLastEventId(lastEventId, out var epoch, out var requested))
-                return new(journal.Events.ToArray(), true, false, 0, firstRetained, latest);
-            if (epoch != JournalEpoch)
-                return new(journal.Events.ToArray(), true, false, requested, firstRetained, latest);
-            if (requested < firstRetained - 1)
-                return new(journal.Events.ToArray(), true, true, requested, firstRetained, latest);
-            return new(EventsAfter(journal.Events, requested), false, true, requested, firstRetained, latest);
-        }
+        var epoch = cursorEpoch ?? JournalEpoch;
+        return ReadJournalCore(siteId, $"{epoch:D}:{sequenceExclusive}", fabId, fresh: false);
     }
 
     /// <summary>Builds the replay-gap control-frame payload for a gapped journal read.</summary>
@@ -320,6 +326,46 @@ public sealed class EquipmentCommandService
     public int PruneTerminalCommands()
     {
         lock (submitGate) return PruneTerminalCommandsLocked();
+    }
+
+    private JournalReadResult ReadJournalCore(Guid siteId, string? lastEventId, string? fabId, bool fresh = true)
+    {
+        if (!journals.TryGetValue(siteId, out var journal))
+        {
+            if (fresh && string.IsNullOrWhiteSpace(lastEventId))
+                return new([], false, false, 0, 1, 0);
+            if (!TryParseLastEventId(lastEventId, out var emptyEpoch, out var emptyRequested))
+                return new([], true, false, 0, 1, 0);
+            if (emptyEpoch != JournalEpoch)
+                return new([], true, false, emptyRequested, 1, 0);
+            if (emptyRequested > 0)
+                return new([], true, true, emptyRequested, 1, 0);
+            return new([], false, true, emptyRequested, 1, 0);
+        }
+
+        lock (journal.Gate)
+        {
+            var latest = journal.Sequence;
+            var firstRetained = journal.Events.Count == 0 ? latest + 1 : journal.Events[0].Sequence;
+            if (fresh && string.IsNullOrWhiteSpace(lastEventId))
+                return new(FilterByFab(journal.Events, fabId), false, false, 0, firstRetained, latest);
+            if (!TryParseLastEventId(lastEventId, out var epoch, out var requested))
+                return new(FilterByFab(journal.Events, fabId), true, false, 0, firstRetained, latest);
+            if (epoch != JournalEpoch)
+                return new(FilterByFab(journal.Events, fabId), true, false, requested, firstRetained, latest);
+            if (requested > latest)
+                return new(FilterByFab(journal.Events, fabId), true, true, requested, firstRetained, latest);
+            if (requested < firstRetained - 1)
+                return new(FilterByFab(journal.Events, fabId), true, true, requested, firstRetained, latest);
+            return new(FilterByFab(EventsAfter(journal.Events, requested), fabId), false, true, requested, firstRetained, latest);
+        }
+    }
+
+    private static EquipmentCommandStreamEnvelope[] FilterByFab(IEnumerable<EquipmentCommandStreamEnvelope> events, string? fabId)
+    {
+        return fabId is null
+            ? events.ToArray()
+            : events.Where(envelope => string.Equals(envelope.Payload.FabId, fabId, StringComparison.Ordinal)).ToArray();
     }
 
     private int PruneTerminalCommandsLocked()

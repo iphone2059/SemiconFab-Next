@@ -148,12 +148,100 @@ public sealed class CommandJournalTests
         Assert.NotEqual(Guid.Empty, epoch);
     }
 
+    [Fact]
+    public void CursorAheadOfLatestReportsGapAndReplaysRetainedEvents()
+    {
+        var service = Service();
+        var command = Submit(service, "equipment-0", "key-1");
+        var latest = service.ReadJournal(SiteId, null).LatestSequence;
+        var requested = latest + 100;
+
+        var result = service.ReadJournal(SiteId, $"{service.JournalEpoch:D}:{requested}");
+        Assert.True(result.HasGap);
+        Assert.True(result.CursorAccepted);
+        Assert.Equal(requested, result.RequestedSequence);
+        Assert.NotEmpty(result.Events);
+        Assert.Equal(result.FirstRetainedSequence, result.Events[0].Sequence);
+        Assert.All(result.Events, envelope => Assert.Equal(command.CommandId, envelope.Payload.CommandId));
+    }
+
+    [Fact]
+    public void ReadJournalSinceDetectsCursorAheadOfEmptyJournal()
+    {
+        var service = Service();
+        var result = service.ReadJournalSince(SiteId, 5);
+
+        Assert.True(result.HasGap);
+        Assert.True(result.CursorAccepted);
+        Assert.Empty(result.Events);
+        Assert.Equal(5, result.RequestedSequence);
+        Assert.Equal(0, result.LatestSequence);
+        Assert.Equal(1, result.FirstRetainedSequence);
+    }
+
+    [Fact]
+    public void ReadJournalSinceDetectsLiveRetentionGap()
+    {
+        var service = Service(new EquipmentCommandOptions
+        {
+            ExecutingDelay = TimeSpan.FromHours(1),
+            SucceededDelay = TimeSpan.FromHours(2),
+            MaxJournalEventsPerSite = 2
+        });
+        Submit(service, "equipment-0", "key-1");
+        Submit(service, "equipment-1", "key-2");
+        Submit(service, "equipment-2", "key-3");
+
+        var result = service.ReadJournalSince(SiteId, 0);
+        Assert.True(result.HasGap);
+        Assert.True(result.CursorAccepted);
+        Assert.Equal(new long[] { 2, 3 }, result.Events.Select(envelope => envelope.Sequence).ToArray());
+
+        var caughtUp = service.ReadJournalSince(SiteId, result.LatestSequence);
+        Assert.False(caughtUp.HasGap);
+        Assert.Empty(caughtUp.Events);
+    }
+
+    [Fact]
+    public void ReadJournalSinceDetectsForeignEpoch()
+    {
+        var service = Service();
+        Submit(service, "equipment-0", "key-1");
+
+        var result = service.ReadJournalSince(SiteId, 0, cursorEpoch: Guid.NewGuid());
+        Assert.True(result.HasGap);
+        Assert.False(result.CursorAccepted);
+        Assert.NotEmpty(result.Events);
+    }
+
+    [Fact]
+    public void JournalReadsFilterToRequestedFab()
+    {
+        var service = Service();
+        var fab1 = SiteDirectory.CreateFab(1).Id.ToString("D");
+        var fab2 = SiteDirectory.CreateFab(2).Id.ToString("D");
+        Submit(service, "equipment-0", "key-1", fab1);
+        Submit(service, "equipment-0", "key-2", fab2);
+
+        var all = service.ReadJournal(SiteId, null);
+        Assert.Contains(all.Events, envelope => envelope.Payload.FabId == fab1);
+        Assert.Contains(all.Events, envelope => envelope.Payload.FabId == fab2);
+
+        var onlyFab2 = service.ReadJournal(SiteId, null, fab2);
+        Assert.NotEmpty(onlyFab2.Events);
+        Assert.All(onlyFab2.Events, envelope => Assert.Equal(fab2, envelope.Payload.FabId));
+
+        var liveFab1 = service.ReadJournalSince(SiteId, 0, fab1);
+        Assert.NotEmpty(liveFab1.Events);
+        Assert.All(liveFab1.Events, envelope => Assert.Equal(fab1, envelope.Payload.FabId));
+    }
+
     private static EquipmentCommandService Service(EquipmentCommandOptions? options = null) =>
         new(new SiteDirectory(), TimeProvider.System, options);
 
-    private static EquipmentCommandStatus Submit(EquipmentCommandService service, string equipmentId, string key)
+    private static EquipmentCommandStatus Submit(EquipmentCommandService service, string equipmentId, string key, string? fabId = null)
     {
-        var result = service.Submit(SiteId, new EquipmentCommandRequest(FabId, equipmentId, "START"), "local-developer", key);
+        var result = service.Submit(SiteId, new EquipmentCommandRequest(fabId ?? FabId, equipmentId, "START"), "local-developer", key);
         Assert.Equal(EquipmentCommandSubmitStatus.Accepted, result.Status);
         return result.Command!;
     }

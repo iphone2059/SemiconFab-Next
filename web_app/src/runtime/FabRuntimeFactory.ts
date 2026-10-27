@@ -10,6 +10,8 @@ export interface FabRuntimeFactoryOptions {
   readonly createWorkflow?: CommandWorkflowFactory;
   /** Test seam for retention bounds/clock; production keeps the runtime defaults. */
   readonly retention?: FabRuntimeRetentionOptions;
+  /** Defer opening the per-FAB command SSE stream until a command is tracked. */
+  readonly lazyCommandSubscription?: boolean;
 }
 
 /** Creates one runtime per FAB from the same realtime source provider and gateway. */
@@ -23,6 +25,7 @@ export class FabRuntimeFactory {
       gateway: this.options.gateway,
       createWorkflow: this.options.createWorkflow,
       retention: this.options.retention,
+      lazyCommandSubscription: this.options.lazyCommandSubscription,
     });
   }
 }

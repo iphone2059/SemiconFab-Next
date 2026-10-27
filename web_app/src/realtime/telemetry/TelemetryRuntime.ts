@@ -1,6 +1,7 @@
 import type { TelemetryFrame } from '../../application/contracts/CommandEvents';
 import type { FabToolState } from '../../fab-layout';
 import { MessageDecoder } from '../protocol/MessageDecoder';
+import { createTelemetryWorker } from '../workers/createTelemetryWorker';
 
 interface EventSourceLike {
   onopen: (() => void) | null;
@@ -33,21 +34,49 @@ export interface TelemetrySnapshot {
 const TOOL_STATES: readonly FabToolState[] = ['running', 'idle', 'down', 'maint'];
 const SAMPLE_LIMIT = 16;
 const FRAME_SIZE = SAMPLE_LIMIT * 2;
+const ENTITY_SLOT_PATTERN = /^equipment-(\d+)$/;
 
-/** Flatten wire samples into the fixed Float32 frame consumed by the Worker. */
-export function flattenTelemetryFrame(frame: TelemetryFrame): { sequence: number; values: number[]; toolStates: FabToolState[] } {
-  const sampleCount = Math.min(frame.samples.length, SAMPLE_LIMIT);
-  const values: number[] = [];
-  const toolStates: FabToolState[] = [];
-  for (let index = 0; index < sampleCount; index += 1) {
-    const valuesAtSample = frame.samples[index].values;
-    const state = Math.max(0, Math.min(TOOL_STATES.length - 1, Math.round(valuesAtSample.state ?? 0)));
-    const utilization = Math.max(0, Math.min(1, valuesAtSample.utilization ?? 0));
-    values.push(state, utilization);
-    toolStates.push(TOOL_STATES[state]);
+/**
+ * Parse a telemetry entity id into its stable render slot. Sample array
+ * position is NOT identity: the backend may reorder samples between frames.
+ * Unknown entity ids (not `equipment-<index>` inside the 16-slot frame) have no
+ * slot and are ignored.
+ */
+export function telemetrySlotForEntityId(entityId: string): number | undefined {
+  const match = ENTITY_SLOT_PATTERN.exec(entityId);
+  if (!match) return undefined;
+  const slot = Number(match[1]);
+  return Number.isSafeInteger(slot) && slot >= 0 && slot < SAMPLE_LIMIT ? slot : undefined;
+}
+
+/**
+ * Flatten wire samples into the fixed Float32 frame consumed by the Worker.
+ *
+ * Slots are keyed by the stable entity index (`equipment-<index>`), so shuffled
+ * sample arrays still update the same tool. Slots absent from this frame keep
+ * their previous values instead of resetting to zero (= `running`); on the first
+ * frame of a connection missing slots use the zero/running default. Duplicate
+ * entity ids are ignored after their first occurrence.
+ */
+export function flattenTelemetryFrame(
+  frame: TelemetryFrame,
+  previous?: ArrayLike<number>,
+): { sequence: number; values: number[]; toolStates: FabToolState[] } {
+  const values: number[] = new Array<number>(FRAME_SIZE).fill(0);
+  if (previous) {
+    for (let index = 0; index < FRAME_SIZE; index += 1) values[index] = Number(previous[index] ?? 0);
   }
-  while (values.length < FRAME_SIZE) values.push(0);
-  return { sequence: frame.sequence, values, toolStates };
+  const touched = new Set<number>();
+  for (const sample of frame.samples) {
+    const slot = telemetrySlotForEntityId(sample.entityId);
+    if (slot === undefined || touched.has(slot)) continue;
+    touched.add(slot);
+    const state = Math.max(0, Math.min(TOOL_STATES.length - 1, Math.round(sample.values.state ?? 0)));
+    const utilization = Math.max(0, Math.min(1, sample.values.utilization ?? 0));
+    values[slot * 2] = state;
+    values[slot * 2 + 1] = utilization;
+  }
+  return { sequence: frame.sequence, values, toolStates: toolStatesFromValues(values) };
 }
 
 /** Map worker-returned Float32 values back to renderer tool states. */
@@ -70,6 +99,8 @@ export class TelemetryRuntime {
   private source?: EventSourceLike;
   private worker?: WorkerLike;
   private snapshot?: TelemetrySnapshot;
+  /** Last submitted slot-keyed frame; missing entities inherit these values. */
+  private lastValues?: number[];
   private started = false;
 
   constructor(private readonly options: TelemetryRuntimeOptions) {}
@@ -83,7 +114,7 @@ export class TelemetryRuntime {
     const eventSourceFactory = this.options.eventSourceFactory ??
       (typeof EventSource === 'undefined' ? undefined : (target: string) => new EventSource(target) as unknown as EventSourceLike);
     const workerFactory = this.options.workerFactory ??
-      (typeof Worker === 'undefined' ? undefined : () => new Worker(new URL('../workers/telemetryWorker.ts', import.meta.url), { type: 'module' }) as unknown as WorkerLike);
+      (typeof Worker === 'undefined' ? undefined : () => createTelemetryWorker() as unknown as WorkerLike);
     if (!eventSourceFactory || !workerFactory) return;
     this.started = true;
     const decoder = new MessageDecoder();
@@ -119,8 +150,12 @@ export class TelemetryRuntime {
           if (decoded.kind !== 'telemetry') return;
           // One runtime per FAB: a crossed frame must never enter this Worker.
           if (this.options.fabId !== undefined && decoded.event.fabId !== this.options.fabId) return;
-          const frame = flattenTelemetryFrame(decoded.event);
+          // Slot-keyed merge: reordered samples hit the same tools and entities
+          // missing from this frame retain their previous state (never silently
+          // reset to running).
+          const frame = flattenTelemetryFrame(decoded.event, this.lastValues);
           if (frame.sequence <= submittedSequence) return;
+          this.lastValues = frame.values;
           worker.postMessage({ type: 'frame', sequence: frame.sequence, values: frame.values, generation });
           submittedSequence = frame.sequence;
         } catch {
@@ -139,6 +174,7 @@ export class TelemetryRuntime {
     this.source = undefined;
     this.worker = undefined;
     this.snapshot = undefined;
+    this.lastValues = undefined;
     this.started = false;
   }
 

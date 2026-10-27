@@ -70,7 +70,7 @@ npx --yes pnpm@12.15.0 test
 npx --yes pnpm@12.15.0 build
 ```
 
-当前验证基线：`tsc --noEmit` 0、Vitest **69 文件 / 306 测试 PASS**、`vite build` 0、后端 **127/127**、真实 Chrome WebGPU 门禁 **p95 8.6ms**、`./scripts/verify.ps1` exit 0（8 个 Python 工具测试、3 个 .NET 项目、契约/架构检查、前端全量）。
+当前验证基线：`tsc --noEmit` 0、Vitest **69 文件 / 314 测试 PASS**、`vite build` 0、后端 **139/139**、真实 Chrome WebGPU 持续门禁 **600 帧 / p95 41.6ms / 86.5fps / 3 Worker**、Worker 压测 500/2000/5000 实体 p95 ≤2ms、`./scripts/verify.ps1` exit 0（8 个 Python 工具测试、3 个 .NET 项目、契约/架构检查、前端全量）。
 
 ## 产品 URL（仅 canonical，无重定向）
 

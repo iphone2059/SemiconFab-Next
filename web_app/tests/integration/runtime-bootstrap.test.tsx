@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AppProviders } from '../../src/app/providers/AppProviders';
-import { useFabRuntimeRegistry } from '../../src/app/providers/RuntimeProvider';
+import { useCommandProjection, useFabRuntimeRegistry } from '../../src/app/providers/RuntimeProvider';
 import { useFabTelemetry } from '../../src/app/providers/TelemetryProvider';
 import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
 import WorkbenchApp from '../../src/features/workbench/workbench';
@@ -94,13 +94,67 @@ it('starts one FAB-scoped telemetry runtime per FAB and exposes useFabTelemetry(
     '/api/v1/sites/site-1/fabs/fab-b/telemetry/stream',
     '/api/v1/sites/site-1/fabs/fab-c/telemetry/stream',
   ]);
-  // The command SSE stays site-scoped; only telemetry/status are FAB-scoped.
-  expect(commandUrls).toEqual(['/api/v1/sites/site-1/commands/stream']);
+  // Command streams are lazy: no per-FAB SSE connection is opened until the
+  // first command is tracked. Then the stream is FAB-scoped + authorized.
+  expect(commandUrls).toEqual([]);
+  captured?.get('fab-a')?.trackCommand('cmd-a');
+  await waitFor(() => expect([...commandUrls].sort()).toEqual([
+    '/api/v1/sites/site-1/commands/stream?fabId=fab-a',
+  ]));
+  expect(commandUrls.some((url) => !url.includes('?fabId='))).toBe(false);
   await waitFor(() => expect(screen.getByTestId('fab-telemetry').textContent).toBe('fab-b:none'));
   expect(captured?.size).toBe(3);
 
   view.unmount();
-  await waitFor(() => expect(telemetryUrls.every((url) => closed.includes(url))).toBe(true));
+  const allUrls = [...telemetryUrls, ...commandUrls];
+  await waitFor(() => expect(allUrls.every((url) => closed.includes(url))).toBe(true));
+});
+
+function ProjectionProbe({ fabId, commandId }: { fabId: string; commandId: string }) {
+  const projection = useCommandProjection(fabId, commandId);
+  return <div data-testid="projection">{projection ? `${projection.state}:${projection.revision}` : 'none'}</div>;
+}
+
+it('delivers each FAB command SSE stream to its own FabRuntime only', async () => {
+  const sources = new Map<string, { onmessage: ((event: { data: string }) => void) | null }>();
+  class FakeEventSource {
+    onopen: (() => void) | null = null;
+    onmessage: ((event: { data: string }) => void) | null = null;
+    onerror: ((event: unknown) => void) | null = null;
+    constructor(readonly url: string) { sources.set(url, this); }
+    addEventListener() {}
+    removeEventListener() {}
+    close() {}
+  }
+  vi.stubGlobal('EventSource', FakeEventSource);
+
+  render(
+    <AppProviders client={clientWithSites()}>
+      <RegistryProbe />
+      <ProjectionProbe fabId="fab-b" commandId="cmd-1" />
+    </AppProviders>,
+  );
+  await waitFor(() => expect(captured?.size).toBe(3));
+  // Lazy streams: only tracked FABs open a command SSE connection.
+  captured?.get('fab-b')?.trackCommand('cmd-1');
+  captured?.get('fab-a')?.trackCommand('cmd-a');
+  await waitFor(() => expect(sources.size).toBe(2));
+
+  const emit = (fabId: string, event: unknown) => {
+    sources.get(`/api/v1/sites/site-1/commands/stream?fabId=${fabId}`)?.onmessage?.({ data: JSON.stringify(event) });
+  };
+  const envelope = (fabId: string) => ({
+    topic: 'command.result', sequence: 1,
+    payload: { fabId, commandId: 'cmd-1', revision: 1, outcome: 'accepted', occurredAt: '2026-10-27T00:00:00Z' },
+  });
+
+  // An event on another FAB's stream never reaches this runtime.
+  emit('fab-a', envelope('fab-a'));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(screen.getByTestId('projection').textContent).toBe('idle:-1');
+
+  emit('fab-b', envelope('fab-b'));
+  await waitFor(() => expect(screen.getByTestId('projection').textContent).toBe('accepted:1'));
 });
 
 it('shows a data-driven FAB selector in the workbench when the site has multiple FABs', async () => {

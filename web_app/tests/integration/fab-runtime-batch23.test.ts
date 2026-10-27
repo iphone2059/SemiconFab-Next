@@ -43,6 +43,41 @@ describe('FabRuntime replay-gap reconciliation (batch 2/3)', () => {
     runtime.dispose();
   });
 
+  it('keeps gap-driven reconciliation isolated to the FAB whose stream gapped', async () => {
+    const sourceA = new FakeCommandEventSource();
+    const sourceB = new FakeCommandEventSource();
+    const calls: string[] = [];
+    const gateway: CommandGateway = {
+      getCommandStatus: async (targetFab, commandId) => {
+        calls.push(`${targetFab}:${commandId}`);
+        return commandResult({ fabId: targetFab, commandId, revision: 1, outcome: 'executing' });
+      },
+    };
+    const factory = new FabRuntimeFactory({ sourceFor: (targetFab) => targetFab === 'fab-a' ? sourceA : sourceB, gateway });
+    const runtimeA = factory.create('fab-a');
+    const runtimeB = factory.create('fab-b');
+    runtimeA.start(); runtimeB.start();
+    runtimeA.trackCommand('cmd');
+    runtimeB.trackCommand('cmd');
+    sourceA.emit(commandResult({ fabId: 'fab-a', commandId: 'cmd', revision: 1, outcome: 'executing' }));
+    sourceB.emit(commandResult({ fabId: 'fab-b', commandId: 'cmd', revision: 1, outcome: 'executing' }));
+    await runtimeA.reconcileAll();
+    await runtimeB.reconcileAll();
+    calls.length = 0;
+
+    // Each FabRuntime owns one FAB-scoped SSE source; a gap on A must never
+    // reconcile B's commands (and vice versa).
+    sourceA.emitGap();
+    await expect.poll(() => calls.length, { timeout: 300 }).toBe(1);
+    expect(calls).toEqual(['fab-a:cmd']);
+
+    calls.length = 0;
+    sourceB.emitGap();
+    await expect.poll(() => calls.length, { timeout: 300 }).toBe(1);
+    expect(calls).toEqual(['fab-b:cmd']);
+    runtimeA.dispose(); runtimeB.dispose();
+  });
+
   it('reconciles only tracked active commands; terminal and unknown ids are ignored', async () => {
     const source = new FakeCommandEventSource();
     const calls: string[] = [];

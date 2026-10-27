@@ -83,6 +83,7 @@ try {
   };
   await send('Runtime.enable');
   await send('Page.enable');
+  await send('Performance.enable');
 
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
@@ -98,6 +99,7 @@ try {
     await sleep(500);
   }
   if (!isRendererReady(readiness)) throw new Error('Renderer did not become ready before timeout');
+  const metricsStart = await send('Performance.getMetrics');
   const measurement = await evaluate(`(async () => {
     const adapter = navigator.gpu ? await navigator.gpu.requestAdapter() : null;
     const bridge = window.__SEMICONFAB_PERF__;
@@ -106,7 +108,7 @@ try {
       const values = [];
       let last = 0;
       let lastFrames = initialFrames;
-      const deadline = performance.now() + 20000;
+      const deadline = performance.now() + Math.max(20000, (${frames + warmupFrames}) * 50);
       function tick(now) {
         const stats = bridge.getStats();
         // Count intervals only when the engine actually renders a new frame.
@@ -135,6 +137,11 @@ try {
       deltas,
     };
   })()`, true);
+  const metricsEnd = await send('Performance.getMetrics');
+  const metricMap = (result) => Object.fromEntries((result.result?.metrics ?? []).map((entry) => [entry.name, entry.value]));
+  const startMetrics = metricMap(metricsStart);
+  const endMetrics = metricMap(metricsEnd);
+  const workerTargets = (await (await fetch('http://127.0.0.1:' + port + '/json/list')).json()).filter((entry) => entry.type === 'worker').length;
 
   const allDeltas = measurement.deltas.filter((value) => Number.isFinite(value) && value > 0);
   const deltas = allDeltas.slice(warmupFrames);
@@ -161,6 +168,11 @@ try {
     canvasSize: measurement.canvasSize,
     rendererFrames: measurement.rendererFrames,
     drawCalls: measurement.drawCalls,
+    workerTargets,
+    jsHeapUsedMb: Number(((endMetrics.JSHeapUsedSize ?? 0) / 1024 / 1024).toFixed(2)),
+    jsHeapDeltaMb: Number((((endMetrics.JSHeapUsedSize ?? 0) - (startMetrics.JSHeapUsedSize ?? 0)) / 1024 / 1024).toFixed(2)),
+    taskDurationMs: Number((((endMetrics.TaskDuration ?? 0) - (startMetrics.TaskDuration ?? 0)) * 1000).toFixed(2)),
+    scriptDurationMs: Number((((endMetrics.ScriptDuration ?? 0) - (startMetrics.ScriptDuration ?? 0)) * 1000).toFixed(2)),
     gpuErrors,
     failures,
     bodyText: measurement.bodyText,

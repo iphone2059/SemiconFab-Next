@@ -628,7 +628,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 - **后端传输**：`fab_app -- --realtime`（WebSocket）仍是占位；HTTP 命令 API + 命令 SSE、FAB 级遥测/设备状态 SSE 已实现并接入产品。WebSocket 生产传输可后续替换同契约。
 - **后端持久化**：命令/遥测状态仍为内存模拟（命令终态 TTL/容量已限制）；PostgreSQL/Outbox/生产身份未实现，缺少数据库与身份基础设施。
 - **Worker/遥测接线**：FAB 级 20Hz 遥测 SSE → 每 FAB 一个 TelemetryRuntime/Worker → FrameRingBuffer → 渲染 frame loop；3 FAB 浏览器实测 3 个 Worker；SharedArrayBuffer/COOP-COEP 未启用。
-- **GPU/浏览器性能门禁**：Chrome 155 headless WebGPU 门禁通过（120 采集帧，p95 8.6ms，rendererFrames 151，drawCalls 903，gpuErrors []）；生产设备矩阵/显存/长任务仍待扩展。
+- **GPU/浏览器性能门禁**：Chrome 155 headless WebGPU 持续门禁通过（600 采集帧，p95 41.6ms，86.5fps，rendererFrames 631，drawCalls 903，3 Worker，heap 71.96MB，gpuErrors []）；生产设备矩阵/显存/长任务仍待扩展。
 - **目录收口**：`rendering/lite`、页面级 `features/{twin,catalog,workbench}`、共享 `components/` 已归位；旧顶层页面文件已删除。
 - **XState**：实现位于 `runtime/commands`，经 `CommandWorkflow` 契约暴露；位置不强制，升级实现需重跑 workflow/contract 测试。
 - **历史保留**：旧代码与旧迁移证据已从工作树删除，但保留在 Git 历史中；仓库只有一个 `main` 分支，无旧 URL 重定向。
@@ -711,12 +711,12 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 - 设备能力目录：`Fab:EquipmentCapabilities` 配置每 FAB equipment actions/preconditions，启动 fail-fast；默认 fallback equipment-0..120 + START/STOP/PAUSE 保持前端兼容；无效/未授权命令 400/404。
 - CPU/Worker 负载：`tests/performance/telemetry-load.test.ts` 压测 500/2000/5000 entities at 60Hz（300 frames）：约 18.6ms/60ms/141ms，heap delta < 256MB；覆盖 Worker handler + FrameRingBuffer 路径。
-- 真实 GPU：`tools/render_perf.mjs` 增加 `perf=1` 诊断桥，要求真实 renderer frames/drawCalls 且 gpuErrors 为空；本次 120 帧，p95 8.6ms，rendererFrames 151，drawCalls 903，gpuErrors []。
+- 真实 GPU：`tools/render_perf.mjs` 增加 `perf=1` 诊断桥，要求真实 renderer frames/drawCalls 且 gpuErrors 为空；最新持续运行 600 帧，p95 41.6ms，86.5fps，rendererFrames 631，drawCalls 903，3 Worker，gpuErrors []。
 
 ### 27.4 验证
 
-- 前端：tsc 0、Vitest **69 文件 / 306 测试 PASS**、vite build 0。
-- 后端：**127/127 PASS**（85 + 42 新增/调整）。
+- 前端：tsc 0、Vitest **69 文件 / 314 测试 PASS**、vite build 0。
+- 后端：**139/139 PASS**（85 + 54 新增/调整）。
 - `./scripts/verify.ps1` exit 0；只有 main 分支，工作树干净后提交推送。
 
 ### 27.5 保留边界（基础设施缺失）
@@ -724,6 +724,33 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 - PostgreSQL 命令历史/Outbox/事务发布未实现：仓库没有数据库依赖/服务；当前内存存储 + 终态保留只满足开发阶段。
 - 生产身份/正式 FAB 权限体系未实现：`DevelopmentFabAuthorization` 只覆盖开发密钥；生产必须接正式 IdP/策略/审计。
 - 真实 WebSocket 生产传输、SharedArrayBuffer/COOP-COEP、生产设备矩阵/长时 WebGPU 压力仍为后续项。
+## 28. 复核报告剩余 P1/P2 修复记录（2026-10-27）
+
+> 针对复核报告中的 3 个 P1 与 2 个 P2 项逐条修复；GitHub Actions 按要求不处理。
+
+### 28.1 P1 修复
+
+- **幂等重放先于前置条件**：`EquipmentCommandService.Submit` 变为单一临界区路径：site/FAB/principal/key/payload 校验后先查幂等记录；相同 payload 直接重放原 accepted 快照（同 commandId、202、不再跑当前能力/状态校验），不同 payload 409，仅新命令才运行 validator。测试覆盖“第一次 STOP 在 running 通过 → 状态变 idle → 同 key 重放仍 202 同 id，新 key 400”。
+- **命令 SSE FAB 级授权**：`GET /sites/{siteId}/commands/stream?fabId=` 必填；缺失/非法 400，未知/无权限 404（无存在性泄漏）；服务端按 payload.fabId 过滤 journal，客户端过滤不再承担访问控制。FAB 级 equipment-status(+stream)/telemetry 同样接 `IFabAuthorization`。前端每个 FAB 使用自己的 `?fabId=` 流。
+- **在线 Journal 缺口检测**：`ReadJournal`/`ReadJournalSince` 共享游标合法性检查，覆盖 malformed/foreign epoch、游标早于保留窗口、游标超前/日志尚不存在；SSE 发现缺口时先发一次 `replay-gap` 再重放保留事件，不再静默跳过。
+
+### 28.2 P2 修复
+
+- **稳定设备身份**：`TelemetryRuntime` 按 `entityId`（equipment-<index>）映射渲染槽位，不依赖 sample 数组顺序；乱序/未知/重复实体有明确策略；后续帧缺失实体保留上一状态而非回落 running。设备状态与 telemetry 后端共用同一 EquipmentStatusService 快照（状态映射 0..3）。
+- **真实浏览器持续压力**：新增 `web_app/tests/telemetry-stress.html` + `tools/telemetry_stress.mjs`，使用真实 `createTelemetryWorker()` Worker 在 500/2000/5000 实体、60Hz、5s 下测量跨线程往返：收发比例 100%，p95 分别约 0.6/1.1/2.0ms；CPU/Heap 微基准保留。`render_perf.mjs` 持续 600 帧并报告 workerTargets/heap/taskDuration，实测 3 Worker、p95 41.6ms、86.5fps、gpuErrors []。
+- **HTTP/1.1 连接上限修复**：命令 SSE 改为“首次 trackCommand 才打开”（lazyCommandSubscription），页面默认只有 3 telemetry + 1 equipment-status 连接；命令提交时最多增加 1 个，避免 7 个常驻 EventSource 超过浏览器 6 连接限制导致 Worker/模块加载停滞。
+
+### 28.3 复核后验证
+
+- 前端 `tsc --noEmit` 0；Vitest **69 文件 / 314 测试 PASS**；`vite build` 0。
+- 后端 **139/139 PASS**（含 journal/retention/capability/authorization）。
+- 浏览器 e2e：3 FAB Workbench 命令面板提交 → accepted→executing→succeeded；页面 3 个 Worker。
+- `./scripts/verify.ps1` exit 0。
+
+### 28.4 仍未实现（基础设施边界）
+
+- PostgreSQL/Outbox/正式 IdP：仓库无数据库/身份基础设施；当前为内存 + 终态保留 + 开发授权 seam。
+- 生产 WebSocket、SharedArrayBuffer/COOP-COEP、生产设备矩阵/长时 GPU 压测。
 ## 附录 A. 关键术语
 
 | 术语 | 含义 |

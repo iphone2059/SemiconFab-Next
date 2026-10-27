@@ -39,7 +39,8 @@ internal static class ApiHost
         builder.Services.AddSingleton(provider => new EquipmentCommandService(
             provider.GetRequiredService<SiteDirectory>(),
             provider.GetRequiredService<TimeProvider>(),
-            provider.GetRequiredService<EquipmentCommandOptions>()));
+            provider.GetRequiredService<EquipmentCommandOptions>(),
+            provider.GetRequiredService<IEquipmentCommandValidator>()));
         builder.Services.AddSingleton<TelemetrySimulationService>();
         builder.Services.Configure<EquipmentCapabilityCatalogOptions>(builder.Configuration.GetSection("Fab:EquipmentCapabilities"));
         builder.Services.AddSingleton<IEquipmentCapabilityCatalog, EquipmentCapabilityCatalog>();
@@ -123,13 +124,13 @@ internal static class ApiHost
                 // Client disconnected.
             }
         });
-        api.MapGet("/sites/{siteId:guid}/fabs/{fabId:guid}/equipment-status", (Guid siteId, Guid fabId, EquipmentStatusService status, SiteDirectory directory) =>
-            directory.TryGetFab(siteId, fabId, out _)
+        api.MapGet("/sites/{siteId:guid}/fabs/{fabId:guid}/equipment-status", (Guid siteId, Guid fabId, EquipmentStatusService status, SiteDirectory directory, IFabAuthorization authorization, HttpContext context) =>
+            directory.TryGetFab(siteId, fabId, out var fab) && authorization.IsAuthorized(siteId, fab.Id, context.User)
                 ? Results.Ok(status.Get(siteId, fabId))
                 : Results.Problem(statusCode: 404, title: "Site or FAB not found"));
-        api.MapGet("/sites/{siteId:guid}/fabs/{fabId:guid}/equipment-status/stream", async (Guid siteId, Guid fabId, EquipmentStatusService status, SiteDirectory directory, HttpContext context, CancellationToken cancellationToken) =>
+        api.MapGet("/sites/{siteId:guid}/fabs/{fabId:guid}/equipment-status/stream", async (Guid siteId, Guid fabId, EquipmentStatusService status, SiteDirectory directory, IFabAuthorization authorization, HttpContext context, CancellationToken cancellationToken) =>
         {
-            if (!directory.TryGetFab(siteId, fabId, out _))
+            if (!directory.TryGetFab(siteId, fabId, out var fab) || !authorization.IsAuthorized(siteId, fab.Id, context.User))
             {
                 await Results.Problem(statusCode: 404, title: "Site or FAB not found").ExecuteAsync(context);
                 return;
@@ -155,7 +156,7 @@ internal static class ApiHost
             }
         });
         api.MapPost("/sites/{siteId:guid}/commands", (Guid siteId, EquipmentCommandRequest? request, HttpContext context,
-            EquipmentCommandService commands, SiteDirectory directory, IEquipmentCommandValidator validator, IFabAuthorization authorization) =>
+            EquipmentCommandService commands, SiteDirectory directory, IFabAuthorization authorization) =>
         {
             if (!EquipmentCommandService.TryValidateIdempotencyKey(context.Request.Headers["Idempotency-Key"].ToString(), out var idempotencyKey, out var keyError))
                 return Results.Problem(statusCode: 400, title: "A valid Idempotency-Key is required", detail: keyError,
@@ -170,11 +171,9 @@ internal static class ApiHost
             // Ownership check: never reveal whether an unauthorized FAB exists.
             if (!authorization.IsAuthorized(siteId, fab.Id, context.User))
                 return Results.Problem(statusCode: 404, title: "FAB not found in Site");
-            var validation = validator.Validate(siteId, fab, command);
-            if (!validation.IsValid)
-                return Results.Problem(statusCode: 400, title: validation.Title, detail: validation.Detail,
-                    extensions: new Dictionary<string, object?> { ["errorCode"] = "INVALID_COMMAND" });
             var principal = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+            // The service owns the single atomic path: idempotency replay/conflict is decided
+            // before the capability/state validator runs for brand-new commands only.
             var result = commands.Submit(siteId, command, principal, idempotencyKey);
             return result.Status switch
             {
@@ -183,6 +182,9 @@ internal static class ApiHost
                 EquipmentCommandSubmitStatus.IdempotencyConflict => Results.Problem(statusCode: 409,
                     title: "Idempotency-Key conflicts with an earlier request",
                     extensions: new Dictionary<string, object?> { ["errorCode"] = "IDEMPOTENCY_CONFLICT" }),
+                EquipmentCommandSubmitStatus.InvalidCommand => Results.Problem(statusCode: 400,
+                    title: result.Validation!.Title, detail: result.Validation.Detail,
+                    extensions: new Dictionary<string, object?> { ["errorCode"] = "INVALID_COMMAND" }),
                 _ => Results.Accepted($"/api/v1/commands/{result.Command!.CommandId}", result.Command)
             };
         });
@@ -197,16 +199,24 @@ internal static class ApiHost
                 return Results.Problem(statusCode: 404, title: "Command not found");
             return Results.Ok(command);
         });
-        api.MapGet("/sites/{siteId:guid}/commands/stream", async (Guid siteId, EquipmentCommandService commands, SiteDirectory directory, HttpContext context, CancellationToken cancellationToken) =>
+        api.MapGet("/sites/{siteId:guid}/commands/stream", async (Guid siteId, string? fabId, EquipmentCommandService commands,
+            SiteDirectory directory, IFabAuthorization authorization, HttpContext context, CancellationToken cancellationToken) =>
         {
-            if (!directory.TryGetSite(siteId, out _))
+            if (!Guid.TryParse(fabId, out var requestedFabId))
             {
-                await Results.Problem(statusCode: 404, title: "Site not found").ExecuteAsync(context);
+                await Results.Problem(statusCode: 400, title: "A valid fabId query parameter is required",
+                    detail: "The command stream is FAB-scoped; pass ?fabId={guid} for a member FAB.").ExecuteAsync(context);
                 return;
             }
+            if (!directory.TryGetFab(siteId, requestedFabId, out var fab) || !authorization.IsAuthorized(siteId, fab.Id, context.User))
+            {
+                await Results.Problem(statusCode: 404, title: "Site or FAB not found").ExecuteAsync(context);
+                return;
+            }
+            var fabScope = fab.Id.ToString("D");
             var header = context.Request.Headers["Last-Event-ID"].ToString();
             string? lastEventId = string.IsNullOrWhiteSpace(header) ? null : header;
-            var replay = commands.ReadJournal(siteId, lastEventId);
+            var replay = commands.ReadJournal(siteId, lastEventId, fabScope);
             context.Response.Headers.ContentType = "text/event-stream";
             context.Response.Headers.CacheControl = "no-cache";
             context.Response.Headers.Connection = "keep-alive";
@@ -222,20 +232,33 @@ internal static class ApiHost
                     await context.Response.WriteAsync($"event: replay-gap\ndata: {gapJson}\n\n", cancellationToken);
                 }
                 foreach (var envelope in replay.Events)
-                {
                     await WriteCommandEventAsync(context.Response, commands.JournalEpoch, envelope, cancellationToken);
-                    cursor = envelope.Sequence;
-                }
+                cursor = replay.LatestSequence;
                 if (replay.HasGap || replay.Events.Length > 0) await context.Response.Body.FlushAsync(cancellationToken);
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    var pending = commands.ReadJournalSince(siteId, cursor);
-                    foreach (var envelope in pending)
+                    var pending = commands.ReadJournalSince(siteId, cursor, fabScope, commands.JournalEpoch);
+                    if (pending.HasGap)
                     {
-                        await WriteCommandEventAsync(context.Response, commands.JournalEpoch, envelope, cancellationToken);
-                        cursor = envelope.Sequence;
+                        // Never silently continue: tell the client its cursor is unusable, then replay retained events.
+                        var requestedCursor = $"{commands.JournalEpoch:D}:{cursor}";
+                        var gapJson = System.Text.Json.JsonSerializer.Serialize(commands.CreateReplayGap(pending, requestedCursor), SseJsonOptions);
+                        await context.Response.WriteAsync($"event: replay-gap\ndata: {gapJson}\n\n", cancellationToken);
+                        foreach (var envelope in pending.Events)
+                            await WriteCommandEventAsync(context.Response, commands.JournalEpoch, envelope, cancellationToken);
+                        cursor = pending.LatestSequence;
+                        await context.Response.Body.FlushAsync(cancellationToken);
                     }
-                    if (pending.Length > 0) await context.Response.Body.FlushAsync(cancellationToken);
+                    else
+                    {
+                        foreach (var envelope in pending.Events)
+                            await WriteCommandEventAsync(context.Response, commands.JournalEpoch, envelope, cancellationToken);
+                        if (pending.Events.Length > 0)
+                        {
+                            cursor = pending.LatestSequence;
+                            await context.Response.Body.FlushAsync(cancellationToken);
+                        }
+                    }
                     await Task.Delay(TimeSpan.FromMilliseconds(EquipmentCommandService.StreamPollMilliseconds), cancellationToken);
                 }
             }
@@ -244,9 +267,10 @@ internal static class ApiHost
                 // Client disconnected.
             }
         });
-        api.MapGet("/sites/{siteId:guid}/fabs/{fabId:guid}/telemetry/stream", async (Guid siteId, Guid fabId, TelemetrySimulationService telemetry, HttpContext context, CancellationToken cancellationToken) =>
+        api.MapGet("/sites/{siteId:guid}/fabs/{fabId:guid}/telemetry/stream", async (Guid siteId, Guid fabId, TelemetrySimulationService telemetry,
+            IFabAuthorization authorization, HttpContext context, CancellationToken cancellationToken) =>
         {
-            if (!telemetry.TryGetFab(siteId, fabId, out _))
+            if (!telemetry.TryGetFab(siteId, fabId, out var fab) || !authorization.IsAuthorized(siteId, fab.Id, context.User))
             {
                 await Results.Problem(statusCode: 404, title: "Site or FAB not found").ExecuteAsync(context);
                 return;
@@ -262,7 +286,7 @@ internal static class ApiHost
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     sequence++;
-                    var frame = telemetry.CreateFrame(fabId, sequence);
+                    var frame = telemetry.CreateFrame(siteId, fabId, sequence);
                     var json = System.Text.Json.JsonSerializer.Serialize(frame, SseJsonOptions);
                     await context.Response.WriteAsync($"data: {json}\n\n", cancellationToken);
                     await context.Response.Body.FlushAsync(cancellationToken);

@@ -35,12 +35,13 @@ const commandEnvelope = (revision: number) => ({
 
 it('decodes command SSE envelopes and closes the EventSource on unsubscribe', () => {
   const sources: FakeEventSource[] = [];
-  const source = createSseCommandEventSource('/api/v1/sites/site-1/commands/stream', {
+  // The product stream is FAB-scoped and authorized by the fabId query param.
+  const source = createSseCommandEventSource('/api/v1/sites/site-1/commands/stream?fabId=fab-a', {
     eventSourceFactory: (url) => { const value = new FakeEventSource(url); sources.push(value); return value; },
   });
   const received: number[] = [];
   const subscription = source.commandResult$.subscribe((event) => received.push(event.revision));
-  expect(sources[0].url).toBe('/api/v1/sites/site-1/commands/stream');
+  expect(sources[0].url).toBe('/api/v1/sites/site-1/commands/stream?fabId=fab-a');
   sources[0].emit(commandEnvelope(0));
   sources[0].emit(commandEnvelope(1));
   sources[0].emit({ topic: 'unknown', payload: {} });
@@ -91,7 +92,7 @@ it('parses the journal cursor and surfaces replay-gap as an explicit signal', ()
 
 it('keeps reconnected$ and emits gaps$ once per backend replay-gap control frame', () => {
   const sources: FakeEventSource[] = [];
-  const source = createSseCommandEventSource('/api/v1/sites/site-1/commands/stream', {
+  const source = createSseCommandEventSource('/api/v1/sites/site-1/commands/stream?fabId=fab-a', {
     eventSourceFactory: (url) => { const value = new FakeEventSource(url); sources.push(value); return value; },
   });
   const gaps: unknown[] = [];
@@ -160,13 +161,58 @@ it('feeds telemetry frames through the Worker and exposes renderer tool states',
   expect(worker.terminate).toHaveBeenCalled();
 });
 
-it('flattens only numeric sample fields into a fixed frame', () => {
+it('flattens only numeric sample fields into a fixed slot-keyed frame', () => {
   const frame = flattenTelemetryFrame({
     fabId: 'fab-a', sequence: 1, capturedAt: 'now',
     samples: [{ entityId: 'equipment-0', values: { state: 2, utilization: 0.25 } }],
   });
   expect(frame.values).toHaveLength(32);
   expect(frame.values.slice(0, 2)).toEqual([2, 0.25]);
-  expect(frame.toolStates).toEqual(['down']);
+  expect(frame.toolStates).toHaveLength(16);
+  expect(frame.toolStates[0]).toBe('down');
+  // Slots without samples on the first frame keep the legacy running default.
+  expect(frame.toolStates.slice(1)).toEqual(Array(15).fill('running'));
   expect(toolStatesFromValues(frame.values)).toHaveLength(16);
+});
+
+it('maps samples by stable equipment entity slot: shuffled order, duplicate/unknown ids, missing retention', () => {
+  const first = flattenTelemetryFrame({
+    fabId: 'fab-a', sequence: 1, capturedAt: 'now',
+    samples: [
+      { entityId: 'equipment-3', values: { state: 2, utilization: 0.5 } },
+      { entityId: 'equipment-0', values: { state: 1, utilization: 0.25 } },
+    ],
+  });
+  expect(first.toolStates[0]).toBe('idle');
+  expect(first.toolStates[3]).toBe('down');
+
+  // Same entities in shuffled order (plus an unknown + a duplicate) hit the same slots.
+  const shuffled = flattenTelemetryFrame({
+    fabId: 'fab-a', sequence: 2, capturedAt: 'now',
+    samples: [
+      { entityId: 'equipment-0', values: { state: 3, utilization: 0.1 } },
+      { entityId: 'unknown-entity', values: { state: 2 } },
+      { entityId: 'equipment-0', values: { state: 1 } },
+      { entityId: 'equipment-3', values: { state: 0, utilization: 0.9 } },
+    ],
+  }, first.values);
+  expect(shuffled.toolStates[0]).toBe('maint'); // first occurrence wins; duplicate ignored
+  expect(shuffled.toolStates[3]).toBe('running');
+  expect(shuffled.toolStates[2]).toBe('running');
+});
+
+it('retains the previous state for entities missing from a later frame instead of resetting them', () => {
+  const first = flattenTelemetryFrame({
+    fabId: 'fab-a', sequence: 1, capturedAt: 'now',
+    samples: [
+      { entityId: 'equipment-0', values: { state: 2, utilization: 0.5 } },
+      { entityId: 'equipment-7', values: { state: 3, utilization: 0.5 } },
+    ],
+  });
+  const later = flattenTelemetryFrame({
+    fabId: 'fab-a', sequence: 2, capturedAt: 'now',
+    samples: [{ entityId: 'equipment-7', values: { state: 1, utilization: 0.5 } }],
+  }, first.values);
+  expect(later.toolStates[0]).toBe('down'); // kept, not defaulted back to running
+  expect(later.toolStates[7]).toBe('idle');
 });
