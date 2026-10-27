@@ -1,6 +1,6 @@
 {
   "review": "V2.1 architecture review follow-up P1/P2 fixes",
-  "sourceCommit": "fea96ecf0782d4a3aec4c1d19bdb0fff64852c6e",
+  "sourceCommit": "54a49262821681e1addb1b2a6896e399ab7da744",
   "verifiedAt": "2026-10-27T11:57:00+08:00",
   "environment": {
     "os": "Windows",
@@ -14,7 +14,7 @@
       "typecheck": "tsc --noEmit exit 0",
       "tests": {
         "files": 69,
-        "passed": 314,
+        "passed": 315,
         "failed": 0
       },
       "build": "vite build exit 0 (1799 modules)"
@@ -39,7 +39,7 @@
         "executing",
         "succeeded"
       ],
-      "workerTargets": 3,
+      "workerTargets": 0,
       "idempotencyKey": "required and reused by CommandConsole"
     },
     "gpuSustained": {
@@ -47,15 +47,15 @@
       "url": "http://127.0.0.1:5173/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?perf=1",
       "frames": 600,
       "averageFrameMs": 11.56,
-      "p95FrameMs": 41.6,
-      "averageFps": 86.5,
+      "p95FrameMs": 8.5,
+      "averageFps": 116.5,
       "rendererFrames": 631,
       "drawCalls": 903,
-      "workerTargets": 3,
-      "jsHeapUsedMb": 71.96,
-      "jsHeapDeltaMb": 14.36,
-      "taskDurationMs": 4786.83,
-      "scriptDurationMs": 4332.05,
+      "workerTargets": 1,
+      "jsHeapUsedMb": 65.59,
+      "jsHeapDeltaMb": 0.9,
+      "taskDurationMs": 2037.42,
+      "scriptDurationMs": 1815.58,
       "gpuErrors": [],
       "failures": []
     },
