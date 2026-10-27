@@ -76,7 +76,7 @@ export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
   const personnelRoot = createTransformNode('procedural-personnel'); setParent(personnelRoot, root);
   const meshes: Mesh[] = [], lights: PointLight[] = [], parts: LiteMotionPart[] = [];
   const pools = new Map<string, Pool>(), textures = new Set<DynamicTexture2D>();
-  let disposed = false, language: 'zh' | 'en' = 'zh', remainderMs = 0;
+  let disposed = false, remainderMs = 0;
   function dispose() {
     if (disposed) return;
     disposed = true;
@@ -130,7 +130,6 @@ export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
   const personnel = createPersonnelTimeline({ seed: 42, dt: 0.016, clockStartMs: 0, clockMsPerTick: 16,
     ticks: 0, chamberUserDataMode: 'as-built' });
   let frame = personnel.readInitialFrame();
-  const initialPatrol = { ...frame.patrol };
   const cars: { body: TransformNode; hoist: TransformNode; foup: TransformNode; cables: TransformNode[]; shadow: TransformNode }[] = [];
   const actors: { root: TransformNode; leftLeg: TransformNode; rightLeg: TransformNode; leftArm: TransformNode;
     rightArm: TransformNode; screen: StandardMaterialProps }[] = [];
@@ -348,10 +347,6 @@ export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
     patrolPosition(): Triple { const actor = frame.actors[5]; return [actor.x, actor.y, actor.z]; },
     /** B03: the frame read once by update() is the shared read-only snapshot for this tick. */
     readAirShowerFrames() { return frame.airShowers; },
-    /** As-built source loses the status-sprite update reference: locale redraws the frozen initial board. */
-    readPatrolStatus() { return { phase: initialPatrol.phase, text: language === 'zh' ? initialPatrol.statusTextZh : initialPatrol.statusTextEn,
-      y: 2.15, width: 3.2, height: 0.8 }; },
-    setLanguage(value: 'zh' | 'en') { if (!disposed) language = value; },
     /** World-space OHT body poses for acceptance (source RH metres, before the render frame reflection). */
     readVehiclePositions() {
       return cars.map(car => ({ position: [car.body.position.x, car.body.position.y, car.body.position.z] as Triple,
@@ -361,15 +356,6 @@ export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
       loops: arcs.map((arc, i) => ({ length: arc.total, samples: arc.positions.length, stations: stations[i].map(s => ({ ...s })) })),
       vehicles: traffic.vehicles.map(v => ({ id: v.id, loopId: v.loopId, s: v.s, speed: v.speed, state: v.state,
         hoistY: v.hoistY, cableScaleY: v.cableScaleY, cableY: v.cableY, foupVisible: v.foupVisible, ledHex: v.ledHex })) }; },
-    prepareForDeviceRecovery() {
-      if (disposed) return;
-      for (const pool of pools.values()) {
-        // Rebuild the capacity-sized device state from the retained CPU matrices, then restore the
-        // active draw count exactly as the last projection left it.
-        pool.mesh.thinInstances = null;
-        setThinInstances(pool.mesh, pool.matrices, pool.members.length); setThinInstanceCount(pool.mesh, pool.lastCount);
-      }
-    },
     dispose,
   };
 }

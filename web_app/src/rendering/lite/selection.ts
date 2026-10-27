@@ -66,7 +66,6 @@ export interface LiteSelection {
     readonly lastHit: boolean | null; readonly lastThinInstance: number | null; readonly lastError: string | null };
   /** Recompute the visual against moved equipment (legacy refreshSelection after explode). */
   refresh(): void;
-  prepareForDeviceRecovery(): void;
   dispose(): void;
 }
 
@@ -450,13 +449,6 @@ export function createLiteSelection(scene: SceneContext, engine: EngineContext, 
     refresh() {
       if (disposed || selected === null) return;
       showVisual(selected);
-    },
-    prepareForDeviceRecovery() {
-      if (disposed) return;
-      clickEpoch++;
-      cancelHoverRequest();
-      if (picker) { disposePicker(picker); picker = createGpuPicker(scene); }
-      if (selected !== null) showVisual(selected);
     },
     dispose() {
       if (disposed) return;

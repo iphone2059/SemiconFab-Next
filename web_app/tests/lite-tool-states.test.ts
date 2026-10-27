@@ -203,7 +203,7 @@ it('applies per-tool states and full snapshots while preserving every other lamp
   } finally { harnessed.dispose(); }
 });
 
-it('reapplies the current thin-instance colors and preserves identity after device recovery', () => {
+it('reapplies the current thin-instance colors and preserves identity', () => {
   const harnessed = harness();
   const states = createLiteToolStates(harnessed.scene, harnessed.engine, harnessed.equipment);
   try {
@@ -215,9 +215,6 @@ it('reapplies the current thin-instance colors and preserves identity after devi
     const expected = harnessed.equipment.tools.map((_, index) => colorOf(harnessed.equipment, index));
     const beaconMeshes = new Set(harnessed.equipment.tools.map((_, index) => beacon(harnessed.equipment, index).mesh));
     const counts = harnessed.equipment.batches.map(batch => batch.mesh.thinInstances!.count);
-    harnessed.equipment.prepareForDeviceRecovery();
-    states.prepareForDeviceRecovery();
-    states.prepareForDeviceRecovery();
     harnessed.equipment.batches.forEach((batch, index) => {
       expect(batch.mesh.thinInstances!.count).toBe(counts[index]);
       if (beaconMeshes.has(batch.mesh)) expect(batch.mesh.thinInstances!.colors).toBeInstanceOf(Float32Array);
@@ -256,7 +253,6 @@ it('restores the equipment material when disposed and ignores later state calls'
     states.applyAll([...FAB_TOOL_STATES].map(() => 'down'));
     states.update(16, 0);
     expect(colorOf(harnessed.equipment, 0)).toEqual(before);
-    states.prepareForDeviceRecovery();
     states.dispose();
   } finally { harnessed.dispose(); }
 });
@@ -327,13 +323,5 @@ it('keeps a dense down index across setToolState, applyAll, recovery and the no-
     expectColor(colorOf(harnessed.equipment, 5), STATE_COLORS.down, .6);
     expectColor(colorOf(harnessed.equipment, 120), STATE_COLORS.down, .6);
     expect(versions().map((version, index) => version - beforePrefix[index])).toEqual(writesFor([5, 120]));
-
-    // Device recovery keeps the index: the next frame pulses the same two lamps.
-    states.prepareForDeviceRecovery();
-    const beforeRecovery = versions();
-    states.update(16, 180 * Math.PI * 1.5);
-    expectColor(colorOf(harnessed.equipment, 5), STATE_COLORS.down, .2);
-    expectColor(colorOf(harnessed.equipment, 120), STATE_COLORS.down, .2);
-    expect(versions().map((version, index) => version - beforeRecovery[index])).toEqual(writesFor([5, 120]));
   } finally { states.dispose(); harnessed.dispose(); }
 });

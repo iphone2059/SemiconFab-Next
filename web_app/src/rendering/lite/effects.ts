@@ -59,7 +59,6 @@ export interface LiteEffects {
   readonly shadowLinked: boolean;
   /** Acceptance diagnostics: configured X-Ray target counts per source role. */
   readonly targetCounts: { readonly equipment: number; readonly floor: number; readonly subfab: number; readonly oht: number };
-  prepareForDeviceRecovery(): void;
   dispose(): void;
 }
 
@@ -695,23 +694,6 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
     applyXray(filter);
   }
 
-  function prepareForDeviceRecovery(): void {
-    if (disposed) return;
-    // Drop the old device's borrowed depth view; the next update() re-reads the generator's
-    // current receiver texture. The generator and its receiver callback stay attached (Lite
-    // recovery preserves both) so the CSM transforms resync on the replacement device.
-    shadowTexture = null;
-    shadowData = null;
-    shadowViews = null;
-    for (const material of paletteMaterials) {
-      setShaderTexture(material, 'xrayDepth', null);
-      setShaderUniform(material, 'xrayShadowEnabled', 0);
-    }
-    // Force the next trail replay through the retained CPU geometry; no buffers reallocate.
-    lastTrailCount = -1;
-    lastTrailLength = -1;
-  }
-
   function dispose(): void {
     if (disposed) return;
     disposed = true;
@@ -754,7 +736,6 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
       for (const target of xrayTargets) counts[target.role] += 1;
       return counts;
     },
-    prepareForDeviceRecovery,
     dispose,
   };
 }

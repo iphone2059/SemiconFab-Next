@@ -1,6 +1,6 @@
 import {
   addToScene, createBox, createCylinder, createLineSystem, createPbrMaterial,
-  createTransformNode, setParent, setPbrEmissive, setThinInstanceColors, setThinInstances, enableThinInstanceWorldBounds,
+  createTransformNode, setParent, setPbrEmissive, setThinInstances, enableThinInstanceWorldBounds,
   type EngineContext, type Mesh, type PbrMaterialProps, type SceneContext,
 } from '@babylonjs/lite';
 import { FAB_LAYOUT } from '../../../fab-layout';
@@ -21,7 +21,6 @@ export interface LiteEquipment {
   readonly batches: { readonly mesh: Mesh }[];
   resolve(mesh: Mesh, instanceIndex: number): EquipmentTool | undefined;
   /** Call from the owning runtime's lost notification, before native scene rebuilding. */
-  prepareForDeviceRecovery(): void;
 }
 /** Native geometry/material batches. Placement identity never depends on batch order. */
 export function createLiteEquipment(scene: SceneContext, engine: EngineContext): LiteEquipment {
@@ -118,17 +117,6 @@ export function createLiteEquipment(scene: SceneContext, engine: EngineContext):
     tools, batches,
     resolve(mesh, instanceIndex) {
       return Number.isInteger(instanceIndex) && instanceIndex >= 0 ? byMesh.get(mesh)?.[instanceIndex] : undefined;
-    },
-    prepareForDeviceRecovery() {
-      // Lite 1.36 rebuilds mesh geometry but retains thin-instance GPU caches.
-      // Reset the public data slot and let native setters allocate fresh device state.
-      for (const { mesh } of batches) {
-        const instances = mesh.thinInstances;
-        if (!instances) continue;
-        mesh.thinInstances = null;
-        setThinInstances(mesh, instances.matrices, instances.count);
-        if (instances.colors) setThinInstanceColors(mesh, instances.colors);
-      }
     },
   };
 }

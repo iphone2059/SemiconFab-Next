@@ -2,7 +2,7 @@ import {
   addToScene, createLineMaterial, createLineSystem, createMeshFromData, createPbrMaterial,
   createPointLight, createStandardMaterial, createTransformNode, createDynamicTexture,
   setParent, setPbrEmissive, setPbrTransmission, setSubtreeVisible, setTextureTransform,
-  setThinInstances, setThinInstanceColors, updateDynamicTexture, releaseTexture,
+  setThinInstances, updateDynamicTexture, releaseTexture,
   enableMaterialUvTransform, loadHdrEnvironment, decomposeMat4, rebuildMaterial, markMaterialUboDirty, enableThinInstanceWorldBounds,
   type DynamicTexture2D, type EngineContext, type Mat4, type Material, type Mesh, type PbrMaterialProps, type PointLight, type SceneContext, type TransformNode,
 } from '@babylonjs/lite';
@@ -47,7 +47,6 @@ export interface LiteStaticStructure {
   setVisible(layer: StaticLayer, visible: boolean): void;
   setOffset(layer: StaticLayer, y: number): void;
   setLevel(level: 'L1' | 'B1' | 'DUAL' | 'EXPLODED'): Promise<void>;
-  prepareForDeviceRecovery(): void;
   dispose(): void;
 }
 /** Frozen source vertex data, composed directly into native Lite resources. No legacy engine is loaded. */
@@ -221,15 +220,6 @@ export function createLiteStaticStructure(scene: SceneContext, engine: EngineCon
         material.alphaBlend = blended;
         if (changed) await rebuildMaterial(scene, material);
         else markMaterialUboDirty(material);
-      },
-      prepareForDeviceRecovery() {
-        for (const mesh of batches) {
-          const instances = mesh.thinInstances;
-          if (!instances) continue;
-          mesh.thinInstances = null;
-          setThinInstances(mesh, instances.matrices, instances.count);
-          if (instances.colors) setThinInstanceColors(mesh, instances.colors);
-        }
       },
     };
   } catch (error) { dispose(); throw error; }

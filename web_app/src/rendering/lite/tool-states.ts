@@ -1,5 +1,5 @@
 import {
-  getPbrEmissiveColor, setPbrEmissive, setThinInstanceColor, setThinInstanceColors, setThinInstances,
+  getPbrEmissiveColor, setPbrEmissive, setThinInstanceColor, setThinInstanceColors,
   type EngineContext, type MaterialPlugin, type Mesh, type PbrMaterialProps, type SceneContext,
 } from '@babylonjs/lite';
 import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from '../../fab-layout';
@@ -10,7 +10,6 @@ export interface LiteToolStates {
   setToolState(index: number, state: FabToolState): void;
   applyAll(states: readonly FabToolState[]): void;
   update(deltaMs: number, nowMs: number): void;
-  prepareForDeviceRecovery(): void;
   dispose(): void;
 }
 
@@ -186,21 +185,6 @@ export function createLiteToolStates(_scene: SceneContext, _engine: EngineContex
         const color = STATE_COLORS.down;
         target.batch.colors.set([color[0], color[1], color[2], pulse], target.instanceIndex * 4);
         setThinInstanceColor(target.batch.mesh, target.instanceIndex, color[0], color[1], color[2], pulse);
-      }
-    },
-    prepareForDeviceRecovery() {
-      if (disposed) return;
-      for (const batch of batches.values()) {
-        // Lite 1.36 rebuilds mesh geometry but keeps thin-instance GPU caches; reset the
-        // public data slot so the native setters allocate fresh device state, then
-        // reapply the current per-instance colors. Same public recovery pattern as
-        // geometry/tool-families.ts.
-        const instances = batch.mesh.thinInstances;
-        if (instances) {
-          batch.mesh.thinInstances = null;
-          setThinInstances(batch.mesh, instances.matrices, instances.count);
-        }
-        setThinInstanceColors(batch.mesh, batch.colors);
       }
     },
     dispose() {

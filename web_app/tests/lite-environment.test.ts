@@ -155,7 +155,6 @@ it('updates bilingual canvases, leaves billboard registration to its native scen
   model.setLanguage('en'); expect(vi.mocked(updateDynamicTexture).mock.calls.length).toBe(initialUpdates + 3);
   expect(model.diagnostics.labels.every(label => label.language === 'en')).toBe(true);
   model.setLayer('roof', true); model.setLayer('airflow', true);
-  model.prepareForDeviceRecovery();
   expect(model.roofRoot.visible).toBe(true); expect(model.airflowRoot.visible).toBe(true);
   const count = model.billboardSystems.reduce((sum, system) => sum + system.count, 0);
   expect(count).toBe(1573);

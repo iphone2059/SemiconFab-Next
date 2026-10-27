@@ -233,8 +233,6 @@ export function createLiteFacility(scene: SceneContext, engine: EngineContext, o
         updateDynamicTexture(engine, art.texture, art.canvas, { invertY: false });
       }
     },
-    prepareForDeviceRecovery() { labelOverlay.dispose(); const units = meshes.find(mesh => mesh.name === 'original-ffu-batch')!;
-      const data = units.thinInstances!; units.thinInstances = null; setThinInstances(units, data.matrices, data.count); },
     dispose() { disposed = true; labelOverlay.dispose(); for (const texture of textures) releaseTexture(texture); textures.clear(); },
   };
 }

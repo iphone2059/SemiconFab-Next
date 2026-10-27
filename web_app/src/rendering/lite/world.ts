@@ -48,7 +48,6 @@ export interface LiteWorldPerf {
 /** Read-only acceptance diagnostics: computed from live native objects, never cached. */
 export interface LiteWorldDiagnostics {
   readonly gpuErrors: readonly string[];
-  readonly recoveryPreparations: number;
   readonly cutPlane: readonly [number, number, number, number] | null;
   readonly selection: { readonly index: number | null; readonly visible: boolean; readonly center: Point | null; readonly scale: Point | null;
     readonly pickingEnabled: boolean; readonly pickStats: { readonly requests: number; readonly hits: number;
@@ -102,7 +101,6 @@ export interface LiteWorld {
   projectTool(index: number): { x: number; y: number } | null;
   /** Test-only hook (only reachable through the ?perf bridge): simulate a real WebGPU device loss. */
   forceDeviceLoss(): void;
-  prepareForDeviceRecovery(): void;
   dispose(): void;
 }
 
@@ -152,7 +150,6 @@ export async function createLiteWorld(
   let disposed = false;
   let frames = 0, fpsFrames = 0, fpsSince = performance.now(), fps = 0;
   const gpuErrors: string[] = [];
-  let recoveryPreparations = 0;
   // The AMHS stats consumer coalesces at 100 ms, so gate the per-frame readStats() scan.
   const amhsStatsDue = createAmhsStatsGate();
 
@@ -463,7 +460,6 @@ export async function createLiteWorld(
     setLanguage(next) {
       if (disposed || next === language) return;
       language = next;
-      motion?.setLanguage(next);
       environment?.setLanguage(next);
       facility?.setLanguage(next);
     },
@@ -501,7 +497,6 @@ export async function createLiteWorld(
       }).length;
       return {
         gpuErrors: [...gpuErrors],
-        recoveryPreparations,
         cutPlane: scene.clipPlane ? [scene.clipPlane[0], scene.clipPlane[1], scene.clipPlane[2], scene.clipPlane[3]] : null,
         selection: {
           index: selection?.selectedIndex ?? null,
@@ -582,18 +577,6 @@ export async function createLiteWorld(
         layers: { ...layers }, level: currentLevel(), explodeFactor, xrayFilter,
         toolStates: [...toolStateCache],
       };
-    },
-    prepareForDeviceRecovery() {
-      if (disposed) return;
-      recoveryPreparations += 1;
-      equipment?.prepareForDeviceRecovery();
-      structure?.prepareForDeviceRecovery();
-      facility?.prepareForDeviceRecovery();
-      motion?.prepareForDeviceRecovery();
-      environment?.prepareForDeviceRecovery();
-      effects?.prepareForDeviceRecovery();
-      toolStates?.prepareForDeviceRecovery();
-      selection?.prepareForDeviceRecovery();
     },
     dispose,
   };

@@ -152,13 +152,13 @@ it('bounds the additive trail to 30 retained vertices and skips unchanged upload
     h.effects.setWaferTrail([[1, 2, 3], [4, 5, 6]]); expect(getMeshIndexedDrawInfo(trail).indexCount).toBe(2);
     expect(Array.from(getMeshGeometry(trail)!.positions).slice(-3)).toEqual([4, 5, 6]);
     h.effects.setWaferTrail([]); expect(trail.visible).toBe(false);
-    h.effects.prepareForDeviceRecovery(); h.effects.setWaferTrail([[1, 2, 3], [4, 5, 6]]);
+    h.effects.setWaferTrail([[1, 2, 3], [4, 5, 6]]);
     expect(trail.visible).toBe(true); expect(h.buffers).toHaveLength(allocationCount);
   } finally { h.dispose(); }
   expect(h.buffers.every(b => b.destroyed)).toBe(true);
 });
 
-it('borrows the native CSM receiver texture and rebinds on recovery without taking texture ownership', () => {
+it('borrows the native CSM receiver texture without taking texture ownership', () => {
   const h = harness();
   try {
     const light = createDirectionalLight([0, -1, 0]); addToScene(h.scene, light);
@@ -168,7 +168,6 @@ it('borrows the native CSM receiver texture and rebinds on recovery without taki
     h.effects.configureXrayTargets([{ mesh, role: 'equipment' }]); h.effects.bindShadows(generator); h.effects.setXrayFilter('all');
     const material = mesh.material as ShaderMaterial;
     expect(getShaderTexture(material, 'xrayDepth')).toBe(getCsmReceiverTexture(generator));
-    h.effects.prepareForDeviceRecovery(); expect(getShaderTexture(material, 'xrayDepth')).toBeNull();
     h.effects.update(16, 1000); expect(getShaderTexture(material, 'xrayDepth')).toBe(getCsmReceiverTexture(generator));
   } finally { h.dispose(); }
 });

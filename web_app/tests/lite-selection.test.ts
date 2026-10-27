@@ -142,12 +142,6 @@ it('creates the native GPU picker and the legacy wireframe box, recreating the p
     expect(differences.filter(count => count === 2)).toHaveLength(6);
     expect(differences.filter(count => count === 1)).toHaveLength(12);
 
-    const first = selection.picker;
-    selection.prepareForDeviceRecovery();
-    expect(selection.picker).toBeDefined();
-    expect(selection.picker).not.toBe(first);
-    expect(harnessed.scene.meshes).toContain(visual);
-
     selection.dispose();
     expect(selection.picker).toBeUndefined();
     expect(harnessed.scene.meshes).not.toContain(visual);
@@ -503,16 +497,6 @@ it('ignores picks that resolve after a newer selection, a clear or disposal', as
     expectPickedTool(picks[2], 7);
     expect(selection.selectedIndex).toBe(7);
 
-    // prepareForDeviceRecovery invalidates old-device picks and replaces the picker.
-    canvas.dispatch('pointerdown', { clientX: 110, clientY: 220 });
-    canvas.dispatch('pointerup', { clientX: 110, clientY: 220 });
-    await flush();
-    expect(selection.picker).toBeUndefined();
-    selection.prepareForDeviceRecovery();
-    expect(selection.picker).toBeUndefined();
-    await resolve(4, { toolIndex: 1, x: 0, y: 0 });
-    expect(picks).toHaveLength(3);
-
     // dispose() detaches listeners and drops late results.
     canvas.dispatch('pointerdown', { clientX: 110, clientY: 220 });
     canvas.dispatch('pointerup', { clientX: 110, clientY: 220 });
@@ -521,7 +505,7 @@ it('ignores picks that resolve after a newer selection, a clear or disposal', as
     expect(canvas.listenerCount('pointerup')).toBe(0);
     expect(canvas.listenerCount('pointermove')).toBe(0);
     expect(canvas.listenerCount('dblclick')).toBe(0);
-    await resolve(5, { toolIndex: 2, x: 0, y: 0 });
+    await resolve(4, { toolIndex: 2, x: 0, y: 0 });
     expect(picks).toHaveLength(3);
     unbind();
   } finally { selection.dispose(); harnessed.dispose(); }

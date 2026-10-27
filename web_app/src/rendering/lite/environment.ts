@@ -276,7 +276,6 @@ export function createLiteEnvironment(scene: SceneContext, engine: EngineContext
       for (const label of labels) { label.language = value; drawOriginalRoofSprite(label.context, label.nameEn, label.nameZh, value);
         updateDynamicTexture(engine, label.texture, label.canvas, { invertY: false }); }
     },
-    prepareForDeviceRecovery() { if (!disposed) { overlay.dispose(); syncBillboards(); } },
     /** Runtime beforeStart: rebuild native billboard renderables after mount/recovery. */
     registerBillboards(): Promise<void> { return disposed ? Promise.resolve() : overlay.register(billboardSystems); },
     dispose,

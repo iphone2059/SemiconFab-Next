@@ -225,25 +225,13 @@ it('projects source hoist/cable/FOUP/LED states and preserves AMHS hidden state 
   } finally { h.dispose(); }
 });
 
-it('retains root-relative instance transforms under reflection, recovery, language changes and disposal', () => {
+it('retains root-relative instance transforms under reflection and disposal', () => {
   const h = harness();
   try {
     const reflected = createTransformNode('frame'); reflected.scaling.z = -1;
     setParent(h.model.root, reflected);
     h.model.update(16, 16);
     const before = h.model.readSnapshot();
-    const pools = h.model.meshes.filter(m => m.thinInstances).map(mesh => ({ mesh, slot: mesh.thinInstances,
-      data: Array.from(mesh.thinInstances!.matrices), count: mesh.thinInstances!.count }));
-    h.model.prepareForDeviceRecovery();
-    for (const pool of pools) {
-      expect(pool.mesh.thinInstances).not.toBe(pool.slot);
-      expect(Array.from(pool.mesh.thinInstances!.matrices)).toEqual(pool.data);
-      expect(pool.mesh.thinInstances!.count).toBe(pool.count);
-    }
-    h.model.setLanguage('en');
-    expect(h.model.readPatrolStatus().text).toBe('Approaching Litho Airlock');
-    h.model.setLanguage('zh');
-    expect(h.model.readPatrolStatus().text).toBe('正在步向黄光风淋气闸');
     expect(h.model.readSnapshot()).toEqual(before);
     h.model.dispose(); h.model.dispose(); h.model.update(16, 32);
     expect(h.model.readSnapshot()).toEqual(before);
@@ -352,30 +340,6 @@ it('keeps the rendered instance order, count and world matrices identical to the
       for (let lane = 0; lane < 16; lane++) expect(data.matrices[slot * 16 + lane]).toBe(matrix[lane]);
       for (let axis = 0; axis < 3; axis++) expect(matrix[12 + axis]).toBeCloseTo(poses[slot].position[axis], 5);
     });
-  } finally { h.dispose(); }
-});
-
-it('restores the capacity buffer and active count after device recovery', () => {
-  const h = harness();
-  try {
-    h.model.update(16, 16);
-    const before = h.model.meshes.filter(mesh => mesh.thinInstances).map(mesh => {
-      const data = internals(mesh);
-      return { mesh, count: data.count, capacity: data._capacity, matrices: Array.from(data.matrices) };
-    });
-    h.model.prepareForDeviceRecovery();
-    for (const snapshot of before) {
-      const data = internals(snapshot.mesh);
-      expect(data._capacity, snapshot.mesh.name).toBe(snapshot.capacity);
-      expect(data.count, snapshot.mesh.name).toBe(snapshot.count);
-      expect(Array.from(data.matrices), snapshot.mesh.name).toEqual(snapshot.matrices);
-    }
-    const support = poolMesh(h.model, 'motion-batch-support');
-    expect(internals(support)._capacity).toBe(44);
-    // The rebuilt draw count matches the last projection, so the static pool stays quiet afterwards.
-    const version = internals(support)._version;
-    h.model.update(16, 32);
-    expect(internals(support)._version).toBe(version);
   } finally { h.dispose(); }
 });
 

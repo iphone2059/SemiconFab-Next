@@ -5,7 +5,7 @@
 // Determinism and collision policy:
 //   1. source entries are fixture.keys in document order, then fixture.dynamic in source-line order;
 //   2. identical zh strings collapse to one entry; the FIRST occurrence in that order wins;
-//   3. zh strings that map to more than one en value are reported in GENERATED_TWIN_COLLISIONS as
+//   3. zh strings that map to more than one en value are counted in the generator summary as
 //      distinct en values in first-appearance order (the first element is the emitted winner);
 //   4. emitted keys are sorted by UTF-16 code unit (locale-independent), not localeCompare.
 // No locale other than en/zh-CN is ever serialized.
@@ -107,21 +107,10 @@ const header = [
 ].join('\n');
 
 const englishLines = sortedZh.map((zhCN) => '  ' + JSON.stringify(zhCN) + ': ' + JSON.stringify(emitted[zhCN]) + ',');
-const collisionZh = Object.keys(collisions).sort(compareText);
-const collisionLines = collisionZh.length === 0
-  ? ['  // No same-zh/different-en collisions in the frozen inventory.']
-  : collisionZh.map((zhCN) => '  ' + JSON.stringify(zhCN) + ': [' +
-      collisions[zhCN].map((en) => JSON.stringify(en)).join(', ') + '],');
-
 const output = header +
   'export const GENERATED_TWIN_EN: Readonly<Record<string, string>> = {\n' +
   englishLines.join('\n') + '\n' +
-  '};\n\n' +
-  '// Distinct en values for zh strings with conflicting frozen en copy; first value is the emitted winner.\n' +
-  'export const GENERATED_TWIN_COLLISIONS: Readonly<Record<string, readonly string[]>> = {\n' +
-  collisionLines.join('\n') + '\n' +
-  '};\n\n' +
-  'export const GENERATED_TWIN_PROVENANCE = ' + JSON.stringify(provenance, null, 2) + ' as const;\n';
+  '};\n';
 
 if (process.argv.includes('--check')) {
   let existing;

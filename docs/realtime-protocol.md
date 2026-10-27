@@ -4,7 +4,7 @@
 - 状态：**契约/类型化流/HTTP-SSE 产品链路已实现（模拟后端）；真实 WebSocket 未接**（implemented / WebSocket pending）
 - 依据：[ADR-0010](adr/0010-command-event-bridge.md)；总览见 [架构基线](architecture.md)；命令桥见 [命令事件桥](command-event-bridge.md)；恢复见 [命令核对](command-reconciliation.md)；渲染旁路见 [渲染管线](rendering.md)
 - 上位规范：[08-API-EVENT-CONTRACTS](SemiconFab-Next-Engineering-v1.1/08-API-EVENT-CONTRACTS.md)、[14-CONTRACTS-AND-EVENT-FLOWS](SemiconFab-Next-Engineering-v1.1/engineering/14-CONTRACTS-AND-EVENT-FLOWS.md)（本前端协议不得另造第二套语义）
-- 当前实现：设备状态 SSE + 后端**模拟**命令 SSE / 20Hz 遥测 SSE 已接入产品；`MessageDecoder`/`SequenceTracker`/`EventRouter` 已运行；`SseCommandEventSource` 与 `TelemetryRuntime` 使用同一 envelope 契约；`WebSocketClient` 仍是替换骨架。后端 `--realtime`（WebSocket）仍为占位。
+- 当前实现：设备状态 SSE + 后端**模拟**命令 SSE / 20Hz 遥测 SSE 已接入产品；`MessageDecoder` 由 `TelemetryRuntime` 实际使用；`SseCommandEventSource` 与 `TelemetryRuntime` 使用同一 envelope 契约。`realtime/streams` 与 `WebSocketClient`/`SequenceTracker`/`RealtimeGateway` 的 RxJS 骨架在 2026-10-27 审计清理中作为生产不可达死代码删除（M4+ 接入真实 WebSocket 时按 ADR-0010 重建）。后端 `--realtime`（WebSocket）仍为占位。
 - 门禁：解码/序列/路由、CE-01..08 已在测试源/真实模拟后端上 PASS；浏览器 e2e 命令 accepted→executing→succeeded；真实 WebSocket 生产传输仍缺。
 
 ## 1. 范围与边界
