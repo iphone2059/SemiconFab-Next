@@ -186,4 +186,71 @@ public sealed class SimulationTests
         var checksum = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(modified))).ToLowerInvariant();
         Assert.ThrowsAny<ArgumentException>(() => engine.Resume(checkpoint with { StateJson = modified, Checksum = checksum }));
     }
+
+    // Digests frozen from the record-class baseline (fab_tests 153/153 green) before the
+    // value-type/allocation refactor: event JSON, stats and checkpoint bytes must not move.
+    [Fact]
+    public void FrozenSimulationDigestsMatchPreChangeBaseline()
+    {
+        var engine = new FabSimulation();
+        var result = engine.Execute(Scenario(), A);
+        Assert.Equal("24c25351333588496775fb264f9fd2f973c1cdc2ad2e6bf81d1edd23ee6f1cb2", result.TraceHash);
+        Assert.Equal("12", result.CompletedLots);
+        Assert.Equal("12", result.TotalLots);
+        Assert.Equal("1000", result.SimulationTimeUs);
+        Assert.Equal("252", result.BusyTimeUs);
+        Assert.Equal(36, result.Events.Length);
+
+        var session = engine.Start(Scenario(), A);
+        var start = session.CreateCheckpoint();
+        Assert.Equal("b84499972d471543c2f6ae334c530495965ef3ccc35b0c92c6baed99c5fec647", start.Checksum);
+        session.StepOneEvent();
+        var afterOne = session.CreateCheckpoint();
+        Assert.Equal("0472573da77977b8bfb3d9a11aa5b4beef62ab9cf811f29332c862beeeb4ed2a", afterOne.Checksum);
+        Assert.Equal(1818, afterOne.StateJson.Length);
+        session.StepOneEvent();
+        var afterTwo = session.CreateCheckpoint();
+        Assert.Equal("7c218dc16f01190a9a67d0291a19777a751c076c256ebdf368c869c6e39e2d99", afterTwo.Checksum);
+        Assert.Equal(1868, afterTwo.StateJson.Length);
+    }
+
+    [Fact]
+    public void ScheduledEventIsValueTypeWithValueEqualityAndCausalKey()
+    {
+        Assert.True(typeof(ScheduledEvent).IsValueType);
+        var original = new ScheduledEvent(10, 2, 3, 4, "LotReleased");
+        var copy = original with { };
+        Assert.Equal(original, copy);
+        Assert.True(original == copy);
+        var queue = new StableEventQueue();
+        queue.Enqueue(original);
+        Assert.Equal(original, queue.Peek());
+        Assert.Equal(original, queue.Dequeue());
+        Assert.Equal(0, queue.Count);
+    }
+
+    [Fact]
+    public void QueueAcceptsUniqueSequencesInAnyEnqueueOrderAndRejectsReuse()
+    {
+        var queue = new StableEventQueue();
+        queue.Enqueue(new(30, 0, 3, 1, "third"));
+        queue.Enqueue(new(0, 0, 1, 2, "first"));
+        queue.Enqueue(new(20, 0, 2, 3, "second"));
+        Assert.ThrowsAny<ArgumentException>(() => queue.Enqueue(new(40, 0, 2, 4, "reused")));
+        Assert.Equal(new long[] { 1, 2, 3 }, queue.Snapshot().Select(e => e.EnqueueSequence));
+        Assert.Equal(new long[] { 1, 2, 3 }, Enumerable.Range(0, 3).Select(_ => queue.Dequeue().EnqueueSequence));
+    }
+
+    [Theory]
+    [InlineData(-1, 0, 1)]
+    [InlineData(0, -1, 1)]
+    [InlineData(0, 0, 0)]
+    [InlineData(0, 0, -5)]
+    public void QueueRejectsInvalidOrderingKeys(long timeUs, int priority, long sequence)
+    {
+        var queue = new StableEventQueue();
+        Assert.ThrowsAny<ArgumentException>(() => queue.Enqueue(new ScheduledEvent(timeUs, priority, sequence, 1, "invalid")));
+        Assert.Equal(0, queue.Count);
+        Assert.Empty(queue.Snapshot());
+    }
 }

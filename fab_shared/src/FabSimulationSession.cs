@@ -20,17 +20,22 @@ public sealed class FabSimulationSession
     private readonly long _warmup;
     private StableEventQueue _queue = new();
     private readonly Queue<int> _waiting = new();
-    private readonly List<SimulationEventDto> _events = [];
+    private readonly List<SimulationEventDto> _events;
+    private readonly string?[] _lotText;
     private SplitMix64 _rng;
     private long _clock, _nextEnqueue = 1, _eventSequence, _completed, _busy;
     private int _active;
     private bool _startPending, _finished;
     private ScheduledEvent? _last;
+    private long _clockTextValue;
+    private string? _clockText;
 
     internal FabSimulationSession(ScenarioDefinition scenario, SyntheticFifoModel model)
     {
         _scenario = scenario;
         _model = model;
+        _events = new(checked(3 * model.LotCount)); // one release, start and completion per lot
+        _lotText = new string?[model.LotCount + 1];
         _duration = FabSimulation.ParseTime(scenario.DurationUs, nameof(scenario.DurationUs), true);
         _warmup = FabSimulation.ParseTime(scenario.WarmupUs, nameof(scenario.WarmupUs), false);
         _rng = new(SplitMix64.Derive(FabSimulation.ParseSeed(scenario.MasterSeed), model.FabId));
@@ -70,7 +75,7 @@ public sealed class FabSimulationSession
                 break;
             default: throw new InvalidOperationException("Unknown internal event kind.");
         }
-        _events.Add(new(_model.FabId, current.Lot.ToString(CultureInfo.InvariantCulture), current.Kind, Text(_clock), Text(checked(++_eventSequence))));
+        _events.Add(new(_model.FabId, LotText(current.Lot), current.Kind, ClockText(), Text(checked(++_eventSequence))));
         return true;
     }
 
@@ -86,7 +91,7 @@ public sealed class FabSimulationSession
     private void Schedule(long time, int priority, int lot, string kind)
     {
         var next = new ScheduledEvent(time, priority, _nextEnqueue, lot, kind);
-        if (_last is not null && Comparer<(long, int, long)>.Default.Compare((time, priority, _nextEnqueue), (_last.TimeUs, _last.Priority, _last.EnqueueSequence)) <= 0)
+        if (_last is { } last && Comparer<(long, int, long)>.Default.Compare((time, priority, _nextEnqueue), (last.TimeUs, last.Priority, last.EnqueueSequence)) <= 0)
             throw new InvalidOperationException("A child event must follow its causal parent.");
         _nextEnqueue = checked(_nextEnqueue + 1);
         _queue.Enqueue(next);
@@ -129,6 +134,22 @@ public sealed class FabSimulationSession
         session._busy = state.BusyTimeUs;
         session._finished = state.Finished;
         return session;
+    }
+
+    // Per-event formatting caches: lots recur, and batched events often share one simulation time.
+    // Cached strings are ordinary invariant strings, so event DTOs and digest bytes are unchanged.
+    private string LotText(int lot) => lot >= 0 && lot < _lotText.Length
+        ? _lotText[lot] ??= lot.ToString(CultureInfo.InvariantCulture)
+        : lot.ToString(CultureInfo.InvariantCulture);
+
+    private string ClockText()
+    {
+        if (_clockText is null || _clockTextValue != _clock)
+        {
+            _clockTextValue = _clock;
+            _clockText = _clock.ToString(CultureInfo.InvariantCulture);
+        }
+        return _clockText;
     }
 
     private static string Text(long value) => value.ToString(CultureInfo.InvariantCulture);
