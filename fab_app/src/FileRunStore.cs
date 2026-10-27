@@ -17,10 +17,14 @@ public sealed class FileRunStore : IRunService
     private readonly string directory;
     private readonly string runsDirectory;
     private readonly string resultsDirectory;
+    private readonly string idempotencyDirectory;
     private readonly string pendingIndexPath;
     private readonly SemaphoreSlim submittedWork = new(0);
     private readonly TimeProvider clock;
+    private readonly HashSet<string> knownIdempotencyShards = new(StringComparer.Ordinal);
+    private volatile bool idempotencyIndexReconciled;
     public TimeSpan LeaseDuration { get; }
+    private string LegacyIdempotencyIndexPath => Path.Combine(directory, "idempotency-index.json");
 
     public FileRunStore(string directory, TimeProvider? clock = null, TimeSpan? leaseDuration = null)
     {
@@ -34,9 +38,11 @@ public sealed class FileRunStore : IRunService
             throw new ArgumentOutOfRangeException(nameof(leaseDuration));
         runsDirectory = Path.Combine(this.directory, "runs");
         resultsDirectory = Path.Combine(this.directory, "results");
+        idempotencyDirectory = Path.Combine(this.directory, "idempotency");
         pendingIndexPath = Path.Combine(this.directory, "pending-index.json");
         Directory.CreateDirectory(runsDirectory);
         Directory.CreateDirectory(resultsDirectory);
+        Directory.CreateDirectory(idempotencyDirectory);
     }
 
     public RunSummary Submit(CreateRunRequest request, string principal, string key)
@@ -55,20 +61,12 @@ public sealed class FileRunStore : IRunService
         var requestHash = Hash(Serialize(frozen));
         var scope = Hash(Serialize(new[] { frozen.Scenario.SiteId, principal, "CreateRun", key }));
         using var gate = AcquireLock();
-        var indexPath = Path.Combine(directory, "idempotency-index.json");
-        var index = File.Exists(indexPath) ? Read<Dictionary<string, IdempotencyEntry>>(indexPath) : [];
-        if (!index.TryGetValue(scope, out var existing))
-        {
-            // Repair a process death between publishing a Run and publishing its index entry.
-            var orphan = ReadRuns().SingleOrDefault(run => run.Scope == scope);
-            if (orphan is not null)
-            {
-                existing = new(orphan.Id, orphan.RequestHash);
-                index.Add(scope, existing);
-                AtomicWrite(indexPath, Serialize(index));
-            }
-        }
-        if (existing is not null)
+        // A process death between publishing a Run and its idempotency entry is repaired by one
+        // history scan per store instance, never by a scan on every new idempotency key.
+        ReconcileIdempotencyIndexOnce();
+        var shardPrefix = ShardPrefix(scope);
+        var shard = LoadIdempotencyShard(shardPrefix);
+        if (shard.TryGetValue(scope, out var existing))
         {
             if (existing.RequestHash != requestHash) throw new IdempotencyConflictException("The idempotency key already identifies a different request.");
             // A replayed Submit may be retrying a Run that is still queued, so idle workers are notified too.
@@ -82,8 +80,10 @@ public sealed class FileRunStore : IRunService
             Executions = frozen.Scenario.Fabs.Select(fab => new StoredExecution { FabId = fab.FabId, Code = fab.Code, TotalLots = fab.LotCount }).ToArray()
         };
         Save(record);
-        index.Add(scope, new(record.Id, requestHash));
-        AtomicWrite(indexPath, Serialize(index));
+        shard.Add(scope, new IdempotencyEntry(record.Id, requestHash));
+        // Only this one shard is rewritten; Submit never touches the rest of the history.
+        AtomicWrite(IdempotencyShardPath(shardPrefix), Serialize(shard));
+        knownIdempotencyShards.Add(shardPrefix);
         // Publish the claimable executions after the Run is durable. If the process dies between the
         // two writes, a later pending-index rebuild repairs the index from the Run records.
         var pending = TryLoadPendingIndex();
@@ -119,6 +119,15 @@ public sealed class FileRunStore : IRunService
     {
         if (timeout < TimeSpan.Zero && timeout != Timeout.InfiniteTimeSpan) throw new ArgumentOutOfRangeException(nameof(timeout));
         return submittedWork.WaitAsync(timeout, token);
+    }
+
+    /// <summary>Forces authoritative recovery of both persisted indexes from the Run records (used at worker startup).</summary>
+    public void RecoverIndexes()
+    {
+        using var gate = AcquireLock();
+        ReconcileIdempotencyIndex();
+        idempotencyIndexReconciled = true;
+        WritePendingIndex(RebuildPendingIndex(clock.GetUtcNow(), tolerateUnreadableRuns: true));
     }
 
     public ExecutionLease? TryClaim(string owner)
@@ -229,6 +238,102 @@ public sealed class FileRunStore : IRunService
         return (run, execution);
     }
 
+    private void ReconcileIdempotencyIndexOnce()
+    {
+        if (idempotencyIndexReconciled) return;
+        ReconcileIdempotencyIndex();
+        idempotencyIndexReconciled = true;
+    }
+
+    /// <summary>Rebuilds idempotency authority from Run records once per instance; first scope by CreatedAtUtc then Id wins.</summary>
+    private void ReconcileIdempotencyIndex()
+    {
+        var authoritative = new Dictionary<string, IdempotencyEntry>();
+        foreach (var run in ReadRunsForRecovery().OrderBy(run => run.CreatedAtUtc).ThenBy(run => run.Id))
+            authoritative.TryAdd(run.Scope, new IdempotencyEntry(run.Id, run.RequestHash));
+        var shards = new Dictionary<string, Dictionary<string, IdempotencyEntry>>(StringComparer.Ordinal);
+        foreach (var (scope, entry) in authoritative)
+        {
+            var prefix = ShardPrefix(scope);
+            if (!shards.TryGetValue(prefix, out var shard)) shards[prefix] = shard = [];
+            shard[scope] = entry;
+        }
+        Directory.CreateDirectory(idempotencyDirectory);
+        foreach (var (prefix, entries) in shards)
+        {
+            var existing = TryReadIdempotencyShard(prefix);
+            if (existing is not null && IdempotencyIndexesEqual(existing, entries)) continue;
+            AtomicWrite(IdempotencyShardPath(prefix), Serialize(entries));
+        }
+        // A rebuild is authoritative: any file the rebuild did not produce (lost fragments, stale shards,
+        // leftover temporary files) is removed so the directory exactly mirrors the Run records.
+        foreach (var path in Directory.GetFiles(idempotencyDirectory))
+        {
+            var prefix = Path.GetFileNameWithoutExtension(path);
+            if (path.EndsWith(".json", StringComparison.Ordinal) && shards.ContainsKey(prefix)) continue;
+            File.Delete(path);
+        }
+        // The legacy single-file index is superseded by the shards; drop it only after the shard writes succeeded.
+        if (File.Exists(LegacyIdempotencyIndexPath)) File.Delete(LegacyIdempotencyIndexPath);
+        knownIdempotencyShards.Clear();
+        foreach (var prefix in shards.Keys) knownIdempotencyShards.Add(prefix);
+    }
+
+    /// <summary>Recovery must not fail because one historical Run record is unreadable; Get/List still surface the damage.</summary>
+    private StoredRun[] ReadRunsForRecovery()
+    {
+        try { return ReadRuns(); }
+        catch (Exception error) when (error is InvalidDataException or JsonException or IOException or UnauthorizedAccessException)
+        {
+            var runs = new List<StoredRun>();
+            foreach (var path in Directory.EnumerateFiles(runsDirectory, "*.json"))
+            {
+                try { runs.Add(Read<StoredRun>(path)); }
+                catch (Exception skipped) when (skipped is InvalidDataException or JsonException or IOException or UnauthorizedAccessException) { }
+            }
+            return runs.ToArray();
+        }
+    }
+
+    /// <summary>Loads the shard for a Submit; a lost known shard or an unreadable shard is rebuilt from Run records first.</summary>
+    private Dictionary<string, IdempotencyEntry> LoadIdempotencyShard(string prefix)
+    {
+        var shard = TryReadIdempotencyShard(prefix);
+        if (shard is not null)
+        {
+            knownIdempotencyShards.Add(prefix);
+            return shard;
+        }
+        // A missing shard is normal until a scope hashes to this prefix. A shard this instance saw before,
+        // or an unreadable shard file, means the index was lost and must be rebuilt from Run records.
+        if (knownIdempotencyShards.Contains(prefix) || File.Exists(IdempotencyShardPath(prefix)))
+        {
+            ReconcileIdempotencyIndex();
+            shard = TryReadIdempotencyShard(prefix);
+            if (shard is not null)
+            {
+                knownIdempotencyShards.Add(prefix);
+                return shard;
+            }
+        }
+        return [];
+    }
+
+    private Dictionary<string, IdempotencyEntry>? TryReadIdempotencyShard(string prefix)
+    {
+        var path = IdempotencyShardPath(prefix);
+        if (!File.Exists(path)) return null;
+        try { return Read<Dictionary<string, IdempotencyEntry>>(path); }
+        catch (Exception error) when (error is InvalidDataException or JsonException or IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    private string IdempotencyShardPath(string prefix) => Path.Combine(idempotencyDirectory, prefix + ".json");
+
+    private static string ShardPrefix(string scope) => scope[..2];
+
+    private static bool IdempotencyIndexesEqual(Dictionary<string, IdempotencyEntry> left, Dictionary<string, IdempotencyEntry> right) =>
+        left.Count == right.Count && left.All(pair => right.TryGetValue(pair.Key, out var entry) && entry == pair.Value);
+
     /// <summary>Loads the persisted pending index, returning null when it is missing or structurally invalid.</summary>
     private PendingIndex? TryLoadPendingIndex()
     {
@@ -252,10 +357,10 @@ public sealed class FileRunStore : IRunService
     }
 
     /// <summary>Full-scan repair: reconstruct the claimable candidate set from the authoritative Run records.</summary>
-    private PendingIndex RebuildPendingIndex(DateTimeOffset now)
+    private PendingIndex RebuildPendingIndex(DateTimeOffset now, bool tolerateUnreadableRuns = false)
     {
         var entries = new List<PendingEntry>();
-        foreach (var run in ReadRuns())
+        foreach (var run in tolerateUnreadableRuns ? ReadRunsForRecovery() : ReadRuns())
             for (var order = 0; order < run.Executions.Length; order++)
                 if (CreatePendingEntry(run, run.Executions[order], order) is { } entry) entries.Add(entry);
         return new PendingIndex { Version = PendingIndexVersion, RebuiltAtUtc = now, Entries = entries.ToArray() };

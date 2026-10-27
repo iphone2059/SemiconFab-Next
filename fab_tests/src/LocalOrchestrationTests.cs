@@ -1,5 +1,6 @@
 using Fab.Contracts;
 using System.Diagnostics;
+using System.Text.Json.Nodes;
 using Fab.Orchestration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -44,7 +45,7 @@ public sealed class LocalOrchestrationTests : IDisposable
         var original = store.Submit(Request(), "operator", "key");
         store.Complete(store.TryClaim("worker")!, Result());
         Assert.Equal("COMPLETED", store.Get(Guid.Parse(original.RunId))!.Status);
-        if (missingIndex) File.Delete(Path.Combine(directory, "idempotency-index.json"));
+        if (missingIndex) Directory.Delete(Path.Combine(directory, "idempotency"), recursive: true);
         var replay = new FileRunStore(directory).Submit(Request(), "operator", "key");
         Assert.Equal(System.Text.Json.JsonSerializer.Serialize(original), System.Text.Json.JsonSerializer.Serialize(replay));
     }
@@ -209,7 +210,7 @@ public sealed class LocalOrchestrationTests : IDisposable
     {
         var store = new FileRunStore(directory);
         var run = store.Submit(Request(), "operator", "key");
-        File.Delete(Path.Combine(directory, "idempotency-index.json"));
+        Directory.Delete(Path.Combine(directory, "idempotency"), recursive: true);
         Assert.Equal(run.RunId, new FileRunStore(directory).Submit(Request(), "operator", "key").RunId);
         store.Complete(store.TryClaim("worker")!, Result());
         File.WriteAllText(Assert.Single(Directory.GetFiles(Path.Combine(directory, "results"), "*.json")), "{}");
@@ -393,6 +394,169 @@ public sealed class LocalOrchestrationTests : IDisposable
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.WaitForWorkAsync(TimeSpan.FromSeconds(10), cancellation.Token));
     }
+
+    [Fact]
+    public void RecoverIndexes_restores_a_run_missing_from_the_pending_index()
+    {
+        var store = new FileRunStore(directory);
+        store.Submit(Request(), "operator", "first");
+        store.Complete(store.TryClaim("worker")!, Result());
+        var pendingPath = Path.Combine(directory, "pending-index.json");
+        var emptyIndex = File.ReadAllBytes(pendingPath);
+        var second = store.Submit(Request() with { Scenario = Request().Scenario with { MasterSeed = "43" } }, "operator", "second");
+        // Simulate a crash between Save(run) and the pending-index write: the Run file exists, the index omits it.
+        File.WriteAllBytes(pendingPath, emptyIndex);
+        var restarted = new FileRunStore(directory);
+        Assert.Null(restarted.TryClaim("worker"));
+        restarted.RecoverIndexes();
+        var recovered = restarted.TryClaim("worker");
+        Assert.Equal(second.RunId, recovered!.RunId.ToString("D"));
+    }
+
+    [Fact]
+    public void Submit_new_key_does_not_scan_completed_history()
+    {
+        var store = new FileRunStore(directory);
+        var first = store.Submit(Request(), "operator", "first");
+        store.Complete(store.TryClaim("worker")!, Result());
+        var runPath = Path.Combine(directory, "runs", Guid.Parse(first.RunId).ToString("N") + ".json");
+        var original = File.ReadAllBytes(runPath);
+        File.WriteAllText(runPath, "{not valid json");
+        try
+        {
+            // The former per-new-key ReadRuns() repair would throw on this corrupt, unrelated Run.
+            var second = store.Submit(Request(), "operator", "second");
+            Assert.NotEqual(first.RunId, second.RunId);
+        }
+        finally
+        {
+            File.WriteAllBytes(runPath, original);
+        }
+    }
+
+    [Fact]
+    public void Idempotency_replay_recovers_after_lost_index_with_corrupt_unrelated_run()
+    {
+        var store = new FileRunStore(directory);
+        var original = store.Submit(Request(), "operator", "key");
+        var unrelated = store.Submit(Request() with { Scenario = Request().Scenario with { MasterSeed = "43" } }, "operator", "unrelated");
+        store.Complete(store.TryClaim("worker")!, Result());
+        File.WriteAllText(Path.Combine(directory, "runs", Guid.Parse(unrelated.RunId).ToString("N") + ".json"), "{not valid json");
+        Directory.Delete(Path.Combine(directory, "idempotency"), recursive: true);
+        // One-time reconciliation must recover the surviving Run instead of failing on the corrupt record.
+        var replay = new FileRunStore(directory).Submit(Request(), "operator", "key");
+        Assert.Equal(original.RunId, replay.RunId);
+    }
+
+    [Fact]
+    public void RecoverIndexes_repairs_both_indexes_from_run_records()
+    {
+        var store = new FileRunStore(directory);
+        var run = store.Submit(Request(), "operator", "key");
+        var missingRunId = Guid.NewGuid();
+        var pendingPath = Path.Combine(directory, "pending-index.json");
+        var pending = JsonNode.Parse(File.ReadAllText(pendingPath))!.AsObject();
+        pending["entries"]!.AsArray().Add(new JsonObject
+        {
+            ["runId"] = missingRunId.ToString("D"),
+            ["fabId"] = FabId,
+            ["order"] = 0,
+            ["createdAtUtc"] = "2026-01-01T00:00:00+00:00",
+            ["status"] = "QUEUED",
+            ["expiresAtUtc"] = "2026-01-01T00:00:00+00:00"
+        });
+        File.WriteAllText(pendingPath, pending.ToJsonString());
+        var idempotencyDirectory = Path.Combine(directory, "idempotency");
+        var realShard = Path.GetFileNameWithoutExtension(Assert.Single(Directory.GetFiles(idempotencyDirectory, "*.json")));
+        var staleShardPath = Path.Combine(idempotencyDirectory, (realShard == "00" ? "01" : "00") + ".json");
+        File.WriteAllText(staleShardPath, "{\"FAKE-SCOPE\":{\"runId\":\"" + missingRunId.ToString("D") + "\",\"requestHash\":\"fake\"}}");
+        var legacyPath = Path.Combine(directory, "idempotency-index.json");
+        File.WriteAllText(legacyPath, "{\"LEGACY-FAKE\":{\"runId\":\"" + missingRunId.ToString("D") + "\",\"requestHash\":\"fake\"}}");
+
+        store.RecoverIndexes();
+
+        var pendingText = File.ReadAllText(pendingPath);
+        Assert.Contains(run.RunId, pendingText);
+        Assert.DoesNotContain(missingRunId.ToString("D"), pendingText);
+        Assert.False(File.Exists(staleShardPath));
+        Assert.False(File.Exists(legacyPath));
+        var shardText = string.Concat(Directory.GetFiles(idempotencyDirectory, "*.json").Select(File.ReadAllText));
+        Assert.DoesNotContain(missingRunId.ToString("D"), shardText);
+        Assert.DoesNotContain("FAKE-SCOPE", shardText);
+        Assert.Equal(run.RunId, store.Submit(Request(), "operator", "key").RunId);
+
+        // A claimed execution survives recovery as RUNNING with its lease expiry, so nobody can steal it.
+        var lease = store.TryClaim("worker")!;
+        store.RecoverIndexes();
+        Assert.Contains(lease.RunId.ToString("D"), File.ReadAllText(pendingPath));
+        Assert.Null(new FileRunStore(directory).TryClaim("competitor"));
+    }
+
+    [Fact]
+    public void Submit_writes_an_idempotency_shard_and_no_legacy_global_index()
+    {
+        var store = new FileRunStore(directory);
+        var run = store.Submit(Request(), "operator", "key");
+        Assert.False(File.Exists(Path.Combine(directory, "idempotency-index.json")));
+        var shardPath = Assert.Single(Directory.GetFiles(Path.Combine(directory, "idempotency"), "*.json"));
+        var prefix = Path.GetFileNameWithoutExtension(shardPath);
+        Assert.Equal(2, prefix.Length);
+        Assert.All(prefix, value => Assert.True(Uri.IsHexDigit(value)));
+        Assert.Contains(run.RunId, File.ReadAllText(shardPath));
+    }
+
+    [Fact]
+    public void Sharded_index_preserves_replay_and_conflict_across_restart()
+    {
+        var original = new FileRunStore(directory).Submit(Request(), "operator", "key");
+        var restarted = new FileRunStore(directory);
+        Assert.Equal(original.RunId, restarted.Submit(Request(), "operator", "key").RunId);
+        var changed = Request() with { Scenario = Request().Scenario with { MasterSeed = "43" } };
+        Assert.Throws<IdempotencyConflictException>(() => restarted.Submit(changed, "operator", "key"));
+        Assert.Throws<IdempotencyConflictException>(() => new FileRunStore(directory).Submit(changed, "operator", "key"));
+        Assert.Equal(original.RunId, new FileRunStore(directory).Submit(Request(), "operator", "key").RunId);
+    }
+
+    [Fact]
+    public void Lost_idempotency_shards_are_rebuilt_by_next_submit_or_recovery()
+    {
+        var store = new FileRunStore(directory);
+        var run = store.Submit(Request(), "operator", "key");
+        var shardPath = Assert.Single(Directory.GetFiles(Path.Combine(directory, "idempotency"), "*.json"));
+        File.Delete(shardPath);
+        // The same instance saw this shard before, so it rebuilds from Run records before deciding replay.
+        Assert.Equal(run.RunId, store.Submit(Request(), "operator", "key").RunId);
+        Assert.True(File.Exists(shardPath));
+
+        var idempotencyDirectory = Path.Combine(directory, "idempotency");
+        Directory.Delete(idempotencyDirectory, recursive: true);
+        var restarted = new FileRunStore(directory);
+        restarted.RecoverIndexes();
+        Assert.Equal(run.RunId, restarted.Submit(Request(), "operator", "key").RunId);
+        Assert.Equal(run.RunId, new FileRunStore(directory).Submit(Request(), "operator", "key").RunId);
+    }
+
+    [Fact]
+    public void Legacy_global_index_is_rebuilt_from_runs_and_removed()
+    {
+        var store = new FileRunStore(directory);
+        var original = store.Submit(Request(), "operator", "key");
+        var shardPath = Assert.Single(Directory.GetFiles(Path.Combine(directory, "idempotency"), "*.json"));
+        // The legacy global index has the same scope -> entry shape as a single shard.
+        var legacyBytes = File.ReadAllBytes(shardPath);
+        Directory.Delete(Path.Combine(directory, "idempotency"), recursive: true);
+        var legacyPath = Path.Combine(directory, "idempotency-index.json");
+        File.WriteAllBytes(legacyPath, legacyBytes);
+        var migrated = new FileRunStore(directory);
+        migrated.RecoverIndexes();
+        Assert.False(File.Exists(legacyPath));
+        Assert.True(File.Exists(shardPath));
+        var changed = Request() with { Scenario = Request().Scenario with { MasterSeed = "43" } };
+        Assert.Throws<IdempotencyConflictException>(() => migrated.Submit(changed, "operator", "key"));
+        Assert.Equal(original.RunId, migrated.Submit(Request(), "operator", "key").RunId);
+        Assert.Equal(original.RunId, new FileRunStore(directory).Submit(Request(), "operator", "key").RunId);
+    }
+
 
     private async Task<string> RunProcess(string operation)
     {

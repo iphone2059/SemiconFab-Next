@@ -14,6 +14,9 @@ public sealed class SimulationWorker(FileRunStore store, ISimulationExecutionPor
     public override Task StartAsync(CancellationToken cancellationToken)
     {
         EnsureDevelopment();
+        // Repair any index write lost to a crash between publishing a Run and publishing an index
+        // before the worker starts claiming, instead of waiting for a fallback repair interval.
+        store.RecoverIndexes();
         return base.StartAsync(cancellationToken);
     }
 
