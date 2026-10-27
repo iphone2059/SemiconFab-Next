@@ -5,7 +5,7 @@ vi.hoisted(() => Object.assign(globalThis, {
 }));
 import {
   createSceneContext, disposeScene, getPbrEmissiveColor,
-  type EngineContext, type PbrMaterialProps,
+  type EngineContext, type Mesh, type PbrMaterialProps,
 } from '@babylonjs/lite';
 import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from '../src/fab-layout';
 import { createLiteEquipment, type LiteEquipment } from '../src/rendering/lite/geometry/tool-families';
@@ -54,6 +54,19 @@ function emissiveScale(index: number) {
 function expectColor(actual: readonly number[], expected: readonly number[], alpha: number) {
   expected.forEach((value, axis) => expect(actual[axis], 'channel ' + axis).toBeCloseTo(value, 6));
   expect(actual[3], 'emissive scale').toBeCloseTo(alpha, 6);
+}
+/** @internal color GPU-sync bookkeeping that the public ThinInstanceData type does not expose. */
+type ColorInternals = { count: number; _version: number; _colorVersion: number; _colorDirtyMin: number; _colorDirtyMax: number };
+function internals(mesh: Mesh): ColorInternals {
+  const data = mesh.thinInstances;
+  if (!data) throw new Error(`mesh "${mesh.name}" is not thin-instanced`);
+  return data as unknown as ColorInternals;
+}
+function beaconMeshes(equipment: LiteEquipment): Mesh[] {
+  return [...new Set(equipment.tools.map((_, index) => beacon(equipment, index).mesh))];
+}
+function allColors(equipment: LiteEquipment): [number, number, number, number][] {
+  return equipment.tools.map((_, index) => colorOf(equipment, index));
 }
 
 it('maps all 121 layout identities onto two beacon batches and applies the frozen source colors', () => {
@@ -246,4 +259,81 @@ it('restores the equipment material when disposed and ignores later state calls'
     states.prepareForDeviceRecovery();
     states.dispose();
   } finally { harnessed.dispose(); }
+});
+
+it('pulses exactly the down lamps and leaves every other lamp untouched', () => {
+  const harnessed = harness();
+  const states = createLiteToolStates(harnessed.scene, harnessed.engine, harnessed.equipment);
+  try {
+    const down = FAB_TOOL_STATES.map((state, index) => state === 'down' ? index : -1).filter(index => index >= 0);
+    const snapshot = allColors(harnessed.equipment);
+    states.update(16, 180 * Math.PI * 1.5);
+    for (let index = 0; index < snapshot.length; index++) {
+      if (down.includes(index)) {
+        expectColor(colorOf(harnessed.equipment, index), STATE_COLORS.down, .2);
+        continue;
+      }
+      expect(colorOf(harnessed.equipment, index), 'tool ' + index).toEqual(snapshot[index]);
+    }
+  } finally { states.dispose(); harnessed.dispose(); }
+});
+
+it('keeps a dense down index across setToolState, applyAll, recovery and the no-down fast path', () => {
+  const harnessed = harness();
+  const states = createLiteToolStates(harnessed.scene, harnessed.engine, harnessed.equipment);
+  try {
+    const meshes = beaconMeshes(harnessed.equipment);
+    const versions = () => meshes.map(mesh => internals(mesh)._version);
+    const writesFor = (indices: readonly number[]) => meshes.map(mesh => indices.filter(index =>
+      beacon(harnessed.equipment, index).mesh === mesh).length);
+    const initialDown = FAB_TOOL_STATES.map((state, index) => state === 'down' ? index : -1).filter(index => index >= 0);
+    expect(initialDown.length).toBeGreaterThan(0);
+
+    // Initialization indexes every initially down tool: exactly one lamp write per down tool.
+    const start = versions();
+    states.update(16, 180 * Math.PI / 2);
+    expect(versions().map((version, index) => version - start[index])).toEqual(writesFor(initialDown));
+
+    // Clearing a down tool drops exactly that lamp from the pulse index.
+    const cleared = initialDown[0];
+    states.setToolState(cleared, 'running');
+    expectColor(colorOf(harnessed.equipment, cleared), STATE_COLORS.running, emissiveScale(cleared));
+    const remainingDown = initialDown.slice(1);
+    const beforeClear = versions();
+    states.update(16, 180 * Math.PI * 1.5);
+    expect(versions().map((version, index) => version - beforeClear[index])).toEqual(writesFor(remainingDown));
+
+    // No down lamp at all: the update fast path must bump no version and touch no color.
+    states.applyAll([...FAB_TOOL_STATES].map(() => 'running'));
+    const allRunningVersions = versions();
+    const allRunningColors = allColors(harnessed.equipment);
+    states.update(16, 180 * Math.PI * 2);
+    expect(versions()).toEqual(allRunningVersions);
+    expect(allColors(harnessed.equipment)).toEqual(allRunningColors);
+
+    // Re-setting down on one tool does not duplicate its dense index entry.
+    states.setToolState(5, 'down');
+    states.setToolState(5, 'down');
+    const beforeDuplicate = versions();
+    states.update(16, 0);
+    expectColor(colorOf(harnessed.equipment, 5), STATE_COLORS.down, .6);
+    expect(versions().map((version, index) => version - beforeDuplicate[index])).toEqual(writesFor([5]));
+
+    // applyAll only owns its prefix; down tools beyond it stay indexed and keep pulsing.
+    states.setToolState(120, 'down');
+    states.applyAll([...FAB_TOOL_STATES].slice(0, 3).map(() => 'running'));
+    const beforePrefix = versions();
+    states.update(16, Math.PI * 180);
+    expectColor(colorOf(harnessed.equipment, 5), STATE_COLORS.down, .6);
+    expectColor(colorOf(harnessed.equipment, 120), STATE_COLORS.down, .6);
+    expect(versions().map((version, index) => version - beforePrefix[index])).toEqual(writesFor([5, 120]));
+
+    // Device recovery keeps the index: the next frame pulses the same two lamps.
+    states.prepareForDeviceRecovery();
+    const beforeRecovery = versions();
+    states.update(16, 180 * Math.PI * 1.5);
+    expectColor(colorOf(harnessed.equipment, 5), STATE_COLORS.down, .2);
+    expectColor(colorOf(harnessed.equipment, 120), STATE_COLORS.down, .2);
+    expect(versions().map((version, index) => version - beforeRecovery[index])).toEqual(writesFor([5, 120]));
+  } finally { states.dispose(); harnessed.dispose(); }
 });

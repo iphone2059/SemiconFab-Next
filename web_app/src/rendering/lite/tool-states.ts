@@ -116,8 +116,18 @@ export function createLiteToolStates(_scene: SceneContext, _engine: EngineContex
   }
 
   const states: FabToolState[] = [...FAB_TOOL_STATES];
+  /** Dense list of tool indices currently `down`; update() pulses only these lamps. */
+  const downIndices: number[] = [];
   let lastNowMs = 0;
   let disposed = false;
+
+  function trackDown(index: number, previous: FabToolState, next: FabToolState): void {
+    if (previous === next) return;
+    if (next === 'down') { downIndices.push(index); return; }
+    if (previous !== 'down') return;
+    const at = downIndices.indexOf(index);
+    if (at >= 0) downIndices.splice(at, 1);
+  }
 
   function writeColor(index: number, state: FabToolState, pulseNow = lastNowMs): void {
     const target = targets[index];
@@ -141,11 +151,15 @@ export function createLiteToolStates(_scene: SceneContext, _engine: EngineContex
     return Number.isInteger(index) && index >= 0 && index < states.length
       && Object.prototype.hasOwnProperty.call(FAB_TOOL_STATE_META, state);
   }
-  for (let index = 0; index < states.length; index++) writeColor(index, states[index], 0);
+  for (let index = 0; index < states.length; index++) {
+    if (states[index] === 'down') downIndices.push(index);
+    writeColor(index, states[index], 0);
+  }
 
   return {
     setToolState(index, state) {
       if (disposed || !valid(index, state)) return;
+      trackDown(index, states[index], state);
       states[index] = state;
       writeColor(index, state);
     },
@@ -154,6 +168,7 @@ export function createLiteToolStates(_scene: SceneContext, _engine: EngineContex
       const count = Math.min(next.length, states.length);
       for (let index = 0; index < count; index++) {
         if (!valid(index, next[index])) continue;
+        trackDown(index, states[index], next[index]);
         states[index] = next[index];
       }
       for (const batch of batches.values()) rebuildBatch(batch, lastNowMs);
@@ -162,9 +177,10 @@ export function createLiteToolStates(_scene: SceneContext, _engine: EngineContex
       if (disposed || !Number.isFinite(nowMs)) return;
       // The source clock is absolute (performance.now), not accumulated deltas.
       lastNowMs = nowMs;
+      // Fast path: no tool is down, so no emissive pulse can change this frame.
+      if (downIndices.length === 0) return;
       const pulse = downPulse(nowMs);
-      for (let index = 0; index < states.length; index++) {
-        if (states[index] !== 'down') continue;
+      for (const index of downIndices) {
         const target = targets[index];
         if (!target) continue;
         const color = STATE_COLORS.down;
@@ -200,6 +216,7 @@ export function createLiteToolStates(_scene: SceneContext, _engine: EngineContex
         }
       }
       batches.clear();
+      downIndices.length = 0;
     },
   };
 }

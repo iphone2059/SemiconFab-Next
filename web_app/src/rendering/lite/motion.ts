@@ -2,7 +2,8 @@ import {
   addToScene, createBox, createCylinder, createDisc, createDynamicTexture, createGround,
   createSphere, createStandardMaterial, createTransformNode, createTube,
   enableThinInstanceWorldBounds, markMaterialUboDirty, onSceneDispose, releaseTexture,
-  setParent, setStandardOpacityTexture, setThinInstanceCount, setThinInstances, updateDynamicTexture,
+  setParent, setStandardOpacityTexture, setThinInstanceCount, setThinInstanceMatrix, setThinInstances,
+  updateDynamicTexture,
   type DynamicTexture2D, type EngineContext, type Mesh, type PointLight, type SceneContext,
   type StandardMaterialProps, type TransformNode,
 } from '@babylonjs/lite';
@@ -15,7 +16,13 @@ type Triple = readonly [number, number, number];
 type Point = { x: number; y: number; z: number };
 type Arc = { positions: Point[]; cumulative: number[]; total: number };
 export interface LiteMotionPart { name: string; mesh: Mesh; node: TransformNode; instanceIndex: number }
-type Pool = { mesh: Mesh; members: { part: LiteMotionPart; enabled: () => boolean }[]; matrices: Float32Array };
+type Pool = {
+  mesh: Mesh; members: { part: LiteMotionPart; enabled: () => boolean }[]; matrices: Float32Array;
+  /** Enabled flag per member cached by the current projection (single enabled() evaluation per frame). */
+  flags: Uint8Array;
+  /** Enabled count projected last frame; -1 forces the initial full order/count upload. */
+  lastCount: number;
+};
 const rgb = (hex: number): [number, number, number] => [(hex >>> 16 & 255) / 255, (hex >>> 8 & 255) / 255, (hex & 255) / 255];
 const scaleRgb = (hex: number, intensity: number): [number, number, number] => rgb(hex).map(c => c * intensity) as [number, number, number];
 
@@ -87,7 +94,7 @@ export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
     let pool = pools.get(key);
     if (!pool) {
       const mesh = own(build(), 'motion-batch-' + key, mat, amhsRoot);
-      pool = { mesh, members: [], matrices: new Float32Array(0) }; pools.set(key, pool);
+      pool = { mesh, members: [], matrices: new Float32Array(0), flags: new Uint8Array(0), lastCount: -1 }; pools.set(key, pool);
     }
     // CPU pose nodes live in a root-relative RH frame. The only render nodes are the native batches.
     // This avoids baking the composition root's reflection/explode transform into instance matrices twice.
@@ -154,7 +161,7 @@ export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
             const key = `${kind}-${tint.hex}-${intensity}`;
             let pool = pools.get(key);
             if (!pool) { pool = { mesh: own(build(), 'motion-batch-' + key, tint[intensity], amhsRoot),
-              members: [], matrices: new Float32Array(0) }; pools.set(key, pool); }
+              members: [], matrices: new Float32Array(0), flags: new Uint8Array(0), lastCount: -1 }; pools.set(key, pool); }
             sourcePart ??= { name: `native-oht-${kind}-${suffix}`, node: pose, mesh: pool.mesh, instanceIndex: 0 };
             pool.members.push({ part: sourcePart, enabled: () => vehicle.ledHex === tint.hex
               && (ledChanged[id] ? intensity === 'active' : intensity === 'initial') });
@@ -218,7 +225,10 @@ export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
       actors.push({ root: actor, leftLeg, rightLeg, leftArm, rightArm, screen: actorScreen });
     });
     for (const pool of pools.values()) {
+      // Pre-size each batch once: capacity stays at the full member count so later projections
+      // only adjust the active draw count and upload the instances that actually moved.
       pool.matrices = new Float32Array(pool.members.length * 16);
+      pool.flags = new Uint8Array(pool.members.length);
       setThinInstances(pool.mesh, pool.matrices, pool.members.length); enableThinInstanceWorldBounds(pool.mesh);
     }
     project();
@@ -240,13 +250,49 @@ export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
       for (const cable of car.cables) { cable.scaling.y = vehicle.cableScaleY; cable.position.y = vehicle.cableY - 5.8; }
     }
     for (const pool of pools.values()) {
+      // Evaluate each enabled() closure once per frame and cache it for the projection pass.
+      const members = pool.members, flags = pool.flags;
       let count = 0;
-      for (const member of pool.members) {
-        if (!member.enabled()) continue;
-        member.part.mesh = pool.mesh; member.part.instanceIndex = count;
-        pool.matrices.set(member.part.node.worldMatrix, count++ * 16);
+      for (let index = 0; index < members.length; index++) {
+        const enabled = members[index].enabled();
+        flags[index] = enabled ? 1 : 0;
+        if (enabled) count++;
       }
-      setThinInstanceCount(pool.mesh, count);
+      if (count !== pool.lastCount) {
+        // Population change: rewrite the enabled prefix in order and publish the new draw count.
+        // setThinInstanceCount marks [0,count) dirty, which is exactly the rewritten range.
+        let slot = 0;
+        for (let index = 0; index < members.length; index++) {
+          if (!flags[index]) continue;
+          const member = members[index];
+          member.part.mesh = pool.mesh; member.part.instanceIndex = slot;
+          pool.matrices.set(member.part.node.worldMatrix, slot++ * 16);
+        }
+        setThinInstanceCount(pool.mesh, count);
+        pool.lastCount = count;
+        continue;
+      }
+      if (count === 0) continue; // stable empty pool: nothing to compare or upload
+      // Stable population: upload only the instance slots whose world matrix changed. Identical
+      // frames bump no version and upload no data at all.
+      let slot = 0;
+      const matrices = pool.matrices;
+      for (let index = 0; index < members.length; index++) {
+        if (!flags[index]) continue;
+        const member = members[index];
+        member.part.mesh = pool.mesh; member.part.instanceIndex = slot;
+        const matrix = member.part.node.worldMatrix, offset = slot * 16;
+        // Translation is the last matrix column; moving instances differ there first, so probe it
+        // before the rotation lanes to keep unchanged-slot detection cheap.
+        let changed = matrices[offset + 12] !== matrix[12] || matrices[offset + 13] !== matrix[13]
+          || matrices[offset + 14] !== matrix[14] || matrices[offset + 15] !== matrix[15];
+        if (!changed) for (let lane = 0; lane < 12; lane++) {
+          if (matrices[offset + lane] === matrix[lane]) continue;
+          changed = true; break;
+        }
+        if (changed) setThinInstanceMatrix(pool.mesh, slot, matrix);
+        slot++;
+      }
     }
     actors.forEach((actor, i) => {
       const pose = frame.actors[i]; actor.root.position.set(pose.x, pose.y, pose.z); actor.root.rotation.y = pose.rotY;
@@ -290,9 +336,10 @@ export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
     prepareForDeviceRecovery() {
       if (disposed) return;
       for (const pool of pools.values()) {
-        const count = pool.mesh.thinInstances!.count;
+        // Rebuild the capacity-sized device state from the retained CPU matrices, then restore the
+        // active draw count exactly as the last projection left it.
         pool.mesh.thinInstances = null;
-        setThinInstances(pool.mesh, pool.matrices, pool.members.length); setThinInstanceCount(pool.mesh, count);
+        setThinInstances(pool.mesh, pool.matrices, pool.members.length); setThinInstanceCount(pool.mesh, pool.lastCount);
       }
     },
     dispose,

@@ -28,6 +28,22 @@ function dimensions(mesh: Mesh) {
   });
 }
 
+/** @internal GPU-sync bookkeeping that the public ThinInstanceData type does not expose. */
+type ThinInstanceInternals = {
+  matrices: Float32Array | Float64Array; count: number; _capacity: number;
+  _version: number; _dirtyMin: number; _dirtyMax: number;
+};
+function internals(mesh: Mesh): ThinInstanceInternals {
+  const data = mesh.thinInstances;
+  if (!data) throw new Error(`mesh "${mesh.name}" is not thin-instanced`);
+  return data as unknown as ThinInstanceInternals;
+}
+function poolMesh(model: ReturnType<typeof createLiteMotion>, name: string): Mesh {
+  const mesh = model.meshes.find(candidate => candidate.name === name);
+  if (!mesh) throw new Error(`missing thin-instance pool "${name}"`);
+  return mesh;
+}
+
 it('retains all source AMHS parts and exact source geometry measurements with native batching', () => {
   const h = harness();
   try {
@@ -231,5 +247,134 @@ it('retains root-relative instance transforms under reflection, recovery, langua
     expect(h.model.readSnapshot()).toEqual(before);
     h.model.dispose(); h.model.dispose(); h.model.update(16, 32);
     expect(h.model.readSnapshot()).toEqual(before);
+  } finally { h.dispose(); }
+});
+
+it('keeps a static thin-instance pool version and dirty window untouched across repeated projections', () => {
+  const h = harness();
+  try {
+    h.model.update(16, 16);
+    const support = poolMesh(h.model, 'motion-batch-support');
+    const data = internals(support);
+    expect(data.count).toBe(44);
+    expect(data._capacity).toBe(44);
+    const version = data._version, dirtyMin = data._dirtyMin, dirtyMax = data._dirtyMax;
+    const matrices = Array.from(data.matrices);
+    for (let tick = 2; tick <= 12; tick++) h.model.update(16, tick * 16);
+    expect(internals(support)._version).toBe(version);
+    expect(internals(support)._dirtyMin).toBe(dirtyMin);
+    expect(internals(support)._dirtyMax).toBe(dirtyMax);
+    expect(Array.from(internals(support).matrices)).toEqual(matrices);
+  } finally { h.dispose(); }
+});
+
+it('uploads only the changed instance slots while a pool population is stable', () => {
+  const h = harness();
+  try {
+    // Warm up into live traffic so the LED colour pools hold partial populations.
+    for (let tick = 1; tick <= 160; tick++) h.model.update(1000 / 60, tick * 1000 / 60);
+    const meshes = h.model.meshes.filter(mesh => mesh.thinInstances);
+    let stableFrames = 0, partialWrites = 0;
+    for (let tick = 161; tick <= 200; tick++) {
+      const snapshots = meshes.map(mesh => {
+        const data = internals(mesh);
+        return { mesh, data, count: data.count, version: data._version, matrices: Array.from(data.matrices) };
+      });
+      // Match the render system, which resets the dirty window to [count, 0) after a GPU sync.
+      for (const snapshot of snapshots) { snapshot.data._dirtyMin = snapshot.count; snapshot.data._dirtyMax = 0; }
+      h.model.update(1000 / 60, tick * 1000 / 60);
+      for (const snapshot of snapshots) {
+        const { data } = snapshot;
+        if (data.count !== snapshot.count) continue; // population changes re-upload the whole active range (next test)
+        let changed = 0, dirtyMin = data.count, dirtyMax = 0;
+        for (let slot = 0; slot < data.count; slot++) {
+          const offset = slot * 16;
+          for (let lane = 0; lane < 16; lane++) {
+            if (snapshot.matrices[offset + lane] === data.matrices[offset + lane]) continue;
+            changed += 1; dirtyMin = Math.min(dirtyMin, slot); dirtyMax = Math.max(dirtyMax, slot + 1); break;
+          }
+        }
+        stableFrames += 1;
+        // One setThinInstanceMatrix bump per changed slot, and no bump at all for identical frames.
+        expect(data._version - snapshot.version, snapshot.mesh.name).toBe(changed);
+        expect(data._dirtyMin, snapshot.mesh.name).toBe(changed ? dirtyMin : data.count);
+        expect(data._dirtyMax, snapshot.mesh.name).toBe(dirtyMax);
+        if (changed > 0 && data.count < data._capacity) {
+          partialWrites += 1;
+          // A partial pool never marks the whole capacity dirty for its active instances.
+          expect(dirtyMax, snapshot.mesh.name).toBeLessThanOrEqual(data.count);
+        }
+      }
+    }
+    expect(stableFrames).toBeGreaterThan(0);
+    expect(partialWrites).toBeGreaterThan(0);
+  } finally { h.dispose(); }
+});
+
+it('keeps the full active-range upload on frames where a pool population changes', () => {
+  const h = harness();
+  try {
+    const meshes = h.model.meshes.filter(mesh => mesh.thinInstances);
+    let observed = false;
+    for (let tick = 1; tick <= 400 && !observed; tick++) {
+      const snapshots = meshes.map(mesh => {
+        const data = internals(mesh);
+        return { data, count: data.count, version: data._version };
+      });
+      for (const snapshot of snapshots) { snapshot.data._dirtyMin = snapshot.count; snapshot.data._dirtyMax = 0; }
+      h.model.update(1000 / 60, tick * 1000 / 60);
+      for (const snapshot of snapshots) {
+        if (snapshot.data.count === snapshot.count) continue;
+        expect(snapshot.data._version).toBeGreaterThan(snapshot.version);
+        expect(snapshot.data._dirtyMin).toBe(0);
+        expect(snapshot.data._dirtyMax).toBe(snapshot.data.count);
+        observed = true;
+      }
+    }
+    expect(observed).toBe(true);
+  } finally { h.dispose(); }
+});
+
+it('keeps the rendered instance order, count and world matrices identical to the pose nodes', () => {
+  const h = harness();
+  try {
+    for (let tick = 1; tick <= 30; tick++) h.model.update(16, tick * 16);
+    const body = poolMesh(h.model, 'motion-batch-body');
+    const data = internals(body);
+    const poses = h.model.readVehiclePositions();
+    expect(data.count).toBe(poses.length);
+    const members = h.model.parts.filter(part => part.mesh === body)
+      .sort((left, right) => left.instanceIndex - right.instanceIndex);
+    expect(members).toHaveLength(data.count);
+    members.forEach((part, slot) => {
+      expect(part.instanceIndex).toBe(slot);
+      const matrix = part.node.worldMatrix;
+      for (let lane = 0; lane < 16; lane++) expect(data.matrices[slot * 16 + lane]).toBe(matrix[lane]);
+      for (let axis = 0; axis < 3; axis++) expect(matrix[12 + axis]).toBeCloseTo(poses[slot].position[axis], 5);
+    });
+  } finally { h.dispose(); }
+});
+
+it('restores the capacity buffer and active count after device recovery', () => {
+  const h = harness();
+  try {
+    h.model.update(16, 16);
+    const before = h.model.meshes.filter(mesh => mesh.thinInstances).map(mesh => {
+      const data = internals(mesh);
+      return { mesh, count: data.count, capacity: data._capacity, matrices: Array.from(data.matrices) };
+    });
+    h.model.prepareForDeviceRecovery();
+    for (const snapshot of before) {
+      const data = internals(snapshot.mesh);
+      expect(data._capacity, snapshot.mesh.name).toBe(snapshot.capacity);
+      expect(data.count, snapshot.mesh.name).toBe(snapshot.count);
+      expect(Array.from(data.matrices), snapshot.mesh.name).toEqual(snapshot.matrices);
+    }
+    const support = poolMesh(h.model, 'motion-batch-support');
+    expect(internals(support)._capacity).toBe(44);
+    // The rebuilt draw count matches the last projection, so the static pool stays quiet afterwards.
+    const version = internals(support)._version;
+    h.model.update(16, 32);
+    expect(internals(support)._version).toBe(version);
   } finally { h.dispose(); }
 });
