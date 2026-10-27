@@ -1,0 +1,119 @@
+{
+  "review": "V2.1 architecture review follow-up P1/P2 fixes",
+  "sourceCommit": "fea96ecf0782d4a3aec4c1d19bdb0fff64852c6e",
+  "verifiedAt": "2026-10-27T11:57:00+08:00",
+  "environment": {
+    "os": "Windows",
+    "browser": "Chrome/155.0.8059.86 (headless, localhost secure context)",
+    "backend": ".NET 11 Release"
+  },
+  "automatedVerification": {
+    "command": "./scripts/verify.ps1",
+    "exitCode": 0,
+    "frontend": {
+      "typecheck": "tsc --noEmit exit 0",
+      "tests": {
+        "files": 69,
+        "passed": 314,
+        "failed": 0
+      },
+      "build": "vite build exit 0 (1799 modules)"
+    },
+    "backend": {
+      "passed": 139,
+      "failed": 0,
+      "total": 139
+    },
+    "pythonToolTests": {
+      "passed": 8,
+      "failed": 0
+    },
+    "contractsArchitecture": "PASS"
+  },
+  "browserEvidence": {
+    "commandE2E": {
+      "route": "http://127.0.0.1:5173/ (Workbench)",
+      "multiFab": 3,
+      "transition": [
+        "accepted",
+        "executing",
+        "succeeded"
+      ],
+      "workerTargets": 3,
+      "idempotencyKey": "required and reused by CommandConsole"
+    },
+    "gpuSustained": {
+      "source": ".local/render-perf.json",
+      "url": "http://127.0.0.1:5173/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?perf=1",
+      "frames": 600,
+      "averageFrameMs": 11.56,
+      "p95FrameMs": 41.6,
+      "averageFps": 86.5,
+      "rendererFrames": 631,
+      "drawCalls": 903,
+      "workerTargets": 3,
+      "jsHeapUsedMb": 71.96,
+      "jsHeapDeltaMb": 14.36,
+      "taskDurationMs": 4786.83,
+      "scriptDurationMs": 4332.05,
+      "gpuErrors": [],
+      "failures": []
+    },
+    "workerStress": {
+      "source": ".local/telemetry-stress.json",
+      "url": "http://127.0.0.1:5173/tests/telemetry-stress.html?seconds=5&rate=60&entities=500,2000,5000",
+      "seconds": 5,
+      "rateHz": 60,
+      "results": [
+        {
+          "entities": 500,
+          "sent": 300,
+          "received": 300,
+          "receiveRatio": 1,
+          "averageLatencyMs": 0.34,
+          "p95LatencyMs": 0.6,
+          "maxLatencyMs": 1.1
+        },
+        {
+          "entities": 2000,
+          "sent": 300,
+          "received": 300,
+          "receiveRatio": 1,
+          "averageLatencyMs": 0.72,
+          "p95LatencyMs": 1.1,
+          "maxLatencyMs": 1.5
+        },
+        {
+          "entities": 5000,
+          "sent": 300,
+          "received": 300,
+          "receiveRatio": 1,
+          "averageLatencyMs": 1.17,
+          "p95LatencyMs": 2,
+          "maxLatencyMs": 21.4
+        }
+      ],
+      "failures": []
+    },
+    "cpuHeapBenchmark": {
+      "path": "web_app/tests/performance/telemetry-load.test.ts",
+      "entities": [
+        500,
+        2000,
+        5000
+      ],
+      "framesEach": 300,
+      "elapsedMsApprox": [
+        18.6,
+        60,
+        141.4
+      ],
+      "heapDeltaMbThreshold": 256
+    }
+  },
+  "knownBoundaries": [
+    "PostgreSQL/Outbox and production identity/authorization: not implemented; no database or IdP infrastructure in this repository. Current command store is in-memory with terminal TTL/capacity retention and a development authorization seam.",
+    "Production WebSocket transport and SharedArrayBuffer/COOP-COEP: not implemented; current product uses HTTP/SSE and postMessage workers.",
+    "GPU evidence is a single-machine headless Chrome baseline, not a production device matrix or long-run memory/thermal test."
+  ]
+}
