@@ -627,8 +627,8 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 - **后端传输**：`fab_app -- --realtime`（WebSocket）仍是占位；HTTP 命令 API + 命令 SSE、FAB 级遥测/设备状态 SSE 已实现并接入产品。WebSocket 生产传输可后续替换同契约。
 - **后端持久化**：命令/遥测状态仍为内存模拟（命令终态 TTL/容量已限制）；PostgreSQL/Outbox/生产身份未实现，缺少数据库与身份基础设施。
-- **Worker/遥测接线**：FAB 级 20Hz 遥测 SSE → 每 FAB 一个 TelemetryRuntime/Worker → FrameRingBuffer → 渲染 frame loop；3 FAB 浏览器实测 3 个 Worker；SharedArrayBuffer/COOP-COEP 未启用。
-- **GPU/浏览器性能门禁**：Chrome 155 headless WebGPU 持续门禁通过（600 采集帧，p95 41.6ms，86.5fps，rendererFrames 631，drawCalls 903，3 Worker，heap 71.96MB，gpuErrors []）；生产设备矩阵/显存/长任务仍待扩展。
+- **Worker/遥测接线**：FAB 级 20Hz 遥测 SSE → selected FAB 的 TelemetryRuntime/Worker → FrameRingBuffer → 渲染 frame loop；Worker 按需启动（3D 页面 1 个，Workbench 0 个）；SharedArrayBuffer/COOP-COEP 未启用。
+- **GPU/浏览器性能门禁**：Chrome 155 headless WebGPU 持续门禁通过（600 采集帧，p95 8.5ms，116.5fps，rendererFrames 631，drawCalls 903，1 个按需 Worker，heap 65.59MB，gpuErrors []）；生产设备矩阵/显存/长任务仍待扩展。
 - **目录收口**：`rendering/lite`、页面级 `features/{twin,catalog,workbench}`、共享 `components/` 已归位；旧顶层页面文件已删除。
 - **XState**：实现位于 `runtime/commands`，经 `CommandWorkflow` 契约暴露；位置不强制，升级实现需重跑 workflow/contract 测试。
 - **历史保留**：旧代码与旧迁移证据已从工作树删除，但保留在 Git 历史中；仓库只有一个 `main` 分支，无旧 URL 重定向。
@@ -698,7 +698,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 - FAB 级设备状态：`GET /api/v1/sites/{siteId}/fabs/{fabId}/equipment-status` 与 `/stream`，每 FAB 121 工具、独立序列；未知/不归属 FAB → 404。
 - FAB 级遥测：`GET /api/v1/sites/{siteId}/fabs/{fabId}/telemetry/stream`，20Hz，payload `fabId` 为请求 FAB；旧 site 级遥测删除。
 - 前端：`FabTelemetryRegistry` + `useFabTelemetry(fabId)`；RuntimeBootstrap 每 FAB 一个 TelemetryRuntime；Twin 按选中 FAB 读取遥测/设备状态；Workbench 三 FAB 卡片/选择器，Run 提交包含所有 site FAB。
-- 浏览器 e2e：`/api/v1/sites` 返回 3 FAB；Workbench 命令面板可提交；3D 路由每个 FAB；页面存在 3 个 Worker；命令 accepted→executing→succeeded。
+- 浏览器 e2e：`/api/v1/sites` 返回 3 FAB；Workbench 命令面板可提交；3D 路由按需启动选中 FAB 的 1 个 Worker；点击 3D FAB 与直接粘贴 URL 均可加载；命令 accepted→executing→succeeded。
 
 ### 27.2 P1 SSE 恢复与命令保留
 
@@ -711,11 +711,11 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 - 设备能力目录：`Fab:EquipmentCapabilities` 配置每 FAB equipment actions/preconditions，启动 fail-fast；默认 fallback equipment-0..120 + START/STOP/PAUSE 保持前端兼容；无效/未授权命令 400/404。
 - CPU/Worker 负载：`tests/performance/telemetry-load.test.ts` 压测 500/2000/5000 entities at 60Hz（300 frames）：约 18.6ms/60ms/141ms，heap delta < 256MB；覆盖 Worker handler + FrameRingBuffer 路径。
-- 真实 GPU：`tools/render_perf.mjs` 增加 `perf=1` 诊断桥，要求真实 renderer frames/drawCalls 且 gpuErrors 为空；最新持续运行 600 帧，p95 41.6ms，86.5fps，rendererFrames 631，drawCalls 903，3 Worker，gpuErrors []。
+- 真实 GPU：`tools/render_perf.mjs` 增加 `perf=1` 诊断桥，要求真实 renderer frames/drawCalls 且 gpuErrors 为空；最新持续运行 600 帧，p95 8.5ms，116.5fps，rendererFrames 631，drawCalls 903，1 个按需 Worker，gpuErrors []。
 
 ### 27.4 验证
 
-- 前端：tsc 0、Vitest **69 文件 / 314 测试 PASS**、vite build 0。
+- 前端：tsc 0、Vitest **69 文件 / 315 测试 PASS**、vite build 0。
 - 后端：**139/139 PASS**（85 + 54 新增/调整）。
 - `./scripts/verify.ps1` exit 0；只有 main 分支，工作树干净后提交推送。
 
@@ -737,14 +737,14 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ### 28.2 P2 修复
 
 - **稳定设备身份**：`TelemetryRuntime` 按 `entityId`（equipment-<index>）映射渲染槽位，不依赖 sample 数组顺序；乱序/未知/重复实体有明确策略；后续帧缺失实体保留上一状态而非回落 running。设备状态与 telemetry 后端共用同一 EquipmentStatusService 快照（状态映射 0..3）。
-- **真实浏览器持续压力**：新增 `web_app/tests/telemetry-stress.html` + `tools/telemetry_stress.mjs`，使用真实 `createTelemetryWorker()` Worker 在 500/2000/5000 实体、60Hz、5s 下测量跨线程往返：收发比例 100%，p95 分别约 0.6/1.1/2.0ms；CPU/Heap 微基准保留。`render_perf.mjs` 持续 600 帧并报告 workerTargets/heap/taskDuration，实测 3 Worker、p95 41.6ms、86.5fps、gpuErrors []。
-- **HTTP/1.1 连接上限修复**：命令 SSE 改为“首次 trackCommand 才打开”（lazyCommandSubscription），页面默认只有 3 telemetry + 1 equipment-status 连接；命令提交时最多增加 1 个，避免 7 个常驻 EventSource 超过浏览器 6 连接限制导致 Worker/模块加载停滞。
+- **真实浏览器持续压力**：新增 `web_app/tests/telemetry-stress.html` + `tools/telemetry_stress.mjs`，使用真实 `createTelemetryWorker()` Worker 在 500/2000/5000 实体、60Hz、5s 下测量跨线程往返：收发比例 100%，p95 分别约 0.6/1.1/2.0ms；CPU/Heap 微基准保留。`render_perf.mjs` 持续 600 帧并报告 workerTargets/heap/taskDuration，实测 1 个按需 Worker、p95 8.5ms、116.5fps、gpuErrors []。
+- **HTTP/1.1 连接上限修复**：命令 SSE 改为“首次 trackCommand 才打开”（lazyCommandSubscription）；telemetry 也改为按消费者启动（`useFabTelemetry`），Workbench 不打开任何遥测流，3D 页面只启动选中 FAB 的 1 个 Worker/SSE + 1 个设备状态流。之前从 Workbench 点击 3D FAB 会卡在“准备 WebGPU 视图”，根因是 Workbench 常驻 3 条 telemetry SSE 占用浏览器 per-origin 6 连接预算，Babylon Lite 动态模块排队；修复后点击链接与直接粘贴 URL 均实测正常加载。
 
 ### 28.3 复核后验证
 
-- 前端 `tsc --noEmit` 0；Vitest **69 文件 / 314 测试 PASS**；`vite build` 0。
+- 前端 `tsc --noEmit` 0；Vitest **69 文件 / 315 测试 PASS**；`vite build` 0。
 - 后端 **139/139 PASS**（含 journal/retention/capability/authorization）。
-- 浏览器 e2e：3 FAB Workbench 命令面板提交 → accepted→executing→succeeded；页面 3 个 Worker。
+- 浏览器 e2e：3 FAB Workbench 命令面板提交 → accepted→executing→succeeded；3D 页面按需 1 个 Worker。
 - `./scripts/verify.ps1` exit 0。
 
 ### 28.4 仍未实现（基础设施边界）

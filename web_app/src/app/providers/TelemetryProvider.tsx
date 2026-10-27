@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import type { FabTelemetryRegistry } from '../../realtime/telemetry/FabTelemetryRegistry';
 import type { TelemetryRuntime } from '../../realtime/telemetry/TelemetryRuntime';
 
@@ -15,11 +15,18 @@ export function TelemetryProvider({ registry, version = 0, children }: { registr
 }
 
 /**
- * The telemetry runtime for one FAB. The Worker/TypedArray path is read inside
- * the renderer frame loop; this hook only resolves the runtime handle and never
- * feeds high-frequency data through React (ARCH-11).
+ * Returns the telemetry runtime for a FAB and starts it only while a consumer
+ * is mounted. Idle FABs therefore do not hold SSE/Worker connections.
  */
 export function useFabTelemetry(fabId: string | undefined): TelemetryRuntime | undefined {
   const registry = useContext(TelemetryContext)?.registry;
-  return fabId ? registry?.get(fabId) : undefined;
+  const runtime = fabId ? registry?.get(fabId) : undefined;
+
+  useEffect(() => {
+    if (!runtime) return;
+    runtime.start();
+    return () => runtime.stop();
+  }, [runtime]);
+
+  return runtime;
 }

@@ -63,7 +63,7 @@ function TelemetryProbe() {
   return <div data-testid="fab-telemetry">{middle ? middle.fabId : 'none'}:{missing ? 'leak' : 'none'}</div>;
 }
 
-it('starts one FAB-scoped telemetry runtime per FAB and exposes useFabTelemetry(fabId)', async () => {
+it('starts only the consumed FAB telemetry runtime and exposes useFabTelemetry(fabId)', async () => {
   const telemetryUrls: string[] = [];
   const commandUrls: string[] = [];
   const closed: string[] = [];
@@ -88,11 +88,11 @@ it('starts one FAB-scoped telemetry runtime per FAB and exposes useFabTelemetry(
   vi.stubGlobal('Worker', FakeWorker);
 
   const view = render(<AppProviders client={clientWithSites()}><RegistryProbe /><TelemetryProbe /></AppProviders>);
-  await waitFor(() => expect(telemetryUrls.length).toBe(3));
-  expect([...telemetryUrls].sort()).toEqual([
-    '/api/v1/sites/site-1/fabs/fab-a/telemetry/stream',
+  // Telemetry is demand-driven: only fab-b has a mounted consumer, so only its
+  // FAB-scoped stream is opened (idle FABs must not consume connections).
+  await waitFor(() => expect(telemetryUrls.length).toBe(1));
+  expect(telemetryUrls).toEqual([
     '/api/v1/sites/site-1/fabs/fab-b/telemetry/stream',
-    '/api/v1/sites/site-1/fabs/fab-c/telemetry/stream',
   ]);
   // Command streams are lazy: no per-FAB SSE connection is opened until the
   // first command is tracked. Then the stream is FAB-scoped + authorized.
@@ -155,6 +155,31 @@ it('delivers each FAB command SSE stream to its own FabRuntime only', async () =
 
   emit('fab-b', envelope('fab-b'));
   await waitFor(() => expect(screen.getByTestId('projection').textContent).toBe('accepted:1'));
+});
+
+it('does not hold idle FAB telemetry/command SSE connections on the workbench route', async () => {
+  const urls: string[] = [];
+  class FakeEventSource {
+    onopen: (() => void) | null = null;
+    onmessage: ((event: { data: string }) => void) | null = null;
+    onerror: ((event: unknown) => void) | null = null;
+    constructor(readonly url: string) { urls.push(url); }
+    addEventListener() {}
+    removeEventListener() {}
+    close() {}
+  }
+  class FakeWorker {
+    onmessage: ((event: { data: unknown }) => void) | null = null;
+    postMessage() {}
+    terminate() {}
+  }
+  vi.stubGlobal('EventSource', FakeEventSource);
+  vi.stubGlobal('Worker', FakeWorker);
+  const view = render(<AppProviders client={clientWithSites()}><RegistryProbe /><WorkbenchApp /></AppProviders>);
+  await waitFor(() => expect(captured?.size).toBe(3));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(urls).toEqual([]);
+  view.unmount();
 });
 
 it('shows a data-driven FAB selector in the workbench when the site has multiple FABs', async () => {

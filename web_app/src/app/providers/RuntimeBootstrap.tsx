@@ -72,7 +72,9 @@ export function RuntimeBootstrap({ children }: { children: ReactNode }) {
           url: `/api/v1/sites/${encodeURIComponent(fab.siteId)}/fabs/${encodeURIComponent(fab.fabId)}/telemetry/stream`,
           fabId: fab.fabId,
         });
-        runtime.start();
+        // Do not open FAB telemetry SSE/Worker until a page actually consumes
+        // this FAB (useFabTelemetry); idle streams consume the browser's
+        // per-origin HTTP/1.1 connection budget and can block 3D module loads.
         telemetry.set(fab.fabId, runtime);
       }
       telemetryRegistry.replaceAll(telemetry);

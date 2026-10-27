@@ -5,9 +5,9 @@
   - 契约/架构检查 PASS
   - 8 个 Python 工具测试 PASS
   - 3 个 .NET 项目 Release 构建 + **139/139 测试 PASS**
-  - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **69 文件 / 314 测试 PASS**、`vite build` 0
+  - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **69 文件 / 315 测试 PASS**、`vite build` 0
   - `./scripts/verify.ps1` exit 0
-  - 真实 Chrome/WebGPU 持续门禁：600 帧，p95 41.6ms，86.5fps，3 Worker，heap 71.96MB，rendererFrames 631，drawCalls 903，gpuErrors []（`.local/render-perf.json`）
+  - 真实 Chrome/WebGPU 持续门禁：600 帧，p95 8.5ms，116.5fps，1 个按需 Worker，heap 65.59MB，rendererFrames 631，drawCalls 903，gpuErrors []（`.local/render-perf.json`）
   - Worker 压力：500/2000/5000 entities × 60Hz × 5s，真实浏览器 Worker 收发 100%，p95 0.6/1.1/2.0ms；CPU/Heap 微基准约 18.6/60/141ms
 
 ## 当前架构
