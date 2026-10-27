@@ -26,11 +26,11 @@ function captureFetch(response: () => Response) {
   return calls;
 }
 
-it('uses relative URLs, same-origin credentials, no-store and no browser dev key', async () => {
-  const calls = captureFetch(() => jsonResponse({ siteId: 'site-1', generatedAt: 'now', sequence: 1, tools: [{ state: 'UP' }] }));
-  await client().fetchQuery(equipmentStatusQueryOptions('site/1'));
+it('uses FAB-scoped relative URLs, same-origin credentials, no-store and no browser dev key', async () => {
+  const calls = captureFetch(() => jsonResponse({ siteId: 'site/1', fabId: 'fab/1', generatedAt: 'now', sequence: 1, tools: [{ state: 'UP' }] }));
+  await client().fetchQuery(equipmentStatusQueryOptions('site/1', 'fab/1'));
   expect(calls).toHaveLength(1);
-  expect(calls[0].url).toBe('/api/v1/sites/site%2F1/equipment-status');
+  expect(calls[0].url).toBe('/api/v1/sites/site%2F1/fabs/fab%2F1/equipment-status');
   expect(calls[0].init?.credentials).toBe('same-origin');
   expect(calls[0].init?.cache).toBe('no-store');
   const headers = new Headers(calls[0].init?.headers);
@@ -70,5 +70,8 @@ it('preserves ProblemDetails and non-JSON gateway errors', async () => {
 
 it('rejects an invalid payload before it reaches the cache', async () => {
   vi.stubGlobal('fetch', async () => jsonResponse({ siteId: 1, generatedAt: 'now', tools: [] }));
-  await expect(client().fetchQuery(equipmentStatusQueryOptions('site-1'))).rejects.toThrow();
+  await expect(client().fetchQuery(equipmentStatusQueryOptions('site-1', 'fab-1'))).rejects.toThrow();
+  // FAB identity is part of the contract: a site-only snapshot must not be cached.
+  vi.stubGlobal('fetch', async () => jsonResponse({ siteId: 'site-1', generatedAt: 'now', tools: [{ state: 'UP' }] }));
+  await expect(client().fetchQuery(equipmentStatusQueryOptions('site-1', 'fab-1'))).rejects.toThrow(/fabId/);
 });

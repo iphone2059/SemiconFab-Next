@@ -17,10 +17,30 @@ export interface CommandResultEvent {
   readonly occurredAt: string;
 }
 
+/**
+ * A disconnect could not be fully replayed from the backend journal (epoch
+ * change, pruned cursor, malformed Last-Event-ID). Results may be missing, so
+ * consumers must reconcile authoritative command state instead of guessing.
+ */
+export interface CommandStreamGap {
+  /** Server journal epoch that could not be replayed, when the backend reports it. */
+  readonly epoch?: string;
+  /** Last sequence observed for that epoch before the gap, when known. */
+  readonly sequence?: number;
+  /** Raw backend cursor/details for diagnostics only; never parsed as business state. */
+  readonly cursor?: string;
+}
+
 export interface CommandEventSource {
   readonly commandResult$: Observable<CommandResultEvent>;
   /** A live connection was restored; replay may no longer contain every result. */
   readonly reconnected$?: Observable<void>;
+  /**
+   * Replay could not cover a disconnect (backend `replay-gap`); reconciliation of
+   * tracked active commands is required. Optional so fakes/backends without gap
+   * signalling remain valid sources.
+   */
+  readonly gaps$?: Observable<CommandStreamGap>;
 }
 
 export interface AlarmEvent {

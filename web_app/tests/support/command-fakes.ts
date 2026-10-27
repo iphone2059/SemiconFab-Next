@@ -1,5 +1,5 @@
 import { Subject } from 'rxjs';
-import type { CommandEventSource, CommandOutcome, CommandResultEvent } from '../../src/application/contracts/CommandEvents';
+import type { CommandEventSource, CommandOutcome, CommandResultEvent, CommandStreamGap } from '../../src/application/contracts/CommandEvents';
 import type { CommandWorkflow, CommandWorkflowRegistry } from '../../src/application/contracts/CommandWorkflow';
 
 export class FakeCommandWorkflow implements CommandWorkflow {
@@ -39,10 +39,19 @@ export class FakeWorkflowRegistry implements CommandWorkflowRegistry {
 export class FakeCommandEventSource implements CommandEventSource {
   private readonly subject = new Subject<CommandResultEvent>();
   private readonly reconnects = new Subject<void>();
+  private readonly gaps = new Subject<CommandStreamGap>();
   readonly commandResult$ = this.subject.asObservable();
   readonly reconnected$ = this.reconnects.asObservable();
+  readonly gaps$ = this.gaps.asObservable();
 
   reconnect(): void { this.reconnects.next(); }
+
+  /** Signal that backend replay could not cover a disconnect. */
+  emitGap(gap: CommandStreamGap = { epoch: 'epoch-1', sequence: 7 }): void { this.gaps.next(gap); }
+
+  get commandObservers(): number { return this.subject.observed ? 1 : 0; }
+  get reconnectObservers(): number { return this.reconnects.observed ? 1 : 0; }
+  get gapObservers(): number { return this.gaps.observed ? 1 : 0; }
 
   emit(event: CommandResultEvent): void {
     this.subject.next(event);

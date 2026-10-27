@@ -6,16 +6,30 @@ export interface EquipmentStatusItem {
 
 export interface EquipmentStatusSnapshot {
   readonly siteId: string;
+  /** FAB identity of a FAB-scoped snapshot (additive; absent on legacy site frames). */
+  readonly fabId?: string;
   readonly generatedAt: string;
-  /** Monotonic per-site tick. Optional for backward compatibility with older servers. */
+  /** Monotonic per-FAB tick. Optional for backward compatibility with older servers. */
   readonly sequence?: number;
   readonly tools: EquipmentStatusItem[];
+}
+
+/** Composite identity for FAB-scoped equipment status: REST + SSE must agree. */
+export interface EquipmentStatusScope {
+  readonly siteId: string;
+  readonly fabId: string;
+}
+
+function isInScope(value: Partial<EquipmentStatusSnapshot>, scope: EquipmentStatusScope): boolean {
+  // FAB identity is validated whenever the server sends it; legacy site-level
+  // frames without fabId stay readable so an older backend does not blank the page.
+  return value.siteId === scope.siteId && (value.fabId === undefined || value.fabId === scope.fabId);
 }
 
 /** Keep the last good snapshot visible, but never label a disconnected/stalled stream LIVE. */
 export function watchEquipmentStatus(
   source: EventSource,
-  siteId: string,
+  scope: EquipmentStatusScope,
   onSnapshot: (snapshot: EquipmentStatusSnapshot) => void,
   onStale: () => void,
   signal: AbortSignal,
@@ -30,7 +44,7 @@ export function watchEquipmentStatus(
       const frame: unknown = JSON.parse(String(event.data));
       if (!frame || typeof frame !== 'object') throw new Error('Invalid status frame');
       const value = frame as Partial<EquipmentStatusSnapshot>;
-      if (value.siteId !== siteId || typeof value.generatedAt !== 'string' || !Number.isFinite(Date.parse(value.generatedAt)) ||
+      if (!isInScope(value, scope) || typeof value.generatedAt !== 'string' || !Number.isFinite(Date.parse(value.generatedAt)) ||
         !Array.isArray(value.tools) || value.tools.length === 0 || !value.tools.every(tool => tool &&
           ['running', 'idle', 'down', 'maint'].includes(tool.state))) throw new Error('Invalid status scope or payload');
       onSnapshot(value as EquipmentStatusSnapshot);
@@ -49,7 +63,7 @@ export function watchEquipmentStatus(
  * the timestamp high-water mark when the API exposes one.
  */
 export function createOrderedEquipmentStatusConsumer(
-  siteId: string,
+  scope: EquipmentStatusScope,
   expectedToolCount: number,
   onSnapshot: (snapshot: EquipmentStatusSnapshot) => void,
   onInvalid?: () => void,
@@ -70,7 +84,7 @@ export function createOrderedEquipmentStatusConsumer(
       onInvalid?.();
       return false;
     }
-    if (snapshot.siteId !== siteId || !Number.isFinite(timestamp) ||
+    if (!isInScope(snapshot, scope) || !Number.isFinite(timestamp) ||
         !Array.isArray(snapshot.tools) || snapshot.tools.length !== expectedToolCount ||
         !snapshot.tools.every(tool =>
           tool !== null && typeof tool === 'object' &&

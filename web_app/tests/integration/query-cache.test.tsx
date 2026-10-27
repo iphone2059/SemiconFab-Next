@@ -14,16 +14,16 @@ import { createRun, invalidateRuns } from '../../src/api/mutations/runs.mutation
  *   forces a refetch), while the page subscription refetches on Query staleness.
  * - RQ-03: a mutation invalidates the runs prefix and the next read returns the
  *   authoritative server list.
- * - RQ-04: Query keys carry the site identity, so two FABs cannot share one
- *   equipment-status cache entry.
+ * - RQ-04: Query keys carry the (siteId, fabId) identity, so two FABs cannot
+ *   share one equipment-status cache entry even inside the same site.
  */
 
 const SITES_V1 = [{ siteId: 'site-1', code: 'SITE-1', templateHash: 'hash-1', fabs: [{ fabId: 'FAB-01', code: 'FAB-01' }] }];
 const SITES_V2 = [{ siteId: 'site-1', code: 'SITE-1', templateHash: 'hash-2', fabs: [{ fabId: 'FAB-01', code: 'FAB-01' }] }];
 const RUN_1 = { runId: 'run-1', siteId: 'site-1', status: 'RUNNING', version: '1', createdAtUtc: '2026-10-27T00:00:00Z', executions: [] };
 const RUN_2 = { runId: 'run-2', siteId: 'site-1', status: 'QUEUED', version: '1', createdAtUtc: '2026-10-27T00:00:01Z', executions: [] };
-const STATUS_A = { siteId: 'site-a', generatedAt: '2026-10-27T00:00:00Z', sequence: 1, tools: [{ state: 'UP' }] };
-const STATUS_B = { siteId: 'site-b', generatedAt: '2026-10-27T00:00:00Z', sequence: 1, tools: [{ state: 'DOWN' }] };
+const STATUS_A = { siteId: 'site-a', fabId: 'fab-1', generatedAt: '2026-10-27T00:00:00Z', sequence: 1, tools: [{ state: 'UP' }] };
+const STATUS_B = { siteId: 'site-a', fabId: 'fab-2', generatedAt: '2026-10-27T00:00:00Z', sequence: 1, tools: [{ state: 'DOWN' }] };
 
 const jsonResponse = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
@@ -88,21 +88,27 @@ it('RQ-03: createRun invalidation refreshes the authoritative runs list', async 
   expect(fetchMock).toHaveBeenCalledTimes(3); // GET, POST, invalidated GET
 });
 
-it('RQ-04: FAB-scoped Query keys isolate identical equipment ids per site', async () => {
+it('RQ-04: FAB-scoped Query keys isolate identical equipment ids per FAB', async () => {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url.includes('/site-a/')) return jsonResponse(STATUS_A);
-    if (url.includes('/site-b/')) return jsonResponse(STATUS_B);
+    if (url.includes('/fabs/fab-1/')) return jsonResponse(STATUS_A);
+    if (url.includes('/fabs/fab-2/')) return jsonResponse(STATUS_B);
     throw new Error('unexpected request ' + url);
   });
   vi.stubGlobal('fetch', fetchMock);
   const queryClient = freshClient();
-  expect(equipmentStatusQueryOptions('site-a').queryKey).not.toEqual(equipmentStatusQueryOptions('site-b').queryKey);
+  // Same site, different FABs: the composite identity must keep the keys apart.
+  expect(equipmentStatusQueryOptions('site-a', 'fab-1').queryKey)
+    .not.toEqual(equipmentStatusQueryOptions('site-a', 'fab-2').queryKey);
 
-  expect(await queryClient.ensureQueryData(equipmentStatusQueryOptions('site-a'))).toEqual(STATUS_A);
-  expect(await queryClient.ensureQueryData(equipmentStatusQueryOptions('site-b'))).toEqual(STATUS_B);
-  expect(queryClient.getQueryData(equipmentStatusQueryKey('site-a'))).toEqual(STATUS_A);
-  expect(queryClient.getQueryData(equipmentStatusQueryKey('site-b'))).toEqual(STATUS_B);
-  expect(queryClient.getQueryData(equipmentStatusQueryKey('site-a'))).not.toEqual(STATUS_B);
+  expect(await queryClient.ensureQueryData(equipmentStatusQueryOptions('site-a', 'fab-1'))).toEqual(STATUS_A);
+  expect(await queryClient.ensureQueryData(equipmentStatusQueryOptions('site-a', 'fab-2'))).toEqual(STATUS_B);
+  expect(queryClient.getQueryData(equipmentStatusQueryKey('site-a', 'fab-1'))).toEqual(STATUS_A);
+  expect(queryClient.getQueryData(equipmentStatusQueryKey('site-a', 'fab-2'))).toEqual(STATUS_B);
+  expect(queryClient.getQueryData(equipmentStatusQueryKey('site-a', 'fab-1'))).not.toEqual(STATUS_B);
   expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
+    '/api/v1/sites/site-a/fabs/fab-1/equipment-status',
+    '/api/v1/sites/site-a/fabs/fab-2/equipment-status',
+  ]);
 });

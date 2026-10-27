@@ -16,6 +16,8 @@ interface WorkerLike {
 
 export interface TelemetryRuntimeOptions {
   readonly url: string;
+  /** FAB identity for the scoped stream; frames for another FAB are rejected. */
+  readonly fabId?: string;
   /** Test seam; production defaults to browser EventSource. */
   readonly eventSourceFactory?: (url: string) => EventSourceLike;
   /** Test seam; production defaults to a module Worker. */
@@ -72,6 +74,10 @@ export class TelemetryRuntime {
 
   constructor(private readonly options: TelemetryRuntimeOptions) {}
 
+  get fabId(): string | undefined {
+    return this.options.fabId;
+  }
+
   start(): void {
     if (this.started) return;
     const eventSourceFactory = this.options.eventSourceFactory ??
@@ -111,6 +117,8 @@ export class TelemetryRuntime {
         try {
           const decoded = decoder.decode(event.data);
           if (decoded.kind !== 'telemetry') return;
+          // One runtime per FAB: a crossed frame must never enter this Worker.
+          if (this.options.fabId !== undefined && decoded.event.fabId !== this.options.fabId) return;
           const frame = flattenTelemetryFrame(decoded.event);
           if (frame.sequence <= submittedSequence) return;
           worker.postMessage({ type: 'frame', sequence: frame.sequence, values: frame.values, generation });

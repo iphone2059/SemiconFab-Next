@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import WorkbenchApp from '../src/features/workbench/workbench';
@@ -74,4 +74,74 @@ it('does not render cached run details or totals belonging to another site', () 
   );
   expect(container.innerHTML).toContain('AWAITING RUN');
   expect(container.innerHTML).not.toContain('999,999');
+});
+
+it('renders one execution card and selector option per site FAB (data-driven multi-FAB)', () => {
+  workbenchActions.siteIdSet('site-m');
+  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith('/api/v1/runs')) {
+      return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } }));
+    }
+    return new Promise(() => {});
+  }));
+  const queryClient = createQueryClient();
+  queryClient.setQueryData(sitesQueryOptions().queryKey, [{
+  siteId: 'site-m', code: 'MULTI', templateHash: 'hash',
+  fabs: [{ fabId: 'fab-a', code: 'FAB-A' }, { fabId: 'fab-b', code: 'FAB-B' }, { fabId: 'fab-c', code: 'FAB-C' }],
+}]);
+  queryClient.setQueryData(runsQueryOptions().queryKey, []);
+  const { container } = render(
+    createElement(QueryClientProvider, { client: queryClient, children: createElement(WorkbenchApp) }),
+  );
+  expect(container.querySelectorAll('aside select option')).toHaveLength(3);
+  expect(container.querySelectorAll('.fab-card')).toHaveLength(3);
+  // The FAB metric is the catalog length, not a hard-coded single FAB.
+  expect(container.querySelector('.metric strong')?.textContent).toBe('03');
+  for (const code of ['FAB-A', 'FAB-B', 'FAB-C']) expect(container.innerHTML).toContain(code);
+  expect(container.innerHTML).not.toContain('单 FAB 执行域');
+});
+
+it('submits one scenario FAB per site FAB', async () => {
+  workbenchActions.siteIdSet('site-m');
+  const bodies: Array<{ scenario: { fabs: unknown[] } }> = [];
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith('/api/v1/runs') && init?.method === 'POST') {
+      bodies.push(JSON.parse(String(init.body)) as { scenario: { fabs: unknown[] } });
+      return new Response(JSON.stringify({
+        runId: 'run-9', siteId: 'site-m', status: 'QUEUED', version: '1',
+        createdAtUtc: '2026-10-27T00:00:00Z', executions: [],
+      }), { status: 202, headers: { 'content-type': 'application/json' } });
+    }
+    if (url.endsWith('/api/v1/runs')) {
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Promise(() => {});
+  }));
+  const originalCrypto = globalThis.crypto;
+  Object.defineProperty(globalThis, 'crypto', { value: { ...originalCrypto, randomUUID: () => 'idem-multi' }, configurable: true });
+  try {
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(sitesQueryOptions().queryKey, [{
+  siteId: 'site-m', code: 'MULTI', templateHash: 'hash',
+  fabs: [{ fabId: 'fab-a', code: 'FAB-A' }, { fabId: 'fab-b', code: 'FAB-B' }, { fabId: 'fab-c', code: 'FAB-C' }],
+}]);
+    queryClient.setQueryData(runsQueryOptions().queryKey, []);
+    const { container } = render(
+      createElement(QueryClientProvider, { client: queryClient, children: createElement(WorkbenchApp) }),
+    );
+    const form = container.querySelector('.workbench-run-form form');
+    expect(form).not.toBeNull();
+    fireEvent.submit(form as HTMLFormElement);
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    // The generated contract keeps FabScenario.processTimeUs as a decimal string.
+    expect(bodies[0].scenario.fabs).toEqual([
+      { fabId: 'fab-a', code: 'FAB-A', lotCount: 24, processTimeUs: '1000000' },
+      { fabId: 'fab-b', code: 'FAB-B', lotCount: 24, processTimeUs: '1000000' },
+      { fabId: 'fab-c', code: 'FAB-C', lotCount: 24, processTimeUs: '1000000' },
+    ]);
+  } finally {
+    Object.defineProperty(globalThis, 'crypto', { value: originalCrypto, configurable: true });
+  }
 });

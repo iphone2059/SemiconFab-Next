@@ -10,6 +10,7 @@ export const TWIN_EN: Readonly<Record<string, string>> = {
   " · 原版别名被覆盖": " · overridden original alias",
   "/121 台；未映射设备保留进入回放前的状态。217 台仿真设备与布局不是一一对应。AMHS 为独立动画时钟，JSONL 无运输事件。": "/121 tools. Unmapped tools retain their pre-replay state. The 217 simulation machines do not map one-to-one to the layout. AMHS uses an independent animation clock; JSONL contains no transport events.",
   "121 台设备 · 单 FAB 洁净室": "121 tools · single-FAB cleanroom",
+  "单 FAB": "single FAB",
   "121 台设备、双环 OHT、天花板 FFU 与 Subfab 都在同一场景中。": "121 tools, dual-loop OHT, ceiling FFUs and Subfab share one scene.",
   "1500 层流粒子 · 原版示意压差场": "1500 laminar particles · original schematic pressure field",
   "24 台 OHT · 空中运输": "24 OHT vehicles · overhead transport",

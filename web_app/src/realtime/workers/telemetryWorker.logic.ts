@@ -1,7 +1,7 @@
 import { FrameRingBuffer } from '../buffers/FrameRingBuffer';
 
 export type TelemetryWorkerCommand =
-  | { readonly type: 'frame'; readonly sequence: number; readonly values: readonly number[]; readonly generation?: number }
+  | { readonly type: 'frame'; readonly sequence: number; readonly values: ArrayLike<number>; readonly generation?: number }
   | { readonly type: 'snapshot' }
   | { readonly type: 'reset' };
 
@@ -14,11 +14,13 @@ export interface TelemetryWorkerHandler {
   readonly buffer: FrameRingBuffer;
 }
 
-const isFrame = (value: unknown): value is Extract<TelemetryWorkerCommand, { type: 'frame' }> =>
-  typeof value === 'object' && value !== null && (value as { type?: unknown }).type === 'frame' &&
-  Number.isInteger((value as { sequence?: unknown }).sequence) &&
-  Array.isArray((value as { values?: unknown }).values) &&
-  ((value as { values: unknown[] }).values).every((entry) => typeof entry === 'number' && Number.isFinite(entry));
+const isFrame = (value: unknown): value is Extract<TelemetryWorkerCommand, { type: 'frame' }> => {
+  if (typeof value !== 'object' || value === null || (value as { type?: unknown }).type !== 'frame') return false;
+  if (!Number.isInteger((value as { sequence?: unknown }).sequence)) return false;
+  const frameValues = (value as { values?: unknown }).values;
+  if (!Array.isArray(frameValues) && !ArrayBuffer.isView(frameValues)) return false;
+  return Array.from(frameValues as ArrayLike<number>).every((entry) => typeof entry === 'number' && Number.isFinite(entry));
+};
 
 /**
  * Pure worker message handler, separated from the WorkerGlobalScope entry for

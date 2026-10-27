@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Fab.Contracts;
@@ -5,21 +6,48 @@ using Fab.Contracts;
 namespace Fab.Site;
 
 /// <summary>
-/// Read-only synthetic development catalog for the single-FAB demo site.
-/// The original SemiconFab workspace exposes one cleanroom FAB, so this
-/// application deliberately does not offer FAB-02/FAB-03 or a FAB count setting.
+/// Read-only synthetic development catalog for one demo Site. The catalog supports
+/// 1..32 FABs; the default development catalog exposes FAB-01..FAB-03 so every module
+/// is exercised with multiple independent FABs (the production count is configuration,
+/// not a compile-time constant).
+///
+/// FAB ids are derived deterministically from <c>{SiteCode}/{FabCode}</c>. FAB-01 keeps
+/// the Guid it always had, so existing URLs and stored data remain stable when the FAB
+/// count changes; FAB-02..FAB-32 are derived the same way.
 /// </summary>
 public sealed class SiteDirectory
 {
+    public const int MinFabCount = 1;
+    public const int MaxFabCount = 32;
+    public const int DefaultFabCount = 3;
+    public const string DemoSiteCode = "DEMO-SITE";
+    public static readonly Guid DemoSiteId = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+
     private readonly SiteDefinition _site;
 
-    public SiteDirectory()
+    public SiteDirectory() : this(DefaultFabCount)
     {
-        var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("synthetic-fifo-single-tool-v1")));
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes("DEMO-SITE/FAB-01"));
-        var fab = new FabUnit(new Guid(bytes.AsSpan(0, 16)), "FAB-01");
-        _site = new SiteDefinition(Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), "DEMO-SITE", hash, [fab]);
     }
+
+    public SiteDirectory(int fabCount)
+    {
+        if (fabCount is < MinFabCount or > MaxFabCount)
+            throw new ArgumentOutOfRangeException(nameof(fabCount), $"The development catalog supports {MinFabCount}..{MaxFabCount} FABs.");
+        var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("synthetic-fifo-single-tool-v1")));
+        var fabs = Enumerable.Range(1, fabCount).Select(CreateFab).ToArray();
+        _site = new SiteDefinition(DemoSiteId, DemoSiteCode, hash, fabs);
+    }
+
+    /// <summary>Deterministically derives the FAB unit for the 1-based FAB index (FAB-01..FAB-32).</summary>
+    public static FabUnit CreateFab(int index)
+    {
+        if (index is < MinFabCount or > MaxFabCount) throw new ArgumentOutOfRangeException(nameof(index));
+        var code = "FAB-" + index.ToString("00", CultureInfo.InvariantCulture);
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{DemoSiteCode}/{code}"));
+        return new FabUnit(new Guid(bytes.AsSpan(0, 16)), code);
+    }
+
+    public int FabCount => _site.Fabs.Count;
 
     public SiteDto[] GetSites() => [new SiteDto(_site.Id.ToString(), _site.Code, _site.TemplateHash,
         _site.Fabs.Select(f => new FabDto(f.Id.ToString(), f.Code)).ToArray())];
@@ -54,14 +82,27 @@ public sealed class SiteDirectory
         return false;
     }
 
+    /// <summary>Returns the primary/legacy FAB (FAB-01) of the configured Site.</summary>
+    public FabUnit PrimaryFab => _site.Fabs[0];
+
+    /// <summary>
+    /// A scenario must target the configured Site with a non-empty, duplicate-free subset
+    /// of its FABs. FAB ids from another Site or with a mismatched FAB code are rejected.
+    /// </summary>
     public void ValidateMembership(ScenarioDefinition scenario)
     {
         ArgumentNullException.ThrowIfNull(scenario);
-        if (!Guid.TryParse(scenario.SiteId, out var site) || site != _site.Id || scenario.Fabs is not { Length: 1 })
-            throw new ArgumentException("A scenario must target the configured Site with exactly one FAB.");
-        var member = scenario.Fabs[0];
-        if (member is null || !Guid.TryParse(member.FabId, out var id) ||
-            !_site.Fabs.Any(f => f.Id == id && f.Code == member.Code))
-            throw new ArgumentException("Scenario FAB does not belong to the configured single-FAB catalog.");
+        if (!Guid.TryParse(scenario.SiteId, out var site) || site != _site.Id)
+            throw new ArgumentException("A scenario must target the configured Site.");
+        if (scenario.Fabs is not { Length: > 0 and <= MaxFabCount })
+            throw new ArgumentException($"A scenario requires between 1 and {MaxFabCount} FAB members.");
+        var seen = new HashSet<Guid>();
+        foreach (var member in scenario.Fabs)
+        {
+            if (member is null || !Guid.TryParse(member.FabId, out var id) || !seen.Add(id))
+                throw new ArgumentException("Scenario FAB members must be unique FAB ids.");
+            if (!_site.Fabs.Any(fab => fab.Id == id && fab.Code == member.Code))
+                throw new ArgumentException("Scenario FAB does not belong to the configured Site catalog.");
+        }
     }
 }

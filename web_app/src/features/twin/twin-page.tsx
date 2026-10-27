@@ -36,7 +36,7 @@ import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from '../../api/
 import { researchEventsQueryOptions } from '../../api/queries/research.queries';
 import { waferRoutesQueryOptions } from '../../api/queries/wafer.queries';
 import { createCoalescedDispatcher } from '../../state/telemetry-buffer';
-import { useSiteTelemetry } from '../../app/providers/TelemetryProvider';
+import { useFabTelemetry } from '../../app/providers/TelemetryProvider';
 const ONBOARDING_KEY = 'semicon_twin_onboarding_dismissed';
 const ONBOARDING_STEPS = [
   { title: '一个单 FAB 洁净室', body: '121 台设备、双环 OHT、天花板 FFU 与 Subfab 都在同一场景中。' },
@@ -121,12 +121,30 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const waferFollow = useTwinPageStore(state => state.wafer.follow);
   const { open: ymsOpen, tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, yieldInput, yieldScenario, stdfCopied } = page.yms;
 
-  const telemetry = useSiteTelemetry(siteId ?? undefined);
   const sitesQuery = useQuery(sitesQueryOptions());
-  const site = useMemo(() => sitesQuery.data?.find((value) => value.siteId === siteId), [sitesQuery.data, siteId]);
-  // TanStack Query owns the server cache (ARCH-02/G-02). The SSE effect below
-  // merges live frames into the same status key this 4 s polling fallback uses.
-  const statusQuery = useQuery({ ...equipmentStatusQueryOptions(siteId ?? ''), enabled: !!siteId, refetchInterval: 4000 });
+  // Canonical /fabs/$fabId/3d identity wins; the store/legacy fallback only
+  // applies when TwinPage is rendered without a route param (SSR, tests).
+  const site = useMemo(() => {
+    const sites = sitesQuery.data;
+    if (!sites) return undefined;
+    if (fabId) return sites.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
+    return sites.find((value) => value.siteId === siteId) ?? sites[0];
+  }, [sitesQuery.data, siteId, fabId]);
+  const selectedFabId = useMemo(() => fabId ?? site?.fabs[0]?.fabId, [fabId, site]);
+  const fab = useMemo(
+    () => site ? site.fabs.find((value) => value.fabId === selectedFabId) ?? site.fabs[0] : undefined,
+    [site, selectedFabId],
+  );
+  const telemetry = useFabTelemetry(selectedFabId);
+  // TanStack Query owns the server cache (ARCH-02/G-02) and the status cache is
+  // FAB-scoped: two FABs of one site must never share a snapshot/sequence. The
+  // SSE effect below merges live frames into this same 4 s polling entry.
+  const statusSiteId = site?.siteId;
+  const statusQuery = useQuery({
+    ...equipmentStatusQueryOptions(statusSiteId ?? '', selectedFabId ?? ''),
+    enabled: !!statusSiteId && !!selectedFabId,
+    refetchInterval: 4000,
+  });
   const researchQuery = useQuery({ ...researchEventsQueryOptions(), enabled: mode === 'research' });
   const waferRoutesQuery = useQuery({ ...waferRoutesQueryOptions(), enabled: waferActive });
   const waferRoutes = waferRoutesQuery.data;
@@ -248,7 +266,8 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
         return;
       }
     }
-    if (next.fabs.length !== 1) { twinPageActions.siteErrorSet(t("当前产品必须只有一个 FAB")); return; }
+    // Multiple FABs are a first-class product shape: the route/first-FAB fallback
+    // selects one FAB, it never rejects the site for having more than one.
     if (useTwinPageStore.getState().siteId !== next.siteId) twinPageActions.siteIdSet(next.siteId);
     if (useTwinPageStore.getState().siteError !== undefined) twinPageActions.siteErrorSet(undefined);
   }, [sitesQuery.data, siteId, fabId, t]);
@@ -259,15 +278,15 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   }, [sitesQuery.error, t]);
 
   useEffect(() => {
-    if (!siteId) { statusConsumer.current = undefined; return; }
+    if (!statusSiteId || !selectedFabId) { statusConsumer.current = undefined; return; }
     statusConsumer.current = createOrderedEquipmentStatusConsumer(
-      siteId,
+      { siteId: statusSiteId, fabId: selectedFabId },
       FAB_LAYOUT.length,
       (snapshot) => liveSnapshotBatcher.push(snapshot),
       () => twinPageActions.statusFeedStale(),
     );
     return () => { statusConsumer.current = undefined; };
-  }, [siteId, liveSnapshotBatcher]);
+  }, [statusSiteId, selectedFabId, liveSnapshotBatcher]);
 
   useEffect(() => {
     if (statusQuery.data) statusConsumer.current?.(statusQuery.data);
@@ -278,17 +297,20 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   }, [statusQuery.isError]);
 
   useEffect(() => {
-    if (!siteId) return;
+    if (!statusSiteId || !selectedFabId) return;
+    const scope = { siteId: statusSiteId, fabId: selectedFabId };
     const controller = new AbortController();
-    const source = new EventSource(`/api/v1/sites/${encodeURIComponent(siteId)}/equipment-status/stream`);
-    watchEquipmentStatus(source, siteId, (snapshot) => {
+    const source = new EventSource(
+      `/api/v1/sites/${encodeURIComponent(statusSiteId)}/fabs/${encodeURIComponent(selectedFabId)}/equipment-status/stream`,
+    );
+    watchEquipmentStatus(source, scope, (snapshot) => {
       statusConsumer.current?.(snapshot);
-      // Exactly one server cache: live frames overwrite the polling fallback's
+      // Exactly one server cache: live frames overwrite the FAB-scoped polling
       // entry instead of living in a parallel store.
-      queryClient.setQueryData(equipmentStatusQueryKey(siteId), snapshot);
+      queryClient.setQueryData(equipmentStatusQueryKey(statusSiteId, selectedFabId), snapshot);
     }, () => twinPageActions.statusFeedStale(), controller.signal);
     return () => controller.abort();
-  }, [siteId, queryClient]);
+  }, [statusSiteId, selectedFabId, queryClient]);
 
   useEffect(() => {
     const modal = twinModalFrom(search ?? {});
@@ -304,8 +326,8 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   }, [ui.statusSource, demo.playing]);
 
   useEffect(() => {
-    if (site) document.title = `${site.code} / FAB-01 · 3D FAB`;
-  }, [site]);
+    if (site) document.title = `${site.code} / ${fab?.code ?? 'FAB'} · 3D FAB`;
+  }, [site, fab]);
 
   // Mode changes are written through the router search above; no history writes here.
 
@@ -503,9 +525,6 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // The route FAB id selects the site's FAB; the legacy first-FAB fallback only
-  // applies when TwinPage is rendered without a canonical route param.
-  const fab = site ? (fabId ? site.fabs.find((value) => value.fabId === fabId) ?? site.fabs[0] : site.fabs[0]) : undefined;
   const stateCounts = useMemo(() => {
     const counts = { running: 0, idle: 0, down: 0, maint: 0 };
     for (const state of toolStates) counts[state] += 1;
@@ -855,7 +874,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
             <span className="twin-chip">{t(CATEGORY_LABELS[selected.category] ?? selected.category)}</span>
             <span className="twin-chip">{t(FAB_TOOL_STATE_META[toolStates[selected.index] ?? selected.state].label)}</span>
             <dl>
-              <dt>{t("FAB 实例")}</dt><dd>FAB-01 / #{String(selected.index + 1).padStart(3, '0')}</dd>
+              <dt>{t("FAB 实例")}</dt><dd>{fab?.code ?? 'FAB'} / #{String(selected.index + 1).padStart(3, '0')}</dd>
               <dt>{t("实例标识")}</dt><dd>{TWIN_LAYOUT_IDENTITIES[selected.index]?.instanceId}</dd>
               <dt>{t("回放别名")}</dt><dd>{TWIN_LAYOUT_IDENTITIES[selected.index]?.machineId}{!TWIN_LAYOUT_IDENTITIES[selected.index]?.replayTarget ? t(" · 原版别名被覆盖") : ''}</dd>
               <dt>{t("尺寸 (mm)")}</dt><dd>{(selected.width * 1000).toFixed(0)} × {(selected.depth * 1000).toFixed(0)} × {(selected.height * 1000).toFixed(0)}</dd>
@@ -1109,7 +1128,7 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
 
         <footer id="bottom-hud-footer" className="twin-bottom">
           <span className="twin-status" title={status}><i className={status.startsWith('WebGPU') ? 'ok' : ''} />{status.startsWith('WebGPU') ? 'WebGPU' : status}</span>
-          <span>{t("FAB-01 · 单 FAB")}</span>
+          <span>{fab ? `${fab.code} · ${t("单 FAB")}` : t("FAB-01 · 单 FAB")}</span>
           <span className="twin-footer-legend" aria-label={t("工艺分区图例")}>{[['光刻','#d99e3d'],['刻蚀','#c26b6b'],['薄膜','#d68a4a'],['Cu','#a98467'],['注入','#8b7bb5'],['扩散','#5c9b78'],['CMP/清洗','#4f9b9b'],['量测','#5b82b5'],['封装','#b06c96'],['Subfab','#4f6fa8']].map(([name,color])=><i key={name} title={name} style={{background:color}} />)}</span>
           <span>{mode === 'research' ? 'JSONL display only' : `AMHS OHT ${String(amhs?.active ?? 0).padStart(2, '0')}/${amhs?.total ?? 24}`}</span>
           <span>{mode === 'research' ? `REPLAY · WIP ${researchSnapshot?.wip ?? 0} · ACTIVE ${researchSnapshot?.activeTools ?? 0}` : `${stateCounts.running} RUN · ${stateCounts.idle} IDLE · ${stateCounts.down} DOWN · ${stateCounts.maint} MAINT`}</span>

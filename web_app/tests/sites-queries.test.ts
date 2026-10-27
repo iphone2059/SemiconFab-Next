@@ -50,3 +50,17 @@ it('looks sites up by FAB identity', () => {
   expect(findSiteByFabId(sites, 'FAB-01')?.siteId).toBe('site-1');
   expect(findSiteByFabId(sites, 'FAB-99')).toBeUndefined();
 });
+
+it('accepts the data-driven multi-FAB catalog without assuming a FAB count', async () => {
+  const multiFab = [{
+    siteId: 'site-1', code: 'SITE-1', templateHash: 'hash-1',
+    fabs: [
+      { fabId: 'FAB-01', code: 'FAB-01' },
+      { fabId: 'FAB-02', code: 'FAB-02' },
+      { fabId: 'FAB-03', code: 'FAB-03' },
+    ],
+  }];
+  const fetcher = vi.fn<typeof fetch>(async () => jsonResponse(multiFab));
+  expect(await fetchSites(fetcher)).toEqual(multiFab);
+  expect(findSiteByFabId(multiFab, 'FAB-03')?.siteId).toBe('site-1');
+});

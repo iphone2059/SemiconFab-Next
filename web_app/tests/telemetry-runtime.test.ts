@@ -14,7 +14,7 @@ function harness(deferred = false) {
     },
     terminate() {},
   };
-  const runtime = new TelemetryRuntime({ url: 'fake', eventSourceFactory: () => source, workerFactory: () => worker });
+  const runtime = new TelemetryRuntime({ url: 'fake', fabId: 'fab-a', eventSourceFactory: () => source, workerFactory: () => worker });
   runtime.start(); source.onopen?.();
   const send = (sequence: number, state: number) => source.onmessage?.({ data: JSON.stringify({
     topic: 'telemetry.frame', sequence, payload: { fabId: 'fab-a', sequence, capturedAt: '2026-10-27T00:00:00Z', samples: [{ entityId: 'equipment-0', values: { state, utilization: 0.5 } }] },
@@ -37,6 +37,22 @@ it('accepts the first frame after SSE reconnect restarts the wire sequence', () 
   send(1, 2);
   expect(runtime.getSnapshot()?.sequence).toBe(1);
   expect(runtime.getToolStates()?.[0]).toBe('down');
+  runtime.stop();
+});
+
+it('rejects a telemetry frame addressed to another FAB', () => {
+  const { runtime, source } = harness();
+  source.onmessage?.({ data: JSON.stringify({
+    topic: 'telemetry.frame', sequence: 1,
+    payload: { fabId: 'fab-b', sequence: 1, capturedAt: 'now', samples: [{ entityId: 'equipment-0', values: { state: 2 } }] },
+  }) });
+  expect(runtime.getSnapshot()).toBeUndefined();
+  source.onmessage?.({ data: JSON.stringify({
+    topic: 'telemetry.frame', sequence: 1,
+    payload: { fabId: 'fab-a', sequence: 1, capturedAt: 'now', samples: [{ entityId: 'equipment-0', values: { state: 2 } }] },
+  }) });
+  expect(runtime.getSnapshot()?.sequence).toBe(1);
+  expect(runtime.fabId).toBe('fab-a');
   runtime.stop();
 });
 

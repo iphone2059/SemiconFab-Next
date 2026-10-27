@@ -1,7 +1,7 @@
 # SemiconFab Next V2.1 架构基线
 
 - 版本：V2.1（2026-10-27）
-- 状态：**基线已采纳；M1–M6 已落地并验证；M6 后补：页面级 features/components 归位、后端模拟命令+遥测链路、Worker 渲染接线与真实 GPU 性能门禁已完成**（M1-M6 implemented / real simulated backend + GPU gate）
+- 状态：**基线已采纳；M1–M6 与 all review batches 已落地：多 FAB 目录/遥测、FAB 级设备状态、命令幂等/鉴权/能力校验、SSE 游标/缺口恢复、命令保留、真实 GPU 门禁与压力测试均已实现；仅 PostgreSQL/Outbox/生产身份因基础设施缺失保留为边界**。
 - 适用对象：`web_app` 前端架构。后端 `fab_app`/`fab_shared` 的项目与命名空间边界沿用 ADR-0001…ADR-0007
 - 权威决策：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0010](adr/0010-command-event-bridge.md)（实时/命令/工作流边界）；本文档负责汇总、目录结构与迁移计划
 - 当前实现事实：所有 HTTP 端点由 TanStack Query 独占；客户端 UI 状态由 5 个 Zustand store（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale 归属其中）独占；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已全部删除；XState 工作流已接入，实现位于 `runtime/commands` 并经 `CommandWorkflow` 契约暴露（位置不构成架构约束）。详细证据见 [实施状态](IMPLEMENTATION-STATUS.md)、§15–§17。
@@ -625,10 +625,10 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 - 仍存在的边界：真实 WebSocket 生产传输、SharedArrayBuffer/COOP-COEP、非模拟后端；见 §24/§26。
 ## 24. 最终已知边界（M6 后）
 
-- **后端传输**：`fab_app -- --realtime`（WebSocket）仍是占位；M5c 已增加 HTTP 命令 API + 命令 SSE + 20Hz 遥测 SSE 模拟实现，产品已接入并完成浏览器 e2e。WebSocket 生产传输可后续替换同契约。
-- **后端状态**：命令/遥测状态为内存模拟，重启丢失；非模拟后端与持久恢复仍待真实服务。
-- **Worker/遥测接线**：M5c 已完成 20Hz 模拟遥测 SSE → Worker → FrameRingBuffer → 渲染 frame loop 读取；SharedArrayBuffer/COOP-COEP（OPEN-V21-14）未启用。
-- **GPU/浏览器性能门禁**：已运行 Chrome 155 headless WebGPU 门禁（桌面 GPU）；生产设备矩阵/显存/长任务门禁仍待扩展。
+- **后端传输**：`fab_app -- --realtime`（WebSocket）仍是占位；HTTP 命令 API + 命令 SSE、FAB 级遥测/设备状态 SSE 已实现并接入产品。WebSocket 生产传输可后续替换同契约。
+- **后端持久化**：命令/遥测状态仍为内存模拟（命令终态 TTL/容量已限制）；PostgreSQL/Outbox/生产身份未实现，缺少数据库与身份基础设施。
+- **Worker/遥测接线**：FAB 级 20Hz 遥测 SSE → 每 FAB 一个 TelemetryRuntime/Worker → FrameRingBuffer → 渲染 frame loop；3 FAB 浏览器实测 3 个 Worker；SharedArrayBuffer/COOP-COEP 未启用。
+- **GPU/浏览器性能门禁**：Chrome 155 headless WebGPU 门禁通过（120 采集帧，p95 8.6ms，rendererFrames 151，drawCalls 903，gpuErrors []）；生产设备矩阵/显存/长任务仍待扩展。
 - **目录收口**：`rendering/lite`、页面级 `features/{twin,catalog,workbench}`、共享 `components/` 已归位；旧顶层页面文件已删除。
 - **XState**：实现位于 `runtime/commands`，经 `CommandWorkflow` 契约暴露；位置不强制，升级实现需重跑 workflow/contract 测试。
 - **历史保留**：旧代码与旧迁移证据已从工作树删除，但保留在 Git 历史中；仓库只有一个 `main` 分支，无旧 URL 重定向。
@@ -688,6 +688,42 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 - WebSocket 生产传输/非模拟后端仍未接；HTTP/SSE 模拟链路满足当前产品集成。
 - SharedArrayBuffer/COOP-COEP（OPEN-V21-14）未启用；Worker 使用 postMessage。
 - GPU 门禁为单机 headless Chrome 基线，不是生产设备矩阵/显存/长任务门禁。
+## 27. Review 修复落地记录：多 FAB、SSE 恢复、命令保留、能力模型与压力门禁（2026-10-27）
+
+> 实现用户 review 的 P0/P1/P2 项；按批提交。PostgreSQL/Outbox/生产身份因本仓库没有数据库与身份基础设施，明确保留为边界，不用内存实现冒充。
+
+### 27.1 P0 多 FAB 与作用域
+
+- 后端 `SiteDirectory` 支持 1..32 FAB，默认 dev catalog 为 FAB-01/02/03；FAB-01 Guid 保持 `37793fb6-5679-b7a3-3fef-d970433697c1`，FAB-02/03 确定性派生。`Fab:FabCount` 可配置；Scenario 接受非空子集，拒绝重复/跨 Site/未知 FAB。
+- FAB 级设备状态：`GET /api/v1/sites/{siteId}/fabs/{fabId}/equipment-status` 与 `/stream`，每 FAB 121 工具、独立序列；未知/不归属 FAB → 404。
+- FAB 级遥测：`GET /api/v1/sites/{siteId}/fabs/{fabId}/telemetry/stream`，20Hz，payload `fabId` 为请求 FAB；旧 site 级遥测删除。
+- 前端：`FabTelemetryRegistry` + `useFabTelemetry(fabId)`；RuntimeBootstrap 每 FAB 一个 TelemetryRuntime；Twin 按选中 FAB 读取遥测/设备状态；Workbench 三 FAB 卡片/选择器，Run 提交包含所有 site FAB。
+- 浏览器 e2e：`/api/v1/sites` 返回 3 FAB；Workbench 命令面板可提交；3D 路由每个 FAB；页面存在 3 个 Worker；命令 accepted→executing→succeeded。
+
+### 27.2 P1 SSE 恢复与命令保留
+
+- 命令 SSE 每帧 `id: {epoch}:{sequence}`，支持 `Last-Event-ID`：有效游标从下一条继续、无缺口；epoch 变化/游标早于保留窗口发 `event: replay-gap` + JSON 后重放。
+- 前端 `CommandEventSource.gaps$` 解析 replay-gap；FabRuntime 订阅 gap/reconnect，合并触发权威 `reconcileAll`/`reconcileTracked`，dispose 安全；trackCommand 在缺少本地证据时通过 gateway 收敛。
+- 后端保留：终态 TTL 5min、MaxTerminalCommands 512、Journal 4096/site、幂等 4096；`PruneTerminalCommands()` 可确定性测试；被清理命令 GET 404。前端 FabRuntime 终态 workflow TTL/上限 + 投影保留，correlation 终态水印清理。
+- 命令幂等/能力/授权：Idempotency-Key 必填，同 key+payload 重放同 commandId，异 payload 409，并发单命令；设备能力 catalog 支持每 FAB 配置 actions/preconditions；`IFabAuthorization` seam。
+
+### 27.3 P2 能力模型与压力门禁
+
+- 设备能力目录：`Fab:EquipmentCapabilities` 配置每 FAB equipment actions/preconditions，启动 fail-fast；默认 fallback equipment-0..120 + START/STOP/PAUSE 保持前端兼容；无效/未授权命令 400/404。
+- CPU/Worker 负载：`tests/performance/telemetry-load.test.ts` 压测 500/2000/5000 entities at 60Hz（300 frames）：约 18.6ms/60ms/141ms，heap delta < 256MB；覆盖 Worker handler + FrameRingBuffer 路径。
+- 真实 GPU：`tools/render_perf.mjs` 增加 `perf=1` 诊断桥，要求真实 renderer frames/drawCalls 且 gpuErrors 为空；本次 120 帧，p95 8.6ms，rendererFrames 151，drawCalls 903，gpuErrors []。
+
+### 27.4 验证
+
+- 前端：tsc 0、Vitest **69 文件 / 306 测试 PASS**、vite build 0。
+- 后端：**127/127 PASS**（85 + 42 新增/调整）。
+- `./scripts/verify.ps1` exit 0；只有 main 分支，工作树干净后提交推送。
+
+### 27.5 保留边界（基础设施缺失）
+
+- PostgreSQL 命令历史/Outbox/事务发布未实现：仓库没有数据库依赖/服务；当前内存存储 + 终态保留只满足开发阶段。
+- 生产身份/正式 FAB 权限体系未实现：`DevelopmentFabAuthorization` 只覆盖开发密钥；生产必须接正式 IdP/策略/审计。
+- 真实 WebSocket 生产传输、SharedArrayBuffer/COOP-COEP、生产设备矩阵/长时 WebGPU 压力仍为后续项。
 ## 附录 A. 关键术语
 
 | 术语 | 含义 |

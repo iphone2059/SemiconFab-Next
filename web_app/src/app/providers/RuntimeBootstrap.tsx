@@ -8,20 +8,20 @@ import { createPendingCommandEventSource } from '../../runtime/commandSources';
 import { createHttpCommandGateway } from '../../realtime/transport/HttpCommandGateway';
 import { createSseCommandEventSource } from '../../realtime/transport/SseCommandEventSource';
 import { TelemetryRuntime } from '../../realtime/telemetry/TelemetryRuntime';
-import { SiteTelemetryRegistry } from '../../realtime/telemetry/SiteTelemetryRegistry';
+import { FabTelemetryRegistry } from '../../realtime/telemetry/FabTelemetryRegistry';
 import { RuntimeProvider } from './RuntimeProvider';
 import { TelemetryProvider } from './TelemetryProvider';
 
 /**
  * Product runtime wiring: one FabRuntime per FAB discovered from the sites
  * document, backed by the backend SSE command stream + HTTP authoritative
- * gateway, plus one site telemetry runtime (SSE -> Worker -> typed frame).
- * When the browser lacks EventSource/Worker (tests/jsdom), the runtime falls
- * back to the empty CommandEventSource seam.
+ * gateway, plus one FAB-scoped telemetry runtime (SSE -> Worker -> typed frame)
+ * per FAB. When the browser lacks EventSource/Worker (tests/jsdom), the runtime
+ * falls back to the empty CommandEventSource seam.
  */
 export function RuntimeBootstrap({ children }: { children: ReactNode }) {
   const [registry] = useState(() => new FabRuntimeRegistry());
-  const [telemetryRegistry] = useState(() => new SiteTelemetryRegistry());
+  const [telemetryRegistry] = useState(() => new FabTelemetryRegistry());
   const [runtimeVersion, setRuntimeVersion] = useState(0);
   const lifecycle = useRef<FabLifecycleCoordinator | undefined>(undefined);
   const signature = useRef('');
@@ -58,12 +58,17 @@ export function RuntimeBootstrap({ children }: { children: ReactNode }) {
     });
     for (const fab of fabs) registry.register(factory.create(fab.fabId));
 
+    // One telemetry runtime per FAB: the backend telemetry stream is FAB-scoped
+    // and carries a per-connection sequence, so a site aggregate would mix FABs.
     if (typeof EventSource !== 'undefined' && typeof Worker !== 'undefined') {
       const telemetry = new Map<string, TelemetryRuntime>();
-      for (const site of sites) {
-        const runtime = new TelemetryRuntime({ url: `/api/v1/sites/${site.siteId}/telemetry/stream` });
+      for (const fab of fabs) {
+        const runtime = new TelemetryRuntime({
+          url: `/api/v1/sites/${encodeURIComponent(fab.siteId)}/fabs/${encodeURIComponent(fab.fabId)}/telemetry/stream`,
+          fabId: fab.fabId,
+        });
         runtime.start();
-        telemetry.set(site.siteId, runtime);
+        telemetry.set(fab.fabId, runtime);
       }
       telemetryRegistry.replaceAll(telemetry);
     }

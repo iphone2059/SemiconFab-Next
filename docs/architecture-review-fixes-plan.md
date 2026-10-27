@@ -10,6 +10,17 @@
 
 **Spec:** The seven actionable findings in the preceding code review, accepted by the user's request to fix them.
 
+## Status (2026-10-27)
+
+- [x] P0 解除后端单 FAB 硬编码：三 FAB catalog、Scenario 子集校验、FAB 级遥测/设备状态
+- [x] P1 完善命令鉴权与幂等：Idempotency-Key、FAB 授权 seam、设备能力/前置条件校验
+- [x] P1 修复 Runtime 热替换订阅：当前 Runtime 实例依赖 + replacement 回归测试
+- [x] P1 完善 SSE 断线恢复：id/Last-Event-ID、replay-gap、权威核对
+- [x] P1 限制命令内存增长：后端终态 TTL/容量、前端 terminal workflow/projection/correlation 保留策略
+- [x] P2 完善设备能力模型：可配置 capability catalog（默认 fallback 保持兼容）
+- [x] P2 持续遥测压力测试：500/2000/5000 entities CPU/heap + 真实 Chrome WebGPU renderer frames/draw calls/gpuErrors
+- [ ] PostgreSQL/Outbox/生产身份认证：本仓库无数据库/IdP 基础设施，保留为边界（见 architecture §27.5）
+
 ## Global Constraints
 
 - Keep canonical product URLs and existing dependency versions.

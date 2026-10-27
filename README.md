@@ -70,7 +70,7 @@ npx --yes pnpm@12.15.0 test
 npx --yes pnpm@12.15.0 build
 ```
 
-当前验证基线：`tsc --noEmit` 0、Vitest **61 文件 / 271 测试 PASS**、`vite build` 0、后端 **73/73**、真实 Chrome WebGPU 门禁 **p95 8.5ms**、`./scripts/verify.ps1` exit 0（8 个 Python 工具测试、3 个 .NET 项目、契约/架构检查、前端全量）。
+当前验证基线：`tsc --noEmit` 0、Vitest **69 文件 / 306 测试 PASS**、`vite build` 0、后端 **127/127**、真实 Chrome WebGPU 门禁 **p95 8.6ms**、`./scripts/verify.ps1` exit 0（8 个 Python 工具测试、3 个 .NET 项目、契约/架构检查、前端全量）。
 
 ## 产品 URL（仅 canonical，无重定向）
 
@@ -86,8 +86,9 @@ npx --yes pnpm@12.15.0 build
 
 - **TanStack Query**：唯一服务端数据缓存；页面/组件不另建请求缓存。
 - **Zustand**：仅客户端 UI 状态，不保存 Query DTO、XState actor 或引擎对象。
-- **XState v6**：命令生命周期由 workflow 拥有，经 `CommandWorkflow` 契约暴露；`RuntimeBootstrap` 按 FAB 装配 `FabRuntime`，命令源当前为空/可替换（后端实时命令流尚未提供）。
-- **高频路径**：渲染与 TypedArray/Worker 缓冲不经过 Query/Zustand/XState（`realtime/buffers`、`realtime/workers`、`rendering`）。
+- **XState v6**：命令生命周期由 workflow 拥有，经 `CommandWorkflow` 契约暴露；`RuntimeBootstrap` 按 FAB 装配 `FabRuntime`，命令源接后端模拟 HTTP/SSE，含幂等键、能力/权限校验与权威核对。
+- **高频路径**：FAB 级遥测 SSE → 每 FAB Worker → TypedArray/FrameRingBuffer → 渲染 frame loop，不经过 Query/Zustand/XState。
+- **多 FAB**：后端默认 FAB-01/02/03，前端按 FAB 装配 Runtime/遥测/设备状态；命令/SSE 带复合身份与游标恢复。
 - **Babylon Lite/WebGPU-only**：无 WebGL 回退；缺少 WebGPU/安全上下文时明确报错。
 
 ## 文档
@@ -112,6 +113,7 @@ python tools/migrate_legacy_data.py --check
 
 ## 已知边界
 
-- 后端 `--realtime`（WebSocket）/OT 仍是占位；当前产品使用新增的 HTTP 命令 API + 命令 SSE + 20Hz 遥测 SSE 模拟实现，WebSocket 生产传输可后续替换同契约。
-- Worker 高频路径已接模拟遥测 SSE 并供渲染 frame loop 读取；SharedArrayBuffer/COOP-COEP 未启用。
-- GPU 门禁是单机 headless Chrome 基线，不是生产设备矩阵；多 FAB UI 已数据驱动，当前产品数据仍为单 FAB。
+- 后端 `--realtime`（WebSocket）/OT 仍是占位；当前产品使用 HTTP 命令 API + 命令 SSE + FAB 级遥测/设备状态 SSE 模拟实现。
+- PostgreSQL/Outbox/正式身份认证未实现（仓库无数据库/IdP 基础设施）；当前命令状态为内存存储 + 终态 TTL/容量限制，开发身份授权 seam 已就位。
+- Worker 已接 FAB 级遥测 SSE 并供渲染 frame loop 读取；SharedArrayBuffer/COOP-COEP 未启用。
+- GPU 门禁是单机 headless Chrome 基线，不是生产设备矩阵；产品默认 3 FAB，前端已数据驱动。

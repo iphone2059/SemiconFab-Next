@@ -1,13 +1,14 @@
 # 实施状态（V2.1 最终）
 
-- 状态：**M0–M6 已落地；M6 后补完成页面 features 归位、模拟后端命令/遥测链路、Worker 渲染接线与真实 Chrome/WebGPU 性能门禁。**
+- 状态：**M0–M6 与后续 review 修复（多 FAB、SSE 游标/缺口、命令保留/幂等/能力、FAB 级遥测/设备状态、真实 GPU/Worker 压力门禁）已完成；PostgreSQL/Outbox/生产身份因基础设施缺失保留边界。**
 - 最后验证（提交前）：
   - 契约/架构检查 PASS
   - 8 个 Python 工具测试 PASS
-  - 3 个 .NET 项目 Release 构建 + **73/73 测试 PASS**
-  - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **61 文件 / 271 测试 PASS**、`vite build` 0
+  - 3 个 .NET 项目 Release 构建 + **127/127 测试 PASS**
+  - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **69 文件 / 306 测试 PASS**、`vite build` 0
   - `./scripts/verify.ps1` exit 0
-  - 真实 Chrome/WebGPU 性能门禁：179 frames，avg 8.61ms，p95 8.5ms，avg 116.1fps，canvas 754×424（`.local/render-perf.json`）
+  - 真实 Chrome/WebGPU 门禁：120 帧，p95 8.6ms，rendererFrames 151，drawCalls 903，gpuErrors []（`.local/render-perf.json`）
+  - 负载基准：500/2000/5000 entities × 60Hz × 5s，handler+buffer 约 18.6/60/141ms，heap delta < 256MB
 
 ## 当前架构
 
@@ -38,24 +39,27 @@ Babylon Lite 1.36   WebGPU-only 渲染
 | M5b | `src/rendering/lite` 归位、FrameRingBuffer/Worker 骨架、ARCH-11 检查、CPU 性能基线 |
 | M6 | 旧迁移文档/证据/parity 工具与测试删除、verify 收口 |
 | M6 后补 | 页面 `features/components` 归位；后端模拟命令 HTTP/SSE + 遥测 SSE；Worker → 渲染接线；真实 GPU 门禁 |
+| Review 修复 | 三 FAB 目录/场景子集；FAB 级遥测/设备状态；命令幂等/能力/授权；SSE id/Last-Event-ID/replay-gap；命令保留；前端/后端压力与 GPU 门禁 |
 
 ## 命令/遥测/渲染链路
 
 - **命令**：Workbench `CommandConsole` → `POST /api/v1/sites/{siteId}/commands` → `FabRuntime.trackCommand` → 后端命令 SSE → `CommandEventBridge` → XState workflow；`GET /api/v1/commands/{id}` 供核对。浏览器实测 accepted → executing → succeeded。
-- **遥测**：后端 20Hz 遥测 SSE → `TelemetryRuntime` → MessageDecoder → Worker FrameRingBuffer → 渲染 frame loop 的 `getToolStates()`；不经过 Query/Zustand/XState（ARCH-11）。
-- **性能**：`tools/render_perf.mjs` 在 headless Chrome + 真实 WebGPU 上验证 `navigator.gpu`/adapter/canvas 并采集 rAF 帧；命令见根 README。
+- **遥测/设备状态**：FAB 级 20Hz 遥测 SSE → 每 FAB `TelemetryRuntime` → MessageDecoder → Worker FrameRingBuffer → 渲染 frame loop；设备状态 REST/SSE 同样按 FAB 作用域；不经过 Query/Zustand/XState（ARCH-11）。
+- **多 FAB**：后端默认 FAB-01/02/03（`Fab:FabCount` 1..32），前端按 FAB 装配 Runtime/遥测/状态，Workbench 多 FAB 卡片，Scenario 可提交任意非空子集。
+- **命令可靠性**：Idempotency-Key 幂等、能力目录/前置条件、FAB 授权 seam、终态 TTL/容量保留；命令 SSE 带 epoch/sequence 与 Last-Event-ID，缺口触发 replay-gap + 权威核对。
+- **性能**：`tools/render_perf.mjs` 在 headless Chrome + 真实 WebGPU 上验证 `navigator.gpu`/adapter/canvas、renderer frames/draw calls/gpuErrors；`tests/performance/telemetry-load.test.ts` 覆盖 500/2000/5000 实体负载。命令见根 README。
 
 ## 测试与门禁
 
 - RQ-01..RQ-05、CE-01..CE-08：真实运行；CE-06 已有权威状态查询端点与集成测试。
 - ARCH-01..12：Vitest 架构测试 + `tools/check_architecture.py` 可执行检查。
-- 高频路径：`realtime-frame-buffer.test.ts`、`performance/telemetry-frame-buffer.test.ts`（CPU）+ `tools/render_perf.mjs`（真实 GPU）。
-- 传输：`realtime-transport.test.ts` 覆盖 SSE 解码、HTTP gateway、命令提交、TelemetryRuntime Worker 链路。
+- 高频路径：`realtime-frame-buffer.test.ts`、`performance/telemetry-frame-buffer.test.ts`/`telemetry-load.test.ts`（CPU/负载）+ `tools/render_perf.mjs`（真实 GPU）。
+- 传输：`realtime-transport.test.ts` 覆盖 SSE 游标/replay-gap、HTTP gateway、命令幂等提交、TelemetryRuntime Worker 链路；`fab-runtime-batch23` 覆盖 Runtime 保留/缺口核对。
 
 ## 已知边界
 
 - 后端 `--realtime` WebSocket 仍是占位；当前产品使用 HTTP/SSE 模拟实现，WebSocket 生产传输后续可替换同契约。
-- 后端状态为内存模拟，重启丢失；非模拟服务/持久恢复待真实后端。
+- **PostgreSQL/Outbox/生产身份认证未实现**：仓库无数据库依赖/服务与 IdP；当前命令历史/状态为内存存储 + 终态 TTL/容量限制，`DevelopmentFabAuthorization` 仅为开发 seam。
 - SharedArrayBuffer/COOP-COEP 未启用（OPEN-V21-14），Worker 走 postMessage。
-- GPU 门禁为单机 headless Chrome 基线，不是生产设备矩阵/显存/长任务门禁。
-- 当前产品数据为单 FAB；多 FAB runtime/UI 已数据驱动实现。
+- GPU 门禁为单机 headless Chrome 基线；生产设备矩阵/显存/长时压测待补。
+- 产品默认 3 FAB；前端 Runtime/遥测/状态/UI 已按 FAB 数据驱动。

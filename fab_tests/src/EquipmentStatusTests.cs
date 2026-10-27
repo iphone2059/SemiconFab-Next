@@ -6,19 +6,22 @@ namespace Fab.Tests;
 public sealed class EquipmentStatusTests
 {
     [Fact]
-    public void SequenceIsStableWithinBucketAndMonotonicAcrossBuckets()
+    public void SequenceIsStableWithinBucketAndMonotonicPerFab()
     {
         var service = new EquipmentStatusService();
         var siteId = Guid.NewGuid();
+        var fabId = Guid.NewGuid();
         var seed = new DateTimeOffset(2026, 10, 24, 2, 0, 0, TimeSpan.Zero);
         var t0 = DateTimeOffset.FromUnixTimeSeconds(seed.ToUnixTimeSeconds() / 8 * 8);
 
-        var first = service.Get(siteId, t0);
-        var sameBucket = service.Get(siteId, t0.AddSeconds(7));
-        var nextBucket = service.Get(siteId, t0.AddSeconds(8));
-        var lateFrame = service.Get(siteId, t0);
+        var first = service.Get(siteId, fabId, t0);
+        var sameBucket = service.Get(siteId, fabId, t0.AddSeconds(7));
+        var nextBucket = service.Get(siteId, fabId, t0.AddSeconds(8));
+        var lateFrame = service.Get(siteId, fabId, t0);
 
         Assert.Equal(121, first.Tools.Length);
+        Assert.Equal(siteId.ToString("D"), first.SiteId);
+        Assert.Equal(fabId.ToString("D"), first.FabId);
         Assert.Equal(first.Sequence, sameBucket.Sequence);
         Assert.Equal(nextBucket.Sequence, first.Sequence + 1);
         Assert.Equal(nextBucket.Sequence, lateFrame.Sequence);
@@ -27,16 +30,19 @@ public sealed class EquipmentStatusTests
     }
 
     [Fact]
-    public void SequenceIsIndependentPerSite()
+    public void SequenceIsIndependentPerFab()
     {
         var service = new EquipmentStatusService();
+        var siteId = Guid.NewGuid();
+        var fabA = Guid.NewGuid();
+        var fabB = Guid.NewGuid();
         var t0 = new DateTimeOffset(2026, 10, 24, 3, 0, 0, TimeSpan.Zero);
-        var a = Guid.NewGuid();
-        var b = Guid.NewGuid();
 
-        Assert.Equal(1, service.Get(a, t0).Sequence);
-        Assert.Equal(1, service.Get(b, t0).Sequence);
-        Assert.Equal(2, service.Get(a, t0.AddSeconds(8)).Sequence);
-        Assert.Equal(2, service.Get(b, t0.AddSeconds(8)).Sequence);
+        Assert.Equal(1, service.Get(siteId, fabA, t0).Sequence);
+        Assert.Equal(1, service.Get(siteId, fabB, t0).Sequence);
+        Assert.Equal(2, service.Get(siteId, fabA, t0.AddSeconds(8)).Sequence);
+        Assert.Equal(1, service.Get(siteId, fabB, t0).Sequence);
+        Assert.Equal(2, service.Get(siteId, fabB, t0.AddSeconds(8)).Sequence);
+        Assert.Equal(2, service.Get(siteId, fabB, t0.AddSeconds(8)).Sequence);
     }
 }

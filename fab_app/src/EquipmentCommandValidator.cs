@@ -13,51 +13,101 @@ public sealed record EquipmentCommandValidationResult(bool IsValid, string? Titl
 
 /// <summary>
 /// Seam for validating a command against the configured Site/FAB equipment model.
-/// Real deployments replace the synthetic implementation with a SECS/GEM or E30 model adapter.
+/// Real deployments replace the development implementation with a SECS/GEM or E30 adapter.
 /// </summary>
 public interface IEquipmentCommandValidator
 {
     EquipmentCommandValidationResult Validate(Guid siteId, FabUnit fab, EquipmentCommandRequest request);
 }
 
-/// <summary>
-/// Development-only synthetic equipment model: every demo FAB exposes equipment-0..equipment-120
-/// (matching the 121-tool synthetic status feed) and supports START/STOP/PAUSE.
-/// </summary>
-public sealed class SyntheticEquipmentCommandValidator : IEquipmentCommandValidator
+/// <summary>Current observed state of a command target; used only when a capability declares a precondition.</summary>
+public interface IEquipmentStateProvider
 {
-    public const int EquipmentCount = 121;
-    public const string EquipmentPrefix = "equipment-";
-    public static readonly string[] SupportedActions = ["START", "STOP", "PAUSE"];
+    string? GetState(Guid siteId, FabUnit fab, string equipmentId);
+}
 
-    private static readonly HashSet<string> Actions = new(SupportedActions, StringComparer.Ordinal);
+/// <summary>
+/// Development-only state adapter over the synthetic equipment status feed. Equipment ids
+/// follow the canonical <c>equipment-&lt;index&gt;</c> form used by the synthetic status tools.
+/// </summary>
+public sealed class SyntheticEquipmentStateProvider : IEquipmentStateProvider
+{
+    public const string EquipmentPrefix = "equipment-";
+
+    private readonly EquipmentStatusService status;
+
+    public SyntheticEquipmentStateProvider(EquipmentStatusService status)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        this.status = status;
+    }
+
+    public string? GetState(Guid siteId, FabUnit fab, string equipmentId)
+    {
+        ArgumentNullException.ThrowIfNull(fab);
+        if (!TryParseEquipmentIndex(equipmentId, out var index)) return null;
+        var snapshot = status.Get(siteId, fab.Id);
+        return index < snapshot.Tools.Length ? snapshot.Tools[index].State : null;
+    }
+
+    /// <summary>Accepts only canonical ids equipment-0..equipment-N (no padding, signs or whitespace).</summary>
+    public static bool TryParseEquipmentIndex(string? equipmentId, out int index)
+    {
+        index = -1;
+        if (string.IsNullOrEmpty(equipmentId) || !equipmentId.StartsWith(EquipmentPrefix, StringComparison.Ordinal)) return false;
+        var suffix = equipmentId.AsSpan(EquipmentPrefix.Length);
+        if (suffix.Length is 0 or > 9 || !int.TryParse(suffix, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)) return false;
+        if (!string.Equals(equipmentId, EquipmentPrefix + parsed.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)) return false;
+        index = parsed;
+        return true;
+    }
+}
+
+/// <summary>
+/// Default development validator: resolves the equipment entry from
+/// <see cref="IEquipmentCapabilityCatalog"/> and rejects unknown equipment, actions the
+/// entry does not allow, and optional state preconditions that the current state does not meet.
+/// </summary>
+public sealed class EquipmentCommandValidator : IEquipmentCommandValidator
+{
+    private readonly IEquipmentCapabilityCatalog catalog;
+    private readonly IEquipmentStateProvider stateProvider;
+
+    public EquipmentCommandValidator(IEquipmentCapabilityCatalog catalog, IEquipmentStateProvider stateProvider)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(stateProvider);
+        this.catalog = catalog;
+        this.stateProvider = stateProvider;
+    }
 
     public EquipmentCommandValidationResult Validate(Guid siteId, FabUnit fab, EquipmentCommandRequest request)
     {
         ArgumentNullException.ThrowIfNull(fab);
         ArgumentNullException.ThrowIfNull(request);
 
-        if (!TryParseEquipmentId(request.EquipmentId, out _))
+        if (!catalog.TryGetCapability(siteId, fab, request.EquipmentId, out var capability))
             return EquipmentCommandValidationResult.Invalid(
                 "Unknown equipment",
-                $"equipmentId must identify a synthetic tool of FAB {fab.Code}: equipment-0..equipment-{EquipmentCount - 1}.");
-        if (!Actions.Contains(request.Action))
+                $"equipmentId is not a command-capable tool of FAB {fab.Code} in the configured capability catalog.");
+
+        if (!capability.AllowedActions.Contains(request.Action))
             return EquipmentCommandValidationResult.Invalid(
                 "Unsupported action",
-                $"action must be one of {string.Join(", ", SupportedActions)}.");
-        return EquipmentCommandValidationResult.Valid();
-    }
+                $"action '{request.Action}' is not supported by {request.EquipmentId} in FAB {fab.Code}.");
 
-    /// <summary>Accepts only canonical ids equipment-0..equipment-120 (no padding, signs or whitespace).</summary>
-    public static bool TryParseEquipmentId(string? equipmentId, out int index)
-    {
-        index = -1;
-        if (string.IsNullOrEmpty(equipmentId) || !equipmentId.StartsWith(EquipmentPrefix, StringComparison.Ordinal)) return false;
-        var suffix = equipmentId.AsSpan(EquipmentPrefix.Length);
-        if (suffix.Length is 0 or > 3 || !int.TryParse(suffix, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)) return false;
-        if (parsed >= EquipmentCount) return false;
-        if (!string.Equals(equipmentId, EquipmentPrefix + parsed.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)) return false;
-        index = parsed;
-        return true;
+        if (!capability.StatePreconditions.TryGetValue(request.Action, out var requiredState))
+            return EquipmentCommandValidationResult.Valid();
+
+        var currentState = stateProvider.GetState(siteId, fab, request.EquipmentId);
+        if (currentState is null)
+            return EquipmentCommandValidationResult.Invalid(
+                "Command precondition not met",
+                $"action '{request.Action}' requires equipment state '{requiredState}' but the current state is unavailable.");
+        if (!string.Equals(currentState, requiredState, StringComparison.OrdinalIgnoreCase))
+            return EquipmentCommandValidationResult.Invalid(
+                "Command precondition not met",
+                $"action '{request.Action}' requires equipment state '{requiredState}' but current state is '{currentState}'.");
+        return EquipmentCommandValidationResult.Valid();
     }
 }

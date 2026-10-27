@@ -1,17 +1,29 @@
 import { expect, it, vi } from 'vitest';
 import { COMMAND_RESULT_TOPIC, TELEMETRY_TOPIC } from '../src/realtime/protocol/MessageDecoder';
-import { createSseCommandEventSource } from '../src/realtime/transport/SseCommandEventSource';
+import { createSseCommandEventSource, parseCommandCursor, parseCommandReplayGap } from '../src/realtime/transport/SseCommandEventSource';
 import { createHttpCommandGateway } from '../src/realtime/transport/HttpCommandGateway';
 import { submitEquipmentCommand } from '../src/api/mutations/commands.mutations';
 import { TelemetryRuntime, flattenTelemetryFrame, toolStatesFromValues } from '../src/realtime/telemetry/TelemetryRuntime';
 
 class FakeEventSource {
   onopen: (() => void) | null = null;
-  onmessage: ((event: { data: string }) => void) | null = null;
+  onmessage: ((event: { data: string; lastEventId?: string }) => void) | null = null;
   onerror: ((event: unknown) => void) | null = null;
   closed = false;
+  private readonly listeners = new Map<string, Set<(event: { data: string; lastEventId?: string }) => void>>();
   constructor(readonly url: string) {}
-  emit(payload: unknown) { this.onmessage?.({ data: JSON.stringify(payload) }); }
+  addEventListener(type: string, listener: (event: { data: string; lastEventId?: string }) => void) {
+    const set = this.listeners.get(type) ?? new Set();
+    set.add(listener);
+    this.listeners.set(type, set);
+  }
+  removeEventListener(type: string, listener: (event: { data: string; lastEventId?: string }) => void) {
+    this.listeners.get(type)?.delete(listener);
+  }
+  emit(payload: unknown, lastEventId?: string) { this.onmessage?.({ data: JSON.stringify(payload), lastEventId }); }
+  emitNamed(type: string, data: string, lastEventId?: string) {
+    for (const listener of this.listeners.get(type) ?? []) listener({ data, lastEventId });
+  }
   close() { this.closed = true; }
 }
 
@@ -61,6 +73,48 @@ it('reports SSE reconnection so runtimes can reconcile results outside the repla
   expect(sources[0].closed).toBe(true);
 });
 
+it('parses the journal cursor and surfaces replay-gap as an explicit signal', () => {
+  expect(parseCommandCursor('1f0e5c9a-0000-4000-8000-000000000001:42')).toEqual({
+    epoch: '1f0e5c9a-0000-4000-8000-000000000001',
+    sequence: 42,
+  });
+  expect(parseCommandCursor(undefined)).toEqual({});
+  expect(parseCommandCursor('not-a-cursor')).toEqual({});
+  const gap = parseCommandReplayGap(JSON.stringify({
+    topic: 'command.result', replayGap: true, epoch: 'epoch-2',
+    requestedLastEventId: 'epoch-1:9', firstRetainedSequence: 10, latestSequence: 12,
+  }), { epoch: 'epoch-1', sequence: 9 });
+  expect(gap).toEqual({ epoch: 'epoch-2', sequence: 9, cursor: 'epoch-1:9' });
+  // Malformed control frames still mean "reconcile"; they never throw.
+  expect(parseCommandReplayGap('<html>', { sequence: 3 })).toEqual({ sequence: 3 });
+});
+
+it('keeps reconnected$ and emits gaps$ once per backend replay-gap control frame', () => {
+  const sources: FakeEventSource[] = [];
+  const source = createSseCommandEventSource('/api/v1/sites/site-1/commands/stream', {
+    eventSourceFactory: (url) => { const value = new FakeEventSource(url); sources.push(value); return value; },
+  });
+  const gaps: unknown[] = [];
+  let reconnects = 0;
+  const gapSubscription = source.gaps$?.subscribe((gap) => gaps.push(gap));
+  const reconnectSubscription = source.reconnected$?.subscribe(() => { reconnects++; });
+  const results = source.commandResult$.subscribe(() => {});
+  sources[0].onopen?.();
+  // Normal frames carry the journal cursor in the SSE id line.
+  sources[0].emit(commandEnvelope(0), 'epoch-1:7');
+  sources[0].emit(commandEnvelope(1), 'epoch-1:8');
+  // A reconnect followed by one replay-gap control frame (no id line of its own).
+  sources[0].onopen?.();
+  sources[0].emitNamed('replay-gap', JSON.stringify({
+    topic: 'command.result', replayGap: true, epoch: 'epoch-2', requestedLastEventId: 'epoch-1:8',
+    firstRetainedSequence: 20, latestSequence: 22, occurredAt: '2026-10-27T00:00:00Z',
+  }), 'epoch-1:8');
+  expect(reconnects).toBe(1);
+  expect(gaps).toEqual([{ epoch: 'epoch-2', sequence: 8, cursor: 'epoch-1:8' }]);
+  results.unsubscribe(); gapSubscription?.unsubscribe(); reconnectSubscription?.unsubscribe();
+  expect(sources[0].closed).toBe(true);
+});
+
 it('submits equipment commands over HTTP', async () => {
   const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
     commandId: '11111111-1111-4111-8111-111111111111', siteId: 'site-1', fabId: 'fab-a',
@@ -85,7 +139,7 @@ it('feeds telemetry frames through the Worker and exposes renderer tool states',
     terminate: vi.fn(),
   };
   const runtime = new TelemetryRuntime({
-    url: '/api/v1/sites/site-1/telemetry/stream',
+    url: '/api/v1/sites/site-1/fabs/fab-a/telemetry/stream',
     eventSourceFactory: (url) => { const value = new FakeEventSource(url); sources.push(value); return value; },
     workerFactory: () => worker,
   });

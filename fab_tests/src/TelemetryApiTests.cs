@@ -11,8 +11,8 @@ using Xunit.Sdk;
 namespace Fab.Tests;
 
 /// <summary>
-/// API-level coverage for the development telemetry.frame SSE stream: envelope
-/// shape, camelCase payload, numeric sample values, and unknown-Site handling.
+/// API-level coverage for the FAB-scoped telemetry.frame SSE stream: requested-FAB payload
+/// identity, camelCase envelope, numeric samples, per-FAB independence and 404 scoping.
 /// </summary>
 public sealed class TelemetryApiTests
 {
@@ -20,14 +20,14 @@ public sealed class TelemetryApiTests
     private static readonly TimeSpan StreamTimeout = TimeSpan.FromSeconds(10);
 
     [Fact]
-    public async Task TelemetryStreamEmitsFramesWithNumericSamples()
+    public async Task TelemetryStreamEmitsFramesForRequestedFabWithNumericSamples()
     {
         using var factory = Factory();
         using var client = Authorized(factory);
-        var (siteId, fabId) = await SiteAsync(client);
+        var (siteId, fabId) = await SiteFabAsync(client, fabIndex: 1);
 
         using var timeout = new CancellationTokenSource(StreamTimeout);
-        using var response = await client.GetAsync($"/api/v1/sites/{siteId}/telemetry/stream",
+        using var response = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fabId}/telemetry/stream",
             HttpCompletionOption.ResponseHeadersRead, timeout.Token);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("text/event-stream", response.Content.Headers.ContentType!.MediaType);
@@ -70,21 +70,71 @@ public sealed class TelemetryApiTests
     }
 
     [Fact]
-    public async Task UnknownSiteTelemetryStreamReturnsNotFound()
+    public async Task TwoFabStreamsCarryTheirOwnFabIdAndSequence()
+    {
+        using var factory = Factory();
+        using var clientA = Authorized(factory);
+        using var clientB = Authorized(factory);
+        var site = await SiteAsync(clientA);
+        var fabA = site.Fabs[0].FabId;
+        var fabB = site.Fabs[1].FabId;
+        using var timeout = new CancellationTokenSource(StreamTimeout);
+
+        using var responseA = await clientA.GetAsync($"/api/v1/sites/{site.SiteId}/fabs/{fabA}/telemetry/stream",
+            HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        using var responseB = await clientB.GetAsync($"/api/v1/sites/{site.SiteId}/fabs/{fabB}/telemetry/stream",
+            HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        Assert.Equal(HttpStatusCode.OK, responseA.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, responseB.StatusCode);
+
+        await using var bodyA = await responseA.Content.ReadAsStreamAsync(timeout.Token);
+        await using var bodyB = await responseB.Content.ReadAsStreamAsync(timeout.Token);
+        using var readerA = new StreamReader(bodyA, Encoding.UTF8);
+        using var readerB = new StreamReader(bodyB, Encoding.UTF8);
+        var frameA = await ReadEnvelopeAsync(readerA, timeout.Token)
+            ?? throw new XunitException("FAB A telemetry stream ended before the first frame.");
+        var frameB = await ReadEnvelopeAsync(readerB, timeout.Token)
+            ?? throw new XunitException("FAB B telemetry stream ended before the first frame.");
+
+        Assert.Equal(fabA, frameA.GetProperty("payload").GetProperty("fabId").GetString());
+        Assert.Equal(fabB, frameB.GetProperty("payload").GetProperty("fabId").GetString());
+        Assert.NotEqual(fabA, fabB);
+        Assert.Equal(1, frameA.GetProperty("payload").GetProperty("sequence").GetInt64());
+        Assert.Equal(1, frameB.GetProperty("payload").GetProperty("sequence").GetInt64());
+    }
+
+    [Theory]
+    [InlineData("site")]
+    [InlineData("fab")]
+    [InlineData("legacy-site-endpoint")]
+    public async Task InvalidScopeTelemetryStreamReturnsNotFound(string scope)
     {
         using var factory = Factory();
         using var client = Authorized(factory);
-        using var response = await client.GetAsync($"/api/v1/sites/{Guid.NewGuid()}/telemetry/stream");
+        var site = await SiteAsync(client);
+        var url = scope switch
+        {
+            "site" => $"/api/v1/sites/{Guid.NewGuid()}/fabs/{site.Fabs[0].FabId}/telemetry/stream",
+            "fab" => $"/api/v1/sites/{site.SiteId}/fabs/{Guid.NewGuid()}/telemetry/stream",
+            _ => $"/api/v1/sites/{site.SiteId}/telemetry/stream"
+        };
+        using var response = await client.GetAsync(url);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
+        // Known Site/FAB failures are problem+json; the removed legacy endpoint is a plain routing 404.
+        if (scope != "legacy-site-endpoint")
+            Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
     }
 
-    private static async Task<(string SiteId, string FabId)> SiteAsync(HttpClient client)
+    private static async Task<SiteDto> SiteAsync(HttpClient client)
     {
         var sites = await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites");
-        var site = Assert.Single(sites!);
-        var fab = Assert.Single(site.Fabs);
-        return (site.SiteId, fab.FabId);
+        return Assert.Single(sites!);
+    }
+
+    private static async Task<(string SiteId, string FabId)> SiteFabAsync(HttpClient client, int fabIndex)
+    {
+        var site = await SiteAsync(client);
+        return (site.SiteId, site.Fabs[fabIndex].FabId);
     }
 
     private static async Task<JsonElement?> ReadEnvelopeAsync(StreamReader reader, CancellationToken cancellationToken)

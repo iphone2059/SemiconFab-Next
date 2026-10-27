@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using Fab.Site;
 
 namespace Fab.App;
@@ -15,10 +17,11 @@ public sealed record TelemetryFramePayloadDto(string FabId, long Sequence, strin
 public sealed record TelemetryFrameEnvelopeDto(string Topic, long Sequence, TelemetryFramePayloadDto Payload);
 
 /// <summary>
-/// Development-only synthetic telemetry feed. It mirrors the shape of the realtime
-/// telemetry.frame topic already consumed by the preview, at a deliberately low
-/// aggregate rate (~20 Hz, 16 entities per frame), and is meant to be replaced by a
-/// real SECS/GEM or OPC-UA adapter later.
+/// Development-only synthetic telemetry feed. Frames are produced per FAB: each FAB has
+/// its own deterministic random stream and entity state, so two FABs streamed at the same
+/// time never share state. The wire shape matches the realtime telemetry.frame topic at a
+/// deliberately low aggregate rate (~20 Hz, 16 entities per frame) and is meant to be
+/// replaced by a real SECS/GEM or OPC-UA adapter later.
 /// </summary>
 public sealed class TelemetrySimulationService
 {
@@ -28,6 +31,7 @@ public sealed class TelemetrySimulationService
     public const int StateCount = 4;
 
     private readonly SiteDirectory directory;
+    private readonly ConcurrentDictionary<Guid, FabTelemetryState> states = new();
 
     public TelemetrySimulationService(SiteDirectory directory)
     {
@@ -35,34 +39,48 @@ public sealed class TelemetrySimulationService
         this.directory = directory;
     }
 
-    /// <summary>Resolves the single FAB of a Site; returns false for an unknown Site.</summary>
-    public bool TryGetFabId(Guid siteId, out string fabId)
-    {
-        if (directory.TryGetSite(siteId, out var site))
-        {
-            fabId = site.Fabs[0].Id.ToString("D");
-            return true;
-        }
-        fabId = "";
-        return false;
-    }
+    /// <summary>Resolves a requested Site/FAB pair; returns false when either is unknown or mismatched.</summary>
+    public bool TryGetFab(Guid siteId, Guid fabId, out FabUnit fab) => directory.TryGetFab(siteId, fabId, out fab);
 
-    /// <summary>Builds one aggregate frame. Values are synthetic; sequence is supplied by the stream.</summary>
-    public TelemetryFrameEnvelopeDto CreateFrame(string fabId, long sequence, DateTimeOffset? capturedAt = null)
+    /// <summary>
+    /// Builds one aggregate frame for a FAB. The sequence is supplied by the connection;
+    /// each FAB's entity state advances independently across all of its consumers.
+    /// </summary>
+    public TelemetryFrameEnvelopeDto CreateFrame(Guid fabId, long sequence, DateTimeOffset? capturedAt = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(fabId);
+        var state = states.GetOrAdd(fabId, id => new FabTelemetryState(SeedFor(id)));
         var samples = new TelemetrySampleDto[EntityCount];
-        for (var index = 0; index < samples.Length; index++)
+        lock (state.Gate)
         {
-            samples[index] = new TelemetrySampleDto(
-                $"equipment-{index}",
-                new TelemetrySampleValuesDto(
-                    Random.Shared.Next(StateCount),
-                    Math.Round(Random.Shared.NextDouble(), 3)));
+            for (var index = 0; index < samples.Length; index++)
+            {
+                var next = Math.Clamp(state.EntityStates[index] + state.Random.Next(-1, 2), 0, StateCount - 1);
+                state.EntityStates[index] = next;
+                samples[index] = new TelemetrySampleDto(
+                    $"equipment-{index}",
+                    new TelemetrySampleValuesDto(next, Math.Round(state.Random.NextDouble(), 3)));
+            }
+            state.Frames++;
         }
         return new TelemetryFrameEnvelopeDto(
             FrameTopic,
             sequence,
-            new TelemetryFramePayloadDto(fabId, sequence, (capturedAt ?? DateTimeOffset.UtcNow).ToString("O"), samples));
+            new TelemetryFramePayloadDto(fabId.ToString("D"), sequence, (capturedAt ?? DateTimeOffset.UtcNow).ToString("O"), samples));
+    }
+
+    private static int SeedFor(Guid fabId) => BitConverter.ToInt32(SHA256.HashData(fabId.ToByteArray()), 0);
+
+    private sealed class FabTelemetryState
+    {
+        public readonly object Gate = new();
+        public readonly Random Random;
+        public readonly int[] EntityStates = new int[EntityCount];
+        public long Frames;
+
+        public FabTelemetryState(int seed)
+        {
+            Random = new Random(seed);
+            for (var index = 0; index < EntityStates.Length; index++) EntityStates[index] = Random.Next(StateCount);
+        }
     }
 }

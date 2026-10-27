@@ -33,7 +33,6 @@ const count = (value: string) => BigInt(value).toLocaleString('zh-CN');
 function Workbench({ site }: { site: SiteDto }) {
   const { runId, form, submitError } = useWorkbenchStore();
   const { lotCount, processTimeUs, durationUs, warmupUs, masterSeed } = form;
-  const fab = site.fabs[0];
   const submissionScope = useMemo(() => new ScopeGate(), []);
   const queryClient = useQueryClient();
   const runsQuery = useQuery({ ...runsQueryOptions(), refetchInterval: 1500 });
@@ -63,7 +62,7 @@ function Workbench({ site }: { site: SiteDto }) {
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     workbenchActions.submitErrorSet('');
-    if (!fab) {
+    if (site.fabs.length === 0) {
       workbenchActions.submitErrorSet('当前站点没有可用的 FAB');
       return;
     }
@@ -75,7 +74,8 @@ function Workbench({ site }: { site: SiteDto }) {
     const request: CreateRunRequest = {
       scenario: {
         contractVersion: 1, siteId: site.siteId, mode: 'INDEPENDENT', masterSeed, durationUs, warmupUs,
-        fabs: [{ fabId: fab.fabId, code: fab.code, lotCount: Number(lotCount), processTimeUs }],
+        // One execution per site FAB; the catalog is data-driven, never a fixed count.
+        fabs: site.fabs.map((member) => ({ fabId: member.fabId, code: member.code, lotCount: Number(lotCount), processTimeUs })),
       },
     };
     const json = JSON.stringify(request);
@@ -100,15 +100,15 @@ function Workbench({ site }: { site: SiteDto }) {
     (sum, resultFab) => sum + BigInt(resultFab.completedLots),
     0n,
   );
-  const execution = fab ? displayedRun?.executions.find((value) => value.fabId === fab.fabId) : undefined;
-  const metrics = fab ? displayedResult?.fabs.find((value) => value.fabId === fab.fabId) : undefined;
+  const executionFor = (fabId: string) => displayedRun?.executions.find((value) => value.fabId === fabId);
+  const metricsFor = (fabId: string) => displayedResult?.fabs.find((value) => value.fabId === fabId);
   return (
     <>
       <div className="metrics">
         <Metric
           label="FAB"
-          value="01"
-          hint="FAB-01 · 单 FAB 执行域"
+          value={String(site.fabs.length).padStart(2, '0')}
+          hint={`${site.fabs.map((member) => member.code).join(' · ')} · 独立执行域`}
         />
         <Metric
           label="当前运行"
@@ -123,7 +123,7 @@ function Workbench({ site }: { site: SiteDto }) {
         <Metric label="运行模式" value="独立仿真" hint="INDEPENDENT · 合成 FIFO 模型" />
       </div>
       <div className="workbench-run-form">
-        <Panel title="新建仿真" subtitle="单 FAB 清洁室，独立执行域。">
+        <Panel title="新建仿真" subtitle={`${site.fabs.length} 个 FAB · 独立执行域。`}>
           <form
             onSubmit={(event) => {
               void submit(event);
@@ -187,7 +187,7 @@ function Workbench({ site }: { site: SiteDto }) {
                 {submitError}
               </div>
             )}
-            <button className="primary" disabled={submitting || !fab}>
+            <button className="primary" disabled={submitting || site.fabs.length === 0}>
               {submitting ? '正在提交…' : '创建并运行'}
               <span>↗</span>
             </button>
@@ -208,44 +208,48 @@ function Workbench({ site }: { site: SiteDto }) {
           运行查询失败：{runError}；下列已显示值可能过期。
         </div>
       )}
-      <div className="fab-grid single-fab">
-        {fab && (
-          <article className="fab-card" key={fab.fabId}>
-            <div className="fab-card-head">
-              <span className="fab-icon">01</span>
-              <div>
-                <h3>{fab.code}</h3>
-                <small>单 FAB 执行域</small>
+      <div className={`fab-grid${site.fabs.length === 1 ? ' single-fab' : ''}`}>
+        {site.fabs.map((member, index) => {
+          const execution = executionFor(member.fabId);
+          const metrics = metricsFor(member.fabId);
+          return (
+            <article className="fab-card" key={member.fabId}>
+              <div className="fab-card-head">
+                <span className="fab-icon">{String(index + 1).padStart(2, '0')}</span>
+                <div>
+                  <h3>{member.code}</h3>
+                  <small>独立执行域</small>
+                </div>
+                {execution ? (
+                  <StatusPill status={execution.status} />
+                ) : (
+                  <span className="muted">待选择 Run</span>
+                )}
               </div>
-              {execution ? (
-                <StatusPill status={execution.status} />
-              ) : (
-                <span className="muted">待选择 Run</span>
+              <div className="fab-values">
+                <div>
+                  <span>完成 / 总 Lot</span>
+                  <strong>
+                    {execution
+                      ? `${count(execution.completedLots)} / ${count(execution.totalLots)}`
+                      : '—'}
+                  </strong>
+                </div>
+                <div>
+                  <span>仿真时间 / μs</span>
+                  <strong>{execution ? count(execution.simulationTimeUs) : '—'}</strong>
+                </div>
+              </div>
+              {execution && (
+                <CompletionBar completed={execution.completedLots} total={execution.totalLots} />
               )}
-            </div>
-            <div className="fab-values">
-              <div>
-                <span>完成 / 总 Lot</span>
-                <strong>
-                  {execution
-                    ? `${count(execution.completedLots)} / ${count(execution.totalLots)}`
-                    : '—'}
-                </strong>
+              <div className="hash">
+                {metrics ? `轨迹 SHA ${metrics.traceHash.slice(0, 18)}…` : '等待后端提交结果'}
               </div>
-              <div>
-                <span>仿真时间 / μs</span>
-                <strong>{execution ? count(execution.simulationTimeUs) : '—'}</strong>
-              </div>
-            </div>
-            {execution && (
-              <CompletionBar completed={execution.completedLots} total={execution.totalLots} />
-            )}
-            <div className="hash">
-              {metrics ? `轨迹 SHA ${metrics.traceHash.slice(0, 18)}…` : '等待后端提交结果'}
-            </div>
-            {execution?.error && <div className="error">{execution.error}</div>}
-          </article>
-        )}
+              {execution?.error && <div className="error">{execution.error}</div>}
+            </article>
+          );
+        })}
       </div>
       <Panel title="运行记录" subtitle="站点范围内的持久化 Run；点击查看执行状态与完整结果。">
         {listError && (

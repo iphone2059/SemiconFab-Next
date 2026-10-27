@@ -9,7 +9,8 @@ export const queryKeys = {
     all: ['sites'] as const,
   },
   equipment: {
-    status: (siteId: string) => ['equipment', 'status', siteId] as const,
+    /** FAB-scoped: identical equipment ids must never share one status cache entry. */
+    status: (siteId: string, fabId: string) => ['equipment', 'status', siteId, fabId] as const,
   },
   catalog: {
     all: ['catalog'] as const,
