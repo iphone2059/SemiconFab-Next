@@ -1,0 +1,139 @@
+{
+  "review": "PR #1: camera input parity with the source Three.js r128 OrbitControls behaviour",
+  "pr": 1,
+  "branch": "fix/orbit-r128-input-parity-20261027",
+  "baseCommit": "15da277d79bcf2e11b80f7d7ad94e92cea555fa4",
+  "branchHead": "879c5196225f6c8ec03db372ef6d5ec78486ac61",
+  "mergeCommit": "c1d16789419a9e3f7ed14f2e8c89a607d1a705db",
+  "verifiedAt": "2026-10-27T16:05:10+08:00",
+  "environment": {
+    "os": "Windows",
+    "browser": "Chrome/155.0.8059.86 (headless, WebGPU, localhost secure context)",
+    "backend": ".NET 11 Release",
+    "frontend": "React 19 / Vite 8 / TypeScript 7 / @babylonjs/lite 1.36.0",
+    "node": "26.12.1"
+  },
+  "automatedVerification": {
+    "command": "./scripts/verify.ps1",
+    "exitCode": 0,
+    "frontend": {
+      "typecheck": "tsc --noEmit exit 0",
+      "tests": {
+        "files": 74,
+        "passed": 381,
+        "failed": 0
+      },
+      "build": "vite build exit 0 (1804 modules)"
+    },
+    "backend": {
+      "passed": 170,
+      "failed": 0,
+      "total": 170
+    },
+    "pythonToolTests": {
+      "passed": 8,
+      "failed": 0
+    },
+    "renderGateUnitTests": {
+      "passed": 13,
+      "failed": 0
+    },
+    "contractsArchitecture": "PASS"
+  },
+  "sourceParityReference": {
+    "source": "three.js r128 examples/js/controls/OrbitControls.js",
+    "url": "https://raw.githubusercontent.com/mrdoob/three.js/r128/examples/js/controls/OrbitControls.js",
+    "verifiedSemantics": [
+      "dampingFactor 0.06 applied per update to the pending spherical/pan delta and remainder retained 0.94",
+      "rotateLeft/rotateUp use 2*PI*delta/clientHeight for both axes",
+      "perspective pan uses 2*radius*tan(fov/2)/clientHeight along the camera right/up columns; target damped by 0.06 with 0.94 retention",
+      "wheel is sign-only and uses dollyIn=scale*0.95 / dollyOut=scale/0.95 with radius clamped to 4..180",
+      "modifier remap: ROTATE+ctrl/meta/shift -> PAN; PAN+ctrl/meta/shift -> ROTATE; MIDDLE -> DOLLY",
+      "touch modes: one finger rotate, two fingers dolly (pinch ratio) + pan, one-finger/two-finger page coordinates"
+    ]
+  },
+  "browserEvidence": {
+    "probe": ".local/camera_probe.mjs (raw artifact, not committed; result .local/camera-probe.json)",
+    "environment": "headless Chrome 155 + real WebGPU, 754x424 canvas, demo FAB",
+    "checksTotal": 12,
+    "checksPassed": 12,
+    "checksFailed": 0,
+    "checks": [
+      {
+        "name": "left-drag-rotates",
+        "pass": true,
+        "detail": "position [38,48,58] -> [-20.51,48,66.24]"
+      },
+      {
+        "name": "inertia-continues-after-release",
+        "pass": true,
+        "detail": "27.42 world units after release"
+      },
+      {
+        "name": "inertia-decays-to-rest",
+        "pass": true,
+        "detail": "rest drift 0 after the 0.94^n tail"
+      },
+      {
+        "name": "wheel-up-zooms-in",
+        "pass": true,
+        "detail": "radius 84.33 -> 80.12"
+      },
+      {
+        "name": "wheel-down-zooms-out",
+        "pass": true,
+        "detail": "radius 80.12 -> 84.33"
+      },
+      {
+        "name": "right-drag-pans",
+        "pass": true,
+        "detail": "target moved 7.06 units"
+      },
+      {
+        "name": "right-drag-keeps-radius",
+        "pass": true,
+        "detail": "radius drift 5.9e-6"
+      },
+      {
+        "name": "ctrl-left-pans",
+        "pass": true,
+        "detail": "target moved 10.37 units"
+      },
+      {
+        "name": "middle-drag-out",
+        "pass": true,
+        "detail": "radius 84.33 -> 127.12"
+      },
+      {
+        "name": "middle-drag-in",
+        "pass": true,
+        "detail": "radius 127.12 -> 84.33"
+      },
+      {
+        "name": "touch-drag-rotates",
+        "pass": true,
+        "detail": "position moved 40.10 units"
+      },
+      {
+        "name": "pinch-changes-radius",
+        "pass": true,
+        "detail": "radius 84.33 -> 37.48"
+      }
+    ],
+    "gpuErrors": [],
+    "pageErrors": [],
+    "notes": [
+      "The first-visit onboarding overlay was dismissed before gesture dispatch (it covers the canvas).",
+      "Camera pose was read from the product ?perf bridge (getCameraPose), so changes are real scene-camera changes, not DOM-only assertions."
+    ]
+  },
+  "followUpFixes": [
+    "Forwarded the orbit updater's already-clamped spherical radius to the Lite camera adapter (879c519) so limit values stay exact (180.00000000000003 -> 180); the frozen lite-camera limit assertions now pass."
+  ],
+  "knownBoundaries": [
+    "Input was synthesized through CDP mouse/touch events in headless Chrome; physical devices, Safari/iOS touch behaviour and pen input were not tested.",
+    "No side-by-side visual/pixel comparison against the original Three.js build was performed; parity was verified against the r128 source semantics plus real-camera kinematics in the Lite scene.",
+    "The render performance gate was not re-run for this PR; the probe observed a rendering scene with no GPU errors, and the existing dev/60Hz gates remain available for follow-up.",
+    "PR #1 was merged locally into main (merge commit c1d1678) because this session has no GitHub CLI/API credentials; mark the Draft PR merged/closed in the GitHub UI (or via API) if the remote PR state matters."
+  ]
+}

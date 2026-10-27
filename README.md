@@ -70,7 +70,7 @@ npx --yes pnpm@12.15.0 test
 npx --yes pnpm@12.15.0 build
 ```
 
-当前验证基线：`tsc --noEmit` 0、Vitest **73 文件 / 374 测试 PASS**、`vite build` 0（1804 modules）、后端 **170/170**、真实 Chrome WebGPU dev 门禁 **600 帧 / p95 8.5ms / 114.5fps / 1 个按需 Worker**、60Hz profile **p95 8.5ms / p99 16.6ms / heap growth 11.8MB**、Worker 压测 500/2000/5000 实体 p95 ≤1.2ms、静态结构构建期打包（`lite-backend` chunk 2.36MB→1.79MB，gzip 192.7→176.4kB）、RunStore 10k 历史 Run 下 Submit steady p50 **6.2ms（原 40.4ms，分片索引）**、RunStore 提交通知**合并唤醒**（批量提交后不积压空转）、`./scripts/verify.ps1` exit 0（8 个 Python 工具测试、13 个渲染门禁单测、3 个 .NET 项目、契约/架构检查、前端全量）。
+当前验证基线：`tsc --noEmit` 0、Vitest **74 文件 / 381 测试 PASS**、`vite build` 0（1804 modules）、后端 **170/170**、真实 Chrome WebGPU dev 门禁 **600 帧 / p95 8.5ms / 114.5fps / 1 个按需 Worker**、60Hz profile **p95 8.5ms / p99 16.6ms / heap growth 11.8MB**、Worker 压测 500/2000/5000 实体 p95 ≤1.2ms、静态结构构建期打包（`lite-backend` chunk 2.36MB→1.79MB，gzip 192.7→176.4kB）、RunStore 10k 历史 Run 下 Submit steady p50 **6.2ms（原 40.4ms，分片索引）**、RunStore 提交通知**合并唤醒**（批量提交后不积压空转）、相机输入与 Three.js r128 `OrbitControls` 行为对齐（独立 source-orbit-input 控制器，真实浏览器 12 项交互探针通过）、`./scripts/verify.ps1` exit 0（8 个 Python 工具测试、13 个渲染门禁单测、3 个 .NET 项目、契约/架构检查、前端全量）。
 
 ## 产品 URL（仅 canonical，无重定向）
 
