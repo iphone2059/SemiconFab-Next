@@ -1,5 +1,5 @@
-import { expect, it } from 'vitest';
-import type { TelemetryFrame } from '../src/application/contracts/CommandEvents';
+import { expect, it, vi } from 'vitest';
+import type { TelemetryFrame, TelemetrySample } from '../src/application/contracts/CommandEvents';
 import type { TelemetryWorkerEvent } from '../src/realtime/workers/telemetryWorker.logic';
 import { TelemetryRuntime, mergeTelemetryFrames } from '../src/realtime/telemetry/TelemetryRuntime';
 import { createTelemetryWorkerHandler } from '../src/realtime/workers/telemetryWorker.logic';
@@ -297,6 +297,194 @@ it('stop disposes pending/in-flight work and detaches both callbacks', () => {
   send(3, 1); // late SSE frame after stop
   expect(runtime.getSnapshot()).toBeUndefined();
   expect(frames().map((frame) => frame.sequence)).toEqual([1]);
+});
+
+interface RecoveryWorker {
+  onmessage: ((event: { data: unknown }) => void) | null;
+  onerror: ((event: unknown) => void) | null;
+  onmessageerror: ((event: unknown) => void) | null;
+  terminated: boolean;
+  postMessage(message: unknown): void;
+  terminate(): void;
+}
+
+/**
+ * Worker-fault harness: replies can be withheld, postMessage failures injected and
+ * every Worker generation created by a rebuild is observable.
+ */
+function recoveryHarness(options: { deliverNow?: boolean; workerTimeoutMs?: number } = {}) {
+  const handler = createTelemetryWorkerHandler({ frameSize: 32 });
+  const commands: PostedCommand[] = [];
+  const replies: TelemetryWorkerEvent[] = [];
+  const workers: RecoveryWorker[] = [];
+  let deliverNow = options.deliverNow !== false;
+  let throwNextPost = false;
+  const factory = (): RecoveryWorker => {
+    const worker: RecoveryWorker = {
+      onmessage: null,
+      onerror: null,
+      onmessageerror: null,
+      terminated: false,
+      postMessage(message: unknown) {
+        if (throwNextPost) {
+          throwNextPost = false;
+          throw new Error('injected postMessage failure');
+        }
+        commands.push(message as PostedCommand);
+        const result = handler.handle(message);
+        if (!result) return;
+        replies.push(result);
+        if (deliverNow) worker.onmessage?.({ data: result });
+      },
+      terminate() { worker.terminated = true; },
+    };
+    workers.push(worker);
+    return worker;
+  };
+  const source = {
+    onopen: null as (() => void) | null,
+    onmessage: null as ((event: { data: string }) => void) | null,
+    close() {},
+  };
+  const runtime = new TelemetryRuntime({
+    url: 'fake',
+    fabId: 'fab-a',
+    eventSourceFactory: () => source,
+    workerFactory: factory,
+    workerTimeoutMs: options.workerTimeoutMs ?? 0,
+  });
+  runtime.start();
+  source.onopen?.();
+  const send = (sequence: number, state: number) => source.onmessage?.({ data: JSON.stringify({
+    topic: 'telemetry.frame', sequence,
+    payload: { fabId: 'fab-a', sequence, capturedAt: '2026-10-27T00:00:00Z',
+      samples: [{ entityId: 'equipment-0', values: { state, utilization: 0.5 } }] },
+  }) });
+  const sendSamples = (sequence: number, samples: TelemetrySample[]) => source.onmessage?.({ data: JSON.stringify({
+    topic: 'telemetry.frame', sequence,
+    payload: { fabId: 'fab-a', sequence, capturedAt: '2026-10-27T00:00:00Z', samples },
+  }) });
+  const frames = () => commands.filter((command) => command.type === 'frame');
+  const current = () => workers[workers.length - 1];
+  const deliver = (index: number) => current().onmessage?.({ data: replies[index] });
+  const fail = (kind: 'error' | 'messageerror') => {
+    if (kind === 'error') current().onerror?.('worker crashed');
+    else current().onmessageerror?.('worker decode failed');
+  };
+  const throwNextPostMessage = () => { throwNextPost = true; };
+  return { runtime, source, workers, commands, replies, frames, current, deliver, fail, send, sendSamples, throwNextPostMessage };
+}
+
+it('releases the in-flight slot and exposes stale after a Worker error, then recovers', () => {
+  const h = recoveryHarness({ deliverNow: false });
+  h.send(1, 2); // in flight, reply withheld
+  expect(h.frames()).toHaveLength(1);
+  expect(h.runtime.stale).toBe(false);
+  h.fail('error');
+  // The failed Worker generation is replaced instead of leaving inFlight stuck.
+  expect(h.runtime.stale).toBe(true);
+  expect(h.runtime.status).toBe('stale');
+  expect(h.runtime.failed).toBe(false);
+  expect(h.workers).toHaveLength(2);
+  expect(h.workers[0].terminated).toBe(true);
+  expect(h.workers[1].terminated).toBe(false);
+
+  h.send(2, 1);
+  expect(h.frames().map((frame) => frame.sequence)).toEqual([1, 2]);
+  expect(h.frames()[1].generation).toBeGreaterThan(h.frames()[0].generation ?? 0);
+  h.deliver(0); // reply from the obsolete generation: ignored, slot stays in flight
+  expect(h.runtime.getSnapshot()).toBeUndefined();
+  expect(h.runtime.stale).toBe(true);
+  h.deliver(1);
+  expect(h.runtime.getSnapshot()?.sequence).toBe(2);
+  expect(h.runtime.getToolStates()?.[0]).toBe('idle');
+  expect(h.runtime.stale).toBe(false);
+  expect(h.runtime.status).toBe('live');
+  h.runtime.stop();
+});
+
+it('releases the slot on messageerror and recovers through a rebuilt Worker', () => {
+  const h = recoveryHarness({ deliverNow: false });
+  h.send(1, 0);
+  h.fail('messageerror');
+  expect(h.runtime.stale).toBe(true);
+  expect(h.workers).toHaveLength(2);
+  h.send(2, 2);
+  h.deliver(1);
+  expect(h.runtime.getSnapshot()?.sequence).toBe(2);
+  expect(h.runtime.getToolStates()?.[0]).toBe('down');
+  expect(h.runtime.stale).toBe(false);
+  h.runtime.stop();
+});
+
+it('times out a wedged in-flight Worker reply and releases the slot', () => {
+  vi.useFakeTimers();
+  try {
+    const h = recoveryHarness({ deliverNow: false, workerTimeoutMs: 50 });
+    h.send(1, 0);
+    expect(h.frames()).toHaveLength(1);
+    vi.advanceTimersByTime(49);
+    expect(h.runtime.stale).toBe(false);
+    vi.advanceTimersByTime(2);
+    expect(h.runtime.stale).toBe(true);
+    expect(h.runtime.status).toBe('stale');
+    expect(h.workers).toHaveLength(2);
+    h.send(2, 3);
+    expect(h.frames()).toHaveLength(2);
+    h.deliver(1);
+    expect(h.runtime.getSnapshot()?.sequence).toBe(2);
+    expect(h.runtime.getToolStates()?.[0]).toBe('maint');
+    expect(h.runtime.stale).toBe(false);
+    h.runtime.stop();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('rolls back the in-flight slot when postMessage throws and converges on the next frame', () => {
+  const h = recoveryHarness({ deliverNow: false });
+  h.throwNextPostMessage();
+  h.send(1, 2); // synchronous postMessage failure
+  expect(h.frames()).toHaveLength(0);
+  expect(h.runtime.stale).toBe(true);
+  expect(h.workers).toHaveLength(2);
+  h.send(2, 3); // no in-flight slot: newer frame merges with the held one
+  expect(h.frames().map((frame) => frame.sequence)).toEqual([2]);
+  h.deliver(0);
+  expect(h.runtime.getSnapshot()?.sequence).toBe(2);
+  expect(h.runtime.getToolStates()?.[0]).toBe('maint');
+  expect(h.runtime.stale).toBe(false);
+  h.runtime.stop();
+});
+
+it('bounds the pending merge by the registered render slots', () => {
+  const known = (index: number, state: number): TelemetrySample =>
+    ({ entityId: 'equipment-' + index, values: { state, utilization: 0.5 } });
+  const base: TelemetryFrame = {
+    fabId: 'fab-a', sequence: 1, capturedAt: '2026-10-27T00:00:00Z', samples: [known(0, 1)],
+  };
+  const unknown: TelemetrySample[] = Array.from({ length: 1_000 }, (_, index) =>
+    ({ entityId: 'external-' + index, values: { state: 2 } }));
+  const incoming: TelemetryFrame = {
+    fabId: 'fab-a', sequence: 2, capturedAt: '2026-10-27T00:00:01Z',
+    samples: [...unknown, known(7, 2), known(7, 0), { entityId: 'equipment-16', values: { state: 2 } }],
+  };
+  const merged = mergeTelemetryFrames(base, incoming);
+  // Unknown/out-of-range ids cannot be rendered and never enter the pending slot.
+  expect(merged.samples).toHaveLength(2);
+  expect(merged.samples.map((sample) => sample.entityId)).toEqual(['equipment-0', 'equipment-7']);
+  expect(merged.samples[1].values.state).toBe(2);
+
+  // Runtime path: 1,000 unknown entities merged during Worker backpressure stay bounded.
+  const h = recoveryHarness({ deliverNow: false });
+  h.send(1, 2); // in flight: equipment-0 = down
+  h.sendSamples(2, unknown);
+  h.deliver(0); // flush the single merged pending frame
+  expect(h.frames()).toHaveLength(2);
+  h.deliver(1);
+  expect(h.runtime.getSnapshot()?.sequence).toBe(2);
+  expect(h.runtime.getToolStates()?.[0]).toBe('down'); // retained registered slot
+  h.runtime.stop();
 });
 
 it('accepts ArrayBuffer views and legacy number[] worker replies', () => {

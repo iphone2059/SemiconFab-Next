@@ -20,3 +20,26 @@ it('parses the three original product routes and projects steps onto the layout'
   const transit = waferTransitPoint(waypoints, 1, 0.35);
   expect(Number.isFinite(transit.x)).toBe(true);
 });
+
+function routeValue(a: unknown, b: unknown = { route: [{ step: 1, tool_group: 'TG01_LITHO' }] }, c: unknown = b) {
+  return { products: { A: a, B: b, C: c } };
+}
+
+it('rejects an empty product route through the parse error path instead of accepting it', () => {
+  expect(() => parseWaferRoutes(routeValue({ route: [] }))).toThrow('Product A route 为空');
+});
+
+it('rejects non-positive or non-finite step numbers', () => {
+  expect(() => parseWaferRoutes(routeValue({ route: [{ step: 0, tool_group: 'TG01_LITHO' }] }))).toThrow('Product A route 第 1 行 step 无效');
+  expect(() => parseWaferRoutes(routeValue({ route: [{ step: Number.POSITIVE_INFINITY, tool_group: 'TG01_LITHO' }] }))).toThrow('step 无效');
+});
+
+it('keeps the 1-based fallback for rows without a step number', () => {
+  const routes = parseWaferRoutes(routeValue({ route: [{ tool_group: 'TG01_LITHO' }, { tool_group: 'TG02_TRACK' }] }));
+  expect(routes.A.map((step) => step.step)).toEqual([1, 2]);
+});
+
+it('projects an empty waypoint list without throwing', () => {
+  expect(buildWaferWaypoints([])).toEqual([]);
+  expect(waferTransitPoint([], 0, 0.5)).toEqual({ x: 0, y: 2.5, z: 0 });
+});

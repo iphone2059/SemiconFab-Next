@@ -224,6 +224,24 @@ export const RENDER_COLORS = {
   vortexPoints: 0xbae6fd,
 } as const;
 
+/**
+ * Opt-in recording of the full diagnostic history (events, phase sequence,
+ * purge records). Production leaves this unset: the motion/facility viewers
+ * keep only cumulative counters and bounded per-waypoint state, because no
+ * production consumer reads the full trace. Acceptance fixtures opt in
+ * explicitly, optionally with ring-buffer capacities.
+ */
+export interface PersonnelTraceOptions {
+  /** Defaults to true when the option object is present; false disables recording. */
+  readonly enabled?: boolean;
+  /** Ring-buffer capacity for events; 0/absent keeps the full trace. */
+  readonly maxEvents?: number;
+  /** Ring-buffer capacity for the recorded phase sequence. */
+  readonly maxPhaseChanges?: number;
+  /** Ring-buffer capacity for recorded purge records. */
+  readonly maxPurges?: number;
+}
+
 export interface PersonnelScenario {
   seed: number;
   dt: number;
@@ -231,6 +249,19 @@ export interface PersonnelScenario {
   clockMsPerTick: number;
   ticks: number;
   chamberUserDataMode: ChamberUserDataMode;
+  /** Full diagnostic history is opt-in; production runs without it. */
+  readonly trace?: PersonnelTraceOptions;
+}
+
+/** Cumulative bounded counters kept in every mode (including production). */
+export interface PersonnelTraceCounters {
+  readonly traceEnabled: boolean;
+  readonly traceBounded: boolean;
+  readonly events: number;
+  readonly phaseChanges: number;
+  readonly purges: number;
+  /** Arrival-edge count per patrol waypoint (once per inspection arrival, not per tick). */
+  readonly waypointArrivals: readonly number[];
 }
 
 export interface ActorFrame {
@@ -416,6 +447,8 @@ export interface PersonnelTimeline {
   readVortexParticles(): VortexParticleRender[];
   readEvents(): PersonnelEvent[];
   readPhases(): PhaseSummary;
+  /** Cumulative counters that remain meaningful when the full trace is not recorded. */
+  readTraceCounters(): PersonnelTraceCounters;
   readWaypointTrace(): WaypointTraceEntry[];
   readStats(): PersonnelStats;
   readPersonnel(): PersonnelConfig[];
@@ -495,6 +528,8 @@ interface VortexRuntimeParticle {
 interface WaypointRuntime {
   ticks: number;
   reachedTick: number | null;
+  /** Number of inspection arrivals (status edge), not dwell ticks. */
+  arrivals: number;
 }
 
 const LITHO_AIR_SHOWER_ID = 'fac.airshower.litho.1';
@@ -593,6 +628,13 @@ export function createPersonnelTimeline(scenario: PersonnelScenario): PersonnelT
 
   let tick = 0;
   let clockMs = scenario.clockStartMs;
+  // Full diagnostic history is opt-in (tests/acceptance only); production keeps
+  // counters and the fixed-size waypoint state instead of O(time) arrays.
+  const trace = scenario.trace;
+  const traceEnabled = trace !== undefined && trace.enabled !== false;
+  const eventsLimit = traceEnabled ? Math.max(0, trace?.maxEvents ?? 0) : 0;
+  const phaseChangesLimit = traceEnabled ? Math.max(0, trace?.maxPhaseChanges ?? 0) : 0;
+  const purgesLimit = traceEnabled ? Math.max(0, trace?.maxPurges ?? 0) : 0;
   const events: PersonnelEvent[] = [];
   const phaseSequence: PatrolPhase[] = [];
   const phaseTicks: Record<PatrolPhase, number> = {
@@ -607,7 +649,11 @@ export function createPersonnelTimeline(scenario: PersonnelScenario): PersonnelT
   const waypointRuntime: WaypointRuntime[] = waypoints.map(() => ({
     ticks: 0,
     reachedTick: null,
+    arrivals: 0,
   }));
+  let eventCount = 0;
+  let phaseChangeCount = 0;
+  let purgeCount = 0;
   let purgeTicks = 0;
   let currentPurge: PurgeRecord | null = null;
   let previousPhase: PatrolPhase = patrol.state;
@@ -618,14 +664,23 @@ export function createPersonnelTimeline(scenario: PersonnelScenario): PersonnelT
     waypoints,
   );
   let previousWaypointIndex = patrol.waypointIndex;
+  let previousArrivalIndex: number | null = null;
   let previousScreen = screen.color;
   let previousVortexOpacity = vortex.opacity;
   const previousChamberState = chambers.map(() => ({ purging: false, cycleBlowing: false }));
   let previousStateTimer = 0;
   let lastTick = 0;
 
+  // Ring-buffer append: with a positive capacity the oldest recorded entry is
+  // dropped, so an opted-in trace is bounded too. Counters stay cumulative.
+  const record = <T>(list: T[], value: T, limit: number): void => {
+    list.push(value);
+    if (limit > 0 && list.length > limit) list.splice(0, list.length - limit);
+  };
+
   const pushEvent = (fields: Omit<PersonnelEvent, 'tick' | 'time'>): void => {
-    events.push({ tick, time: round(tick * scenario.dt), ...fields });
+    eventCount += 1;
+    if (traceEnabled) record(events, { tick, time: round(tick * scenario.dt), ...fields }, eventsLimit);
   };
 
   const walkTowards = (targetX: number, targetZ: number, speed: number): number => {
@@ -942,7 +997,8 @@ export function createPersonnelTimeline(scenario: PersonnelScenario): PersonnelT
         x: current.actors[PERSONNEL.length - 1].x,
         z: current.actors[PERSONNEL.length - 1].z,
       });
-      phaseSequence.push(patrol.state);
+      phaseChangeCount += 1;
+      if (traceEnabled) record(phaseSequence, patrol.state, phaseChangesLimit);
     }
     if (statusKey !== previousStatusKey) {
       pushEvent({
@@ -968,7 +1024,10 @@ export function createPersonnelTimeline(scenario: PersonnelScenario): PersonnelT
         break;
       }
     }
-    if (arrivalIndex !== null) {
+    // Record the inspection arrival once per edge, not once per dwell tick: the
+    // cumulative arrival counter and the diagnostic event share the same edge.
+    if (arrivalIndex !== null && arrivalIndex !== previousArrivalIndex) {
+      waypointRuntime[arrivalIndex].arrivals += 1;
       if (waypointRuntime[arrivalIndex].reachedTick === null) {
         waypointRuntime[arrivalIndex].reachedTick = tick;
       }
@@ -983,6 +1042,7 @@ export function createPersonnelTimeline(scenario: PersonnelScenario): PersonnelT
         statusTextEn: patrol.statusTextEn,
       });
     }
+    previousArrivalIndex = arrivalIndex;
     if (screen.color !== previousScreen) {
       pushEvent({
         type: 'tablet-screen',
@@ -1036,7 +1096,8 @@ export function createPersonnelTimeline(scenario: PersonnelScenario): PersonnelT
       currentPurge.ticks = tick - currentPurge.startTick;
       currentPurge.seconds = round(currentPurge.ticks * scenario.dt);
       currentPurge.lastStateTimer = round(previousStateTimer);
-      purges.push(currentPurge);
+      purgeCount += 1;
+      if (traceEnabled) record(purges, currentPurge, purgesLimit);
       currentPurge = null;
     }
     if (patrol.state === 'AIR_SHOWER_CYCLE') {
@@ -1103,6 +1164,16 @@ export function createPersonnelTimeline(scenario: PersonnelScenario): PersonnelT
         purges: purges.slice(),
       };
     },
+    readTraceCounters(): PersonnelTraceCounters {
+      return {
+        traceEnabled,
+        traceBounded: eventsLimit > 0 || phaseChangesLimit > 0 || purgesLimit > 0,
+        events: eventCount,
+        phaseChanges: phaseChangeCount,
+        purges: purgeCount,
+        waypointArrivals: waypointRuntime.map((entry) => entry.arrivals),
+      };
+    },
     readWaypointTrace(): WaypointTraceEntry[] {
       return waypoints.map((waypoint, index) => ({
         index,
@@ -1126,11 +1197,11 @@ export function createPersonnelTimeline(scenario: PersonnelScenario): PersonnelT
         actors: PERSONNEL.length,
         chambers: chambers.length,
         vortexParticles: VORTEX_PARTICLE_COUNT,
-        events: events.length,
-        phaseChanges: phaseSequence.length,
+        events: eventCount,
+        phaseChanges: phaseChangeCount,
         purgeTicks,
         purgeSeconds: round(purgeTicks * scenario.dt),
-        purges: purges.length,
+        purges: purgeCount,
         waypointsReached: waypointRuntime.filter((entry) => entry.reachedTick !== null).length,
         lastTick,
       };

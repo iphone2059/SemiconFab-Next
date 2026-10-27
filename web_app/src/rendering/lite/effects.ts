@@ -351,11 +351,20 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
   const paletteMaterials: ShaderMaterial[] = [];
   const meshMaterials = new Map<string, ShaderMaterial>();
   let xrayClock = 0;
+  // Declared before bindShadows(): the CSM receiver callback may run synchronously during
+  // bindShadows and uses this to decide whether the palette fan-out is observable.
+  let activeFilter: LiteXrayFilter | null = null;
 
   // ---- Shadow borrowing: the generator keeps ownership, the palette only binds. ----
   let shadowGenerator: ShadowGenerator | undefined;
   let shadowTexture: Texture2D | null = null;
   let shadowData: Float32Array | null = null;
+  // B04: the receiver UBO is 80 floats. Reuse one buffer and its eight subarray views
+  // instead of allocating a fresh typed array per callback and eight views per material.
+  let shadowViews: {
+    cascade0: Float32Array; cascade1: Float32Array; cascade2: Float32Array; cascade3: Float32Array;
+    viewFrustumZ: Float32Array; frustumLengths: Float32Array; shadowsInfo: Float32Array; csmParams: Float32Array;
+  } | null = null;
   let detachCsmReceiver: (() => void) | undefined;
 
   function applyShadowBinding(material: ShaderMaterial): void {
@@ -363,18 +372,36 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
       setShaderTexture(material, 'xrayDepth', shadowTexture);
     }
     setShaderUniform(material, 'xrayShadowEnabled', shadowTexture && shadowData ? 1 : 0);
-    if (shadowData) writeCsmUniforms(material, shadowData);
+    if (shadowData) writeCsmUniforms(material);
   }
 
-  function writeCsmUniforms(material: ShaderMaterial, data: Float32Array): void {
-    setShaderUniform(material, 'xrayCascade0', data.subarray(0, 16));
-    setShaderUniform(material, 'xrayCascade1', data.subarray(16, 32));
-    setShaderUniform(material, 'xrayCascade2', data.subarray(32, 48));
-    setShaderUniform(material, 'xrayCascade3', data.subarray(48, 64));
-    setShaderUniform(material, 'xrayViewFrustumZ', data.subarray(64, 68));
-    setShaderUniform(material, 'xrayFrustumLengths', data.subarray(68, 72));
-    setShaderUniform(material, 'xrayShadowsInfo', data.subarray(72, 76));
-    setShaderUniform(material, 'xrayCsmParams', data.subarray(76, 80));
+  function receiveShadowData(data: Float32Array): void {
+    if (!shadowData || !shadowViews || shadowData.length !== data.length) {
+      shadowData = new Float32Array(data.length);
+      shadowViews = {
+        cascade0: shadowData.subarray(0, 16),
+        cascade1: shadowData.subarray(16, 32),
+        cascade2: shadowData.subarray(32, 48),
+        cascade3: shadowData.subarray(48, 64),
+        viewFrustumZ: shadowData.subarray(64, 68),
+        frustumLengths: shadowData.subarray(68, 72),
+        shadowsInfo: shadowData.subarray(72, 76),
+        csmParams: shadowData.subarray(76, 80),
+      };
+    }
+    shadowData.set(data);
+  }
+
+  function writeCsmUniforms(material: ShaderMaterial): void {
+    if (!shadowViews) return;
+    setShaderUniform(material, 'xrayCascade0', shadowViews.cascade0);
+    setShaderUniform(material, 'xrayCascade1', shadowViews.cascade1);
+    setShaderUniform(material, 'xrayCascade2', shadowViews.cascade2);
+    setShaderUniform(material, 'xrayCascade3', shadowViews.cascade3);
+    setShaderUniform(material, 'xrayViewFrustumZ', shadowViews.viewFrustumZ);
+    setShaderUniform(material, 'xrayFrustumLengths', shadowViews.frustumLengths);
+    setShaderUniform(material, 'xrayShadowsInfo', shadowViews.shadowsInfo);
+    setShaderUniform(material, 'xrayCsmParams', shadowViews.csmParams);
   }
 
   function syncMaterialFrame(material: ShaderMaterial): void {
@@ -463,10 +490,14 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
     // from inside this callback rather than an onBeforeRender hook.
     detachCsmReceiver = onCsmReceiverUpdate(generator, data => {
       if (disposed) return;
-      shadowData = new Float32Array(data);
+      receiveShadowData(data);
+      // B04: while X-Ray is active the palette materials are attached to rendered meshes and
+      // must mirror the receiver UBO. While it is inactive no mesh uses them, so the
+      // per-material uniform fan-out is skipped; enabling resyncs from the retained snapshot.
+      if (activeFilter === null) return;
       for (const material of paletteMaterials) {
         setShaderUniform(material, 'xrayShadowEnabled', shadowTexture ? 1 : 0);
-        writeCsmUniforms(material, shadowData);
+        writeCsmUniforms(material);
       }
     });
     for (const material of paletteMaterials) applyShadowBinding(material);
@@ -475,7 +506,6 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
   // ---- X-Ray target application/restoration (legacy-site.ts:469-524). ----
   const savedTargets = new Map<Mesh, SavedXrayTarget>();
   let xrayTargets: readonly LiteXrayTarget[] = [];
-  let activeFilter: LiteXrayFilter | null = null;
 
   function readXrayCaster(mesh: Mesh): boolean | undefined {
     const metadata = mesh.metadata as { xrayCaster?: boolean } | null | undefined;
@@ -512,6 +542,9 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
       mesh.material = line ? lineMaterial : meshMaterial(liteXraySurfaceState(target.role, filter, activeRole));
       mesh.metadata = { ...mesh.metadata, xrayCaster: true };
     }
+    // B04: the CSM fan-out pauses while X-Ray is off; re-apply the retained receiver
+    // snapshot before the first active frame so the visuals are unchanged.
+    for (const material of paletteMaterials) applyShadowBinding(material);
     setLineXray(true);
     updateXrayFrame();
   }
@@ -669,6 +702,7 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
     // recovery preserves both) so the CSM transforms resync on the replacement device.
     shadowTexture = null;
     shadowData = null;
+    shadowViews = null;
     for (const material of paletteMaterials) {
       setShaderTexture(material, 'xrayDepth', null);
       setShaderUniform(material, 'xrayShadowEnabled', 0);
@@ -687,6 +721,7 @@ export function createLiteEffects(scene: SceneContext, engine: EngineContext, op
     shadowGenerator = undefined;
     shadowTexture = null;
     shadowData = null;
+    shadowViews = null;
     savedTargets.clear();
     meshMaterials.clear();
     paletteMaterials.length = 0;

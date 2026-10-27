@@ -5,8 +5,11 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
 import { equipmentStatusQueryOptions, equipmentStatusQueryKey } from '../../src/api/queries/equipment.queries';
+import { acceptEquipmentStatusSnapshot } from '../../src/api/queries/equipment-status-bridge';
 import { runsQueryOptions } from '../../src/api/queries/runs.queries';
 import { createRun, invalidateRuns } from '../../src/api/mutations/runs.mutations';
+import { FAB_LAYOUT } from '../../src/fab-layout';
+import type { EquipmentStatusSnapshot } from '../../src/equipment-status';
 
 /**
  * RQ-02/RQ-03/RQ-04 on the real TanStack Query modules (no RTK Query involved).
@@ -16,14 +19,25 @@ import { createRun, invalidateRuns } from '../../src/api/mutations/runs.mutation
  *   authoritative server list.
  * - RQ-04: Query keys carry the (siteId, fabId) identity, so two FABs cannot
  *   share one equipment-status cache entry even inside the same site.
+ * - A02/A03: REST frames pass the same per-scope ordered acceptance gate as SSE;
+ *   a rejected/delayed frame can never regress the FAB-scoped cache entry.
  */
 
 const SITES_V1 = [{ siteId: 'site-1', code: 'SITE-1', templateHash: 'hash-1', fabs: [{ fabId: 'FAB-01', code: 'FAB-01' }] }];
 const SITES_V2 = [{ siteId: 'site-1', code: 'SITE-1', templateHash: 'hash-2', fabs: [{ fabId: 'FAB-01', code: 'FAB-01' }] }];
 const RUN_1 = { runId: 'run-1', siteId: 'site-1', status: 'RUNNING', version: '1', createdAtUtc: '2026-10-27T00:00:00Z', executions: [] };
 const RUN_2 = { runId: 'run-2', siteId: 'site-1', status: 'QUEUED', version: '1', createdAtUtc: '2026-10-27T00:00:01Z', executions: [] };
-const STATUS_A = { siteId: 'site-a', fabId: 'fab-1', generatedAt: '2026-10-27T00:00:00Z', sequence: 1, tools: [{ state: 'UP' }] };
-const STATUS_B = { siteId: 'site-a', fabId: 'fab-2', generatedAt: '2026-10-27T00:00:00Z', sequence: 1, tools: [{ state: 'DOWN' }] };
+
+/** A real FAB status frame carries one valid state per layout tool. */
+const statusFrame = (siteId: string, fabId: string, sequence: number, generatedAt: string, state = 'running') => ({
+  siteId,
+  fabId,
+  generatedAt,
+  sequence,
+  tools: FAB_LAYOUT.map(() => ({ state })),
+});
+const STATUS_A = statusFrame('site-a', 'fab-1', 1, '2026-10-27T00:00:00Z');
+const STATUS_B = statusFrame('site-a', 'fab-2', 1, '2026-10-27T00:00:00Z', 'down');
 
 const jsonResponse = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
@@ -111,4 +125,41 @@ it('RQ-04: FAB-scoped Query keys isolate identical equipment ids per FAB', async
     '/api/v1/sites/site-a/fabs/fab-1/equipment-status',
     '/api/v1/sites/site-a/fabs/fab-2/equipment-status',
   ]);
+});
+
+it('A02/A03: a first REST frame is accepted once and stored under the FAB-scoped key with its epoch', async () => {
+  const frame = { ...statusFrame('site-a', 'fab-1', 1, '2026-10-27T00:00:01Z'), epoch: 2 };
+  const fetchMock = vi.fn(async () => jsonResponse(frame));
+  vi.stubGlobal('fetch', fetchMock);
+  const queryClient = freshClient();
+
+  const result = await queryClient.fetchQuery(equipmentStatusQueryOptions('site-a', 'fab-1'));
+  const cached = queryClient.getQueryData<EquipmentStatusSnapshot>(equipmentStatusQueryKey('site-a', 'fab-1'));
+  expect(result).toEqual(frame);
+  expect(cached).toEqual(frame);
+  expect(cached?.epoch).toBe(2);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+it('A02: a REST poll resolving after a newer SSE frame cannot regress the FAB-scoped cache', async () => {
+  const scope = { siteId: 'site-a', fabId: 'fab-1' };
+  const rest = { frame: statusFrame('site-a', 'fab-1', 3, '2026-10-27T00:00:03Z') };
+  const fetchMock = vi.fn(async () => jsonResponse(rest.frame));
+  vi.stubGlobal('fetch', fetchMock);
+  const queryClient = freshClient();
+
+  expect((await queryClient.fetchQuery(equipmentStatusQueryOptions('site-a', 'fab-1'))).sequence).toBe(3);
+  // The SSE listener writes through the exact same acceptance boundary.
+  const newer = statusFrame('site-a', 'fab-1', 5, '2026-10-27T00:00:05Z', 'down');
+  expect(acceptEquipmentStatusSnapshot(queryClient, scope, newer)?.sequence).toBe(5);
+
+  // A delayed REST response that is older than the accepted SSE frame is routed
+  // through the gate, rejected, and cannot overwrite the cache.
+  rest.frame = statusFrame('site-a', 'fab-1', 4, '2026-10-27T00:00:04Z', 'maint');
+  const late = await queryClient.fetchQuery(equipmentStatusQueryOptions('site-a', 'fab-1'));
+  const cached = queryClient.getQueryData<EquipmentStatusSnapshot>(equipmentStatusQueryKey('site-a', 'fab-1'));
+  expect(late.sequence).toBe(5);
+  expect(late.tools[0].state).toBe('down');
+  expect(cached?.sequence).toBe(5);
+  expect(cached?.tools[0].state).toBe('down');
 });

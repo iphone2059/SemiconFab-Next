@@ -525,3 +525,53 @@ it('records that the frozen source has no seek, only replay and speed scaling', 
   expect(fixture.scenario.wafer.speedTraces[2].speed).toBe(16);
   expect(fixture.scenario.wafer.speedTraces[1].speed).toBe(4);
 });
+
+it('tolerates an empty wafer route without dereferencing waypoints', () => {
+  const scenario = waferScenarioFor('A', 1);
+  const timeline = createWaferTimeline({ ...scenario, products: { A: [] } });
+  expect(timeline.readInitialFrame()).toMatchObject({ waypointCount: 0, playing: false, segment: 'complete' });
+  expect(() => {
+    timeline.step(fixture.scenario.wafer.frameMs);
+    timeline.open();
+    timeline.step(fixture.scenario.wafer.frameMs);
+    timeline.togglePlay();
+    timeline.setSpeed(4);
+    timeline.step(fixture.scenario.wafer.frameMs);
+    timeline.replay();
+    timeline.setProduct('missing-product');
+    timeline.step(fixture.scenario.wafer.frameMs);
+    timeline.close();
+  }).not.toThrow();
+  const frame = timeline.readFrame();
+  expect(frame.waypointCount).toBe(0);
+  expect(frame.hud.step).toBe('Step 0/0');
+  expect(frame.hud.width).toBe('0.0%');
+  expect(Number.isFinite(frame.position.x)).toBe(true);
+  expect(timeline.readStats()).toMatchObject({ waypointCount: 0, completed: false });
+});
+
+it('recovers a playable product after an empty route', () => {
+  const scenario = waferScenarioFor('A', 1);
+  const timeline = createWaferTimeline({ ...scenario, products: { ...scenario.products, EMPTY: [] } });
+  timeline.setProduct('EMPTY');
+  expect(timeline.readFrame()).toMatchObject({ playing: false, waypointCount: 0 });
+  timeline.setProduct('B');
+  expect(timeline.readFrame().playing).toBe(true);
+  expect(timeline.readFrame().waypointCount).toBeGreaterThan(0);
+  timeline.step(fixture.scenario.wafer.frameMs);
+  expect(Number.isFinite(timeline.readFrame().position.x)).toBe(true);
+});
+
+it('does not dereference an empty cinematic tour waypoint list', () => {
+  const timeline = createTourTimeline({ ...tourScenario(), waypoints: [] });
+  expect(() => {
+    timeline.start();
+    timeline.step();
+    timeline.next();
+    timeline.prev();
+    timeline.stop();
+    timeline.step();
+  }).not.toThrow();
+  expect(timeline.readFrame().active).toBe(false);
+  expect(timeline.readStats().waypointCount).toBe(0);
+});

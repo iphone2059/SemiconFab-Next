@@ -53,13 +53,18 @@ export function parseWaferRoutes(value: unknown): Record<WaferProduct, WaferRout
     const item = (products as Record<string, unknown>)[product];
     const route = item && typeof item === 'object' ? (item as Record<string, unknown>).route : undefined;
     if (!Array.isArray(route)) throw new Error(`Product ${product} 缺少 route`);
+    // An empty route is not a valid product route: downstream playback indexes
+    // route[0] and would throw a TypeError instead of surfacing a load error.
+    if (route.length === 0) throw new Error(`Product ${product} route 为空`);
     result[product] = route.map((row, index) => {
       if (!row || typeof row !== 'object') throw new Error(`Product ${product} route 第 ${index + 1} 行无效`);
       const entry = row as Record<string, unknown>;
       const toolGroup = typeof entry.tool_group === 'string' ? entry.tool_group : entry.tg;
       if (typeof toolGroup !== 'string') throw new Error(`Product ${product} route 第 ${index + 1} 行缺少 tool_group`);
+      const step = typeof entry.step === 'number' ? entry.step : index + 1;
+      if (!Number.isFinite(step) || step <= 0) throw new Error(`Product ${product} route 第 ${index + 1} 行 step 无效`);
       return {
-        step: typeof entry.step === 'number' ? entry.step : index + 1,
+        step,
         tool_group: toolGroup,
         recipe: typeof entry.recipe === 'string' ? entry.recipe : undefined,
       };

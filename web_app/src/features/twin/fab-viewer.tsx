@@ -52,6 +52,11 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
   ref,
 ) {
   const { t } = useTwinLocale();
+  // The GPU scene and its mount effect outlive individual renders. Route every
+  // scene callback through a ref so the current props handlers are invoked
+  // instead of the first render's closures (which capture a stale selection).
+  const callbacks = useRef({ onToolChange, onStatusChange, onAmhsStatsChange });
+  callbacks.current = { onToolChange, onStatusChange, onAmhsStatsChange };
   const canvas = useRef<HTMLCanvasElement>(null);
   const facade = useRef<SceneFacade | undefined>(undefined);
   const frameSource = useRef({ getToolStates, toolStates });
@@ -83,17 +88,17 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
         if (controller.signal.aborted) return;
         scene = new SceneFacade(createLiteBackend());
         facade.current = scene;
-        onToolChange?.(undefined);
+        callbacks.current.onToolChange?.(undefined);
         return scene.mount(
           element,
           [{ fabId: fab.fabId, code: fab.code, position: [0, 0, 0] }],
           (value) => {
             if (controller.signal.aborted) return;
             runtimeActions.viewerStatusReceived({ epoch, status: value });
-            onStatusChange?.(value);
+            callbacks.current.onStatusChange?.(value);
           },
-          (tool) => { onToolChange?.(tool ?? undefined); },
-          (stats) => { onAmhsStatsChange?.(stats); },
+          (tool) => { callbacks.current.onToolChange?.(tool ?? undefined); },
+          (stats) => { callbacks.current.onAmhsStatsChange?.(stats); },
           (hover) => hoverBatcher.push(hover ?? undefined),
           () => frameSource.current.getToolStates?.() ?? frameSource.current.toolStates,
         );
@@ -102,7 +107,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
         if (!controller.signal.aborted) {
           const status = error instanceof Error ? error.message : t("场景初始化失败");
           runtimeActions.viewerStatusReceived({ epoch, status });
-          onStatusChange?.(status);
+          callbacks.current.onStatusChange?.(status);
         }
       });
     return () => {
@@ -144,7 +149,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
 
   useEffect(() => {
     facade.current?.clearSelection();
-    onToolChange?.(undefined);
+    callbacks.current.onToolChange?.(undefined);
   }, [fab.fabId]);
 
   useEffect(() => {

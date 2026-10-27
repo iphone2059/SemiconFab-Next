@@ -65,3 +65,23 @@ export function liteXraySystemMatches(name: string, filter: LiteXrayFilter): boo
   if (filter === 'vac') return lowered.includes('vac') || lowered.includes('pump') || lowered.includes('booster');
   return lowered.includes('foreline') || lowered.includes('heated') || lowered.includes('exhaust');
 }
+
+/**
+ * Filters whose source classification depends on the entity name. 'all' highlights every
+ * subfab surface without consulting the name, so it carries no identity.
+ */
+const SYSTEM_FILTERS = ['upw', 'gas', 'vac', 'exhaust', 'amhs'] as const satisfies readonly LiteXrayFilter[];
+
+/**
+ * Precomputed X-Ray system classification for a frozen source entity name.
+ *
+ * Batch identity: the merged static mesh is classified by its first entity's name
+ * (effects.ts:applyXray -> liteXraySystemMatches(mesh.name, filter)), so two entities may
+ * only share a thin-instance batch when this signature is equal. Without it a CDA valve
+ * batch would also carry H-UPW valve instances and ghost them when the UPW filter is active.
+ */
+export function liteXraySystemClass(name: string): string {
+  let signature = '';
+  for (const filter of SYSTEM_FILTERS) signature += liteXraySystemMatches(name, filter) ? '1' : '0';
+  return signature;
+}

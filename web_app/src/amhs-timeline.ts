@@ -88,11 +88,37 @@ export interface AmhsState {
   gapViolations: number;
   lastHudUpdate: number;
   queue: AmhsTask[];
+  /**
+   * Retained completed-task history. Empty in the production default mode; the
+   * cumulative `completedCount` is authoritative. Tests/acceptance that need
+   * the task records opt in via AmhsStateOptions.
+   */
   completed: AmhsTask[];
+  /** Cumulative delivered-task count; production statistics read this, not history. */
+  completedCount: number;
+  /** Per-loop idle vehicle ids: dispatch never scans the queue when a set is empty. */
+  readonly idleVehicleIds: Record<AmhsLoopId, Set<number>>;
+  /** Distance comparisons performed by dispatch (0 when the idle fast path skips scanning). */
+  dispatchDistanceChecks: number;
+  /** Per-loop dispatch scan passes that examined the waiting queue. */
+  dispatchScanPasses: number;
+  /** Retention flags resolved from AmhsStateOptions. */
+  readonly retainCompletedHistory: boolean;
+  readonly completedHistoryLimit: number;
   vehicles: AmhsVehicle[];
 }
 
-export function createAmhsState(scenario: AmhsScenario): AmhsState {
+export interface AmhsStateOptions {
+  /**
+   * Keep completed task records instead of only the cumulative counter. The
+   * production motion path leaves this false; acceptance fixtures opt in.
+   */
+  readonly retainCompletedHistory?: boolean;
+  /** Ring-buffer capacity for retained completed records; 0/absent keeps all. */
+  readonly completedHistoryLimit?: number;
+}
+
+export function createAmhsState(scenario: AmhsScenario, options: AmhsStateOptions = {}): AmhsState {
   const vehicles: AmhsVehicle[] = scenario.vehicles.map((entry, index) => ({
     id: index,
     name: `OHT-${index + 1}`,
@@ -109,6 +135,8 @@ export function createAmhsState(scenario: AmhsScenario): AmhsState {
     foupVisible: false,
     ledHex: AMHS_LED_COLORS.IDLE,
   }));
+  const idleVehicleIds: Record<AmhsLoopId, Set<number>> = { 1: new Set(), 2: new Set() };
+  for (const vehicle of vehicles) idleVehicleIds[vehicle.loopId].add(vehicle.id);
   return {
     loops: scenario.loops,
     simTime: 0,
@@ -120,6 +148,12 @@ export function createAmhsState(scenario: AmhsScenario): AmhsState {
     lastHudUpdate: 0,
     queue: [],
     completed: [],
+    completedCount: 0,
+    idleVehicleIds,
+    dispatchDistanceChecks: 0,
+    dispatchScanPasses: 0,
+    retainCompletedHistory: options.retainCompletedHistory === true,
+    completedHistoryLimit: Math.max(0, Math.floor(options.completedHistoryLimit ?? 0)),
     vehicles,
   };
 }
@@ -152,20 +186,29 @@ export function advanceAmhsState(state: AmhsState, dt: number, random: () => num
   }
 
   // 2. FIFO queue with nearest-idle-vehicle dispatch per loop.
+  // The per-loop idle index is maintained by the state machine (create + unload
+  // completion). A loop with no idle vehicle cannot assign any queued task, so
+  // its queue scan is skipped entirely: a growing backlog costs O(1)/frame
+  // while every vehicle is busy instead of O(queue x vehicles). Candidate order
+  // remains the source vehicle order, keeping the exact shortest-distance and
+  // tie-break semantics of the frozen loop.
   for (const loopId of [1, 2] as const) {
     const L = state.loops[loopId].length;
+    const idleVehicles = state.idleVehicleIds[loopId];
+    if (idleVehicles.size === 0) continue;
+    state.dispatchScanPasses += 1;
     for (let qi = 0; qi < state.queue.length; qi += 1) {
       const task = state.queue[qi];
       if (task.loopId !== loopId) continue;
       let bestVehicle: AmhsVehicle | null = null;
       let minDistance = Infinity;
       for (const vehicle of state.vehicles) {
-        if (vehicle.loopId === loopId && vehicle.state === 'IDLE') {
-          const distance = (task.pickup.s - vehicle.s + L) % L;
-          if (distance < minDistance) {
-            minDistance = distance;
-            bestVehicle = vehicle;
-          }
+        if (vehicle.loopId !== loopId || !idleVehicles.has(vehicle.id)) continue;
+        const distance = (task.pickup.s - vehicle.s + L) % L;
+        state.dispatchDistanceChecks += 1;
+        if (distance < minDistance) {
+          minDistance = distance;
+          bestVehicle = vehicle;
         }
       }
       if (bestVehicle) {
@@ -175,8 +218,11 @@ export function advanceAmhsState(state: AmhsState, dt: number, random: () => num
         task.assignedAt = state.simTime;
         task.state = 'ASSIGNED';
         bestVehicle.ledHex = AMHS_LED_COLORS.TO_PICKUP;
+        idleVehicles.delete(bestVehicle.id);
         state.queue.splice(qi, 1);
         qi -= 1;
+        // No idle candidate remains on this loop: stop scanning the backlog.
+        if (idleVehicles.size === 0) break;
       }
     }
   }
@@ -265,13 +311,20 @@ export function advanceAmhsState(state: AmhsState, dt: number, random: () => num
           const task = vehicle.task!;
           task.deliveredAt = state.simTime;
           task.state = 'COMPLETED';
-          state.completed.push(task);
+          state.completedCount += 1;
+          if (state.retainCompletedHistory) {
+            state.completed.push(task);
+            if (state.completedHistoryLimit > 0 && state.completed.length > state.completedHistoryLimit) {
+              state.completed.splice(0, state.completed.length - state.completedHistoryLimit);
+            }
+          }
           state.totalDeliveryTime += task.deliveredAt - task.createdAt;
           vehicle.task = null;
           vehicle.targetStation = null;
           vehicle.state = 'IDLE';
           vehicle.dwellTimer = 0;
           vehicle.ledHex = AMHS_LED_COLORS.IDLE;
+          state.idleVehicleIds[vehicle.loopId].add(vehicle.id);
         }
         continue;
       }

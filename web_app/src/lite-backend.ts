@@ -22,6 +22,38 @@ export function createLiteBackend(): SceneBackend {
   // a replaced world would otherwise disappear with it).
   const retiredGpuErrors: string[] = [];
 
+  // A08: the post-recovery replay is a one-shot initialization phase. Its timers are owned by the
+  // backend so disposal or the next recovery can clear them, and each callback validates the
+  // recovery generation + interaction version so it can never overwrite newer user input.
+  // User interaction counters are bumped by the discrete SceneBackend camera/selection calls
+  // (setCameraPose/zoom/selectTool/clearSelection/...). setView is intentionally not counted:
+  // twin-page.tsx re-applies the active view preset from its status effect right after a
+  // recovery, and the 300 ms replay exists precisely to win that ordering race. The ambient
+  // mode setters (setBasement/setDual) are re-applied by the same status effect, so they only
+  // count as interaction when their value actually changes; otherwise a normal recovery would
+  // cancel its own replay before the preserved pose/selection could be restored. The tracked
+  // values mirror the world's mutual exclusivity (entering basement mode clears dual, v.v.).
+  let interactionVersion = 0;
+  let recoveryGeneration = 0;
+  let replayTimers: number[] = [];
+  let appliedBasement = false;
+  let appliedDual = false;
+  const cancelRecoveryReplay = () => {
+    for (const timer of replayTimers) window.clearTimeout(timer);
+    replayTimers = [];
+  };
+  const markUserInteraction = () => {
+    interactionVersion += 1;
+    cancelRecoveryReplay();
+  };
+  const scheduleRecoveryReplay = (callback: () => void, delay: number) => {
+    const timer = window.setTimeout(() => {
+      replayTimers = replayTimers.filter(handle => handle !== timer);
+      callback();
+    }, delay);
+    replayTimers.push(timer);
+  };
+
   function installPerf() {
     if (perf || !new URLSearchParams(location.search).has('perf')) return;
     const target = {
@@ -103,6 +135,9 @@ export function createLiteBackend(): SceneBackend {
         else if (status === 'lost') {
           lifecycle.losses += 1;
           report('GPU 设备已丢失，正在重新构建设备和静态场景。若失败，请重新加载视图。');
+          // A new recovery supersedes any replay still pending from the previous one.
+          recoveryGeneration += 1;
+          cancelRecoveryReplay();
           // Capture user-visible state before the old scene is torn down.
           const previousDiagnostics = mountedWorld?.readDiagnostics();
           if (previousDiagnostics) retiredGpuErrors.push(...previousDiagnostics.gpuErrors);
@@ -118,13 +153,20 @@ export function createLiteBackend(): SceneBackend {
             pendingPose = null; pendingSelection = null;
             // The status-effect setView(preset) runs after this callback; re-apply once more after it
             // has settled so the preserved pose cannot lose the ordering race with the preset.
+            // Both timers are cancelled when the user interacts, a newer recovery starts or the
+            // backend is disposed, and the callback re-validates the captured identity.
+            cancelRecoveryReplay();
+            const scheduledWorld = world;
+            const scheduledGeneration = recoveryGeneration;
+            const scheduledVersion = interactionVersion;
             const applyRestoredState = () => {
-              if (disposed || !world) return;
+              if (disposed || !world || world !== scheduledWorld
+                || recoveryGeneration !== scheduledGeneration || interactionVersion !== scheduledVersion) return;
               world.setCameraPose(pose.position, pose.target, 0);
               if (selection !== null) world.selectTool(selection, false);
             };
-            window.setTimeout(applyRestoredState, 0);
-            window.setTimeout(applyRestoredState, 300);
+            scheduleRecoveryReplay(applyRestoredState, 0);
+            scheduleRecoveryReplay(applyRestoredState, 300);
           }
         } else if (status === 'failed') {
           console.error('[lite] runtime failed', error, (error as { cause?: { stack?: string } } | undefined)?.cause?.stack ?? '');
@@ -188,23 +230,56 @@ export function createLiteBackend(): SceneBackend {
     dispose(): void {
       if (disposed) return;
       disposed = true;
+      cancelRecoveryReplay();
       perf?.dispose(); perf = undefined;
       runtime?.dispose(); runtime = undefined;
       world = undefined;
     },
     setView(preset: SceneViewPreset, fabId?: string): void { if (!disposed) world?.setView(preset, fabId); },
-    setCameraPose(position, target, durationMs): void { if (!disposed) world?.setCameraPose(position, target, durationMs); },
+    setCameraPose(position, target, durationMs): void {
+      if (disposed) return;
+      markUserInteraction();
+      world?.setCameraPose(position, target, durationMs);
+    },
     getCameraPose() { return disposed ? null : world?.getCameraPose() ?? null; },
-    zoom(deltaY: number): void { if (!disposed) world?.zoom(deltaY); },
+    zoom(deltaY: number): void {
+      if (disposed) return;
+      markUserInteraction();
+      world?.zoom(deltaY);
+    },
     resize(): void { if (!disposed) world?.resize(); },
-    clearSelection(): void { if (!disposed) world?.clearSelection(); },
-    selectTool(index: number, focus?: boolean): void { if (!disposed) world?.selectTool(index, focus); },
+    clearSelection(): void {
+      if (disposed) return;
+      markUserInteraction();
+      world?.clearSelection();
+    },
+    selectTool(index: number, focus?: boolean): void {
+      if (disposed) return;
+      markUserInteraction();
+      world?.selectTool(index, focus);
+    },
     setLayer(layer: SceneLayer, visible: boolean): void { if (!disposed) world?.setLayer(layer, visible); },
     setToolState(index: number, state): void { if (!disposed) world?.setToolState(index, state); },
     setTour(active: boolean): void { if (!disposed) world?.setTour(active); },
     setExplodeFactor(factor: number, modeActive?: boolean): void { if (!disposed) world?.setExplodeFactor(factor, modeActive); },
-    setBasement(active: boolean): void { if (!disposed) world?.setBasement(active); },
-    setDual(active: boolean): void { if (!disposed) world?.setDual(active); },
+    setBasement(active: boolean): void {
+      if (disposed) return;
+      // A genuine mode change supersedes a pending replay; the page's idempotent re-application
+      // after a recovery must not. world.setBasement also clears dual mode and the selection.
+      const changed = active !== appliedBasement;
+      appliedBasement = active;
+      if (active) appliedDual = false;
+      if (changed) markUserInteraction();
+      world?.setBasement(active);
+    },
+    setDual(active: boolean): void {
+      if (disposed) return;
+      const changed = active !== appliedDual;
+      appliedDual = active;
+      if (active) appliedBasement = false;
+      if (changed) markUserInteraction();
+      world?.setDual(active);
+    },
     setCutPlane(active: boolean, axis: CutAxis, position: number, invert: boolean): void {
       if (!disposed) world?.setCutPlane(active, axis, position, invert);
     },
@@ -213,7 +288,11 @@ export function createLiteBackend(): SceneBackend {
       if (!disposed) world?.setWaferPoint(x, y, z, visible, focus, rotationY);
     },
     setWaferTrail(points: readonly (readonly [number, number, number])[]): void { if (!disposed) world?.setWaferTrail(points); },
-    focusPatrol(): void { if (!disposed) world?.focusPatrol(); },
+    focusPatrol(): void {
+      if (disposed) return;
+      markUserInteraction();
+      world?.focusPatrol();
+    },
     setLanguage(language: 'zh' | 'en'): void { if (!disposed) world?.setLanguage(language); },
   };
 }

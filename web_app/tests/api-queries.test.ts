@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
-import { equipmentStatusQueryOptions } from '../src/api/queries/equipment.queries';
+import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from '../src/api/queries/equipment.queries';
+import { FAB_LAYOUT } from '../src/fab-layout';
 import { runsQueryOptions, runQueryOptions, runResultsQueryOptions } from '../src/api/queries/runs.queries';
 import { createRun } from '../src/api/mutations/runs.mutations';
 
@@ -11,6 +12,8 @@ import { createRun } from '../src/api/mutations/runs.mutations';
  */
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
+/** A real FAB frame always carries one valid state per layout tool. */
+const fullTools = (state = 'running') => FAB_LAYOUT.map(() => ({ state }));
 const jsonResponse = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: JSON_HEADERS });
 const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -27,7 +30,9 @@ function captureFetch(response: () => Response) {
 }
 
 it('uses FAB-scoped relative URLs, same-origin credentials, no-store and no browser dev key', async () => {
-  const calls = captureFetch(() => jsonResponse({ siteId: 'site/1', fabId: 'fab/1', generatedAt: 'now', sequence: 1, tools: [{ state: 'UP' }] }));
+  const calls = captureFetch(() => jsonResponse({
+    siteId: 'site/1', fabId: 'fab/1', generatedAt: '2026-10-27T00:00:00Z', sequence: 1, tools: fullTools(),
+  }));
   await client().fetchQuery(equipmentStatusQueryOptions('site/1', 'fab/1'));
   expect(calls).toHaveLength(1);
   expect(calls[0].url).toBe('/api/v1/sites/site%2F1/fabs/fab%2F1/equipment-status');
@@ -74,4 +79,26 @@ it('rejects an invalid payload before it reaches the cache', async () => {
   // FAB identity is part of the contract: a site-only snapshot must not be cached.
   vi.stubGlobal('fetch', async () => jsonResponse({ siteId: 'site-1', generatedAt: 'now', tools: [{ state: 'UP' }] }));
   await expect(client().fetchQuery(equipmentStatusQueryOptions('site-1', 'fab-1'))).rejects.toThrow(/fabId/);
+});
+it('A03: keeps the additive server epoch through the zod REST schema', async () => {
+  // zod strips unknown keys by default, so the epoch must be part of the schema or
+  // REST frames would lose the only field that orders server generations.
+  vi.stubGlobal('fetch', async () => jsonResponse({
+    siteId: 'site-1', fabId: 'fab-1', generatedAt: '2026-10-27T00:00:00Z',
+    sequence: 1, epoch: 7, tools: fullTools(),
+  }));
+  const snapshot = await client().fetchQuery(equipmentStatusQueryOptions('site-1', 'fab-1'));
+  expect(snapshot.sequence).toBe(1);
+  expect(snapshot.epoch).toBe(7);
+});
+
+it('A02: a partial FAB frame is rejected by the shared ordered gate before the cache', async () => {
+  vi.stubGlobal('fetch', async () => jsonResponse({
+    siteId: 'site-1', fabId: 'fab-1', generatedAt: '2026-10-27T00:00:00Z', sequence: 1,
+    tools: [{ state: 'running' }],
+  }));
+  const queryClient = client();
+  await expect(queryClient.fetchQuery(equipmentStatusQueryOptions('site-1', 'fab-1')))
+    .rejects.toThrow(/ordered acceptance gate/);
+  expect(queryClient.getQueryData(equipmentStatusQueryKey('site-1', 'fab-1'))).toBeUndefined();
 });

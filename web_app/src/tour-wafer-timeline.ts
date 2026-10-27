@@ -310,6 +310,11 @@ export function createTourTimeline(scenario: TourScenario): TourTimeline {
   const playWaypoint = (nextIndex: number): void => {
     if (!active) return;
     clearTimers();
+    // An empty waypoint list has no first waypoint to dereference.
+    if (waypoints.length === 0 || !Number.isFinite(nextIndex)) {
+      stopTour();
+      return;
+    }
     if (nextIndex >= waypoints.length) {
       stopTour();
       return;
@@ -674,8 +679,11 @@ export function createWaferTimeline(scenario: WaferScenario): WaferTimeline {
 
   let product = scenario.product;
   let speed = scenario.speed;
-  let route: readonly WaferRouteWaypoint[] = scenario.products[scenario.product];
-  let playing = true;
+  const routeFor = (nextProduct: string): readonly WaferRouteWaypoint[] =>
+    scenario.products[nextProduct] ?? [];
+  let route: readonly WaferRouteWaypoint[] = routeFor(scenario.product);
+  // An empty route has nothing to play; keep it idle instead of dereferencing route[0].
+  let playing = route.length > 0;
   let index = 0;
   let stepTimer = 0;
   let position: Vec3 = { x: 0, y: 2.5, z: 0 };
@@ -718,7 +726,7 @@ export function createWaferTimeline(scenario: WaferScenario): WaferTimeline {
     }
     return {
       step: (isZh ? '步骤 ' : 'Step ') + String(current === undefined ? 0 : current.step) + '/' + String(total),
-      width: (((current === undefined ? 0 : current.step) / total) * 100).toFixed(1) + '%',
+      width: (total > 0 ? ((current === undefined ? 0 : current.step) / total) * 100 : 0).toFixed(1) + '%',
       toolGroup: current === undefined ? '' : current.tool_group,
       recipe: current === undefined || current.recipe === null || current.recipe === '' ? '—' : current.recipe,
       bay: isZh ? bay.nameZh + ' (' + bay.nameEn + ')' : bay.nameEn + ' (' + bay.nameZh + ')',
@@ -818,7 +826,7 @@ export function createWaferTimeline(scenario: WaferScenario): WaferTimeline {
   };
 
   const frameStep = (dt: number): void => {
-    if (playing) {
+    if (playing && route.length > 0) {
       const duration = 2.0 / speed;
       stepTimer += dt;
       const progress = Math.min(stepTimer / duration, 1.0);
@@ -869,7 +877,9 @@ export function createWaferTimeline(scenario: WaferScenario): WaferTimeline {
     const progress = Math.min(stepTimer / stepDurationSeconds, 1.0);
     const lastIndex = route.length - 1;
     let segment: WaferSegment;
-    if (!playing) {
+    if (route.length === 0) {
+      segment = 'complete';
+    } else if (!playing) {
       segment = index === lastIndex && stepTimer === 0 ? 'complete' : 'paused';
     } else if (index === 0) {
       segment = 'start';
@@ -953,7 +963,7 @@ export function createWaferTimeline(scenario: WaferScenario): WaferTimeline {
       index = 0;
       stepTimer = 0;
       clearTrail();
-      playing = true;
+      playing = route.length > 0;
       const first = route[0];
       if (first !== undefined) position = { x: first.x, y: 2.5, z: first.z };
       hud = computeHud();
@@ -966,11 +976,11 @@ export function createWaferTimeline(scenario: WaferScenario): WaferTimeline {
       completed = false;
       completionTimeMs = null;
       product = nextProduct;
-      route = scenario.products[nextProduct];
+      route = routeFor(nextProduct);
       index = 0;
       stepTimer = 0;
       clearTrail();
-      playing = true;
+      playing = route.length > 0;
       const first = route[0];
       if (first !== undefined) position = { x: first.x, y: 2.5, z: first.z };
       hud = computeHud();

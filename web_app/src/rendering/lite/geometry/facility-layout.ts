@@ -102,22 +102,6 @@ export const ORIGINAL_FFU_GRID = {
   braceX: axisValues(ORIGINAL_CEILING_FFU.brace.fromX, ORIGINAL_CEILING_FFU.brace.toX, ORIGINAL_CEILING_FFU.brace.stepX),
 } as const;
 
-export const ORIGINAL_FACILITY_COUNTS = {
-  ffuUnits: ORIGINAL_FFU_GRID.x.length * ORIGINAL_FFU_GRID.z.length,
-  lightAisles: ORIGINAL_CEILING_FFU.lightAislesX.length,
-  trusses: ORIGINAL_FFU_GRID.trussZ.length,
-  braces: ORIGINAL_FFU_GRID.trussZ.length * ORIGINAL_FFU_GRID.braceX.length * 2,
-  dropRods: ORIGINAL_FFU_GRID.trussZ.length * ORIGINAL_FFU_GRID.braceX.length,
-  cableTrays: ORIGINAL_CEILING_FFU.cableTray.aislesX.length,
-  airShowers: ORIGINAL_AIR_SHOWERS.length,
-  stickyMats: ORIGINAL_STICKY_MATS.length,
-} as const;
-
-export const FACILITY_ARCHITECTURE_GROUP_NAME = 'facilityArchitecturalInterfaces';
-export const AIR_SHOWER_CHAMBERS_GROUP_NAME = 'airShowerChambers';
-export const STICKY_MATS_GROUP_NAME = 'stickyMats';
-export const CEILING_FFU_GROUP_NAME = 'ceilingFFU';
-
 const BILLBOARD_FONT = "bold 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const BILLBOARD_FONT_ZH_TITLE = "bold 26px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const BILLBOARD_FONT_EN_TITLE = "bold 23px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";

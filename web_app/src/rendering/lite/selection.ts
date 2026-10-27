@@ -206,6 +206,11 @@ export function createLiteSelection(scene: SceneContext, engine: EngineContext, 
   let hoverRequestId = 0, hoverEpoch = 0;
   let clickRequestId = 0, clickEpoch = 0;
   let pointerDown: { x: number; y: number } | null = null;
+  // Hover backpressure (A07): at most one hover pick is in flight; pointer moves while it is
+  // pending keep only the latest position, which is picked when the in-flight request settles.
+  // Clicks share the same picker and always supersede pending hover work.
+  let hoverPending: { x: number; y: number } | null = null;
+  let hoverInFlight = false;
 
   // Legacy babylon-webgpu.ts selection mesh: unit box scaled to the hierarchy bounds + 0.2.
   const visual = createLineSystem(engine, {
@@ -285,11 +290,7 @@ export function createLiteSelection(scene: SceneContext, engine: EngineContext, 
     const rect = canvas.getBoundingClientRect();
     return { x: clientX - rect.left, y: clientY - rect.top };
   }
-  async function applyHover(binding: BindingState, x: number, y: number): Promise<void> {
-    const requestId = ++hoverRequestId, epoch = hoverEpoch;
-    const hit = await pickSafely(x, y);
-    if (disposed || activeBinding !== binding || !pickingEnabled || requestId !== hoverRequestId || epoch !== hoverEpoch) return;
-    if (hit === PICK_FAILED) return;
+  function applyHoverResult(binding: BindingState, hit: SelectionPickResult | null): void {
     binding.canvas.style.cursor = hit ? 'pointer' : '';
     const nextIndex = hit && validIndex(hit.toolIndex) ? hit.toolIndex : null;
     if (nextIndex === lastHoverIndex) return;
@@ -297,7 +298,48 @@ export function createLiteSelection(scene: SceneContext, engine: EngineContext, 
     if (nextIndex === null || !hit) { emitHover(null); return; }
     emitHover({ tool: pickedTool(nextIndex), x: hit.x, y: hit.y });
   }
+  /** Invalidate pending/in-flight hover work (pointer leave, drag, click, recovery, dispose). */
+  function cancelHoverRequest(): void {
+    hoverPending = null;
+    hoverEpoch += 1;
+    hoverRequestId += 1;
+  }
+  function queueHover(x: number, y: number): void {
+    if (disposed) return;
+    // One latest pending position only; a burst of pointer moves never queues more than this.
+    hoverPending = { x, y };
+    hoverRequestId += 1;
+    void pumpHover();
+  }
+  async function pumpHover(): Promise<void> {
+    if (hoverInFlight) return;
+    hoverInFlight = true;
+    try {
+      while (hoverPending) {
+        const binding = activeBinding;
+        if (disposed || !binding || !pickingEnabled) { hoverPending = null; return; }
+        const point = hoverPending;
+        hoverPending = null;
+        const requestId = hoverRequestId, epoch = hoverEpoch;
+        const hit = await pickSafely(point.x, point.y);
+        if (disposed || activeBinding !== binding || !pickingEnabled
+          || requestId !== hoverRequestId || epoch !== hoverEpoch) return;
+        if (hit === PICK_FAILED) return;
+        // A position that arrived while this pick was in flight supersedes its result.
+        if (hoverPending) continue;
+        applyHoverResult(binding, hit);
+      }
+    } finally {
+      hoverInFlight = false;
+      // Process the latest position that superseded a just-discarded result (or arrived while
+      // the owning binding was being replaced) exactly once.
+      if (hoverPending && !disposed && activeBinding && pickingEnabled) void pumpHover();
+    }
+  }
   async function applyClick(binding: BindingState, x: number, y: number, focus: boolean): Promise<void> {
+    // Clicks have explicit priority over hover: drop the pending position and any in-flight
+    // hover result so it can never overwrite the click's selection afterwards.
+    cancelHoverRequest();
     const requestId = ++clickRequestId, epoch = clickEpoch;
     const hit = await pickSafely(x, y);
     if (disposed || activeBinding !== binding || requestId !== clickRequestId || epoch !== clickEpoch) return;
@@ -339,11 +381,12 @@ export function createLiteSelection(scene: SceneContext, engine: EngineContext, 
         if (activeBinding !== binding || disposed) return;
         if (event.buttons !== 0) {
           // A drag cancels any older hover resolution so the tooltip cannot reappear mid-gesture.
-          hoverEpoch++; hoverRequestId++;
+          cancelHoverRequest();
           canvas.style.cursor = '';
           return;
         }
         if (!pickingEnabled) {
+          cancelHoverRequest();
           canvas.style.cursor = '';
           if (lastHoverIndex !== null) { lastHoverIndex = null; emitHover(null); }
           return;
@@ -353,12 +396,11 @@ export function createLiteSelection(scene: SceneContext, engine: EngineContext, 
         if (current - lastHoverPickAt < hoverPickMs) return;
         lastHoverPickAt = current;
         const point = pointerAt(canvas, event.clientX, event.clientY);
-        void applyHover(binding, point.x, point.y);
+        queueHover(point.x, point.y);
       };
       const onPointerLeave = () => {
         if (activeBinding !== binding || disposed) return;
-        hoverEpoch++;
-        hoverRequestId++;
+        cancelHoverRequest();
         lastHoverIndex = null;
         emitHover(null);
       };
@@ -372,11 +414,14 @@ export function createLiteSelection(scene: SceneContext, engine: EngineContext, 
       add('pointermove', onPointerMove as EventListener);
       add('pointerleave', onPointerLeave as EventListener);
       add('dblclick', onDoubleClick as EventListener);
+      // A new binding starts from a clean hover state; stale positions belong to the old canvas.
+      cancelHoverRequest();
+      lastHoverIndex = null;
       activeBinding = binding;
       return () => {
         for (const [type, listener] of listeners) canvas.removeEventListener(type, listener);
         listeners.length = 0;
-        if (activeBinding === binding) activeBinding = undefined;
+        if (activeBinding === binding) { activeBinding = undefined; cancelHoverRequest(); }
       };
     },
     selectTool(index, focus = false) {
@@ -398,7 +443,8 @@ export function createLiteSelection(scene: SceneContext, engine: EngineContext, 
     setPickingEnabled(enabled) {
       if (disposed || pickingEnabled === enabled) return;
       pickingEnabled = enabled;
-      hoverEpoch++; clickEpoch++; hoverRequestId++;
+      cancelHoverRequest();
+      clickEpoch++;
       if (!enabled && lastHoverIndex !== null) { lastHoverIndex = null; emitHover(null); }
     },
     refresh() {
@@ -407,7 +453,8 @@ export function createLiteSelection(scene: SceneContext, engine: EngineContext, 
     },
     prepareForDeviceRecovery() {
       if (disposed) return;
-      clickEpoch++; hoverEpoch++; hoverRequestId++;
+      clickEpoch++;
+      cancelHoverRequest();
       if (picker) { disposePicker(picker); picker = createGpuPicker(scene); }
       if (selected !== null) showVisual(selected);
     },
@@ -415,7 +462,8 @@ export function createLiteSelection(scene: SceneContext, engine: EngineContext, 
       if (disposed) return;
       disposed = true;
       selected = null; lastHoverIndex = null;
-      clickEpoch++; hoverEpoch++;
+      clickEpoch++;
+      cancelHoverRequest();
       const binding = activeBinding;
       if (binding) {
         for (const [type, listener] of binding.listeners) binding.canvas.removeEventListener(type, listener);

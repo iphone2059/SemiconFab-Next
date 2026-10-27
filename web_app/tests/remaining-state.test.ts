@@ -66,6 +66,13 @@ it('retains an idempotency key for retry and rejects late submission completion 
   expect(useWorkbenchStore.getState().pendingSubmission).toBeUndefined();
 });
 
+it('drops the unused tour countdown branch from the Twin page store (section 6.3)', () => {
+  // No src/tests consumer reads this state; the tour HUD uses its own timeline.
+  expect(useTwinPageStore.getState()).not.toHaveProperty('tourRemainingMs');
+  expect(twinPageActions).not.toHaveProperty('tourRemainingSet');
+  expect(twinPageActions).not.toHaveProperty('tourTick');
+});
+
 it('has a single language/theme authority shared by catalog and Twin', () => {
   localeActions.preferencesSet({ language: 'en', theme: 'dark' });
   localeActions.themeToggled();

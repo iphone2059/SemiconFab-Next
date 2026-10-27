@@ -1,4 +1,4 @@
-import type { CommandEventSource } from '../application/contracts/CommandEvents';
+import type { CommandEventSource, CommandResultEvent } from '../application/contracts/CommandEvents';
 import type { CommandGateway } from '../application/contracts/CommandGateway';
 import type { CommandWorkflow, CommandWorkflowProjection, CommandWorkflowRegistry } from '../application/contracts/CommandWorkflow';
 import { CommandCorrelationRegistry } from '../application/coordination/CommandCorrelationRegistry';
@@ -116,7 +116,7 @@ export class FabRuntime {
     this.bridge = new CommandEventBridge(options.source, registry, {
       fabId: options.fabId,
       correlation: this.correlation,
-      onResultDelivered: () => { this.afterDelivery(); },
+      onResultDelivered: (event) => { this.afterDelivery(event); },
     });
   }
 
@@ -296,8 +296,11 @@ export class FabRuntime {
     return this.started;
   }
 
-  private afterDelivery(): void {
-    this.recordTerminals();
+  private afterDelivery(event?: CommandResultEvent): void {
+    // Hot path (one delivered result): only the affected workflow can have just
+    // become terminal, so no all-workflow scan runs per command.
+    if (event) this.recordTerminal(event.commandId);
+    else this.recordTerminals();
     this.notify();
   }
 
@@ -305,7 +308,25 @@ export class FabRuntime {
     for (const listener of this.listeners) listener();
   }
 
-  /** Track terminals, enforce the max cap and (re)schedule the TTL sweep. */
+  /** Track terminal state for one delivered command (O(1): no workflow scan). */
+  private recordTerminal(commandId: string): void {
+    if (this.disposed) return;
+    const workflow = this.workflows.get(commandId);
+    if (!workflow) return;
+    const now = this.retention.now();
+    if (TERMINAL_OUTCOMES.has(workflow.projection?.outcome ?? '')) {
+      if (!this.terminalAt.has(commandId)) this.terminalAt.set(commandId, now);
+    } else if (this.terminalAt.has(commandId)) {
+      this.terminalAt.delete(commandId);
+    }
+    this.enforceTerminalLimit();
+    this.scheduleSweep();
+  }
+
+  /**
+   * Full terminal-state sweep. Used only by eventless assembly points (command
+   * tracking, authoritative reconciliation), never per delivered result.
+   */
   private recordTerminals(): void {
     if (this.disposed) return;
     const now = this.retention.now();

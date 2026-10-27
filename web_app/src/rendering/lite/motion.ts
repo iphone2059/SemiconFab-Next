@@ -46,14 +46,28 @@ function arcFor(points: readonly (readonly [number, number])[]): Arc {
 }
 function arcPoint(arc: Arc, progress: number, out: Point): void {
   const target = ((progress % 1 + 1) % 1) * arc.total;
-  let index = 1;
-  while (index < 512 && arc.cumulative[index] < target) index++;
+  // B02: binary search for the first cumulative sample that reaches the target. This keeps
+  // exactly the previous scan's boundary convention ([index-1, index], clamped to the last
+  // sample) so interpolation inputs, and therefore every projected transform, are identical.
+  let low = 1, high = arc.cumulative.length - 1;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (arc.cumulative[middle] < target) low = middle + 1;
+    else high = middle;
+  }
+  const index = low;
   const segment = arc.cumulative[index] - arc.cumulative[index - 1];
   const t = segment > 0 ? (target - arc.cumulative[index - 1]) / segment : 0;
   out.x = arc.positions[index - 1].x + (arc.positions[index].x - arc.positions[index - 1].x) * t;
   out.y = 0;
   out.z = arc.positions[index - 1].z + (arc.positions[index].z - arc.positions[index - 1].z) * t;
 }
+
+/**
+ * @internal Test seam for the frozen-arc boundary sweep: same arc construction and
+ * locator the projection uses. Not consumed by the product.
+ */
+export { arcFor as createLiteMotionArc, arcPoint as locateLiteMotionArcPoint };
 
 /** Native scene resources; source coordinates are RH. The composition root reflects them exactly once. */
 export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
@@ -231,10 +245,10 @@ export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
       pool.flags = new Uint8Array(pool.members.length);
       setThinInstances(pool.mesh, pool.matrices, pool.members.length); enableThinInstanceWorldBounds(pool.mesh);
     }
-    project();
+    project(amhsRoot.visible !== false);
   } catch (error) { dispose(); throw error; }
 
-  function project() {
+  function project(amhsVisible: boolean) {
     const point = { x: 0, y: 0, z: 0 }, ahead = { x: 0, y: 0, z: 0 };
     for (let id = 0; id < cars.length; id++) {
       const car = cars[id], vehicle = traffic.vehicles[id], arc = arcs[vehicle.loopId - 1];
@@ -257,6 +271,19 @@ export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
         const enabled = members[index].enabled();
         flags[index] = enabled ? 1 : 0;
         if (enabled) count++;
+      }
+      if (!amhsVisible) {
+        // B01: a hidden layer cannot show an instance change. Keep the simulation and the
+        // CPU part->batch mapping current, but skip the per-instance world-matrix
+        // comparison and GPU upload; re-showing forces a full population/matrix rebuild.
+        let slot = 0;
+        for (let index = 0; index < members.length; index++) {
+          if (!flags[index]) continue;
+          const member = members[index];
+          member.part.mesh = pool.mesh; member.part.instanceIndex = slot++;
+        }
+        pool.lastCount = -1;
+        continue;
       }
       if (count !== pool.lastCount) {
         // Population change: rewrite the enabled prefix in order and publish the new draw count.
@@ -313,13 +340,14 @@ export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
       remainderMs = Math.min(128, remainderMs + deltaMs);
       let steps = 0;
       while (remainderMs >= 16 && steps++ < 8) { personnel.step(); remainderMs -= 16; }
-      frame = personnel.readFrame(); project();
+      frame = personnel.readFrame(); project(amhsRoot.visible !== false);
     },
     readStats(): AmhsStats { return { active: traffic.vehicles.filter(v => v.state !== 'IDLE').length,
-      total: traffic.vehicles.length, queued: traffic.queue.length, completed: traffic.completed.length,
-      avgDelivery: traffic.completed.length ? traffic.totalDeliveryTime / traffic.completed.length : null }; },
+      total: traffic.vehicles.length, queued: traffic.queue.length, completed: traffic.completedCount,
+      avgDelivery: traffic.completedCount ? traffic.totalDeliveryTime / traffic.completedCount : null }; },
     patrolPosition(): Triple { const actor = frame.actors[5]; return [actor.x, actor.y, actor.z]; },
-    readAirShowerFrames() { return personnel.readFrame().airShowers; },
+    /** B03: the frame read once by update() is the shared read-only snapshot for this tick. */
+    readAirShowerFrames() { return frame.airShowers; },
     /** As-built source loses the status-sprite update reference: locale redraws the frozen initial board. */
     readPatrolStatus() { return { phase: initialPatrol.phase, text: language === 'zh' ? initialPatrol.statusTextZh : initialPatrol.statusTextEn,
       y: 2.15, width: 3.2, height: 0.8 }; },
@@ -329,7 +357,7 @@ export function createLiteMotion(scene: SceneContext, engine: EngineContext) {
       return cars.map(car => ({ position: [car.body.position.x, car.body.position.y, car.body.position.z] as Triple,
         rotationY: car.body.rotation.y, hoistY: car.hoist.position.y, foupVisible: car.foup.visible !== false }));
     },
-    readSnapshot() { return { simTime: traffic.simTime, personnel: personnel.readFrame(),
+    readSnapshot() { return { simTime: traffic.simTime, personnel: frame,
       loops: arcs.map((arc, i) => ({ length: arc.total, samples: arc.positions.length, stations: stations[i].map(s => ({ ...s })) })),
       vehicles: traffic.vehicles.map(v => ({ id: v.id, loopId: v.loopId, s: v.s, speed: v.speed, state: v.state,
         hoistY: v.hoistY, cableScaleY: v.cableScaleY, cableY: v.cableY, foupVisible: v.foupVisible, ledHex: v.ledHex })) }; },

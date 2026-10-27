@@ -5,6 +5,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TwinPage } from '../../src/features/twin/twin-page';
 import { AmhsOhtReadout, AmhsResearchBadge } from '../../src/features/twin/twin-amhs-hud';
 import { TwinWaferHud } from '../../src/features/twin/twin-wafer-hud';
+import { TwinYmsPanel } from '../../src/features/twin/twin-yms';
+import { FAB_LAYOUT } from '../../src/fab-layout';
+import { createMesJob } from '../../src/process-control';
 import { TwinLocaleProvider } from '../../src/features/twin/twin-i18n';
 import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
 import { resetTwinUiStore, twinUiActions } from '../../src/state/twinUiStore';
@@ -143,6 +146,83 @@ it('unit-renders the extracted wafer HUD rows from the page slice', () => {
 
   act(() => twinPageActions.waferFollowSet(false));
   expect(document.querySelector('#wafer-cam-text')?.textContent).toBe('自由视角');
+});
+
+it('keeps sidebar, OEM dialog, archive query and inspector-MES branches out of TwinContent/FabViewport', () => {
+  renderTwin();
+  const settled = viewport.renders;
+
+  act(() => twinPageActions.sidebarQuerySet('ASML'));
+  // The sidebar owns its slice, so the filtered query updates without touching the page.
+  expect((document.querySelector('#search-input') as HTMLInputElement).value).toBe('ASML');
+  expect(viewport.renders, 'sidebar branch must not rerender TwinContent/FabViewport').toBe(settled);
+
+  act(() => {
+    twinPageActions.oemDialogQuerySet('ASML');
+    twinPageActions.oemDialogSegmentSet('Lithography');
+    twinPageActions.oemDialogVendorSet('ASML');
+    twinPageActions.archQuerySet('xray');
+    twinPageActions.inspectorMesSet({ id: FAB_LAYOUT[0].recordId, job: createMesJob(FAB_LAYOUT[0], 0) });
+  });
+  expect(viewport.renders, 'OEM/archive/inspector-MES branches must not rerender TwinContent/FabViewport').toBe(settled);
+});
+
+it('keeps YMS hover, die-map inputs and the header yield pill out of TwinContent/FabViewport', () => {
+  renderTwin();
+  fireEvent.click(document.querySelector('.twin-yms-toggle') as Element);
+  expect(document.querySelector('.twin-yms')).not.toBeNull();
+  expect(document.querySelector('.twin-wafer-hover')?.textContent).toMatch(/^300 mm · \d+ dies · Notch 180°$/);
+  const opened = viewport.renders;
+
+  // Cross-die hover lands in the page store at pointer frequency. A14: only the
+  // YMS child may rerender; TwinContent and its FabViewport stay untouched.
+  for (const die of [{ r: 3, c: 4, bin: 1 as const }, { r: 7, c: 8, bin: 2 as const }, { r: 11, c: 12, bin: 3 as const }]) {
+    act(() => twinPageActions.ymsHoverDieSet(die));
+    expect(document.querySelector('.twin-wafer-hover')?.textContent).toBe(`Die [R${die.r}, C${die.c}] · ${die.bin === 1 ? 'Pass (Prime Die)' : die.bin === 2 ? 'Bin 2: Parametric Fail' : 'Bin 3: Functional Hard Fail'}`);
+    expect(viewport.renders, 'YMS hover must not rerender TwinContent/FabViewport').toBe(opened);
+  }
+
+  // Die-area / defect-model inputs are child-owned as well.
+  const dieArea = document.querySelector('.twin-yield-models input[type="range"]') as HTMLInputElement;
+  act(() => { fireEvent.change(dieArea, { target: { value: '250' } }); });
+  expect(screen.getByText('250 mm²')).toBeTruthy();
+  expect(viewport.renders, 'YMS die-area input must not rerender TwinContent/FabViewport').toBe(opened);
+
+  // The header yield pill now owns the cascading-yield subscription; changing a
+  // yield input still updates the subbar value without touching the viewport.
+  const yieldBefore = document.querySelector('#header-yield-val')?.textContent;
+  act(() => twinPageActions.ymsYieldInputSet({ purity: 5, health: 90, lagTime: 1 }));
+  expect(document.querySelector('#header-yield-val')?.textContent).not.toBe(yieldBefore);
+  expect(viewport.renders, 'yield inputs must not rerender TwinContent/FabViewport').toBe(opened);
+
+  // A genuine page-level field (dialog mode) still rerenders TwinContent and the viewport.
+  act(() => twinPageActions.infoDialogSet('database'));
+  expect(document.querySelector('#oem-database-modal')).not.toBeNull();
+  expect(viewport.renders, 'page-level store fields must still rerender the page').toBeGreaterThan(opened);
+});
+
+it('unit-renders the extracted YMS panel against the page slice', () => {
+  const toolStates = Array.from({ length: 121 }, () => 'running' as const);
+  render(
+    <TwinLocaleProvider>
+      <TwinYmsPanel toolStates={toolStates} />
+    </TwinLocaleProvider>,
+  );
+  expect(document.querySelector('.twin-wafer-hover')?.textContent).toMatch(/^300 mm · \d+ dies · Notch 180°$/);
+  expect(document.querySelector('.twin-stdf')?.textContent).toContain('TotalDies=');
+
+  act(() => twinPageActions.ymsHoverDieSet({ r: 5, c: 6, bin: 5 }));
+  expect(document.querySelector('.twin-wafer-hover')?.textContent).toBe('Die [R5, C6] · Bin 5: Interconnect Short/Open');
+
+  act(() => twinPageActions.ymsRandomize('ring'));
+  expect(document.querySelector('.twin-yms-pattern b')?.textContent).toBe('Edge-Ring Excursion');
+  expect(document.querySelector('.twin-yield-models')?.textContent).toContain('Cluster α');
+
+  act(() => twinPageActions.ymsTabSet('yield'));
+  expect(document.querySelector('.twin-yield-view')).not.toBeNull();
+  expect(document.querySelector('.twin-yield-summary')?.textContent).toContain('OVERALL FAB YIELD');
+  expect(document.querySelector('.twin-yield-summary')?.textContent).toContain('BOTTLENECK');
+  expect(document.querySelectorAll('.twin-yield-bars > div').length).toBeGreaterThan(0);
 });
 
 it('keeps ~60 Hz tour HUD frames inside the tour card', async () => {

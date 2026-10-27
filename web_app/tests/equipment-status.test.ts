@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus, type EquipmentStatusSnapshot } from '../src/equipment-status';
+import { createEquipmentStatusGate, createOrderedEquipmentStatusConsumer, watchEquipmentStatus, type EquipmentStatusSnapshot } from '../src/equipment-status';
 
 afterEach(() => vi.useRealTimers());
 
@@ -106,4 +106,24 @@ it('keeps independent per-FAB consumers so two FABs of one site never share orde
   expect(fabB({ ...base, fabId: 'fab-b', sequence: 2 })).toBe(true);
   expect(first).toHaveBeenCalledTimes(2);
   expect(second).toHaveBeenCalledTimes(2);
+});
+
+it('exposes the accepted snapshot through the framework-free gate used by REST and SSE', () => {
+  // A02: REST and SSE share one ordered acceptance boundary. The boolean consumer
+  // above stays for callers that only need accept/reject; the gate returns the
+  // accepted snapshot so the bridge can write it to the FAB-scoped cache.
+  const onInvalid = vi.fn();
+  const gate = createEquipmentStatusGate(scope, 2, onInvalid);
+  const base = {
+    siteId: 'site-1',
+    fabId: 'fab-a',
+    generatedAt: '2026-10-24T02:00:00Z',
+    tools: [{ state: 'running' }, { state: 'idle' }],
+  };
+  expect(gate.accept(base)).toEqual(base);
+  expect(gate.accept({ ...base, generatedAt: '2026-10-24T01:59:59Z' })).toBeUndefined();
+  expect(gate.accept({ ...base, tools: [{ state: 'running' }] })).toBeUndefined();
+  expect(gate.accept({ ...base, epoch: -1 })).toBeUndefined();
+  expect(gate.accept({ ...base, epoch: 1.5 })).toBeUndefined();
+  expect(onInvalid).toHaveBeenCalledTimes(3);
 });

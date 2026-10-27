@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CommandGateway } from '../../src/application/contracts/CommandGateway';
+import type { CommandOutcome, CommandResultEvent } from '../../src/application/contracts/CommandEvents';
+import type { CommandWorkflow, CommandWorkflowProjection } from '../../src/application/contracts/CommandWorkflow';
 import { FabRuntimeFactory } from '../../src/runtime/FabRuntimeFactory';
 import { FakeCommandEventSource, commandResult } from '../support/command-fakes';
 
@@ -140,6 +142,32 @@ describe('FabRuntime replay-gap reconciliation (batch 2/3)', () => {
   });
 });
 
+/** Minimal workflow whose projection access is counted, to expose per-delivery scans. */
+class CountingWorkflow implements CommandWorkflow {
+  accesses = 0;
+  private revisionValue = -1;
+  private outcomeValue: CommandOutcome | 'pending' = 'pending';
+
+  receive(event: CommandResultEvent): void {
+    if (event.revision <= this.revisionValue) return;
+    this.revisionValue = event.revision;
+    this.outcomeValue = event.outcome;
+  }
+
+  async reconcile(): Promise<void> {}
+
+  dispose(): void {}
+
+  get projection(): CommandWorkflowProjection {
+    this.accesses += 1;
+    return {
+      state: this.outcomeValue === 'pending' ? 'idle' : this.outcomeValue,
+      revision: this.revisionValue,
+      outcome: this.outcomeValue,
+    };
+  }
+}
+
 describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => {
   it('retains active workflows and evicts terminal workflows by max with a recent projection kept', () => {
     const source = new FakeCommandEventSource();
@@ -185,6 +213,36 @@ describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => 
     expect(runtime.retainedProjectionCount).toBe(1);
     runtime.dispose();
     expect(runtime.getProjection('cmd-1')).toBeUndefined();
+  });
+
+  it('updates terminal retention only for the delivered command instead of scanning every workflow', () => {
+    const source = new FakeCommandEventSource();
+    const workflows = new Map<string, CountingWorkflow>();
+    const runtime = new FabRuntimeFactory({
+      sourceFor: () => source,
+      createWorkflow: (_fabId, commandId) => {
+        const workflow = new CountingWorkflow();
+        workflows.set(commandId, workflow);
+        return workflow;
+      },
+    }).create(fabId);
+    runtime.start();
+    for (let index = 0; index < 40; index += 1) runtime.trackCommand('cmd-' + index);
+    runtime.trackCommand('cmd-target');
+    // The eventless assembly path (trackCommand) may sweep once; deliveries must not.
+    for (const workflow of workflows.values()) workflow.accesses = 0;
+    source.emit(commandResult({ fabId, commandId: 'cmd-target', revision: 1, outcome: 'executing' }));
+    const executingAccesses = [...workflows.values()].reduce((sum, workflow) => sum + workflow.accesses, 0);
+    // The audited implementation walked every workflow projection per delivery (41 here).
+    expect(executingAccesses).toBeLessThanOrEqual(2);
+
+    for (const workflow of workflows.values()) workflow.accesses = 0;
+    source.emit(commandResult({ fabId, commandId: 'cmd-target', revision: 2, outcome: 'succeeded' }));
+    const terminalAccesses = [...workflows.values()].reduce((sum, workflow) => sum + workflow.accesses, 0);
+    expect(terminalAccesses).toBeLessThanOrEqual(2);
+    expect(runtime.terminalWorkflowCount).toBe(1);
+    expect(runtime.getProjection('cmd-target')).toMatchObject({ outcome: 'succeeded' });
+    runtime.dispose();
   });
 
   it('bounds the correlation watermark registry without evicting active commands', async () => {

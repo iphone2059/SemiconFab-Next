@@ -145,3 +145,33 @@ it('submits one scenario FAB per site FAB', async () => {
     Object.defineProperty(globalThis, 'crypto', { value: originalCrypto, configurable: true });
   }
 });
+
+it('remounts the command console when the selected FAB changes so console state cannot cross FABs', () => {
+  workbenchActions.siteIdSet('site-m');
+  // Background queries stay pending; only the console markup matters here.
+  vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+  const queryClient = createQueryClient();
+  queryClient.setQueryData(sitesQueryOptions().queryKey, [{
+    siteId: 'site-m', code: 'MULTI', templateHash: 'hash',
+    fabs: [{ fabId: 'fab-a', code: 'FAB-A' }, { fabId: 'fab-b', code: 'FAB-B' }],
+  }]);
+  queryClient.setQueryData(runsQueryOptions().queryKey, []);
+  const { container } = render(
+    createElement(QueryClientProvider, { client: queryClient, children: createElement(WorkbenchApp) }),
+  );
+  const fabSelect = container.querySelector('.sidebar-note select') as HTMLSelectElement | null;
+  expect(fabSelect).not.toBeNull();
+  const consoleSelects = () => container.querySelectorAll('form select');
+  const firstEquipment = consoleSelects()[0] as HTMLSelectElement;
+  expect(firstEquipment.value).toBe('equipment-0');
+  fireEvent.change(firstEquipment, { target: { value: 'equipment-5' } });
+  expect((consoleSelects()[0] as HTMLSelectElement).value).toBe('equipment-5');
+
+  fireEvent.change(fabSelect as HTMLSelectElement, { target: { value: '1' } });
+
+  // The FAB switch replaces the scope-keyed console instance, so no form state
+  // (and, in the component, no history/key/busy/error) crosses to FAB-B.
+  const secondEquipment = consoleSelects()[0] as HTMLSelectElement;
+  expect(secondEquipment).not.toBe(firstEquipment);
+  expect(secondEquipment.value).toBe('equipment-0');
+});

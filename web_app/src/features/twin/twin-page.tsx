@@ -1,8 +1,8 @@
 import { OriginalIcon } from '../../original-icons';
 import { useTwinLocale, TwinLocaleProvider } from './twin-i18n';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus, type EquipmentStatusSnapshot } from '../../equipment-status';
+import { watchEquipmentStatus, type EquipmentStatusSnapshot, type EquipmentStatusScope } from '../../equipment-status';
 import { FAB_LAYOUT, FAB_TOOL_STATE_META, type FabToolState } from '../../fab-layout';
 import type { AmhsStats, CutAxis, PickedTool, SceneLayer, XRayFilter } from '../../fab-scene';
 import { FabViewport, type FabViewportHandle } from './fab-viewer';
@@ -13,15 +13,15 @@ import { createToolStateMerger } from './tool-state-merge';
 import { AmhsOhtReadout, AmhsResearchBadge } from './twin-amhs-hud';
 import { TwinTourHud, type TourHudSnapshot, type TwinTourHudHandle } from './twin-tour-hud';
 import { TwinWaferHud } from './twin-wafer-hud';
+import { TwinYmsPanel, TwinYieldPill } from './twin-yms';
 import { ORIGINAL_TWIN_UI, type TwinSelection } from '../../original-twin-data';
 import { ResearchReplay, researchClock } from '../../research-replay';
 import type { WaferProduct } from '../../wafer-route';
 import { buildWaferScenario } from '../../wafer-scenario';
 import { applyMesAction, buildTelemetry, computeSpc, createMesJob, type MesAction, type MesJob } from '../../process-control';
-import { BIN_COLORS, BIN_LABELS, WM811K_DEFECT_METADATA, generateWaferMap, stdfSummary, theoreticalYieldModels, waferMetrics, type BinCode, type DefectPattern } from '../../wafer-map';
-import { computeFabYield, DEFAULT_YIELD_INPUT, scenarioStates, YIELD_SCENARIOS, type YieldInput } from '../../fab-yield';
+import { YIELD_SCENARIOS } from '../../fab-yield';
 import { createTwinUiState, projectTwinSceneState, type EntryMode, type TwinView as CameraView } from '../../twin-state';
-import { DEMO_TICK_MS, projectReplayStates, resolveScenario, TWIN_LAYOUT_IDENTITIES } from '../../twin-equipment';
+import { DEMO_TICK_MS, projectReplayStates, TWIN_LAYOUT_IDENTITIES } from '../../twin-equipment';
 import { cleanroomPressureField } from '../../cleanroom-pressure';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '../../original-tour';
 import { buildTourScenario, TOUR_INITIAL_CAMERA, TOUR_INITIAL_TARGET } from '../../tour-scenario';
@@ -36,7 +36,8 @@ import { useLocaleStore } from '../../state/localeStore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SiteDto } from '../../contracts';
 import { sitesQueryOptions } from '../../api/queries/sites.queries';
-import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from '../../api/queries/equipment.queries';
+import { equipmentStatusQueryOptions } from '../../api/queries/equipment.queries';
+import { acceptEquipmentStatusSnapshot, activateEquipmentStatusScope } from '../../api/queries/equipment-status-bridge';
 import { researchEventsQueryOptions } from '../../api/queries/research.queries';
 import { waferRoutesQueryOptions } from '../../api/queries/wafer.queries';
 import { createCoalescedDispatcher } from '../../state/telemetry-buffer';
@@ -81,6 +82,80 @@ const XRAY_FILTERS: { filter: XRayFilter; label: string }[] = [
   { filter: 'amhs', label: 'AMHS Track' },
 ];
 
+interface EquipmentStatusPipelineProps {
+  siteId: string;
+  fabId: string;
+}
+
+interface EquipmentStatusProjectionFrame {
+  readonly scope: EquipmentStatusScope;
+  readonly snapshot: EquipmentStatusSnapshot;
+}
+
+/**
+ * A01/A02: isolated subscriber for the FAB-scoped equipment status. Keeping the
+ * Query subscription and the SSE listener in a child that renders nothing means
+ * a raw SSE cache write no longer rerenders TwinContent/FabViewport; accepted
+ * frames reach the page at most once per 100 ms through the shared batcher.
+ *
+ * Scope handover is atomic: pending frames from the previous FAB are cancelled in
+ * a layout effect, the new scope starts with a fresh ordering high-water seeded
+ * from the accepted cache, and every FAB-scoped store projection is cleared
+ * before the browser can paint. Store actions additionally carry the composite
+ * scope as a token, so a stale callback can never apply to the new FAB.
+ */
+function EquipmentStatusPipeline({ siteId, fabId }: EquipmentStatusPipelineProps) {
+  const queryClient = useQueryClient();
+  const scope = useMemo<EquipmentStatusScope>(() => ({ siteId, fabId }), [siteId, fabId]);
+  const batcher = useMemo(() => createCoalescedDispatcher<EquipmentStatusProjectionFrame>((frame) => {
+    const states = FAB_LAYOUT.map((_, index): FabToolState => {
+      const value = frame.snapshot.tools[index]?.state;
+      return value === 'running' || value === 'idle' || value === 'down' || value === 'maint' ? value : 'idle';
+    });
+    twinPageActions.liveSnapshotReceived({ scope: frame.scope, states, updatedAt: frame.snapshot.generatedAt });
+  }, 100), []);
+  useLayoutEffect(() => {
+    // Atomic handover: cancel A's pending batch before the new ordering history
+    // and projections exist, all before paint.
+    batcher.cancel();
+    activateEquipmentStatusScope(queryClient, scope, () => twinPageActions.statusFeedStale({ scope }));
+    twinPageActions.liveScopeActivated(scope);
+  }, [batcher, queryClient, scope]);
+  useLayoutEffect(() => () => batcher.cancel(), [batcher]);
+
+  // The page's only subscription for the FAB status entry. The queryFn already
+  // gated REST frames; SSE frames go through the same gate in the effect below.
+  const statusQuery = useQuery({
+    ...equipmentStatusQueryOptions(siteId, fabId),
+    refetchInterval: 4000,
+  });
+
+  // The accepted Query cache entry is the single snapshot owner; this is the one
+  // path that feeds the throttled projection (no per-frame parent render).
+  useEffect(() => {
+    if (statusQuery.data) batcher.push({ scope, snapshot: statusQuery.data });
+  }, [batcher, scope, statusQuery.data]);
+
+  useEffect(() => {
+    if (statusQuery.isError) twinPageActions.statusFeedStale({ scope });
+  }, [scope, statusQuery.isError]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const source = new EventSource(
+      `/api/v1/sites/${encodeURIComponent(siteId)}/fabs/${encodeURIComponent(fabId)}/equipment-status/stream`,
+    );
+    watchEquipmentStatus(source, scope, (snapshot) => {
+      // One acceptance boundary: a frame the ordered consumer rejects is never
+      // written to the FAB-scoped cache (and therefore never reaches the page).
+      acceptEquipmentStatusSnapshot(queryClient, scope, snapshot);
+    }, () => twinPageActions.statusFeedStale({ scope }), controller.signal);
+    return () => controller.abort();
+  }, [fabId, queryClient, scope, siteId]);
+
+  return null;
+}
+
 interface TwinContentProps {
   fabId?: string;
   /** Router-owned search state; the page never reads window.location for product state. */
@@ -93,7 +168,6 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const theme = useLocaleStore((state) => state.theme);
   const searchQuery = searchToQueryString(search ?? {});
   const scene = useRef<FabViewportHandle>(null);
-  const queryClient = useQueryClient();
   // Subscribe to exactly the UI branches this component renders. Wafer
   // playing/speed move with the wafer HUD child below, so its 20 Hz frames no
   // longer rerender TwinContent or FabViewport.
@@ -113,22 +187,34 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     statusSource: state.statusSource,
     preferredStatusSource: state.preferredStatusSource,
   })));
+  // demo.states feeds the scene projection; demo.keys feeds the sidebar/inspector props.
+  // referenceLights/yieldJitter are only used by the extracted yield children.
   const demo = useTwinDemoStore(useShallow((state) => ({
     states: state.states,
     keys: state.keys,
-    referenceLights: state.referenceLights,
     cycle: state.cycle,
     playing: state.playing,
     scenarioId: state.scenarioId,
-    yieldJitter: state.yieldJitter,
   })));
-  // Wafer playback frames and AMHS statistics are store-owned but rendered by
-  // isolated children (twin-wafer-hud.tsx / twin-amhs-hud.tsx); keep them out
-  // of the page snapshot so only page state TwinContent renders remains.
-  const page = useTwinPageStore(useShallow((state) => {
-    const { wafer: _wafer, amhs: _amhs, ...page } = state;
-    return page;
-  }));
+  // Subscribe to exactly the page fields TwinContent itself renders. The wafer
+  // HUD, AMHS readouts, YMS dialog and yield pill own their slices in children
+  // (twin-wafer-hud.tsx / twin-amhs-hud.tsx / twin-yms.tsx), so their
+  // high-frequency or nested updates never rerender this page or FabViewport.
+  const page = useTwinPageStore(useShallow((state) => ({
+    siteId: state.siteId,
+    siteError: state.siteError,
+    liveToolStates: state.liveToolStates,
+    replayBase: state.replayBase,
+    statusFeed: state.statusFeed,
+    selected: state.selected,
+    selection: state.selection,
+    mesJobs: state.mesJobs,
+    layerPreferences: state.layerPreferences,
+    infoDialog: state.infoDialog,
+    showResearchUtil: state.showResearchUtil,
+    onboardingDontShow: state.onboardingDontShow,
+    ymsOpen: state.yms.open,
+  })));
   const status = useRuntimeStore(state => state.viewer.status);
   const mode = ui.entryMode;
   const view = ui.view;
@@ -146,8 +232,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const researchTime = ui.research.timeSec;
   const researchPlaying = ui.research.playing;
   const researchSpeed = ui.research.speed;
-  const { siteId, siteError: error, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, infoDialog, showResearchUtil, onboardingDontShow } = page;
-  const { open: ymsOpen, tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, yieldInput, yieldScenario, stdfCopied } = page.yms;
+  const { siteId, siteError: error, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, infoDialog, showResearchUtil, onboardingDontShow, ymsOpen } = page;
 
   const sitesQuery = useQuery(sitesQueryOptions());
   // Canonical /fabs/$fabId/3d identity wins; the store/legacy fallback only
@@ -164,22 +249,25 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     [site, selectedFabId],
   );
   const telemetry = useFabTelemetry(selectedFabId);
-  // TanStack Query owns the server cache (ARCH-02/G-02) and the status cache is
-  // FAB-scoped: two FABs of one site must never share a snapshot/sequence. The
-  // SSE effect below merges live frames into this same 4 s polling entry.
+  // TanStack Query owns the FAB-scoped server cache (ARCH-02/G-02); the isolated
+  // EquipmentStatusPipeline below subscribes to it and feeds the page through a
+  // throttled projection, so raw SSE cache writes do not rerender TwinContent.
   const statusSiteId = site?.siteId;
-  const statusQuery = useQuery({
-    ...equipmentStatusQueryOptions(statusSiteId ?? '', selectedFabId ?? ''),
-    enabled: !!statusSiteId && !!selectedFabId,
-    refetchInterval: 4000,
-  });
   const researchQuery = useQuery({ ...researchEventsQueryOptions(), enabled: mode === 'research' });
   const waferRoutesQuery = useQuery({ ...waferRoutesQueryOptions(), enabled: waferActive });
   const waferRoutes = waferRoutesQuery.data;
-  const research = useMemo(() => {
-    if (!researchQuery.data) return undefined;
-    try { return ResearchReplay.parse(researchQuery.data); } catch { return undefined; }
+  // A16: a parse failure is a distinct, visible state; it must not silently become
+  // undefined and only reuse the network error owned by the Query.
+  const researchParse = useMemo<{ replay?: ResearchReplay; error: string }>(() => {
+    if (!researchQuery.data) return { replay: undefined, error: '' };
+    try {
+      return { replay: ResearchReplay.parse(researchQuery.data), error: '' };
+    } catch (error) {
+      return { replay: undefined, error: error instanceof Error ? error.message : String(error) };
+    }
   }, [researchQuery.data]);
+  const research = researchParse.replay;
+  const researchParseError = researchParse.error;
   const researchLoading = mode === 'research' && researchQuery.isLoading;
   const researchError = researchQuery.isError ? t('回放数据加载失败') : '';
   const waferError = waferRoutesQuery.isError ? t('路线加载失败') : '';
@@ -206,16 +294,8 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const tourHudRef = useRef<TwinTourHudHandle>(null);
   // Mount-time seed for the tour HUD; later frames are pushed through tourHudRef.
   const [tourHudSeed, setTourHudSeed] = useState<TourHudSnapshot | null>(null);
-  const statusConsumer = useRef<((value: unknown) => boolean) | undefined>(undefined);
-  const liveSnapshotBatcher = useMemo(() => createCoalescedDispatcher<EquipmentStatusSnapshot>((snapshot) => {
-    const states = FAB_LAYOUT.map((_, index): FabToolState => {
-      const value = snapshot.tools[index]?.state;
-      return value === 'running' || value === 'idle' || value === 'down' || value === 'maint' ? value : 'idle';
-    });
-    twinPageActions.liveSnapshotReceived({ states, updatedAt: snapshot.generatedAt });
-  }, 100), []);
   const amhsBatcher = useMemo(() => createCoalescedDispatcher<AmhsStats>((stats) => twinPageActions.amhsSet(stats), 100), []);
-  useEffect(() => () => { liveSnapshotBatcher.cancel(); amhsBatcher.cancel(); }, [liveSnapshotBatcher, amhsBatcher]);
+  useEffect(() => () => amhsBatcher.cancel(), [amhsBatcher]);
 
   const setSelected = (value?: PickedTool) => twinPageActions.selectedSet(value);
   const setSelection = (value?: TwinSelection) => twinPageActions.selectionSet(value);
@@ -225,17 +305,6 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const setOnboardingDontShow = (value: boolean) => twinPageActions.onboardingDontShowSet(value);
   const setYmsOpen = (value: boolean) => twinPageActions.ymsOpenSet(value);
   const setYmsTab = (value: 'map' | 'yield') => twinPageActions.ymsTabSet(value);
-  const selectWaferPattern = (value: DefectPattern) => twinPageActions.ymsRandomize(value);
-  const setHoverDie = (value: { r: number; c: number; bin: BinCode } | undefined) => twinPageActions.ymsHoverDieSet(value);
-  const setDieArea = (value: number) => twinPageActions.ymsDieAreaSet(value);
-  const setDefectD0 = (value: number) => twinPageActions.ymsDefectD0Set(value);
-  const setClusterAlpha = (value: number) => twinPageActions.ymsClusterAlphaSet(value);
-  const setYieldInput = (value: YieldInput | ((current: YieldInput) => YieldInput)) => {
-    if (typeof value === 'function') twinPageActions.ymsYieldInputSet(value(yieldInput));
-    else twinPageActions.ymsYieldInputSet(value);
-  };
-  const setYieldScenario = (value: string) => twinPageActions.ymsYieldScenarioSet(value);
-  const setStdfCopied = (value: boolean) => twinPageActions.ymsStdfCopiedSet(value);
   const setWaferFollow = (value: boolean) => twinPageActions.waferFollowSet(value);
   const setMesJobs = (updater: (current: Record<number, MesJob>) => Record<number, MesJob>) => {
     const next = updater(mesJobs);
@@ -317,41 +386,6 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     if (!sitesQuery.error) return;
     twinPageActions.siteErrorSet(sitesQuery.error instanceof Error ? sitesQuery.error.message : t('FAB 数据加载失败'));
   }, [sitesQuery.error, t]);
-
-  useEffect(() => {
-    if (!statusSiteId || !selectedFabId) { statusConsumer.current = undefined; return; }
-    statusConsumer.current = createOrderedEquipmentStatusConsumer(
-      { siteId: statusSiteId, fabId: selectedFabId },
-      FAB_LAYOUT.length,
-      (snapshot) => liveSnapshotBatcher.push(snapshot),
-      () => twinPageActions.statusFeedStale(),
-    );
-    return () => { statusConsumer.current = undefined; };
-  }, [statusSiteId, selectedFabId, liveSnapshotBatcher]);
-
-  useEffect(() => {
-    if (statusQuery.data) statusConsumer.current?.(statusQuery.data);
-  }, [statusQuery.data]);
-
-  useEffect(() => {
-    if (statusQuery.isError) twinPageActions.statusFeedStale();
-  }, [statusQuery.isError]);
-
-  useEffect(() => {
-    if (!statusSiteId || !selectedFabId) return;
-    const scope = { siteId: statusSiteId, fabId: selectedFabId };
-    const controller = new AbortController();
-    const source = new EventSource(
-      `/api/v1/sites/${encodeURIComponent(statusSiteId)}/fabs/${encodeURIComponent(selectedFabId)}/equipment-status/stream`,
-    );
-    watchEquipmentStatus(source, scope, (snapshot) => {
-      statusConsumer.current?.(snapshot);
-      // Exactly one server cache: live frames overwrite the FAB-scoped polling
-      // entry instead of living in a parallel store.
-      queryClient.setQueryData(equipmentStatusQueryKey(statusSiteId, selectedFabId), snapshot);
-    }, () => twinPageActions.statusFeedStale(), controller.signal);
-    return () => controller.abort();
-  }, [statusSiteId, selectedFabId, queryClient]);
 
   useEffect(() => {
     const modal = twinModalFrom(search ?? {});
@@ -442,35 +476,6 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const selectedTelemetry = useMemo(() => selected ? buildTelemetry(FAB_LAYOUT[selected.index], selected.index) : undefined, [selected?.index]);
   const selectedSpc = useMemo(() => selectedTelemetry ? computeSpc(selectedTelemetry.history, selectedTelemetry.sensors[0], toolStates[selected?.index ?? 0] === 'down') : undefined, [selectedTelemetry, toolStates, selected?.index]);
   const selectedMes = selected ? mesJobs[selected.index] ?? createMesJob(FAB_LAYOUT[selected.index], selected.index) : undefined;
-  const waferDies = useMemo(() => generateWaferMap(waferPattern, waferSeed), [waferPattern, waferSeed]);
-  const waferAnalytics = useMemo(() => waferMetrics(waferDies), [waferDies]);
-  const yieldModels = useMemo(() => theoreticalYieldModels(dieArea, defectD0, clusterAlpha), [dieArea, defectD0, clusterAlpha]);
-  const stdf = useMemo(() => stdfSummary(waferDies, waferPattern), [waferDies, waferPattern]);
-  const yieldStates = useMemo(() => {
-    if (yieldScenario === 'live') return toolStates;
-    const scenario = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
-    return scenario ? scenarioStates(scenario) : toolStates;
-  }, [toolStates, yieldScenario]);
-  const yieldDirectoryStates = useMemo(() => {
-    const scenario = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
-    const states: Record<string, FabToolState> = {};
-    for (const row of ORIGINAL_TWIN_UI.equipment) {
-      const override = scenario?.overrides[row.id];
-      states[row.id] = override
-        ? override.toLowerCase() as FabToolState
-        : yieldScenario === 'live' ? (demo.referenceLights[row.id] ?? 'running') : 'running';
-    }
-    return states;
-  }, [yieldScenario, demo.referenceLights]);
-  const yieldUnresolved = useMemo(() => {
-    const scenario = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
-    return scenario ? resolveScenario(scenario).unresolvedIds : [];
-  }, [yieldScenario]);
-  const fabYield = useMemo(() => computeFabYield(yieldStates, yieldInput, {
-    directoryStates: yieldDirectoryStates,
-    scenarioId: yieldScenario === 'live' ? demo.scenarioId : yieldScenario,
-    jitter: demo.yieldJitter,
-  }), [yieldStates, yieldInput, yieldDirectoryStates, yieldScenario, demo.scenarioId, demo.yieldJitter]);
   const spcPlot = selectedTelemetry ? (() => {
     const values = selectedTelemetry.history;
     const low = Math.min(...values);
@@ -619,11 +624,6 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     const stop = TOUR_STOPS[index];
     if (stop) twinUiActions.tourStep({ waypoint: index, level: stop.level, view: 'iso' });
   }
-  function chooseYieldScenario(id: string): void {
-    setYieldScenario(id);
-    const scenario = YIELD_SCENARIOS.find((entry) => entry.id === id);
-    setYieldInput(scenario ? { purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime } : DEFAULT_YIELD_INPUT);
-  }
   function handleTwinSelection(next: TwinSelection): void {
     setSelection(next);
     if (next.kind === 'reference') {
@@ -647,9 +647,12 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     setSelected(tool);
     const sync = useRuntimeStore.getState().viewer.selectionSync;
     if (sync) { runtimeActions.viewerSelectionSyncFinished(sync); return; }
-    if (tool && selection?.kind === 'reference' && FAB_LAYOUT[tool.index]?.recordId === selection.id) return;
+    // A05: the scene keeps this callback across renders, so read the latest
+    // selection from the store instead of the render closure.
+    const currentSelection = useTwinPageStore.getState().selection;
+    if (tool && currentSelection?.kind === 'reference' && FAB_LAYOUT[tool.index]?.recordId === currentSelection.id) return;
     if (tool) setSelection({ kind: 'layout', index: tool.index });
-    else if (selection?.kind === 'layout') setSelection(undefined);
+    else if (currentSelection?.kind === 'layout') setSelection(undefined);
   }
   function handleManualKey(key: string, state: FabToolState): void {
     twinDemoActions.manualKeySet({ key, state });
@@ -667,8 +670,8 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     if (!scenario) return;
     twinUiActions.sourceSet('demo');
     twinDemoActions.scenarioApplied(scenario);
-    setYieldScenario('live');
-    setYieldInput({ purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime });
+    twinPageActions.ymsYieldScenarioSet('live');
+    twinPageActions.ymsYieldInputSet({ purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime });
   }
   function syncWaferHud(): void {
     const controller = waferTimelineRef.current;
@@ -790,6 +793,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
 
   return (
     <main className="twin-page" data-spatial-mode={ui.spatialMode ?? 'none'}>
+      {statusSiteId && selectedFabId && <EquipmentStatusPipeline siteId={statusSiteId} fabId={selectedFabId} />}
       <header className="twin-topbar">
         <a className="twin-brand" href="/" aria-label={t("首页")}>
           <span className="twin-brand-mark"><OriginalIcon name="home" size={18} /></span>
@@ -828,8 +832,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
       </header>
 
       <div className="twin-subbar" id="tour-status-subbar">
-        <button id="header-yield-val" className="twin-yield-pill" type="button" title="Cascading Yield Model" onClick={() => { setYmsOpen(true); setYmsTab('yield'); }}>{(fabYield.totalYield * 100).toFixed(2)}%⌄</button>
-        <span id="header-wpm-val" className="twin-throughput">{fabYield.wpm.toLocaleString('en-US')}<small>{t("片/月")}</small></span>
+        <TwinYieldPill toolStates={toolStates} />
         <section className="twin-simulation" aria-label={t("B01 场景控制")}>
           <button id="btn-sim-play" type="button" disabled={ui.statusSource !== 'demo'} title={ui.statusSource !== 'demo' ? t("请选择本地 DEMO 状态来源") : 'Toggle Sim Clock · 1600 ms'} onClick={() => twinDemoActions.playingSet(!demo.playing)} aria-pressed={ui.statusSource === 'demo' && demo.playing}>{demo.playing ? 'Ⅱ' : '▶'} <span id="lbl-sim-cycle">#{demo.cycle}</span></button>
           <select id="dt-scenario-select" aria-label="Scenario" value={demo.scenarioId} disabled={ui.statusSource !== 'demo'} onChange={(event) => chooseDemoScenario(event.target.value)}>
@@ -949,13 +952,13 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
 
             {selectedSpc && selectedTelemetry && spcPlot && (
               <section className="twin-process twin-spc" aria-label="Process Capability">
-                <div className="twin-process-head"><strong>PROCESS CAPABILITY · SPC / Cpk</strong><span className={`twin-spc-state ${selectedSpc.status.startsWith('ALARM') ? 'alarm' : 'ok'}`}>{selectedSpc.status}</span></div>
+                <div className="twin-process-head"><strong>PROCESS CAPABILITY · SPC / Cpk</strong><span className={`twin-spc-state ${selectedSpc.controlStatus === 'ALARM EXCURSION' ? 'alarm' : ''}`}>CONTROL · {selectedSpc.controlStatus ?? selectedSpc.status}</span><span className={`twin-spc-state ${selectedSpc.specStatus === 'OUT OF SPEC' ? 'alarm' : ''}`}>SPEC · {selectedSpc.specStatus ?? '—'}</span></div>
                 <div className="twin-spc-grid">
-                  <div><span>Cp</span><b>{selectedSpc.cp.toFixed(2)}</b></div>
-                  <div><span>Cpk</span><b className={selectedSpc.cpk >= 1.67 ? 'good' : selectedSpc.cpk >= 1.33 ? '' : 'bad'}>{selectedSpc.cpk.toFixed(2)}</b></div>
-                  <div><span>SIGMA</span><b>{selectedSpc.sigma.toFixed(2)} σ</b></div>
+                  <div><span>Cp</span><b>{selectedSpc.insufficientData ? '—' : selectedSpc.cp.toFixed(2)}</b></div>
+                  <div><span>Cpk</span><b className={selectedSpc.insufficientData ? '' : selectedSpc.cpk >= 1.67 ? 'good' : selectedSpc.cpk >= 1.33 ? '' : 'bad'}>{selectedSpc.insufficientData ? '—' : selectedSpc.cpk.toFixed(2)}</b></div>
+                  <div><span>SIGMA</span><b>{selectedSpc.insufficientData ? '—' : `${selectedSpc.sigma.toFixed(2)} σ`}</b></div>
                 </div>
-                <div className={`twin-spc-rule ${selectedSpc.rule.startsWith('Rule') ? 'alarm' : ''}`}><span>Nelson Run Rules</span><b>{selectedSpc.rule}</b></div>
+                <div className={`twin-spc-rule ${selectedSpc.controlStatus === 'ALARM EXCURSION' ? 'alarm' : ''}`}><span>Implemented Nelson rules</span><b>{selectedSpc.insufficientData ? 'Insufficient data / 数据不足' : selectedSpc.rule}</b></div>
                 <div className="twin-spc-sensors">
                   {selectedTelemetry.sensors.map((sensor) => (
                     <div key={sensor.name}><span>{sensor.name}</span><b>{sensor.value >= 1000 ? sensor.value.toFixed(0) : sensor.value < 0.01 ? sensor.value.toExponential(2) : sensor.value.toFixed(2)} <small>{sensor.unit}</small></b></div>
@@ -993,6 +996,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
             </div>
             {researchLoading && <p className="twin-research-status">{t("正在载入 27,263 行展示事件…")}</p>}
             {researchError && <p className="twin-research-status error-text">{t("回放加载失败：")}{researchError}</p>}
+            {researchParseError && <p className="twin-research-status twin-research-parse-error error-text">{t("回放数据解析失败：")}{researchParseError}</p>}
             {research && researchSnapshot && (
               <>
                 <div className="twin-research-clock">
@@ -1052,98 +1056,8 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
         )}
 
         {ymsOpen && (
-          <div className="twin-yms-backdrop" onClick={() => setYmsOpen(false)}>
-            <section className="twin-yms" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="YMS yield management">
-              <header className="twin-yms-head">
-                <div><strong>YMS · YIELD MANAGEMENT</strong><span>WM-811K SPATIAL CLASSIFIER · 8-STAGE CASCADING YIELD</span></div>
-                <nav>
-                  <button type="button" className={ymsTab === 'map' ? 'active' : ''} onClick={() => setYmsTab('map')}>Wafer Map</button>
-                  <button type="button" className={ymsTab === 'yield' ? 'active' : ''} onClick={() => setYmsTab('yield')}>Yield Waterfall</button>
-                </nav>
-                <button type="button" className="twin-yms-close" aria-label={t("关闭 YMS")} onClick={() => setYmsOpen(false)}>×</button>
-              </header>
-
-              {ymsTab === 'map' ? (
-                <div className="twin-yms-map">
-                  <aside className="twin-patterns">
-                    <span className="twin-yms-label">WM-811K PATTERNS</span>
-                    {(Object.keys(WM811K_DEFECT_METADATA) as DefectPattern[]).map((pattern) => (
-                      <button type="button" key={pattern} className={waferPattern === pattern ? 'active' : ''} onClick={() => selectWaferPattern(pattern)}>
-                        <b>{WM811K_DEFECT_METADATA[pattern].name}</b>
-                        <small>{WM811K_DEFECT_METADATA[pattern].confidence} confidence</small>
-                      </button>
-                    ))}
-                    <button type="button" className="twin-yms-random" onClick={() => { const patterns = Object.keys(WM811K_DEFECT_METADATA) as DefectPattern[]; selectWaferPattern(patterns[Math.floor(Math.random() * patterns.length)]); }}>{t("随机模式")}</button>
-                  </aside>
-                  <div className="twin-wafer-stage">
-                    <svg viewBox="0 0 320 320" role="img" aria-label="300mm wafer die map">
-                      <circle cx="160" cy="160" r="149" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="3" />
-                      <circle cx="160" cy="160" r="145" fill="#0f172a" stroke="#94a3b8" strokeWidth="1.5" />
-                      <circle cx="160" cy="160" r="139" fill="#1e293b" opacity="0.6" />
-                      {waferDies.map((die) => (
-                        <rect key={`${die.r}-${die.c}`} x={160 + die.dx - 5.15} y={160 + die.dy - 5.15} width={10.3} height={10.3} rx={1.5} fill={BIN_COLORS[die.bin]} stroke="#fff" strokeWidth={0.3} onMouseEnter={() => setHoverDie({ r: die.r, c: die.c, bin: die.bin })} onMouseLeave={() => setHoverDie(undefined)} />
-                      ))}
-                      <path d="M152 305 Q160 295 168 305" fill="none" stroke="#64748b" strokeWidth="2" />
-                    </svg>
-                    <div className="twin-wafer-hover">{hoverDie ? `Die [R${hoverDie.r}, C${hoverDie.c}] · ${BIN_LABELS[hoverDie.bin]}` : `300 mm · ${waferAnalytics.total} dies · Notch 180°`}</div>
-                  </div>
-                  <aside className="twin-yms-analytics">
-                    <div className="twin-yms-pattern"><span>CLASSIFIED PATTERN</span><b>{WM811K_DEFECT_METADATA[waferPattern].name}</b><small>Confidence {WM811K_DEFECT_METADATA[waferPattern].confidence}</small></div>
-                    <p>{WM811K_DEFECT_METADATA[waferPattern].desc}</p>
-                    <div className="twin-yms-cause"><span>ROOT CAUSE</span>{WM811K_DEFECT_METADATA[waferPattern].rootCause}</div>
-                    <div className="twin-yms-yield-row"><div><span>GROSS YIELD</span><b>{waferAnalytics.yieldPct.toFixed(1)}%</b><small>{waferAnalytics.good} / {waferAnalytics.total} dies</small></div><div><span>MODEL LOSS</span><b>{WM811K_DEFECT_METADATA[waferPattern].lossPct.toFixed(1)}%</b><small>D0 {waferAnalytics.d0.toFixed(3)}/cm²</small></div></div>
-                    <div className="twin-bin-list">
-                      {([1, 2, 3, 4, 5] as BinCode[]).map((bin) => <div key={bin}><i style={{ background: BIN_COLORS[bin] }} /><span>{BIN_LABELS[bin]}</span><b>{waferAnalytics.bins[bin]} · {((waferAnalytics.bins[bin] / Math.max(1, waferAnalytics.total)) * 100).toFixed(1)}%</b></div>)}
-                    </div>
-                    <div className="twin-yield-models">
-                      <span className="twin-yms-label">THEORETICAL YIELD MODELS</span>
-                      <label>Die area <b>{dieArea} mm²</b><input type="range" min={25} max={300} step={5} value={dieArea} onChange={(event) => setDieArea(Number(event.target.value))} /></label>
-                      <label>Defect D0 <b>{defectD0.toFixed(2)} /cm²</b><input type="range" min={0.02} max={0.6} step={0.01} value={defectD0} onChange={(event) => setDefectD0(Number(event.target.value))} /></label>
-                      <label>Cluster α <b>{clusterAlpha.toFixed(2)}</b><input type="range" min={0.5} max={6} step={0.1} value={clusterAlpha} onChange={(event) => setClusterAlpha(Number(event.target.value))} /></label>
-                      <div className="twin-model-grid"><div><span>POISSON</span><b>{yieldModels.poisson.toFixed(1)}%</b></div><div><span>MURPHY</span><b>{yieldModels.murphy.toFixed(1)}%</b></div><div><span>SEEDS</span><b>{yieldModels.seeds.toFixed(1)}%</b></div></div>
-                    </div>
-                    <div className="twin-stdf-head"><span>STDF V4 PREVIEW</span><button type="button" onClick={() => { void navigator.clipboard?.writeText(JSON.stringify(stdf, null, 2)).then(() => { setStdfCopied(true); window.setTimeout(() => setStdfCopied(false), 1800); }).catch(() => {}); }}>{stdfCopied ? 'Copied' : 'Copy JSON'}</button></div>
-                    <pre className="twin-stdf">{`MIR: LotID="LOT-300-8842", TestCode="CP1", Fab="FAB-1", Tester="ADVANTEST-V93K"
-WIR: WaferID="W-14", Diameter=300mm, Notch=180, TotalDies=${waferAnalytics.total}, Tested=${waferAnalytics.total}
-PRR: PassCount=${waferAnalytics.good}, FailCount=${waferAnalytics.total - waferAnalytics.good}, GrossYield=${waferAnalytics.yieldPct.toFixed(2)}%, D0_Est=${waferAnalytics.d0.toFixed(3)}/cm²
-BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin3=${waferAnalytics.bins[3]}, Bin4=${waferAnalytics.bins[4]}, Bin5=${waferAnalytics.bins[5]}`}</pre>
-                  </aside>
-                </div>
-              ) : (
-                <div className="twin-yield-view">
-                  <div className="twin-yield-summary">
-                    <div><span>OVERALL FAB YIELD</span><b>{(fabYield.totalYield * 100).toFixed(2)}%</b><small>Y_fab = ∏ Y_i</small></div>
-                    <div><span>EFFECTIVE CAPACITY</span><b>{fabYield.wpm.toLocaleString()}</b><small>wafers / month</small></div>
-                    <div><span>BOTTLENECK</span><b>{fabYield.bottleneck.short}</b><small>{fabYield.bottleneck.name}</small></div>
-                  </div>
-                  <div className="twin-yield-scenarios" aria-label="Yield scenarios">
-                    <button type="button" className={yieldScenario === 'live' ? 'active' : ''} onClick={() => chooseYieldScenario('live')}>LIVE</button>
-                    {YIELD_SCENARIOS.map((scenario) => <button type="button" key={scenario.id} className={yieldScenario === scenario.id ? 'active' : ''} onClick={() => chooseYieldScenario(scenario.id)}>{scenario.name}</button>)}
-                  </div>
-                  {yieldUnresolved.length > 0 && <p className="twin-data-note">{t("此原版场景的旧设备 ID 不在当前布局中，未施加类别级 DOWN：")}{yieldUnresolved.join(', ')}</p>}
-                  <div className="twin-yield-bars">
-                    {fabYield.modules.map((entry) => (
-                      <div key={entry.module.id} className={entry.bottleneck ? 'bottleneck' : ''}>
-                        <span className="twin-yield-icon">{entry.module.icon}</span>
-                        <span className="twin-yield-name">{entry.module.short} · {entry.module.name}</span>
-                        <b className="twin-yield-step">{(entry.stepYield * 100).toFixed(2)}%</b>
-                        <i><b style={{ width: `${Math.min(100, entry.cumulativeYield * 100)}%` }} /></i>
-                        <em>{(entry.cumulativeYield * 100).toFixed(1)}%</em>
-                        {entry.bottleneck && <strong>BOTTLENECK</strong>}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="twin-yield-inputs">
-                    <label>Raw material purity <b>{yieldInput.purity.toFixed(1)}N</b><input type="range" min={4} max={6} step={0.1} value={yieldInput.purity} onChange={(event) => setYieldInput((current) => ({ ...current, purity: Number(event.target.value) }))} /></label>
-                    <label>Equipment health <b>{yieldInput.health.toFixed(1)}%</b><input type="range" min={70} max={100} step={0.1} value={yieldInput.health} onChange={(event) => setYieldInput((current) => ({ ...current, health: Number(event.target.value) }))} /></label>
-                    <label>Queue lag <b>{yieldInput.lagTime.toFixed(1)} h</b><input type="range" min={0} max={16} step={0.1} value={yieldInput.lagTime} onChange={(event) => setYieldInput((current) => ({ ...current, lagTime: Number(event.target.value) }))} /></label>
-                  </div>
-                </div>
-              )}
-            </section>
-          </div>
+          <TwinYmsPanel toolStates={toolStates} />
         )}
-
         <div id="hud-grid-badge" className="twin-grid-badge"><OriginalIcon name="ruler" />{t("网格: 6m × 6m · Subfab: -7.0m")}</div>
 
         <footer id="bottom-hud-footer" className="twin-bottom">

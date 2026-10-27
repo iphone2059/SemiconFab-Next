@@ -412,7 +412,9 @@ export default function WorkbenchApp() {
               </button>
             </div>
           )}
-          {site && selectedFab && <CommandConsole siteId={site.siteId} fabId={selectedFab.fabId} />}
+          {/* Composite scope key: an in-place FAB switch replaces the console instance
+              instead of carrying the previous FAB's request/history/key state across. */}
+          {site && selectedFab && <CommandConsole key={`${site.siteId}:${selectedFab.fabId}`} siteId={site.siteId} fabId={selectedFab.fabId} />}
           {loading && <div className="empty">正在读取站点…</div>}
           {!loading && !error && !site && <div className="empty">API 未返回可用站点。</div>}
           <div id="runs">{site && <Workbench site={site} key={site.siteId} />}</div>

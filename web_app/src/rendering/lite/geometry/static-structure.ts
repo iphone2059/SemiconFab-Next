@@ -8,6 +8,7 @@ import {
 } from '@babylonjs/lite';
 import { staticStructure as source, type PackedSourceEntity } from './static-structure-packed';
 import { originalFloorOpacity } from '../../../twin-spatial';
+import { liteXraySystemClass } from '../effects-xray-state';
 
 export type StaticLayer = 'shell' | 'ffu' | 'b1';
 export interface StaticSurfaceDefinition {
@@ -134,8 +135,11 @@ export function createLiteStaticStructure(scene: SceneContext, engine: EngineCon
     const groups = new Map<string, PackedSourceEntity[]>();
     for (const entity of source.entities) {
       // Keep independent transparent meshes for native sorting. Only opaque peers share a batch.
+      // The precomputed X-Ray system class is part of the batch identity: effects.ts classifies
+      // the merged mesh by its first entity name, so a batch may not mix utility systems (A06).
       const key = JSON.stringify([entity.layer, entity.geometry, entity.material, entity.caster,
-        entity.receiveShadows, source.materials[entity.material].alpha < 1 ? entity.name : null]);
+        entity.receiveShadows, source.materials[entity.material].alpha < 1 ? entity.name : null,
+        liteXraySystemClass(entity.name)]);
       const group = groups.get(key);
       if (group) group.push(entity); else groups.set(key, [entity]);
     }

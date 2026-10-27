@@ -201,29 +201,63 @@ export function buildTelemetry(tool: FabLayoutTool, index: number): Telemetry {
   return createProcessTelemetry({ id: tool.recordId || String(index), category, name: tool.model, position: { x: tool.x } }, random);
 }
 
+export const MIN_SPC_SAMPLES = 5;
+/** Capability threshold conventionally used by the source display (Cpk >= 1.33). */
+const SPEC_CAPABILITY_THRESHOLD = 1.33;
+/** The only Nelson rule classes implemented below; UI text must not claim all eight. */
+const IMPLEMENTED_RULES_NOTE = 'Rule 1–3 of Nelson 8 monitored';
+const NO_VIOLATION_RULE = 'No violation: ' + IMPLEMENTED_RULES_NOTE;
+
+/** Statistical control (implemented Nelson subset) is a different judgement from spec capability. */
+export type SpcControlStatus = 'IN CONTROL' | 'ALARM EXCURSION' | 'INSUFFICIENT DATA';
+export type SpcSpecStatus = 'IN SPEC' | 'OUT OF SPEC' | 'INSUFFICIENT DATA';
+
 export interface SpcResult {
   cp: number;
   cpk: number;
   sigma: number;
   status: 'WORLD CLASS (5σ)' | 'IN CONTROL' | 'ALARM EXCURSION';
   rule: string;
+  /** Fewer than MIN_SPC_SAMPLES samples: no control/capability judgement is claimed. */
+  insufficientData?: boolean;
+  /** Stability from the implemented Nelson rule classes only. */
+  controlStatus?: SpcControlStatus;
+  /** Specification conformance; an in-control process can still be out of spec. */
+  specStatus?: SpcSpecStatus;
+  mean?: number;
+  /** Raw sample standard deviation (0 when every sample is identical). */
+  sampleStd?: number;
+  lsl?: number;
+  usl?: number;
 }
 
 export function computeSpc(history: readonly number[], sensor: SensorDefinition, isDown = false): SpcResult {
-  if (history.length < 5) return { cp: 1.75, cpk: 1.64, sigma: 4.92, status: 'IN CONTROL', rule: 'PASS: Nelson 8 Rules In-Spec' };
-  const mean = history.reduce((sum, value) => sum + value, 0) / history.length;
-  const variance = history.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (history.length - 1);
-  const std = Math.sqrt(variance) || 0.001;
   const target = (sensor.max + sensor.min) / 2;
   const tolerance = (sensor.max - sensor.min) * 0.45;
   const usl = target + tolerance;
   const lsl = target - tolerance;
+  if (history.length < MIN_SPC_SAMPLES) {
+    // Legacy fields keep their declared types for existing consumers; new consumers
+    // must read insufficientData/controlStatus/specStatus instead of treating this
+    // as a healthy capability result.
+    return {
+      cp: 0, cpk: 0, sigma: 0, status: 'IN CONTROL',
+      rule: `Insufficient data: ${history.length}/${MIN_SPC_SAMPLES} samples`,
+      insufficientData: true, controlStatus: 'INSUFFICIENT DATA', specStatus: 'INSUFFICIENT DATA',
+      mean: 0, sampleStd: 0, lsl, usl,
+    };
+  }
+  const mean = history.reduce((sum, value) => sum + value, 0) / history.length;
+  const variance = history.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (history.length - 1);
+  const sampleStd = Math.sqrt(variance);
+  const std = sampleStd || 0.001;
   const cp = (usl - lsl) / (6 * std);
   const cpu = (usl - mean) / (3 * std);
   const cpl = (mean - lsl) / (3 * std);
-  const cpk = Math.max(0.2, Math.min(cpu, cpl));
+  // Real capability: no artificial floor. A negative Cpk means the mean lies outside a limit.
+  const cpk = Math.min(cpu, cpl);
   const sigma = cpk * 3;
-  let rule = 'PASS: Nelson 8 Rules In-Spec';
+  let rule = NO_VIOLATION_RULE;
   if (isDown) {
     rule = 'Rule 1: Point Outside 3σ Upper/Lower Limit';
   } else if (history.some((value) => Math.abs(value - mean) > 3 * std)) {
@@ -232,7 +266,7 @@ export function computeSpc(history: readonly number[], sensor: SensorDefinition,
     const last9 = history.slice(-9);
     if (last9.every((value) => value > mean) || last9.every((value) => value < mean)) rule = 'Rule 2: 9 Points on Same Side (Mean Shift)';
   }
-  if (rule.startsWith('PASS') && history.length >= 6) {
+  if (rule === NO_VIOLATION_RULE && history.length >= 6) {
     const last6 = history.slice(-6);
     let increasing = true;
     let decreasing = true;
@@ -242,6 +276,9 @@ export function computeSpc(history: readonly number[], sensor: SensorDefinition,
     }
     if (increasing || decreasing) rule = 'Rule 3: 6 Points Trending (Chamber Drift)';
   }
-  const status = rule.startsWith('Rule') ? 'ALARM EXCURSION' : cpk >= 1.67 ? 'WORLD CLASS (5σ)' : 'IN CONTROL';
-  return { cp, cpk, sigma, status, rule };
+  const controlStatus: SpcControlStatus = rule === NO_VIOLATION_RULE ? 'IN CONTROL' : 'ALARM EXCURSION';
+  const status = controlStatus === 'ALARM EXCURSION' ? 'ALARM EXCURSION' : cpk >= 1.67 ? 'WORLD CLASS (5σ)' : 'IN CONTROL';
+  const withinLimits = history.every((value) => value >= lsl && value <= usl);
+  const specStatus: SpcSpecStatus = withinLimits && cpk >= SPEC_CAPABILITY_THRESHOLD ? 'IN SPEC' : 'OUT OF SPEC';
+  return { cp, cpk, sigma, status, rule, insufficientData: false, controlStatus, specStatus, mean, sampleStd, lsl, usl };
 }

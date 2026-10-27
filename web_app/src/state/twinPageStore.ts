@@ -1,5 +1,6 @@
 import type { AmhsStats, PickedTool, SceneLayer } from '../fab-scene';
 import { FAB_TOOL_STATES, type FabToolState } from '../fab-layout';
+import type { EquipmentStatusScope } from '../equipment-status';
 import type { TwinSelection } from '../original-twin-data';
 import type { MesJob } from '../process-control';
 import { DEFAULT_YIELD_INPUT, type YieldInput } from '../fab-yield';
@@ -31,6 +32,12 @@ export type YmsUiState = {
 export interface TwinPageState {
   siteId?: string;
   siteError?: string;
+  /**
+   * Composite (siteId, fabId) identity that owns the FAB-scoped server/MES
+   * projections below. A scope activation clears the projections before a frame
+   * from the new FAB can be rendered; siteId alone is not a scope change.
+   */
+  liveStatusScope?: EquipmentStatusScope;
   liveToolStates: FabToolState[];
   replayBase: FabToolState[];
   statusFeed?: { updatedAt: string; stale: boolean };
@@ -41,7 +48,6 @@ export interface TwinPageState {
   amhs?: AmhsStats;
   infoDialog: 'architecture' | 'database' | null;
   showResearchUtil: boolean;
-  tourRemainingMs: number;
   onboardingDontShow: boolean;
   wafer: WaferUiState;
   yms: YmsUiState;
@@ -59,13 +65,13 @@ export interface TwinPageState {
 }
 
 export const initialTwinPageState: TwinPageState = {
+  liveStatusScope: undefined,
   liveToolStates: [...FAB_TOOL_STATES],
   replayBase: [...FAB_TOOL_STATES],
   mesJobs: {},
   layerPreferences: { amhs: true, ceiling: false, roof: false, subfab: false, heatmap: false, airflow: false, xray: false },
   infoDialog: null,
   showResearchUtil: true,
-  tourRemainingMs: 0,
   onboardingDontShow: true,
   wafer: { product: 'A', index: 0, follow: true, completed: false },
   yms: { open: false, tab: 'map', pattern: 'clean', seed: 811, dieArea: 100, defectD0: 0.15, clusterAlpha: 3, yieldInput: DEFAULT_YIELD_INPUT, yieldScenario: 'live', stdfCopied: false },
@@ -81,18 +87,41 @@ const wafer = (state: TwinPageState, patch: Patch<WaferUiState>): TwinPageState 
 const yms = (state: TwinPageState, patch: Patch<YmsUiState>): TwinPageState => page(state, { yms: { ...state.yms, ...patch } });
 const sidebar = (state: TwinPageState, patch: Patch<TwinPageState['sidebar']>): TwinPageState => page(state, { sidebar: { ...state.sidebar, ...patch } });
 const oemDialog = (state: TwinPageState, patch: Patch<TwinPageState['oemDialog']>): TwinPageState => page(state, { oemDialog: { ...state.oemDialog, ...patch } });
+const sameScope = (left: EquipmentStatusScope | undefined, right: EquipmentStatusScope): boolean =>
+  left !== undefined && left.siteId === right.siteId && left.fabId === right.fabId;
 
 const twinPage = createSliceStore(initialTwinPageState, {
   siteIdSet: (state, action) => page(state, { siteId: action.payload }),
   siteErrorSet: (state, action) => page(state, { siteError: action.payload }),
-  liveSnapshotReceived: (state, action) => page(state, {
-    liveToolStates: action.payload.states,
-    statusFeed: { updatedAt: action.payload.updatedAt, stale: false },
+  /**
+   * A01: in-place scope handover in one atomic update. Clears every FAB-scoped
+   * projection so the next FAB never renders the previous FAB's snapshot, feed or
+   * MES demo state before its own first accepted frame.
+   */
+  liveScopeActivated: (state, action) => page(state, {
+    liveStatusScope: action.payload as EquipmentStatusScope,
+    liveToolStates: [...FAB_TOOL_STATES],
+    statusFeed: undefined,
+    mesJobs: {},
+    inspectorMes: {},
   }),
+  liveSnapshotReceived: (state, action) => {
+    const payload = action.payload as { scope: EquipmentStatusScope; states: FabToolState[]; updatedAt: string };
+    // Scope token guard: a coalesced batch that raced the switch can never apply.
+    if (!sameScope(state.liveStatusScope, payload.scope)) return state;
+    return page(state, {
+      liveToolStates: payload.states,
+      statusFeed: { updatedAt: payload.updatedAt, stale: false },
+    });
+  },
   replayBaseSet: (state, action) => page(state, { replayBase: [...action.payload] }),
-  statusFeedStale: (state) => state.statusFeed
-    ? page(state, { statusFeed: { ...state.statusFeed, stale: true } })
-    : state,
+  statusFeedStale: (state, action) => {
+    const scope = (action.payload as { scope?: EquipmentStatusScope } | undefined)?.scope;
+    if (scope && !sameScope(state.liveStatusScope, scope)) return state;
+    return state.statusFeed
+      ? page(state, { statusFeed: { ...state.statusFeed, stale: true } })
+      : state;
+  },
   selectedSet: (state, action) => page(state, { selected: action.payload }),
   selectionSet: (state, action) => page(state, { selection: action.payload }),
   mesJobSet: (state, action) => page(state, { mesJobs: { ...state.mesJobs, [action.payload.index]: action.payload.job } }),
@@ -103,8 +132,6 @@ const twinPage = createSliceStore(initialTwinPageState, {
   amhsSet: (state, action) => page(state, { amhs: action.payload }),
   infoDialogSet: (state, action) => page(state, { infoDialog: action.payload }),
   showResearchUtilToggled: (state) => page(state, { showResearchUtil: !state.showResearchUtil }),
-  tourRemainingSet: (state, action) => page(state, { tourRemainingMs: Math.max(0, action.payload) }),
-  tourTick: (state) => page(state, { tourRemainingMs: Math.max(0, state.tourRemainingMs - 250) }),
   onboardingDontShowSet: (state, action) => page(state, { onboardingDontShow: action.payload }),
   waferFrameReceived: (state, action) => wafer(state, action.payload),
   waferFollowSet: (state, action) => wafer(state, { follow: action.payload }),
@@ -136,9 +163,10 @@ export const useTwinPageStore = twinPage.useStore;
 export const twinPageActions = twinPage.actions as {
   siteIdSet: (siteId?: string) => void;
   siteErrorSet: (error?: string) => void;
-  liveSnapshotReceived: (payload: { states: FabToolState[]; updatedAt: string }) => void;
+  liveScopeActivated: (scope: EquipmentStatusScope) => void;
+  liveSnapshotReceived: (payload: { scope: EquipmentStatusScope; states: FabToolState[]; updatedAt: string }) => void;
   replayBaseSet: (states: readonly FabToolState[]) => void;
-  statusFeedStale: () => void;
+  statusFeedStale: (payload?: { scope?: EquipmentStatusScope }) => void;
   selectedSet: (selected?: PickedTool) => void;
   selectionSet: (selection?: TwinSelection) => void;
   mesJobSet: (payload: { index: number; job: MesJob }) => void;
@@ -146,8 +174,6 @@ export const twinPageActions = twinPage.actions as {
   amhsSet: (stats?: AmhsStats) => void;
   infoDialogSet: (dialog: 'architecture' | 'database' | null) => void;
   showResearchUtilToggled: () => void;
-  tourRemainingSet: (ms: number) => void;
-  tourTick: () => void;
   onboardingDontShowSet: (value: boolean) => void;
   waferFrameReceived: (payload: { product: WaferProduct; index: number; hud: WaferHud; completed: boolean }) => void;
   waferFollowSet: (follow: boolean) => void;

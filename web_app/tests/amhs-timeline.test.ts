@@ -37,7 +37,7 @@ function simulate(): { state: AmhsState; events: Record<string, unknown>[]; snap
     loops: fixture.scenario.loops,
     initialNextTaskTime: fixture.scenario.initialNextTaskTime,
     vehicles: fixture.scenario.vehicles,
-  });
+  }, { retainCompletedHistory: true });
   const events: Record<string, unknown>[] = [];
   const snapshots: unknown[] = [];
   const seenTasks = new Set<string>();
@@ -83,9 +83,9 @@ function simulate(): { state: AmhsState; events: Record<string, unknown>[]; snap
   const stats = {
     simTime: round(state.simTime),
     tasksGenerated: state.taskSeq,
-    completed: state.completed.length,
+    completed: state.completedCount,
     totalDeliveryTime: round(state.totalDeliveryTime),
-    averageDeliveryTime: state.completed.length ? round(state.totalDeliveryTime / state.completed.length) : null,
+    averageDeliveryTime: state.completedCount ? round(state.totalDeliveryTime / state.completedCount) : null,
     minObservedGap: Number.isFinite(state.minObservedGap) ? round(state.minObservedGap) : null,
     gapViolations: state.gapViolations,
     seedAfter: stream.seed(),
@@ -106,6 +106,8 @@ it('keeps the hard no-overtake spacing and idle-state LED contract', () => {
   expect(state.minObservedGap).toBeGreaterThanOrEqual(2.0);
   const ledHexes = events.filter(event => event.type === 'led').map(event => event.hex);
   expect(new Set(ledHexes)).toEqual(new Set([AMHS_LED_COLORS.TO_PICKUP, AMHS_LED_COLORS.LOADING, AMHS_LED_COLORS.TO_DROPOFF, AMHS_LED_COLORS.UNLOADING, AMHS_LED_COLORS.IDLE]));
-  expect(state.completed.length).toBeGreaterThan(0);
+  expect(state.completedCount).toBeGreaterThan(0);
+  // Opted-in history agrees with the cumulative production counter.
+  expect(state.completed).toHaveLength(state.completedCount);
   for (const task of state.completed) expect(task.deliveredAt! - task.createdAt).toBeGreaterThan(0);
 });

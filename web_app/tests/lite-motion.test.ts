@@ -4,7 +4,7 @@ vi.hoisted(() => Object.assign(globalThis, { GPUBufferUsage: { VERTEX: 32, INDEX
   GPUTextureUsage: { TEXTURE_BINDING: 4, COPY_DST: 2, RENDER_ATTACHMENT: 16 } }));
 import { createSceneContext, disposeScene, getMeshGeometry, setParent, createTransformNode, setSubtreeVisible,
   type EngineContext, type Mesh } from '@babylonjs/lite';
-import { createLiteMotion } from '../src/rendering/lite/motion';
+import { createLiteMotion, createLiteMotionArc, locateLiteMotionArcPoint } from '../src/rendering/lite/motion';
 import { advanceAmhsState, createAmhsRandom, createAmhsState } from '../src/amhs-timeline';
 
 const personnel = JSON.parse(readFileSync(new URL('./fixtures/original-personnel-vectors.json', import.meta.url), 'utf8'));
@@ -127,8 +127,8 @@ it('maps the seeded source traffic clock onto every vehicle without a second sim
         expect(vehicle.ledHex).toBe(source.ledHex);
       });
       expect(h.model.readStats()).toEqual({ active: expected.vehicles.filter(v => v.state !== 'IDLE').length,
-        total: 24, queued: expected.queue.length, completed: expected.completed.length,
-        avgDelivery: expected.completed.length ? expected.totalDeliveryTime / expected.completed.length : null });
+        total: 24, queued: expected.queue.length, completed: expected.completedCount,
+        avgDelivery: expected.completedCount ? expected.totalDeliveryTime / expected.completedCount : null });
     }
   } finally { h.dispose(); }
 });
@@ -377,4 +377,158 @@ it('restores the capacity buffer and active count after device recovery', () => 
     h.model.update(16, 32);
     expect(internals(support)._version).toBe(version);
   } finally { h.dispose(); }
+});
+
+// ---------------------------------------------------------------------------------------------
+// A14/B01-B03 wave: frozen projection vectors, arc-boundary sweep and hidden-AMHS projection.
+// ---------------------------------------------------------------------------------------------
+
+const arcVectors = JSON.parse(readFileSync(new URL('./fixtures/original-motion-arc-vectors.json', import.meta.url), 'utf8')) as {
+  loopLengths: number[];
+  ticks: number[];
+  samples: { tick: number; vehicles: number[][] }[];
+};
+
+/**
+ * Independent copy of the pre-wave linear arc-length scan (motion.ts before B02). The binary
+ * locator must return bit-identical interpolation inputs for every boundary and offset.
+ */
+function referenceArcPoint(arc: { positions: { x: number; y: number; z: number }[]; cumulative: number[]; total: number },
+  progress: number): { index: number; x: number; z: number } {
+  const target = ((progress % 1 + 1) % 1) * arc.total;
+  let index = 1;
+  while (index < 512 && arc.cumulative[index] < target) index++;
+  const segment = arc.cumulative[index] - arc.cumulative[index - 1];
+  const t = segment > 0 ? (target - arc.cumulative[index - 1]) / segment : 0;
+  return {
+    index,
+    x: arc.positions[index - 1].x + (arc.positions[index].x - arc.positions[index - 1].x) * t,
+    z: arc.positions[index - 1].z + (arc.positions[index].z - arc.positions[index - 1].z) * t,
+  };
+}
+
+it('locates every arc sample boundary exactly like the removed linear scan', () => {
+  const loops = [
+    [[-33, -27], [26, -27], [42, -27], [42, 28], [18, 28], [-5, 28], [-33, 28]],
+    [[-27, -24], [20, -24], [20, 25], [-4, 25], [-4, -24]],
+  ] as const;
+  const out = { x: 0, y: 0, z: 0 };
+  loops.forEach((points, loopIndex) => {
+    const arc = createLiteMotionArc(points);
+    // The seam uses the product arc constants, not a synthetic curve.
+    expect(arc.total).toBeCloseTo(arcVectors.loopLengths[loopIndex], 10);
+    expect(arc.cumulative).toHaveLength(513);
+    const visited = new Set<number>();
+    const check = (progress: number): void => {
+      locateLiteMotionArcPoint(arc, progress, out);
+      const expected = referenceArcPoint(arc, progress);
+      visited.add(expected.index);
+      expect([out.x, out.z], `progress ${progress}`).toEqual([expected.x, expected.z]);
+      expect(out.y).toBe(0);
+    };
+    for (let index = 1; index <= 512; index++) {
+      const boundary = arc.cumulative[index] / arc.total;
+      check(boundary);
+      check(boundary - 1e-12 / arc.total);
+      check(boundary + 1e-12 / arc.total);
+      if (index > 1) check((arc.cumulative[index - 1] + arc.cumulative[index]) / 2 / arc.total);
+    }
+    for (let step = 0; step < 2048; step++) check(step / 2048);
+    for (const edge of [0, 1e-15, 0.5, 1 - 1e-15, 0.9999999999999999]) check(edge);
+    // Every one of the 512 interpolation segments is actually exercised.
+    expect(visited.size).toBe(512);
+  });
+});
+
+it('keeps the frozen vehicle projection vectors at every sampled source tick', () => {
+  const h = harness();
+  try {
+    const sampleNow = () => h.model.readVehiclePositions().map(vehicle =>
+      [vehicle.position[0], vehicle.position[1], vehicle.position[2], vehicle.rotationY, vehicle.hoistY,
+        vehicle.foupVisible ? 1 : 0]);
+    const expectedByTick = new Map(arcVectors.samples.map(sample => [sample.tick, sample.vehicles]));
+    expect(arcVectors.samples[0].tick).toBe(0);
+    expect(sampleNow()).toEqual(arcVectors.samples[0].vehicles);
+    for (let tick = 1; tick <= 3600; tick++) {
+      h.model.update(1000 / 60, tick * 1000 / 60);
+      const expected = expectedByTick.get(tick);
+      if (expected) expect(sampleNow(), `tick ${tick}`).toEqual(expected);
+    }
+  } finally { h.dispose(); }
+});
+
+it('shares one read-only personnel snapshot per frame with the facility air-shower reader', () => {
+  const h = harness();
+  try {
+    h.model.update(16, 16);
+    const frame = h.model.readSnapshot().personnel;
+    // B03: the facility callback and the state readout consume the exact frame motion already read.
+    expect(h.model.readAirShowerFrames()).toBe(frame.airShowers);
+    expect(h.model.readAirShowerFrames()).toBe(h.model.readAirShowerFrames());
+    h.model.update(16, 32);
+    expect(h.model.readAirShowerFrames()).toBe(h.model.readSnapshot().personnel.airShowers);
+    expect(h.model.readSnapshot().personnel.tick).toBeGreaterThan(frame.tick);
+  } finally { h.dispose(); }
+});
+
+it('keeps the hidden AMHS simulation identical while skipping instance projection and restores it on re-show', () => {
+  const hidden = harness();
+  const visible = harness();
+  try {
+    setSubtreeVisible(hidden.model.amhsRoot, false);
+    const poolSnapshots = hidden.model.meshes.filter(mesh => mesh.thinInstances).map(mesh => {
+      const data = internals(mesh);
+      return { mesh, version: data._version, count: data.count, capacity: data._capacity,
+        dirtyMin: data._dirtyMin, dirtyMax: data._dirtyMax, matrices: Array.from(data.matrices) };
+    });
+    expect(poolSnapshots.length).toBeGreaterThan(8);
+    const simulationBefore = hidden.model.readSnapshot();
+
+    for (let tick = 1; tick <= 600; tick++) {
+      hidden.model.update(1000 / 60, tick * 1000 / 60);
+      visible.model.update(1000 / 60, tick * 1000 / 60);
+      if (tick % 60 === 0) {
+        // (a) hidden still advances the same simulation as the always-visible reference.
+        expect(hidden.model.readSnapshot()).toEqual(visible.model.readSnapshot());
+        expect(hidden.model.readStats()).toEqual(visible.model.readStats());
+      }
+    }
+    const simulationAfter = hidden.model.readSnapshot();
+    expect(simulationAfter.simTime).toBeGreaterThan(simulationBefore.simTime);
+    expect(simulationAfter.vehicles.some((vehicle, index) => vehicle.s !== simulationBefore.vehicles[index].s)).toBe(true);
+    expect(hidden.model.readStats()).toEqual(visible.model.readStats());
+
+    // (b) no per-instance matrix comparison/upload runs while the layer is hidden.
+    for (const snapshot of poolSnapshots) {
+      const data = internals(snapshot.mesh);
+      expect(data._version, snapshot.mesh.name).toBe(snapshot.version);
+      expect(data.count, snapshot.mesh.name).toBe(snapshot.count);
+      expect(data._capacity, snapshot.mesh.name).toBe(snapshot.capacity);
+      expect(data._dirtyMin, snapshot.mesh.name).toBe(snapshot.dirtyMin);
+      expect(data._dirtyMax, snapshot.mesh.name).toBe(snapshot.dirtyMax);
+      expect(Array.from(data.matrices), snapshot.mesh.name).toEqual(snapshot.matrices);
+    }
+
+    // (c) re-showing forces a full population/matrix rebuild that matches the visible reference.
+    setSubtreeVisible(hidden.model.amhsRoot, true);
+    hidden.model.update(1000 / 60, 601 * 1000 / 60);
+    visible.model.update(1000 / 60, 601 * 1000 / 60);
+    expect(hidden.model.readSnapshot()).toEqual(visible.model.readSnapshot());
+    const visiblePools = new Map(visible.model.meshes.filter(mesh => mesh.thinInstances).map(mesh => [mesh.name, mesh]));
+    for (const mesh of hidden.model.meshes.filter(candidate => candidate.thinInstances)) {
+      const reference = visiblePools.get(mesh.name);
+      expect(reference, mesh.name).toBeTruthy();
+      const data = internals(mesh), expected = internals(reference!);
+      const baseline = poolSnapshots.find(snapshot => snapshot.mesh.name === mesh.name)!;
+      expect(data.count, mesh.name).toBe(expected.count);
+      // Only the active draw prefix is part of the rendered state; slots above the count are
+      // stale by design (incremental upload keeps the last written value of an enabled slot).
+      expect(Array.from(data.matrices.slice(0, data.count * 16)), mesh.name)
+        .toEqual(Array.from(expected.matrices.slice(0, expected.count * 16)));
+      // The rebuild publishes the whole active range: count write bumps the version and dirties [0, count).
+      expect(data._version, mesh.name).toBeGreaterThan(baseline.version);
+      expect(data._dirtyMin, mesh.name).toBe(0);
+      expect(data._dirtyMax, mesh.name).toBe(data.count);
+    }
+  } finally { hidden.dispose(); visible.dispose(); }
 });

@@ -295,7 +295,7 @@ it('throttles hover picks by hoverPickMs, dedupes the index, skips pressed point
 
 it('never lets an older hover pick overwrite a newer hover or a pointer leave', async () => {
   const harnessed = harness();
-  const { seam, resolve } = deferredSeam();
+  const { seam, calls, resolve } = deferredSeam();
   let now = 0;
   const selection = selectionWith(harnessed, { pick: seam, hoverPickMs: 50, now: () => now });
   const canvas = fakeCanvas();
@@ -306,12 +306,18 @@ it('never lets an older hover pick overwrite a newer hover or a pointer leave', 
     now = 100;
     canvas.dispatch('pointermove', { clientX: 111, clientY: 221, buttons: 0 });
     await flush();
+    // The newer position is coalesced while the first pick is in flight.
+    expect(calls).toHaveLength(1);
     expect(selection.selectedIndex).toBeNull();
+    // The in-flight result belongs to the superseded position: it is discarded and the pump
+    // issues exactly one pick for the latest position instead.
+    await resolve(0, { toolIndex: 3, x: 100, y: 200 });
+    expect(hovers).toHaveLength(0);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({ x: 101, y: 201 });
     await resolve(1, { toolIndex: 4, x: 500, y: 600 });
     expect(hovers).toHaveLength(1);
     expectPickedTool(hovers[0]!.tool, 4);
-    await resolve(0, { toolIndex: 3, x: 100, y: 200 });
-    expect(hovers).toHaveLength(1);
 
     now = 300;
     canvas.dispatch('pointermove', { clientX: 112, clientY: 222, buttons: 0 });
@@ -320,6 +326,73 @@ it('never lets an older hover pick overwrite a newer hover or a pointer leave', 
     await resolve(2, { toolIndex: 7, x: 1, y: 2 });
     expect(hovers[hovers.length - 1]).toBeNull();
     expect(hovers).toHaveLength(2);
+  } finally { unbind(); selection.dispose(); harnessed.dispose(); }
+});
+
+it('keeps at most one hover pick in flight and coalesces 20 delayed moves to the latest position', async () => {
+  const harnessed = harness();
+  const { seam, calls, resolve } = deferredSeam();
+  let now = 0;
+  const selection = selectionWith(harnessed, { pick: seam, hoverPickMs: 50, now: () => now });
+  const canvas = fakeCanvas();
+  const { hovers, callbacks } = recordingCallbacks();
+  const unbind = bind(selection, canvas, callbacks);
+  let resolved = 0;
+  try {
+    for (let index = 0; index < 20; index += 1) {
+      canvas.dispatch('pointermove', { clientX: 110 + index, clientY: 220 + index, buttons: 0 });
+      await flush();
+      // Request backpressure: a delayed reply never lets a second pick start.
+      expect(calls.length - resolved).toBeLessThanOrEqual(1);
+      now += 50;
+    }
+    expect(calls).toHaveLength(1);
+    // Draining the first reply only issues a pick for the latest (20th) position, not 19 queued ones.
+    await resolve(0, { toolIndex: 3, x: 1, y: 2 }); resolved += 1;
+    expect(hovers).toHaveLength(0);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({ x: 119, y: 219 });
+    expect(calls.length - resolved).toBe(1);
+    await resolve(1, { toolIndex: 8, x: 929, y: 1029 }); resolved += 1;
+    expect(calls).toHaveLength(2);
+    expect(hovers).toHaveLength(1);
+    expectPickedTool(hovers[0]!.tool, 8);
+    expect(hovers[0]!.x).toBe(929);
+    expect(hovers[0]!.y).toBe(1029);
+  } finally { unbind(); selection.dispose(); harnessed.dispose(); }
+});
+
+it('gives clicks priority over hover and never leaks a stale hover after the click result', async () => {
+  const harnessed = harness();
+  const { seam, calls, resolve } = deferredSeam();
+  let now = 0;
+  const selection = selectionWith(harnessed, { pick: seam, hoverPickMs: 50, now: () => now });
+  const canvas = fakeCanvas();
+  const { picks, hovers, callbacks } = recordingCallbacks();
+  const unbind = bind(selection, canvas, callbacks);
+  try {
+    // One hover pick in flight plus a coalesced newer pointer position.
+    canvas.dispatch('pointermove', { clientX: 110, clientY: 220, buttons: 0 });
+    now = 50;
+    canvas.dispatch('pointermove', { clientX: 111, clientY: 221, buttons: 0 });
+    await flush();
+    expect(calls).toHaveLength(1);
+    // A click starts its own higher-priority pick immediately and cancels pending hover work.
+    canvas.dispatch('pointerdown', { clientX: 112, clientY: 222 });
+    canvas.dispatch('pointerup', { clientX: 112, clientY: 222 });
+    await flush();
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({ x: 102, y: 202 });
+    // The late hover reply must not emit hover before the click resolves...
+    await resolve(0, { toolIndex: 3, x: 1, y: 2 });
+    expect(hovers).toHaveLength(0);
+    expect(selection.selectedIndex).toBeNull();
+    // ...and the click result owns the selection, with no stale hover afterwards.
+    await resolve(1, { toolIndex: 5, x: 0, y: 0 });
+    expect(picks).toHaveLength(1);
+    expectPickedTool(picks[0], 5);
+    expect(selection.selectedIndex).toBe(5);
+    expect(hovers).toHaveLength(0);
   } finally { unbind(); selection.dispose(); harnessed.dispose(); }
 });
 
@@ -489,4 +562,3 @@ it('disables picking in basement-like modes and keeps the selection through a tr
     expect(picks).toHaveLength(3);
   } finally { unbind(); selection.dispose(); harnessed.dispose(); }
 });
-

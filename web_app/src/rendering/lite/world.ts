@@ -81,7 +81,6 @@ export interface LiteWorld {
   setCameraPose(position: Point, target: Point, durationMs: number): void;
   getCameraPose(): { position: Point; target: Point } | null;
   zoom(deltaY: number): void;
-  stopCameraTransition(): void;
   setLayer(layer: SceneLayer, visible: boolean): void;
   selectTool(index: number, focus?: boolean): void;
   clearSelection(): void;
@@ -398,7 +397,6 @@ export async function createLiteWorld(
     setCameraPose(position, target, durationMs) { if (!disposed) cameraControl.setPose(position, target, durationMs); },
     getCameraPose() { return disposed ? null : cameraControl.readPose(); },
     zoom(deltaY) { if (!disposed) cameraControl.zoom(deltaY); },
-    stopCameraTransition() { cameraControl.cancel(); },
     setLayer(layer, visible) {
       if (disposed) return;
       if (layer === 'xray') { setXRayFilter(visible ? xrayFilter ?? 'all' : null); return; }

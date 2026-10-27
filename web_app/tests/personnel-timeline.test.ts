@@ -44,6 +44,11 @@ function scenarioFor(mode: ChamberUserDataMode): PersonnelScenario {
   };
 }
 
+/** The frozen acceptance vectors include the full diagnostic trace, so they opt in explicitly. */
+function tracedScenarioFor(mode: ChamberUserDataMode): PersonnelScenario {
+  return { ...scenarioFor(mode), trace: { enabled: true } };
+}
+
 interface PurgeFrame {
   tick: number;
   time: number;
@@ -81,7 +86,7 @@ function projectPurgeFrame(frame: PersonnelFrame): PurgeFrame {
 }
 
 function replay(mode: ChamberUserDataMode): Replay {
-  const timeline = createPersonnelTimeline(scenarioFor(mode));
+  const timeline = createPersonnelTimeline(tracedScenarioFor(mode));
   const initialFrame = timeline.readInitialFrame();
   const frames: PersonnelFrame[] = [];
   const purgeFrames: PurgeFrame[] = [];
@@ -347,6 +352,102 @@ it('keeps the declared zh/en status texts of the frozen behavior tree', () => {
       .filter((op: unknown[]) => op[0] === 'fillText')
       .map((op: unknown[]) => op[1]),
   ).toEqual(['⚡ AIR SHOWER PURGE · 28 m/s', 'Entering Airlock · Interlock Engaged']);
+});
+
+it('bounds production history by default while keeping cumulative counters (1h run)', () => {
+  const timeline = createPersonnelTimeline({ ...scenarioFor('as-built'), ticks: 225_000 });
+  const expectedFrames = fixture.modes['as-built'].frames;
+  const checkpoints = new Set([1, 60, 3_500, 180_000, 225_000]);
+  let previous = { events: 0, phaseChanges: 0, purges: 0 };
+  for (let tick = 1; tick <= 225_000; tick += 1) {
+    timeline.step();
+    // Recording must not change the frozen motion: actor/patrol frames still match the vectors.
+    if (tick % fixture.scenario.sampleEvery === 0 && tick <= 3_500) {
+      expect(timeline.readFrame()).toEqual(expectedFrames[tick / fixture.scenario.sampleEvery]);
+    }
+    if (!checkpoints.has(tick)) continue;
+    expect(timeline.readEvents()).toEqual([]);
+    expect(timeline.readPhases().sequence).toEqual([]);
+    expect(timeline.readPhases().purges).toEqual([]);
+    const counters = timeline.readTraceCounters();
+    expect(counters.traceEnabled).toBe(false);
+    expect(counters.traceBounded).toBe(false);
+    // Counters are cumulative and monotonic instead of unbounded history arrays.
+    expect(counters.events).toBeGreaterThanOrEqual(previous.events);
+    expect(counters.phaseChanges).toBeGreaterThanOrEqual(previous.phaseChanges);
+    expect(counters.purges).toBeGreaterThanOrEqual(previous.purges);
+    previous = { events: counters.events, phaseChanges: counters.phaseChanges, purges: counters.purges };
+    const stats = timeline.readStats();
+    expect(stats.events).toBe(counters.events);
+    expect(stats.phaseChanges).toBe(counters.phaseChanges);
+    expect(stats.purges).toBe(counters.purges);
+    if (tick >= 3_500) expect(counters.events).toBeGreaterThan(0);
+  }
+  // Audit-measured 1h production figures (seed42, 16ms): 1888 events / 406 phase changes / 68 purges.
+  const counters = timeline.readTraceCounters();
+  expect(counters.events).toBe(1_888);
+  expect(counters.phaseChanges).toBe(406);
+  expect(counters.purges).toBe(68);
+  expect([...counters.waypointArrivals]).toEqual([67, 67, 67, 67]);
+  expect(timeline.readStats().purgeSeconds).toBe(306.816);
+});
+
+it('records the full trace only when explicitly enabled, with one arrival edge per waypoint visit', () => {
+  const traced = createPersonnelTimeline({ ...tracedScenarioFor('as-built'), ticks: 7_000 });
+  const plain = createPersonnelTimeline({ ...scenarioFor('as-built'), ticks: 7_000 });
+  for (let tick = 1; tick <= 7_000; tick += 1) {
+    traced.step();
+    plain.step();
+    // The opt-in recording toggle cannot perturb the frozen personnel state.
+    expect(traced.readFrame()).toEqual(plain.readFrame());
+  }
+  const events = traced.readEvents();
+  expect(events.length).toBeGreaterThan(0);
+  const reached = events.filter((event) => event.type === 'waypoint-reached');
+  const counters = traced.readTraceCounters();
+  expect(counters.traceEnabled).toBe(true);
+  expect(reached).toHaveLength(8);
+  // One cumulative arrival per arrival edge (and therefore one diagnostic event each).
+  expect([...counters.waypointArrivals]).toEqual([2, 2, 2, 2]);
+  expect(reached.length).toBe(counters.waypointArrivals.reduce((sum, value) => sum + value, 0));
+  const perWaypoint = [0, 0, 0, 0];
+  for (let index = 0; index < reached.length; index += 1) {
+    perWaypoint[reached[index].index!] += 1;
+    if (index > 0) expect(reached[index].tick).toBeGreaterThan(reached[index - 1].tick);
+  }
+  expect(perWaypoint).toEqual([...counters.waypointArrivals]);
+  expect(traced.readTraceCounters().events).toBe(events.length);
+  expect(traced.readTraceCounters().phaseChanges).toBe(traced.readPhases().sequence.length);
+  expect(traced.readTraceCounters().purges).toBe(traced.readPhases().purges.length);
+  // Default mode keeps the same cumulative numbers without the arrays.
+  expect(plain.readEvents()).toEqual([]);
+  expect(plain.readTraceCounters()).toMatchObject({
+    events: counters.events,
+    phaseChanges: counters.phaseChanges,
+    purges: counters.purges,
+    waypointArrivals: counters.waypointArrivals,
+  });
+});
+
+it('bounds an opted-in trace with ring-buffer capacities instead of growing without limit', () => {
+  const timeline = createPersonnelTimeline({
+    ...scenarioFor('as-built'),
+    ticks: 30_000,
+    trace: { enabled: true, maxEvents: 12, maxPhaseChanges: 5, maxPurges: 2 },
+  });
+  for (let tick = 1; tick <= 30_000; tick += 1) timeline.step();
+  const phases = timeline.readPhases();
+  const counters = timeline.readTraceCounters();
+  expect(timeline.readEvents()).toHaveLength(12);
+  expect(phases.sequence).toHaveLength(5);
+  expect(phases.purges).toHaveLength(2);
+  expect(counters.traceBounded).toBe(true);
+  // The retained tail is the newest history; cumulative counters keep counting.
+  expect(counters.events).toBeGreaterThan(12);
+  expect(counters.phaseChanges).toBeGreaterThan(5);
+  expect(counters.purges).toBeGreaterThan(2);
+  expect(timeline.readEvents()[11].tick).toBeLessThanOrEqual(30_000);
+  expect([...counters.waypointArrivals]).toEqual([9, 9, 9, 9]);
 });
 
 it('documents the frozen air-shower userData overwrite evidence', () => {

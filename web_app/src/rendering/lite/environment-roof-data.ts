@@ -32,9 +32,6 @@ export interface RoofHvacChimney {
   readonly nameZh: string;
 }
 
-/** Original "roofHVACLayer" group name (source line 16019). */
-export const ROOF_HVAC_GROUP_NAME = 'roofHVACLayer';
-
 /** Source: BoxGeometry(85, 0.3, 60) at (4.5, 8.0, 1.0), #cfd4dc. */
 export const ORIGINAL_ROOF_SLAB = {
   width: 85, height: 0.3, depth: 60, x: 4.5, y: 8, z: 1,
@@ -133,9 +130,6 @@ export const ORIGINAL_ROOF_EXHAUST = {
   minSpeed: 0.015,
   speedJitter: 0.02,
 } as const;
-
-export const ROOF_EXHAUST_PARTICLES_PER_STACK = ORIGINAL_ROOF_EXHAUST.particlesPerStack;
-export const ROOF_EXHAUST_PARTICLE_COUNT = ORIGINAL_ROOF_CHIMNEYS.length * ROOF_EXHAUST_PARTICLES_PER_STACK;
 
 /** Source sprite canvas/scale: 384x96 px CanvasTexture on a 4.0 x 1.0 sprite. */
 export const ROOF_SPRITE_CANVAS = { width: 384, height: 96 } as const;

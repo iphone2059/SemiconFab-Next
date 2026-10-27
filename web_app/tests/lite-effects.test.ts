@@ -172,3 +172,50 @@ it('borrows the native CSM receiver texture and rebinds on recovery without taki
     h.effects.update(16, 1000); expect(getShaderTexture(material, 'xrayDepth')).toBe(getCsmReceiverTexture(generator));
   } finally { h.dispose(); }
 });
+
+it('skips the X-Ray palette CSM fan-out while inactive and resyncs the retained receiver on re-enable', () => {
+  const h = harness();
+  try {
+    const light = createDirectionalLight([0, -1, 0]); addToScene(h.scene, light);
+    const generator = createCsmDirectionalShadowGenerator(h.engine, light, { numCascades: 2, mapSize: 2048 });
+    light.shadowGenerator = generator; h.scene.shadowGenerators.push(generator);
+    const mesh = createBox(h.engine); mesh.material = createPbrMaterial(); addToScene(h.scene, mesh);
+    h.effects.configureXrayTargets([{ mesh, role: 'equipment' }]);
+    h.effects.bindShadows(generator);
+    h.effects.setXrayFilter('all');
+    const palette = mesh.material as ShaderMaterial;
+    const version = (material: ShaderMaterial) => (material as unknown as { _uniformVersion: number })._uniformVersion;
+    const publish = (data: Float32Array) => {
+      const callbacks = (generator as unknown as { _onReceiverData?: ((data: Float32Array) => void)[] })._onReceiverData ?? [];
+      expect(callbacks.length).toBeGreaterThan(0);
+      for (const callback of callbacks) callback(data);
+    };
+
+    // While X-Ray is active the borrowed CSM receiver UBO reaches the palette material.
+    const activeData = new Float32Array(80).fill(0.25);
+    publish(activeData);
+    expect(Array.from(getShaderUniform(palette, 'xrayCascade0') as Float32Array)).toEqual(Array.from(activeData.subarray(0, 16)));
+    expect(getShaderUniform(palette, 'xrayShadowEnabled')).toBe(1);
+
+    h.effects.setXrayFilter(null);
+    expect(mesh.material).not.toBe(palette);
+    const inactiveVersion = version(palette);
+    // B04: no rendered mesh uses the palette while X-Ray is off, so a receiver publish must
+    // not fan 80 floats / eight uniform writes into every retained palette material.
+    publish(new Float32Array(80).fill(0.5));
+    expect(version(palette)).toBe(inactiveVersion);
+
+    // Re-enabling re-applies the retained receiver snapshot before the first active frame.
+    h.effects.setXrayFilter('all');
+    expect(mesh.material).toBe(palette);
+    expect(Array.from(getShaderUniform(palette, 'xrayCascade0') as Float32Array)).toEqual(new Array(16).fill(0.5));
+    expect(getShaderUniform(palette, 'xrayShadowEnabled')).toBe(1);
+    expect(version(palette)).toBeGreaterThan(inactiveVersion);
+
+    // The active cadence is unchanged after the resync.
+    const afterResync = version(palette);
+    publish(new Float32Array(80).fill(0.75));
+    expect(Array.from(getShaderUniform(palette, 'xrayCascade2') as Float32Array)).toEqual(new Array(16).fill(0.75));
+    expect(version(palette)).toBeGreaterThan(afterResync);
+  } finally { h.dispose(); }
+});

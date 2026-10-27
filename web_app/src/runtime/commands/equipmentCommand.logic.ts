@@ -28,23 +28,3 @@ export function stateForOutcome(outcome: EquipmentCommandOutcome): EquipmentComm
 export function isTerminalState(state: EquipmentCommandState): boolean {
   return TERMINAL.has(state);
 }
-
-export function isNewerRevision(current: number, next: number): boolean {
-  return Number.isInteger(next) && next > current;
-}
-
-export function applyCommandResult(
-  context: EquipmentCommandContext,
-  event: CommandResultEvent,
-): { state: EquipmentCommandState; context: EquipmentCommandContext } | undefined {
-  if (!isNewerRevision(context.revision, event.revision)) return undefined;
-  return {
-    state: stateForOutcome(event.outcome),
-    context: {
-      ...context,
-      revision: event.revision,
-      outcome: event.outcome,
-      lastEvent: event,
-    },
-  };
-}

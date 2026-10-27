@@ -58,9 +58,13 @@ export class ResearchReplay {
 
   private constructor(events: readonly ResearchEvent[]) {
     this.eventCount = events.length;
-    this.durationSec = events.length ? Math.max(...events.map((event) => event.timestamp_sec)) : 0;
+    // Scan for the maximum while building the index: Math.max(...timestamps) allocates
+    // an O(N) argument array and throws RangeError once the display stream exceeds the
+    // engine's argument-count limit.
+    let durationSec = events.length ? events[0].timestamp_sec : 0;
     const wip: WipSample[] = [];
     for (const event of events) {
+      if (event.timestamp_sec > durationSec) durationSec = event.timestamp_sec;
       if (event.event_type === 'wip_sample') {
         const value = Number(event.payload.wip_count);
         if (Number.isFinite(value)) wip.push({ time: event.timestamp_sec, wip: value });
@@ -78,6 +82,7 @@ export class ResearchReplay {
       members.add(machine);
       this.groupTotals.set(group, members);
     }
+    this.durationSec = durationSec;
     this.wipSamples = wip;
   }
 
