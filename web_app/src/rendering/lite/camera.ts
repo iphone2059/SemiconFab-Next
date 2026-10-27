@@ -1,5 +1,6 @@
 import { getCameraPosition, runFrameInterpolation, type ArcRotateCamera, type SceneContext } from '@babylonjs/lite';
 import type { SceneViewPreset } from '../../fab-scene';
+import { bindSourceOrbitInput, createSourceOrbitMotion } from './source-orbit-input';
 
 type Point = readonly [number, number, number];
 export interface LiteCameraPose { position: Point; target: Point }
@@ -10,7 +11,9 @@ export function createLiteCamera(scene: SceneContext, camera: ArcRotateCamera) {
     const p = getCameraPosition(camera);
     return { position: [p.x, p.y, -p.z || 0], target: [camera.target.x, camera.target.y, -camera.target.z || 0] };
   };
+  const sourceOrbit = createSourceOrbitMotion(readPose, (position, target) => apply(position, target));
   function cancel() {
+    sourceOrbit.clear();
     transition?.abort(); transition = undefined;
     camera.inertialAlphaOffset = camera.inertialBetaOffset = camera.inertialRadiusOffset = 0;
     camera.inertialPanningX = camera.inertialPanningY = 0;
@@ -72,9 +75,18 @@ export function createLiteCamera(scene: SceneContext, camera: ArcRotateCamera) {
     else setPose([38, 48, 58], [0, 0, 0], durationMs);
   }
   return { readPose, setPose, preset, focus, cancel,
+    attachInput(canvas: HTMLCanvasElement) {
+      return bindSourceOrbitInput(canvas, sourceOrbit, () => {
+        if (transition) { transition.abort(); transition = undefined; }
+      });
+    },
+    /** OrbitControls r128 updates on input and before each rendered frame. */
+    update: sourceOrbit.update,
     zoom(deltaY: number) {
       if (disposed || !Number.isFinite(deltaY)) return;
-      cancel(); camera.radius = Math.min(180, Math.max(4, camera.radius * Math.exp(Math.max(-240, Math.min(240, deltaY)) * 0.0028)));
+      if (transition) { transition.abort(); transition = undefined; }
+      sourceOrbit.wheel(deltaY);
+      sourceOrbit.update();
     },
     dispose() { disposed = true; cancel(); },
   };
