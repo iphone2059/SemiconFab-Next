@@ -6,7 +6,7 @@ import {
   enableMaterialUvTransform, loadHdrEnvironment, decomposeMat4, rebuildMaterial, markMaterialUboDirty, enableThinInstanceWorldBounds,
   type DynamicTexture2D, type EngineContext, type Mat4, type Material, type Mesh, type PbrMaterialProps, type PointLight, type SceneContext, type TransformNode,
 } from '@babylonjs/lite';
-import frozen from '../../../../assets/lite-static-structure.json';
+import { staticStructure as source, type PackedSourceEntity } from './static-structure-packed';
 import { originalFloorOpacity } from '../../../twin-spatial';
 
 export type StaticLayer = 'shell' | 'ffu' | 'b1';
@@ -18,16 +18,6 @@ export interface StaticSurfaceDefinition {
   texture?: { width: number; height: number; uScale: number; vScale: number; gammaSpace: boolean;
     operations: unknown[][] };
 }
-interface GeometryData { positions: number[]; normals: number[]; uvs: number[]; indices: number[]; lines: boolean }
-interface SourceEntity { name: string; layer: StaticLayer; geometry: string; material: string; matrix: number[];
-  caster: boolean | null; receiveShadows: boolean }
-interface StaticData {
-  geometries: Record<string, GeometryData>; materials: Record<string, StaticSurfaceDefinition>;
-  entities: SourceEntity[];
-  lights: { name: string; position: [number, number, number]; color: [number, number, number];
-    specular: [number, number, number]; intensity: number; range: number; legacyDecay: number }[];
-}
-const source = frozen as unknown as StaticData;
 
 /** Lite transmission depends on an IBL fragment, even when scene radiance is zero.
  * Load an all-black 4x2 RGBE through the public HDR loader; material environment
@@ -71,6 +61,20 @@ export function createLiteStaticStructure(scene: SceneContext, engine: EngineCon
   const parts: StaticPart[] = [], batches: Mesh[] = [];
   const materials = new Map<string, Material>();
   const ownedTextures = new Set<DynamicTexture2D>();
+  // The generated module already stores typed vertex buffers; resolve them once per frozen
+  // geometry id. 396 batches share 222 geometries, so repeated batches reuse the same immutable
+  // buffers instead of converting/copying source arrays once per batch.
+  const sharedGeometries = new Map<string, { positions: Float32Array; normals: Float32Array;
+    indices: Uint32Array; uvs?: Float32Array }>();
+  function sharedGeometryFor(id: string) {
+    const cached = sharedGeometries.get(id);
+    if (cached) return cached;
+    const geometry = source.geometries[id];
+    const shared = { positions: geometry.positions, normals: geometry.normals,
+      indices: geometry.indices, uvs: geometry.uvs.length > 0 ? geometry.uvs : undefined };
+    sharedGeometries.set(id, shared);
+    return shared;
+  }
   function dispose() {
     // Release creator claims; registered material bindings retain their own claims
     // until the scene is disposed. This also covers failed pre-registration uploads.
@@ -127,7 +131,7 @@ export function createLiteStaticStructure(scene: SceneContext, engine: EngineCon
   }
 
   try {
-    const groups = new Map<string, SourceEntity[]>();
+    const groups = new Map<string, PackedSourceEntity[]>();
     for (const entity of source.entities) {
       // Keep independent transparent meshes for native sorting. Only opaque peers share a batch.
       const key = JSON.stringify([entity.layer, entity.geometry, entity.material, entity.caster,
@@ -140,16 +144,21 @@ export function createLiteStaticStructure(scene: SceneContext, engine: EngineCon
       const material = materialFor(first.material);
       let mesh: Mesh;
       if (geometry.lines) {
-        const lines = [];
-        for (let i = 0; i < geometry.indices.length; i += 2) lines.push(geometry.indices.slice(i, i + 2).map(index => ({
-          x: geometry.positions[index * 3], y: geometry.positions[index * 3 + 1], z: geometry.positions[index * 3 + 2],
-        })));
+        const lines: { x: number; y: number; z: number }[][] = [];
+        for (let start = 0; start < geometry.indices.length; start += 2) {
+          const line = [];
+          for (let point = start; point < Math.min(start + 2, geometry.indices.length); point += 1) {
+            const index = geometry.indices[point];
+            line.push({ x: geometry.positions[index * 3], y: geometry.positions[index * 3 + 1], z: geometry.positions[index * 3 + 2] });
+          }
+          lines.push(line);
+        }
         mesh = createLineSystem(engine, { name: first.name, lines,
           material: material as ReturnType<typeof createLineMaterial> });
       } else {
-        mesh = createMeshFromData(engine, first.name, new Float32Array(geometry.positions),
-          new Float32Array(geometry.normals), new Uint32Array(geometry.indices),
-          geometry.uvs.length ? new Float32Array(geometry.uvs) : undefined);
+        const shared = sharedGeometryFor(first.geometry);
+        mesh = createMeshFromData(engine, first.name, shared.positions, shared.normals,
+          shared.indices, shared.uvs);
         mesh.material = material;
       }
       // Frozen null means the source decided caster status from the material at runtime
