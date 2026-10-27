@@ -9,6 +9,10 @@ import { FabViewport, type FabViewportHandle } from './fab-viewer';
 import { TwinSidebar } from './twin-sidebar';
 import { OriginalInspector } from './twin-inspector';
 import { TwinInfoDialog } from './twin-dialogs';
+import { createToolStateMerger } from './tool-state-merge';
+import { AmhsOhtReadout, AmhsResearchBadge } from './twin-amhs-hud';
+import { TwinTourHud, type TourHudSnapshot, type TwinTourHudHandle } from './twin-tour-hud';
+import { TwinWaferHud } from './twin-wafer-hud';
 import { ORIGINAL_TWIN_UI, type TwinSelection } from '../../original-twin-data';
 import { ResearchReplay, researchClock } from '../../research-replay';
 import type { WaferProduct } from '../../wafer-route';
@@ -16,7 +20,7 @@ import { buildWaferScenario } from '../../wafer-scenario';
 import { applyMesAction, buildTelemetry, computeSpc, createMesJob, type MesAction, type MesJob } from '../../process-control';
 import { BIN_COLORS, BIN_LABELS, WM811K_DEFECT_METADATA, generateWaferMap, stdfSummary, theoreticalYieldModels, waferMetrics, type BinCode, type DefectPattern } from '../../wafer-map';
 import { computeFabYield, DEFAULT_YIELD_INPUT, scenarioStates, YIELD_SCENARIOS, type YieldInput } from '../../fab-yield';
-import { projectTwinSceneState, type EntryMode, type TwinView as CameraView } from '../../twin-state';
+import { createTwinUiState, projectTwinSceneState, type EntryMode, type TwinView as CameraView } from '../../twin-state';
 import { DEMO_TICK_MS, projectReplayStates, resolveScenario, TWIN_LAYOUT_IDENTITIES } from '../../twin-equipment';
 import { cleanroomPressureField } from '../../cleanroom-pressure';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '../../original-tour';
@@ -90,11 +94,41 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const searchQuery = searchToQueryString(search ?? {});
   const scene = useRef<FabViewportHandle>(null);
   const queryClient = useQueryClient();
-  const ui = useTwinUiStore((state) => state);
-  const demo = useTwinDemoStore((state) => state);
-  // Playback progress/trail are store-owned, but do not rerender the full HUD
-  // every frame. Subscribe only to the control values below.
-  const page = useTwinPageStore(useShallow((state) => { const { wafer: _wafer, ...page } = state; return page; }));
+  // Subscribe to exactly the UI branches this component renders. Wafer
+  // playing/speed move with the wafer HUD child below, so its 20 Hz frames no
+  // longer rerender TwinContent or FabViewport.
+  const ui = useTwinUiStore(useShallow((state) => ({
+    entryMode: state.entryMode,
+    view: state.view,
+    level: state.level,
+    spatialMode: state.spatialMode,
+    cut: state.cut,
+    xray: state.xray,
+    explodePercent: state.explodePercent,
+    aeroHeatmap: state.aeroHeatmap,
+    tour: state.tour,
+    onboarding: state.onboarding,
+    waferActive: state.wafer.active,
+    research: state.research,
+    statusSource: state.statusSource,
+    preferredStatusSource: state.preferredStatusSource,
+  })));
+  const demo = useTwinDemoStore(useShallow((state) => ({
+    states: state.states,
+    keys: state.keys,
+    referenceLights: state.referenceLights,
+    cycle: state.cycle,
+    playing: state.playing,
+    scenarioId: state.scenarioId,
+    yieldJitter: state.yieldJitter,
+  })));
+  // Wafer playback frames and AMHS statistics are store-owned but rendered by
+  // isolated children (twin-wafer-hud.tsx / twin-amhs-hud.tsx); keep them out
+  // of the page snapshot so only page state TwinContent renders remains.
+  const page = useTwinPageStore(useShallow((state) => {
+    const { wafer: _wafer, amhs: _amhs, ...page } = state;
+    return page;
+  }));
   const status = useRuntimeStore(state => state.viewer.status);
   const mode = ui.entryMode;
   const view = ui.view;
@@ -108,17 +142,11 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const onboardingStep = ui.onboarding.step;
   const exploded = ui.spatialMode === 'exploded';
   const basement = ui.level === 'B1';
-  const waferActive = ui.wafer.active;
-  const waferPlaying = ui.wafer.playing;
-  const waferSpeed = ui.wafer.speed;
+  const waferActive = ui.waferActive;
   const researchTime = ui.research.timeSec;
   const researchPlaying = ui.research.playing;
   const researchSpeed = ui.research.speed;
-  const { siteId, siteError: error, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, amhs, infoDialog, showResearchUtil, onboardingDontShow } = page;
-  const waferProduct = useTwinPageStore(state => state.wafer.product);
-  const waferHud = useTwinPageStore(state => state.wafer.hud);
-  const waferCompleted = useTwinPageStore(state => state.wafer.completed);
-  const waferFollow = useTwinPageStore(state => state.wafer.follow);
+  const { siteId, siteError: error, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, infoDialog, showResearchUtil, onboardingDontShow } = page;
   const { open: ymsOpen, tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, yieldInput, yieldScenario, stdfCopied } = page.yms;
 
   const sitesQuery = useQuery(sitesQueryOptions());
@@ -155,7 +183,18 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const researchLoading = mode === 'research' && researchQuery.isLoading;
   const researchError = researchQuery.isError ? t('回放数据加载失败') : '';
   const waferError = waferRoutesQuery.isError ? t('路线加载失败') : '';
-  const projected = projectTwinSceneState(ui);
+  // projectTwinSceneState only reads the level/spatial/cut/xray/explode branches;
+  // rebuilding the snapshot from the subscribed values keeps the same projection
+  // without a whole-store subscription.
+  const projected = projectTwinSceneState({
+    ...createTwinUiState(ui.entryMode),
+    level: ui.level,
+    spatialMode: ui.spatialMode,
+    cut: ui.cut,
+    xray: ui.xray,
+    explodePercent: ui.explodePercent,
+    aeroHeatmap: ui.aeroHeatmap,
+  });
   const layers = useMemo(() => ({ ...layerPreferences, airflow: projected.airflow, heatmap: projected.heatmap, xray: projected.xray !== null }),
     [layerPreferences, projected.airflow, projected.heatmap, projected.xray]);
   const appliedCameraView = useRef<CameraView | undefined>(undefined);
@@ -164,7 +203,9 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const waferHudRef = useRef<WaferHud | null>(null);
   const tourLoopRef = useRef<number | null>(null);
   const tourIndexRef = useRef(-1);
-  const [tourHud, setTourHud] = useState<{ tag: string; timerText: string; progressWidth: string; activeDot: number } | null>(null);
+  const tourHudRef = useRef<TwinTourHudHandle>(null);
+  // Mount-time seed for the tour HUD; later frames are pushed through tourHudRef.
+  const [tourHudSeed, setTourHudSeed] = useState<TourHudSnapshot | null>(null);
   const statusConsumer = useRef<((value: unknown) => boolean) | undefined>(undefined);
   const liveSnapshotBatcher = useMemo(() => createCoalescedDispatcher<EquipmentStatusSnapshot>((snapshot) => {
     const states = FAB_LAYOUT.map((_, index): FabToolState => {
@@ -387,18 +428,16 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   // Research replay keeps its derived array in a ref until the query state lands.
   const directToolStates = useRef<readonly FabToolState[]>(toolStates);
   directToolStates.current = toolStates;
+  const mergeToolStates = useMemo(createToolStateMerger, []);
   const getToolStates = useMemo(() => (): readonly FabToolState[] => {
     if (useTwinUiStore.getState().entryMode === 'research') return directToolStates.current;
     if (useTwinUiStore.getState().statusSource === 'demo') return useTwinDemoStore.getState().states;
     const base = useTwinPageStore.getState().liveToolStates;
     // Telemetry Worker output is read inside the scene frame loop; no React
-    // state update is involved on the high-frequency path (ARCH-11).
-    const liveTelemetry = telemetry?.getToolStates();
-    if (!liveTelemetry) return base;
-    const merged = [...base];
-    for (let index = 0; index < liveTelemetry.length && index < merged.length; index += 1) merged[index] = liveTelemetry[index];
-    return merged;
-  }, [telemetry]);
+    // state update is involved on the high-frequency path (ARCH-11). The merger
+    // keeps the previous array while neither source reference changed.
+    return mergeToolStates(base, telemetry?.getToolStates());
+  }, [telemetry, mergeToolStates]);
 
   const selectedTelemetry = useMemo(() => selected ? buildTelemetry(FAB_LAYOUT[selected.index], selected.index) : undefined, [selected?.index]);
   const selectedSpc = useMemo(() => selectedTelemetry ? computeSpc(selectedTelemetry.history, selectedTelemetry.sensors[0], toolStates[selected?.index ?? 0] === 'down') : undefined, [selectedTelemetry, toolStates, selected?.index]);
@@ -666,17 +705,16 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     syncWaferHud();
   }
   function syncTourHud(frame: TourFrame): void {
-    setTourHud(previous => previous && previous.tag === frame.hudTag && previous.timerText === frame.timerText
-      && previous.progressWidth === frame.progressWidth && previous.activeDot === frame.activeDot
-      ? previous
-      : { tag: frame.hudTag, timerText: frame.timerText, progressWidth: frame.progressWidth, activeDot: frame.activeDot });
+    // The tour card owns its high-frequency state; pushing frames through the
+    // ref handle keeps the ~60 Hz countdown/progress updates out of TwinContent.
+    tourHudRef.current?.setHud({ tag: frame.hudTag, timerText: frame.timerText, progressWidth: frame.progressWidth, activeDot: frame.activeDot });
   }
   function finishTour(): void {
     if (tourLoopRef.current !== null) { cancelAnimationFrame(tourLoopRef.current); tourLoopRef.current = null; }
     tourTimelineRef.current?.stop();
     tourTimelineRef.current = null;
     tourIndexRef.current = -1;
-    setTourHud(null);
+    setTourHudSeed(null);
     twinUiActions.tourStop();
   }
   function startTour(): void {
@@ -691,7 +729,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     tourIndexRef.current = -1;
     controller.start();
     applyTourStep(0);
-    setTourHud({ tag: TOUR_STOPS[0].tag, timerText: '5s', progressWidth: '100%', activeDot: 0 });
+    setTourHudSeed({ tag: TOUR_STOPS[0].tag, timerText: '5s', progressWidth: '100%', activeDot: 0 });
     const frameMs = 1000 / 60;
     let lastFrameMs = performance.now();
     let accumulatedMs = 0;
@@ -989,7 +1027,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
                     </div>
                   ))}
                 </div>}
-                <div id="research-amhs-badge" className="twin-research-amhs">AMHS SIMULATED · jobs {amhs?.completed ?? 0} · avg {amhs?.avgDelivery?.toFixed(1) ?? '—'} s · active {amhs?.active ?? 0}/24</div>
+                <AmhsResearchBadge />
                 <p className="twin-research-footnote">{t("只读展示事件流，不是 Checkpoint/WAL。原版别名命中")}{replayProjection?.mappedCount ?? 0}{t("/121 台；未映射设备保留进入回放前的状态。217 台仿真设备与布局不是一一对应。AMHS 为独立动画时钟，JSONL 无运输事件。")}</p>
               </>
             )}
@@ -997,38 +1035,16 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
         )}
 
         {waferActive && (
-          <section id="wafer-follow-panel" className="twin-wafer" aria-label="Wafer Follow">
-            <div className="twin-wafer-head"><div><OriginalIcon name="wafer" /><strong>{t('跟随晶圆漫游')}</strong><span id="wafer-route-badge">{waferHud?.badge}</span></div><button type="button" onClick={closeWafer} aria-label={t("关闭晶圆跟随")}>×</button></div>
-            {waferError && <p className="twin-wafer-error">{t("路线加载失败：")}{waferError}</p>}
-            {!waferRoutes && !waferError && <p className="twin-wafer-error">{t("正在加载 A/B/C 路线…")}</p>}
-            {waferRoutes && waferHud && (
-              <>
-                <div className="twin-wafer-row">
-                  <label>{t('产品:')}
-                    <select id="wafer-product-select" value={waferProduct} onChange={(event) => changeWaferProduct(event.target.value as WaferProduct)} aria-label={t("晶圆产品")}>
-                      <option value="A">Product A (120 Steps)</option>
-                      <option value="B">Product B (104 Steps)</option>
-                      <option value="C">Product C (92 Steps)</option>
-                    </select>
-                  </label>
-                  <div className="twin-wafer-actions">
-                    <button id="wafer-play-btn" type="button" onClick={toggleWaferPlay} title="Play / Pause" aria-label={waferPlaying ? t('暂停') : t('播放')}><OriginalIcon name={waferPlaying ? 'pause' : 'play'} /></button>
-                    <div className="twin-wafer-speeds">{([1, 4, 16] as const).map((speed) => <button id={`wafer-speed-${speed}`} type="button" key={speed} className={waferSpeed === speed ? 'active' : ''} onClick={() => setWaferSpeed(speed)}>{speed}x</button>)}</div>
-                    <button id="wafer-cam-toggle-btn" type="button" className={waferFollow ? 'active' : ''} aria-pressed={waferFollow} onClick={() => setWaferFollow(!waferFollow)}><span id="wafer-cam-text">{waferFollow ? t('跟随视角') : t('自由视角')}</span></button>
-                    <button id="wafer-replay-btn" hidden={!waferCompleted} type="button" onClick={replayWafer}>{t('重播')}</button>
-                  </div>
-                </div>
-                <div className="twin-wafer-readouts"><b id="wafer-step-readout">{waferHud.step}</b><span id="wafer-status-readout">{waferHud.status}</span></div>
-                <div className="twin-wafer-progress"><div id="wafer-progress-bar" style={{ width: waferHud.width }} /></div>
-                <div className="twin-wafer-step">
-                  <div><span>TOOL GROUP</span><strong id="wafer-tg-val">{waferHud.toolGroup}</strong></div>
-                  <div><span>RECIPE</span><strong id="wafer-recipe-val">{waferHud.recipe}</strong></div>
-                  <div><span>BAY LOCATION</span><strong id="wafer-bay-val">{waferHud.bay}</strong></div>
-                </div>
-                <p className="twin-wafer-disclosure">{t('示意：晶圆访问每类设备的代表性机台，不代表实际派工。')}</p>
-              </>
-            )}
-          </section>
+          <TwinWaferHud
+            routesReady={!!waferRoutes}
+            error={waferError}
+            onClose={closeWafer}
+            onProductChange={changeWaferProduct}
+            onTogglePlay={toggleWaferPlay}
+            onSpeedChange={setWaferSpeed}
+            onFollowChange={setWaferFollow}
+            onReplay={replayWafer}
+          />
         )}
 
         {ymsOpen && (
@@ -1130,7 +1146,7 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
           <span className="twin-status" title={status}><i className={status.startsWith('WebGPU') ? 'ok' : ''} />{status.startsWith('WebGPU') ? 'WebGPU' : status}</span>
           <span>{fab ? `${fab.code} · ${t("单 FAB")}` : t("FAB-01 · 单 FAB")}</span>
           <span className="twin-footer-legend" aria-label={t("工艺分区图例")}>{[['光刻','#d99e3d'],['刻蚀','#c26b6b'],['薄膜','#d68a4a'],['Cu','#a98467'],['注入','#8b7bb5'],['扩散','#5c9b78'],['CMP/清洗','#4f9b9b'],['量测','#5b82b5'],['封装','#b06c96'],['Subfab','#4f6fa8']].map(([name,color])=><i key={name} title={name} style={{background:color}} />)}</span>
-          <span>{mode === 'research' ? 'JSONL display only' : `AMHS OHT ${String(amhs?.active ?? 0).padStart(2, '0')}/${amhs?.total ?? 24}`}</span>
+          <AmhsOhtReadout />
           <span>{mode === 'research' ? `REPLAY · WIP ${researchSnapshot?.wip ?? 0} · ACTIVE ${researchSnapshot?.activeTools ?? 0}` : `${stateCounts.running} RUN · ${stateCounts.idle} IDLE · ${stateCounts.down} DOWN · ${stateCounts.maint} MAINT`}</span>
         </footer>
 
@@ -1150,25 +1166,14 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
         )}
 
         {tourStep !== undefined && TOUR_STOPS[tourStep] && (
-          <section id="cinematic-hud" className="twin-tour-card" aria-label="Cinematic Tour">
-            <div className="twin-tour-head">
-              <span id="tour-hud-tag">{tourHud?.tag ?? TOUR_STOPS[tourStep].tag}</span>
-              <b id="tour-hud-timer" title={t("驻留计时")}>{tourHud?.timerText ?? ''}</b>
-              <button type="button" onClick={endTour} aria-label={t("关闭导览")}>{t("跳过")}</button>
-            </div>
-            <div id="tour-progress-bar" className="twin-tour-progress"><i style={{ width: tourHud?.progressWidth ?? '100%' }} /></div>
-            <h3 id="tour-hud-title">{language === 'zh' ? TOUR_STOPS[tourStep].title : TOUR_STOPS[tourStep].titleEn}</h3>
-            <p id="tour-hud-desc">{language === 'zh' ? TOUR_STOPS[tourStep].subtitle : TOUR_STOPS[tourStep].subtitleEn}</p>
-            <div id="tour-dots-container" className="twin-tour-dots" role="tablist" aria-label={t("导览站点")}>
-              {TOUR_STOPS.map((stop, index) => (
-                <button id={`tour-dot-${index}`} type="button" role="tab" aria-selected={(tourHud?.activeDot ?? tourStep) === index} key={stop.title} className={(tourHud?.activeDot ?? tourStep) === index ? 'active' : ''} title={language === 'zh' ? stop.title : stop.titleEn} aria-label={language === 'zh' ? stop.title : stop.titleEn} />
-              ))}
-            </div>
-            <div className="twin-tour-actions">
-              <button type="button" onClick={previousTour} disabled={tourStep === 0}>{t("上一步")}</button>
-              <button type="button" className="primary" onClick={advanceTour}>{tourStep === TOUR_STOPS.length - 1 ? t("完成") : t("下一站")}</button>
-            </div>
-          </section>
+          <TwinTourHud
+            ref={tourHudRef}
+            tourStep={tourStep}
+            initialHud={tourHudSeed}
+            onEnd={endTour}
+            onPrev={previousTour}
+            onNext={advanceTour}
+          />
         )}
 
         {infoDialog && (
