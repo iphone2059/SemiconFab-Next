@@ -3,6 +3,8 @@ export interface SubmitEquipmentCommandInput {
   readonly fabId: string;
   readonly equipmentId: string;
   readonly action: string;
+  /** Stable key for one logical command; retries must reuse it. */
+  readonly idempotencyKey: string;
 }
 
 export interface SubmittedEquipmentCommand {
@@ -25,7 +27,10 @@ export async function submitEquipmentCommand(
 ): Promise<SubmittedEquipmentCommand> {
   const response = await fetchImpl(`/api/v1/sites/${encodeURIComponent(input.siteId)}/commands`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': input.idempotencyKey,
+    },
     body: JSON.stringify({ fabId: input.fabId, equipmentId: input.equipmentId, action: input.action }),
   });
   if (!response.ok) throw new Error(`command submission failed: ${response.status}`);

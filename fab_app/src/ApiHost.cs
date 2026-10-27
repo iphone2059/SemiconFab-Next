@@ -29,6 +29,8 @@ internal static class ApiHost
         builder.Services.AddSingleton<EquipmentStatusService>();
         builder.Services.AddSingleton<EquipmentCommandService>();
         builder.Services.AddSingleton<TelemetrySimulationService>();
+        builder.Services.AddSingleton<IEquipmentCommandValidator, SyntheticEquipmentCommandValidator>();
+        builder.Services.AddSingleton<IFabAuthorization, DevelopmentFabAuthorization>();
         builder.Services.AddSingleton(new CatalogService(Path.GetFullPath(builder.Configuration["Fab:CatalogDirectory"]
             ?? Path.Combine(AppContext.BaseDirectory, "assets", "legacy"))));
         builder.Services.AddLocalOrchestration(data);
@@ -95,22 +97,49 @@ internal static class ApiHost
                 // Client disconnected.
             }
         });
-        api.MapPost("/sites/{siteId:guid}/commands", (Guid siteId, EquipmentCommandRequest? request, EquipmentCommandService commands) =>
+        api.MapPost("/sites/{siteId:guid}/commands", (Guid siteId, EquipmentCommandRequest? request, HttpContext context,
+            EquipmentCommandService commands, SiteDirectory directory, IEquipmentCommandValidator validator, IFabAuthorization authorization) =>
         {
+            if (!EquipmentCommandService.TryValidateIdempotencyKey(context.Request.Headers["Idempotency-Key"].ToString(), out var idempotencyKey, out var keyError))
+                return Results.Problem(statusCode: 400, title: "A valid Idempotency-Key is required", detail: keyError,
+                    extensions: new Dictionary<string, object?> { ["errorCode"] = "INVALID_IDEMPOTENCY_KEY" });
             if (!EquipmentCommandService.TryValidate(request, out var error))
                 return Results.Problem(statusCode: 400, title: "Invalid command request", detail: error);
-            var result = commands.Submit(siteId, request!);
+            var command = request!;
+            if (!directory.TryGetSite(siteId, out _))
+                return Results.Problem(statusCode: 404, title: "Site not found");
+            if (!Guid.TryParse(command.FabId, out var fabId) || !directory.TryGetFab(siteId, fabId, out var fab))
+                return Results.Problem(statusCode: 404, title: "FAB not found in Site");
+            // Ownership check: never reveal whether an unauthorized FAB exists.
+            if (!authorization.IsAuthorized(siteId, fab.Id, context.User))
+                return Results.Problem(statusCode: 404, title: "FAB not found in Site");
+            var validation = validator.Validate(siteId, fab, command);
+            if (!validation.IsValid)
+                return Results.Problem(statusCode: 400, title: validation.Title, detail: validation.Detail,
+                    extensions: new Dictionary<string, object?> { ["errorCode"] = "INVALID_COMMAND" });
+            var principal = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+            var result = commands.Submit(siteId, command, principal, idempotencyKey);
             return result.Status switch
             {
                 EquipmentCommandSubmitStatus.UnknownSite => Results.Problem(statusCode: 404, title: "Site not found"),
                 EquipmentCommandSubmitStatus.UnknownFab => Results.Problem(statusCode: 404, title: "FAB not found in Site"),
+                EquipmentCommandSubmitStatus.IdempotencyConflict => Results.Problem(statusCode: 409,
+                    title: "Idempotency-Key conflicts with an earlier request",
+                    extensions: new Dictionary<string, object?> { ["errorCode"] = "IDEMPOTENCY_CONFLICT" }),
                 _ => Results.Accepted($"/api/v1/commands/{result.Command!.CommandId}", result.Command)
             };
         });
-        api.MapGet("/commands/{commandId:guid}", (Guid commandId, EquipmentCommandService commands) =>
-            commands.Get(commandId) is { } command
-                ? Results.Ok(command)
-                : Results.Problem(statusCode: 404, title: "Command not found"));
+        api.MapGet("/commands/{commandId:guid}", (Guid commandId, EquipmentCommandService commands, IFabAuthorization authorization, HttpContext context) =>
+        {
+            var command = commands.Get(commandId);
+            // Unknown, inconsistent and unauthorized commands all map to the same 404 so no existence leaks.
+            if (command is null ||
+                !Guid.TryParse(command.SiteId, out var siteId) ||
+                !Guid.TryParse(command.FabId, out var fabId) ||
+                !authorization.IsAuthorized(siteId, fabId, context.User))
+                return Results.Problem(statusCode: 404, title: "Command not found");
+            return Results.Ok(command);
+        });
         api.MapGet("/sites/{siteId:guid}/commands/stream", async (Guid siteId, EquipmentCommandService commands, SiteDirectory directory, HttpContext context, CancellationToken cancellationToken) =>
         {
             if (!directory.TryGetSite(siteId, out _))

@@ -25,10 +25,13 @@ export function useFabRuntimeRegistry(): FabRuntimeRegistry | null {
  */
 export function useCommandProjection(fabId: string, commandId: string): CommandWorkflowProjection | undefined {
   const registry = useFabRuntimeRegistry();
+  // Derive the current runtime per render. The Provider version bump after a
+  // RuntimeBootstrap rebuild re-renders consumers, so the effect re-subscribes
+  // to the replacement runtime instead of keeping the disposed one.
+  const runtime = registry?.get(fabId);
   const [projection, setProjection] = useState<CommandWorkflowProjection | undefined>(undefined);
 
   useEffect(() => {
-    const runtime = registry?.get(fabId);
     if (!runtime) {
       setProjection(undefined);
       return;
@@ -36,7 +39,7 @@ export function useCommandProjection(fabId: string, commandId: string): CommandW
     const update = () => { setProjection(runtime.getProjection(commandId)); };
     update();
     return runtime.subscribe(update);
-  }, [registry, fabId, commandId]);
+  }, [runtime, commandId]);
 
   return projection;
 }

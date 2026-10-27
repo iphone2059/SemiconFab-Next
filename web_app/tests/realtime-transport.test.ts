@@ -67,10 +67,13 @@ it('submits equipment commands over HTTP', async () => {
     equipmentId: 'equipment-0', action: 'START', revision: 0, outcome: 'accepted', occurredAt: '2026-10-27T00:00:00Z',
   }), { status: 202 }));
   await expect(submitEquipmentCommand(
-    { siteId: 'site-1', fabId: 'fab-a', equipmentId: 'equipment-0', action: 'START' },
+    { siteId: 'site-1', fabId: 'fab-a', equipmentId: 'equipment-0', action: 'START', idempotencyKey: 'idem-1' },
     fetchImpl,
   )).resolves.toMatchObject({ commandId: '11111111-1111-4111-8111-111111111111', outcome: 'accepted' });
-  expect(fetchImpl).toHaveBeenCalledWith('/api/v1/sites/site-1/commands', expect.objectContaining({ method: 'POST' }));
+  expect(fetchImpl).toHaveBeenCalledWith('/api/v1/sites/site-1/commands', expect.objectContaining({
+    method: 'POST',
+    headers: expect.objectContaining({ 'Idempotency-Key': 'idem-1' }),
+  }));
 });
 
 it('feeds telemetry frames through the Worker and exposes renderer tool states', () => {

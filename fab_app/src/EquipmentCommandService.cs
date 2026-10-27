@@ -27,16 +27,17 @@ public enum EquipmentCommandSubmitStatus
 {
     Accepted,
     UnknownSite,
-    UnknownFab
+    UnknownFab,
+    IdempotencyConflict
 }
 
 public sealed record EquipmentCommandSubmitResult(EquipmentCommandSubmitStatus Status, EquipmentCommandStatus? Command);
 
 /// <summary>
 /// Development-only, in-memory equipment command simulation. It gives the preview an
-/// authoritative command lifecycle (accepted -> executing -> succeeded) and a replayable
-/// per-Site event journal for the SSE stream, and is meant to be replaced by a real
-/// SEMI E30/E40 command adapter later.
+/// authoritative command lifecycle (accepted -> executing -> succeeded), deduplicates
+/// command submissions by Idempotency-Key, and keeps a replayable per-Site event journal
+/// for the SSE stream. It is meant to be replaced by a real SEMI E30/E40 command adapter later.
 ///
 /// The service deliberately owns no persistence: commands vanish when the process exits.
 /// </summary>
@@ -48,6 +49,8 @@ public sealed class EquipmentCommandService
     public const string SucceededOutcome = "succeeded";
     public const int MaxEquipmentIdLength = 128;
     public const int MaxActionLength = 64;
+    public const int MaxIdempotencyKeyLength = 128;
+    public const int MaxIdempotencyEntries = 4096;
     public const int ExecutingDelayMilliseconds = 150;
     public const int SucceededDelayMilliseconds = 600;
     public const int StreamPollMilliseconds = 50;
@@ -56,6 +59,9 @@ public sealed class EquipmentCommandService
     private readonly SiteDirectory directory;
     private readonly ConcurrentDictionary<Guid, EquipmentCommandStatus> commands = new();
     private readonly ConcurrentDictionary<Guid, SiteCommandJournal> journals = new();
+    private readonly object submitGate = new();
+    private readonly Dictionary<IdempotencyScope, IdempotencyEntry> idempotentCommands = new();
+    private readonly Queue<IdempotencyScope> idempotencyOrder = new();
 
     public EquipmentCommandService(SiteDirectory directory)
     {
@@ -69,6 +75,11 @@ public sealed class EquipmentCommandService
         public readonly List<EquipmentCommandStreamEnvelope> Events = [];
         public long Sequence;
     }
+
+    /// <summary>Idempotency scope: one logical command per (Site, FAB, principal, Idempotency-Key).</summary>
+    private readonly record struct IdempotencyScope(Guid SiteId, Guid FabId, string Principal, string IdempotencyKey);
+
+    private sealed record IdempotencyEntry(string EquipmentId, string Action, EquipmentCommandStatus Accepted);
 
     /// <summary>Validates only the request shape; Site/FAB membership is validated by <see cref="Submit"/>.</summary>
     public static bool TryValidate(EquipmentCommandRequest? request, out string error)
@@ -97,36 +108,82 @@ public sealed class EquipmentCommandService
         return true;
     }
 
+    /// <summary>
+    /// Validates and trims the required Idempotency-Key request header. The trimmed value is
+    /// the value used for deduplication, so retries with cosmetic whitespace still replay.
+    /// </summary>
+    public static bool TryValidateIdempotencyKey(string? rawKey, out string idempotencyKey, out string error)
+    {
+        idempotencyKey = rawKey?.Trim() ?? "";
+        if (idempotencyKey.Length is 0 or > MaxIdempotencyKeyLength)
+        {
+            error = $"An Idempotency-Key header of 1..{MaxIdempotencyKeyLength} characters is required.";
+            return false;
+        }
+        if (idempotencyKey.Any(char.IsControl))
+        {
+            error = "Idempotency-Key must not contain control characters.";
+            return false;
+        }
+        error = "";
+        return true;
+    }
+
     /// <summary>Returns the authoritative current state, or null for an unknown command id.</summary>
     public EquipmentCommandStatus? Get(Guid commandId) =>
         commands.TryGetValue(commandId, out var status) ? status : null;
 
     /// <summary>
-    /// Validates Site/FAB membership, records revision 0 (accepted), and schedules the
-    /// background simulation of revisions 1 (executing) and 2 (succeeded).
+    /// Validates Site/FAB membership, deduplicates retries by (Site, FAB, principal,
+    /// Idempotency-Key), records revision 0 (accepted), and schedules the background
+    /// simulation of revisions 1 (executing) and 2 (succeeded).
+    ///
+    /// A repeated key with an identical payload replays the original accepted response; a
+    /// repeated key with a different payload is an idempotency conflict. The lookup, the
+    /// conflict decision and the command creation happen inside one lock, so concurrent
+    /// retries of the same key create exactly one command and one journaled lifecycle.
     /// </summary>
-    public EquipmentCommandSubmitResult Submit(Guid siteId, EquipmentCommandRequest request)
+    public EquipmentCommandSubmitResult Submit(Guid siteId, EquipmentCommandRequest request, string principal, string idempotencyKey)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(principal);
+        ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
+
         if (!directory.TryGetSite(siteId, out _))
             return new(EquipmentCommandSubmitStatus.UnknownSite, null);
         if (!Guid.TryParse(request.FabId, out var fabId) || !directory.TryGetFab(siteId, fabId, out var fab))
             return new(EquipmentCommandSubmitStatus.UnknownFab, null);
 
-        var commandId = Guid.NewGuid();
-        var accepted = new EquipmentCommandStatus(
-            siteId.ToString("D"),
-            fab.Id.ToString("D"),
-            request.EquipmentId,
-            request.Action,
-            commandId.ToString("D"),
-            0,
-            AcceptedOutcome,
-            DateTimeOffset.UtcNow.ToString("O"));
-        commands[commandId] = accepted;
-        Append(siteId, accepted);
-        _ = SimulateAsync(siteId, commandId);
-        return new(EquipmentCommandSubmitStatus.Accepted, accepted);
+        var scope = new IdempotencyScope(siteId, fab.Id, principal, idempotencyKey);
+        lock (submitGate)
+        {
+            if (idempotentCommands.TryGetValue(scope, out var existing))
+            {
+                return string.Equals(existing.EquipmentId, request.EquipmentId, StringComparison.Ordinal) &&
+                       string.Equals(existing.Action, request.Action, StringComparison.Ordinal)
+                    ? new(EquipmentCommandSubmitStatus.Accepted, existing.Accepted)
+                    : new(EquipmentCommandSubmitStatus.IdempotencyConflict, null);
+            }
+
+            var commandId = Guid.NewGuid();
+            var accepted = new EquipmentCommandStatus(
+                siteId.ToString("D"),
+                fab.Id.ToString("D"),
+                request.EquipmentId,
+                request.Action,
+                commandId.ToString("D"),
+                0,
+                AcceptedOutcome,
+                DateTimeOffset.UtcNow.ToString("O"));
+            commands[commandId] = accepted;
+            Append(siteId, accepted);
+            idempotentCommands[scope] = new IdempotencyEntry(request.EquipmentId, request.Action, accepted);
+            idempotencyOrder.Enqueue(scope);
+            while (idempotencyOrder.Count > MaxIdempotencyEntries)
+                idempotentCommands.Remove(idempotencyOrder.Dequeue());
+            _ = SimulateAsync(siteId, commandId);
+            return new(EquipmentCommandSubmitStatus.Accepted, accepted);
+        }
     }
 
     /// <summary>Returns the journal events for a Site whose per-Site sequence is greater than <paramref name="sequenceExclusive"/>.</summary>

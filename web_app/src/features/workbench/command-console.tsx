@@ -29,6 +29,9 @@ export function CommandConsole({ siteId, fabId }: { siteId: string; fabId: strin
   const [tracked, setTracked] = useState<readonly string[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Reuse the same idempotency key when retrying a failed submission; clear it
+  // when the user changes the command or after success.
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -38,10 +41,13 @@ export function CommandConsole({ siteId, fabId }: { siteId: string; fabId: strin
     }
     setBusy(true);
     setError('');
+    const idempotencyKey = pendingKey ?? crypto.randomUUID();
+    setPendingKey(idempotencyKey);
     try {
-      const submitted = await submitEquipmentCommand({ siteId, fabId, equipmentId, action });
+      const submitted = await submitEquipmentCommand({ siteId, fabId, equipmentId, action, idempotencyKey });
       runtime.trackCommand(submitted.commandId);
       setTracked((previous) => [submitted.commandId, ...previous].slice(0, 8));
+      setPendingKey(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '命令提交失败');
     } finally {
@@ -53,12 +59,12 @@ export function CommandConsole({ siteId, fabId }: { siteId: string; fabId: strin
     <Panel title="设备命令" subtitle="HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。">
       <form onSubmit={submit} style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'end', marginBottom: 12 }}>
         <label>设备
-          <select value={equipmentId} onChange={(event) => setEquipmentId(event.target.value)}>
+          <select value={equipmentId} onChange={(event) => { setEquipmentId(event.target.value); setPendingKey(null); }}>
             {EQUIPMENT_IDS.map((id) => <option key={id} value={id}>{id}</option>)}
           </select>
         </label>
         <label>动作
-          <select value={action} onChange={(event) => setAction(event.target.value)}>
+          <select value={action} onChange={(event) => { setAction(event.target.value); setPendingKey(null); }}>
             {ACTIONS.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
         </label>
