@@ -8,6 +8,7 @@ import {
 import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from '../../fab-layout';
 import { advanceExplodeFactor, explodedPlacement } from '../../twin-spatial';
 import type { AmhsStats, CutAxis, HoveredTool, PickedTool, SceneLayer, SceneViewPreset, XRayFilter } from '../../fab-scene';
+import { createAmhsStatsGate } from './amhs-stats';
 import { createLiteCamera } from './camera';
 import { createLiteCutPlane } from './cut-plane';
 import { createLiteEffects } from './effects';
@@ -155,6 +156,8 @@ export async function createLiteWorld(
   let frames = 0, fpsFrames = 0, fpsSince = performance.now(), fps = 0;
   const gpuErrors: string[] = [];
   let recoveryPreparations = 0;
+  // The AMHS stats consumer coalesces at 100 ms, so gate the per-frame readStats() scan.
+  const amhsStatsDue = createAmhsStatsGate();
 
   let equipment: ReturnType<typeof createLiteEquipment> | undefined;
   let structure: ReturnType<typeof createLiteStaticStructure> | undefined;
@@ -335,7 +338,7 @@ export async function createLiteWorld(
       // Crossing the exploded threshold changes floor alpha/slab/ceiling too, not only layer visibility.
       if (wasExploded !== explodedNow()) syncState();
     }
-    callbacks.onAmhsStats?.(motion.readStats());
+    if (callbacks.onAmhsStats && amhsStatsDue(now)) callbacks.onAmhsStats(motion.readStats());
     frames += 1; fpsFrames += 1;
     const measuredAt = performance.now();
     if (measuredAt - fpsSince >= 1000) {

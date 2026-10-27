@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { createSceneContext, createPbrMaterial, createPointLight, createTransformNode, setParent,
   createStandardMaterial, type EngineContext } from '@babylonjs/lite';
-import { createLiteLighting, packLiteLocalLights } from '../src/rendering/lite/lighting';
+import { createLiteLighting, packLiteLocalLights, packLiteLocalLightsInto } from '../src/rendering/lite/lighting';
 import { attachNextCoordinateFrame } from '../src/rendering/lite/next-coordinate-frame';
 
 it('uses the source key/fill/ambient and all five amber points plus the source spotlight', () => {
@@ -76,4 +76,56 @@ it('switches the native Standard ambient and PBR ambient UBO together and restor
   expect(lighting.ambient.intensity).toBe(0.48);
   expect(data[0]).toBeCloseTo(207 / 255 * 0.48);
   lighting.dispose();
+});
+
+it('packs into a caller-owned buffer with the same output as the allocating wrapper', () => {
+  const scene = createSceneContext({} as EngineContext, { defaultRenderTask: false });
+  const lighting = createLiteLighting(scene, []);
+  const buffer = new Float32Array(24 * 16);
+  const count = packLiteLocalLightsInto(lighting.localLights, buffer);
+  const allocated = packLiteLocalLights(lighting.localLights);
+  expect(count).toBe(allocated.count);
+  expect(Array.from(buffer)).toEqual(Array.from(allocated.data));
+  lighting.dispose();
+});
+
+it('packs a moved-parent basement light into a caller-owned buffer identically', () => {
+  const basement = createPointLight([2, -6, 3], 0.7); basement.range = 18;
+  basement.metadata = { legacyDecay: 1 }; basement.diffuse = [0.1, 0.2, 0.3];
+  const root = createTransformNode('basement'); setParent(basement, root);
+  const scene = createSceneContext({} as EngineContext, { defaultRenderTask: false });
+  const lighting = createLiteLighting(scene, [basement]);
+  attachNextCoordinateFrame([lighting.root, root]);
+  root.position.y = -18;
+  const buffer = new Float32Array(24 * 16);
+  const count = packLiteLocalLightsInto(lighting.localLights, buffer);
+  const allocated = packLiteLocalLights(lighting.localLights);
+  expect(count).toBe(allocated.count);
+  expect(buffer[6 * 16 + 1]).toBe(-24);
+  expect(Array.from(buffer)).toEqual(Array.from(allocated.data));
+  lighting.dispose();
+});
+
+it('repacks into the same caller-owned buffer with stable content', () => {
+  const scene = createSceneContext({} as EngineContext, { defaultRenderTask: false });
+  const lighting = createLiteLighting(scene, []);
+  const buffer = new Float32Array(24 * 16);
+  const firstCount = packLiteLocalLightsInto(lighting.localLights, buffer);
+  const first = Array.from(buffer);
+  const secondCount = packLiteLocalLightsInto(lighting.localLights, buffer);
+  expect(buffer).toBeInstanceOf(Float32Array);
+  expect(buffer.length).toBe(24 * 16);
+  expect(secondCount).toBe(firstCount);
+  expect(Array.from(buffer)).toEqual(first);
+  // Only the wrapper allocates a fresh buffer; the into-variant mutates the caller's packet.
+  expect(packLiteLocalLights(lighting.localLights).data).not.toBe(packLiteLocalLights(lighting.localLights).data);
+  lighting.dispose();
+});
+
+it('keeps the source local-light capacity overflow contract', () => {
+  const lights = Array.from({ length: 24 }, (_, index) => createPointLight([index, 0, 0], 1));
+  expect(packLiteLocalLightsInto(lights, new Float32Array(24 * 16))).toBe(24);
+  const overflow = [...lights, createPointLight([0, 0, 0], 1)];
+  expect(() => packLiteLocalLightsInto(overflow, new Float32Array(24 * 16))).toThrow('Source local-light capacity exceeded');
+  expect(() => packLiteLocalLights(overflow)).toThrow('Source local-light capacity exceeded');
 });

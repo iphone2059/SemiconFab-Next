@@ -13,25 +13,48 @@ const amberPoints = [
   [-23.5, -15, 2.2, 14], [-23.5, 3.5, 1.8, 12],
 ] as const;
 
-/** Same 4-vec4 source layout as original-lighting.ts, evaluated in effective render space. */
-export function packLiteLocalLights(lights: readonly LocalLight[]) {
-  const data = new Float32Array(capacity * 16);
+const packetSize = capacity * 16;
+
+/**
+ * Same 4-vec4 source layout as original-lighting.ts, evaluated in effective render space.
+ * Writes the packet into a caller-owned buffer (packetSize floats) without allocating and
+ * returns the active light count, so the per-frame path can reuse one packet across frames.
+ */
+export function packLiteLocalLightsInto(lights: readonly LocalLight[], data: Float32Array): number {
   let count = 0;
   for (const light of lights) {
     if (light.visible === false || light.intensity <= 0) continue;
     if (count === capacity) throw new Error('Source local-light capacity exceeded');
     const world = light.worldMatrix, offset = count++ * 16;
     const spot = light.lightType === 'spot' ? light as SpotLight : undefined;
-    data.set([world[12], world[13], world[14], light.range], offset);
-    data.set(light.diffuse.map(value => value * light.intensity), offset + 4);
+    data[offset] = world[12]; data[offset + 1] = world[13]; data[offset + 2] = world[14];
+    data[offset + 3] = light.range;
+    data[offset + 4] = light.diffuse[0] * light.intensity;
+    data[offset + 5] = light.diffuse[1] * light.intensity;
+    data[offset + 6] = light.diffuse[2] * light.intensity;
     const direction = spot?.direction;
-    const transformed = direction ? [0, 1, 2].map(axis => world[axis] * direction.x
-      + world[axis + 4] * direction.y + world[axis + 8] * direction.z) : [0, 0, 0];
-    const length = Math.hypot(...transformed) || 1;
-    data.set(transformed.map(value => value / length), offset + 8);
+    const dx = direction ? world[0] * direction.x + world[4] * direction.y + world[8] * direction.z : 0;
+    const dy = direction ? world[1] * direction.x + world[5] * direction.y + world[9] * direction.z : 0;
+    const dz = direction ? world[2] * direction.x + world[6] * direction.y + world[10] * direction.z : 0;
+    const length = Math.hypot(dx, dy, dz) || 1;
+    data[offset + 8] = dx / length; data[offset + 9] = dy / length; data[offset + 10] = dz / length;
     data[offset + 11] = Number(light.metadata?.legacyDecay ?? (spot ? 2 : 1));
-    if (spot) data.set([Math.cos(spot.angle / 2), Math.cos(spot.angle * 0.55 / 2), 1, 0], offset + 12);
+    if (spot) {
+      data[offset + 12] = Math.cos(spot.angle / 2);
+      data[offset + 13] = Math.cos(spot.angle * 0.55 / 2);
+      data[offset + 14] = 1; data[offset + 15] = 0;
+    } else {
+      // Point lights keep the cone slot explicitly zeroed, so a reused packet never leaks a stale spot cone.
+      data[offset + 12] = 0; data[offset + 13] = 0; data[offset + 14] = 0; data[offset + 15] = 0;
+    }
   }
+  return count;
+}
+
+/** Allocating wrapper kept for standalone callers; the lighting instance uses packLiteLocalLightsInto. */
+export function packLiteLocalLights(lights: readonly LocalLight[]) {
+  const data = new Float32Array(packetSize);
+  const count = packLiteLocalLightsInto(lights, data);
   return { count, data };
 }
 
@@ -65,6 +88,13 @@ export function createLiteLighting(scene: SceneContext, basementLights: readonly
   let previousCount = -1, previousHash = 0;
   const materials = new Set<PbrMaterialProps>();
   function dirty() { for (const material of materials) markMaterialUboDirty(material); }
+  // One packet owned by this lighting instance: onBeforeRender and every material's UBO
+  // write share it instead of allocating a fresh 384-float array per frame.
+  const packet = new Float32Array(packetSize);
+  function repack() {
+    cached = { count: packLiteLocalLightsInto(localLights, packet), data: packet };
+    return cached;
+  }
   const plugin: MaterialPlugin = {
     name: 'next-source-linear-lighting',
     getUniforms: () => ({ ubo: [
@@ -73,7 +103,7 @@ export function createLiteLighting(scene: SceneContext, basementLights: readonly
       { name: 'fabLocalLights', type: 'array<vec4<u32>, 96>' },
     ] }),
     writeUbo(data, offsets) {
-      const packed = cached ?? packLiteLocalLights(localLights);
+      const packed = cached ?? repack();
       data.set([...ambientColor.map(value => value * (ambientEnabled ? 1 : 0)), 0], offsets.get('fabAmbient')! / 4);
       data.set([localsEnabled ? packed.count : 0, 0, 0, 0], offsets.get('fabLightInfo')! / 4);
       data.set(packed.data, offsets.get('fabLocalLights')! / 4);
@@ -119,8 +149,7 @@ export function createLiteLighting(scene: SceneContext, basementLights: readonly
   // and let the material UBO writer reuse the same packet instead of repacking per material.
   onBeforeRender(scene, () => {
     if (disposed) return;
-    const packed = packLiteLocalLights(localLights);
-    cached = packed;
+    const packed = repack();
     let hash = 0;
     for (let i = 0; i < packed.count * 16; i += 1) hash = (hash * 31 + Math.round(packed.data[i] * 10000)) | 0;
     if (packed.count !== previousCount || hash !== previousHash) {
