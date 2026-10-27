@@ -1,5 +1,5 @@
 import {
-  attachControl, enableMaterialPlugins, enableMirroredMeshes, enableSurfaceResizeObserver,
+  enableMaterialPlugins, enableMirroredMeshes, enableSurfaceResizeObserver,
   forceWebGpuDeviceLossForTesting, getMeshIndexedDrawInfo, getShaderTexture, getViewProjectionMatrix,
   isShaderMaterial, onBeforeRender, onEngineGpuError, rebuildSceneRenderables, setCameraLimits, setSubtreeVisible,
   resizeEngine,
@@ -135,13 +135,11 @@ export async function createLiteWorld(
   scene.camera = camera;
   scene.clearColor = { r: 0.945, g: 0.961, b: 0.976, a: 1 };
   const cameraControl = createLiteCamera(scene, camera);
-  const detachControl = attachControl(camera, canvas, scene);
+  const detachControl = cameraControl.attachInput(canvas);
   const detachLimits = setCameraLimits(camera, {
     lowerBetaLimit: 0.001, upperBetaLimit: Math.PI / 2 - 0.03, lowerRadiusLimit: 4, upperRadiusLimit: 180,
   });
-  // FabViewport owns wheel zoom through SceneFacade.zoom (one sensitivity for canvas + overlays);
-  // the native wheel handler must contribute nothing.
-  camera.wheelPrecision = Number.POSITIVE_INFINITY;
+  // Source r128 input exclusively owns wheel, drag and touch events.
   const detachResize = enableSurfaceResizeObserver(engine);
 
   const fabTarget: Point = [0, 1, 0];
@@ -319,7 +317,9 @@ export async function createLiteWorld(
     }
   }
   function frame(deltaMs: number) {
-    if (disposed || !motion || !environment || !facility || !effects || !toolStates) return;
+    if (disposed) return;
+    cameraControl.update();
+    if (!motion || !environment || !facility || !effects || !toolStates) return;
     const now = performance.now();
     motion.update(deltaMs, now);
     environment.update(deltaMs, now);
