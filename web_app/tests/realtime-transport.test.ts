@@ -151,8 +151,10 @@ it('feeds telemetry frames through the Worker and exposes renderer tool states',
   }));
   sources[0].emit({ topic: TELEMETRY_TOPIC, sequence: 5, payload: { fabId: 'fab-a', sequence: 5, capturedAt: '2026-10-27T00:00:00Z', samples } });
   expect(sent[0]).toMatchObject({ type: 'frame', sequence: 5 });
-  expect((sent[0] as { values: number[] }).values).toHaveLength(32);
-  const values = (sent[0] as { values: number[] }).values;
+  // The Worker command carries a binary typed-array payload, not a number[].
+  const values = (sent[0] as { values: Float32Array }).values;
+  expect(values).toBeInstanceOf(Float32Array);
+  expect(values).toHaveLength(32);
   worker.onmessage?.({ data: { type: 'frame-written', sequence: 5, latest: values, generation: 0 } });
   expect(runtime.getSnapshot()?.sequence).toBe(5);
   expect(runtime.getToolStates()?.[0]).toBe('running');
@@ -166,8 +168,9 @@ it('flattens only numeric sample fields into a fixed slot-keyed frame', () => {
     fabId: 'fab-a', sequence: 1, capturedAt: 'now',
     samples: [{ entityId: 'equipment-0', values: { state: 2, utilization: 0.25 } }],
   });
+  expect(frame.values).toBeInstanceOf(Float32Array);
   expect(frame.values).toHaveLength(32);
-  expect(frame.values.slice(0, 2)).toEqual([2, 0.25]);
+  expect([...frame.values.slice(0, 2)]).toEqual([2, 0.25]);
   expect(frame.toolStates).toHaveLength(16);
   expect(frame.toolStates[0]).toBe('down');
   // Slots without samples on the first frame keep the legacy running default.

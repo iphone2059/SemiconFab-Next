@@ -1,18 +1,29 @@
 import { expect, it } from 'vitest';
+import type { TelemetryWorkerEvent } from '../src/realtime/workers/telemetryWorker.logic';
 import { TelemetryRuntime } from '../src/realtime/telemetry/TelemetryRuntime';
 import { createTelemetryWorkerHandler } from '../src/realtime/workers/telemetryWorker.logic';
 
+interface PostedCommand {
+  readonly type?: string;
+  readonly sequence?: number;
+  readonly values?: Float32Array;
+  readonly generation?: number;
+}
+
 function harness(deferred = false) {
   const handler = createTelemetryWorkerHandler({ frameSize: 32 });
-  const replies: unknown[] = [];
+  const replies: TelemetryWorkerEvent[] = [];
+  const commands: PostedCommand[] = [];
+  let terminated = false;
   const source = { onopen: null as (() => void) | null, onmessage: null as ((event: { data: string }) => void) | null, close() {} };
   const worker = {
     onmessage: null as ((event: { data: unknown }) => void) | null,
     postMessage(message: unknown) {
+      commands.push(message as PostedCommand);
       const result = handler.handle(message);
       if (result) { replies.push(result); if (!deferred) this.onmessage?.({ data: result }); }
     },
-    terminate() {},
+    terminate() { terminated = true; },
   };
   const runtime = new TelemetryRuntime({ url: 'fake', fabId: 'fab-a', eventSourceFactory: () => source, workerFactory: () => worker });
   runtime.start(); source.onopen?.();
@@ -30,7 +41,10 @@ function harness(deferred = false) {
         })),
       },
     }) });
-  return { runtime, source, send, sendSamples, deliver: (index: number) => worker.onmessage?.({ data: replies[index] }) };
+  const deliver = (index: number) => worker.onmessage?.({ data: replies[index] });
+  const frames = () => commands.filter((command) => command.type === 'frame');
+  const wasTerminated = () => terminated;
+  return { runtime, source, worker, send, sendSamples, deliver, commands, replies, frames, wasTerminated };
 }
 
 it('preserves wire sequence through the Worker and rejects older frames in the same connection', () => {
@@ -138,4 +152,80 @@ it('ignores worker replies from an old connection and after stop', () => {
   expect(runtime.getToolStates()?.[0]).toBe('down');
   runtime.stop(); deliver(0);
   expect(runtime.getSnapshot()).toBeUndefined();
+});
+
+it('stores the Worker reply Float32Array directly instead of converting it', () => {
+  const { runtime, send, deliver, replies } = harness(true);
+  send(1, 2);
+  deliver(0);
+  const reply = replies[0] as Extract<TelemetryWorkerEvent, { type: 'frame-written' }>;
+  expect(reply.latest).toBeInstanceOf(Float32Array);
+  // No Float32Array.from: the binary reply array becomes the snapshot as-is.
+  expect(runtime.getSnapshot()?.values).toBe(reply.latest);
+  expect(runtime.getToolStates()?.[0]).toBe('down');
+  runtime.stop();
+});
+
+it('submits only the newest frame while a Worker reply is deferred (latest-wins)', () => {
+  const { runtime, send, deliver, frames } = harness(true);
+  send(1, 0); // submitted, reply deferred
+  send(2, 1); // pending
+  send(3, 2); // replaces pending: latest wins
+  expect(frames().map((frame) => frame.sequence)).toEqual([1]);
+  deliver(0); // reply for frame 1 unblocks exactly one newer frame
+  expect(frames().map((frame) => frame.sequence)).toEqual([1, 3]);
+  expect(frames()[1]?.values?.[0]).toBe(2);
+  deliver(1);
+  expect(runtime.getSnapshot()?.sequence).toBe(3);
+  expect(runtime.getToolStates()?.[0]).toBe('down');
+  runtime.stop();
+});
+
+it('drops the pending frame on SSE reopen and starts a new Worker generation', () => {
+  const { runtime, source, send, deliver, frames } = harness(true);
+  send(1, 2); // in flight
+  send(2, 0); // pending while the reply is deferred
+  source.onopen?.();
+  expect(runtime.getSnapshot()).toBeUndefined();
+  send(1, 1); // first frame of the new connection is submitted immediately
+  expect(frames().map((frame) => frame.sequence)).toEqual([1, 1]);
+  const generations = frames().map((frame) => frame.generation!);
+  expect(generations[1]).toBeGreaterThan(generations[0]);
+  // The old connection's deferred reply is ignored and the dropped pending
+  // frame is never replayed after the reset.
+  deliver(0);
+  expect(runtime.getSnapshot()).toBeUndefined();
+  deliver(1);
+  expect(runtime.getSnapshot()?.sequence).toBe(1);
+  expect(runtime.getToolStates()?.[0]).toBe('idle');
+  runtime.stop();
+});
+
+it('stop disposes pending/in-flight work and detaches both callbacks', () => {
+  const { runtime, send, deliver, frames, wasTerminated } = harness(true);
+  send(1, 0); // in flight
+  send(2, 2); // pending
+  runtime.stop();
+  expect(wasTerminated()).toBe(true);
+  expect(runtime.getSnapshot()).toBeUndefined();
+  deliver(0); // late reply after stop
+  send(3, 1); // late SSE frame after stop
+  expect(runtime.getSnapshot()).toBeUndefined();
+  expect(frames().map((frame) => frame.sequence)).toEqual([1]);
+});
+
+it('accepts ArrayBuffer views and legacy number[] worker replies', () => {
+  const { runtime, worker } = harness(true);
+  // The harness opens the SSE source once during setup, so the active Worker
+  // generation is 1 (setup reset) before any frame is submitted.
+  const generation = 1;
+  const view = Float64Array.from({ length: 32 }, (_, index) => (index === 0 ? 2 : 0));
+  worker.onmessage?.({ data: { type: 'frame-written', sequence: 1, latest: view, generation } });
+  expect(runtime.getSnapshot()?.values).toBeInstanceOf(Float32Array);
+  expect(runtime.getToolStates()?.[0]).toBe('down');
+  const legacy = Array.from({ length: 32 }, (_, index) => (index === 0 ? 1 : 0));
+  worker.onmessage?.({ data: { type: 'frame-written', sequence: 2, latest: legacy, generation } });
+  expect(runtime.getSnapshot()?.sequence).toBe(2);
+  expect(runtime.getToolStates()?.[0]).toBe('idle');
+  runtime.stop();
 });

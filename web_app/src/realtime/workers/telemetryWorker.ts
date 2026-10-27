@@ -1,4 +1,4 @@
-import { createTelemetryWorkerHandler } from './telemetryWorker.logic';
+import { TELEMETRY_RING_CAPACITY, createTelemetryWorkerHandler } from './telemetryWorker.logic';
 
 interface WorkerScope {
   onmessage: ((event: { data: unknown }) => void) | null;
@@ -9,12 +9,16 @@ interface WorkerScope {
 // numeric values = 32 floats by default). The renderer reads the latest states
 // through TelemetryRuntime, never through React/Query/Zustand/XState.
 // A dev-only stress page may send an 'init' frameSize to exercise larger frames.
+// Only readLatest() is consumed, so the ring stays shallow (8 frames): it still
+// absorbs a burst after a worker stall while keeping the 5,000-entity stress
+// buffer at ~0.3 MB instead of the ~10 MB a 256-frame history would allocate.
 const scope = globalThis as unknown as WorkerScope;
-let handler = createTelemetryWorkerHandler({ capacity: 256, frameSize: 32 });
+const createHandler = (frameSize: number) => createTelemetryWorkerHandler({ capacity: TELEMETRY_RING_CAPACITY, frameSize });
+let handler = createHandler(32);
 scope.onmessage = (event) => {
   const data = event.data as { type?: unknown; frameSize?: unknown } | undefined;
   if (data?.type === 'init' && Number.isInteger(data.frameSize) && Number(data.frameSize) > 0 && Number(data.frameSize) <= 20000) {
-    handler = createTelemetryWorkerHandler({ capacity: 256, frameSize: Number(data.frameSize) });
+    handler = createHandler(Number(data.frameSize));
     scope.postMessage({ type: 'initialized', frameSize: Number(data.frameSize) });
     return;
   }
