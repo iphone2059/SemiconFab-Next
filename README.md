@@ -67,7 +67,7 @@ npx --yes pnpm@12.15.0 build
 - 模块档案：`docs/modules/M01.md` … `M18.md`
 - 实施状态：`docs/IMPLEMENTATION-STATUS.md`
 - 决策记录：`docs/adr/`
-- V2.1 架构基线：[架构基线](docs/architecture.md)（ADR-0009 Router/Query 边界、ADR-0010 Realtime/Workflow 桥接、ARCH-01…12 规则、M0–M6 迁移计划；状态：M1–M4 已落地；M5 进行中——TanStack Query 独占服务端数据、Zustand 独占客户端状态、Redux/RTK Query 与旧 URL 已删除；XState v6/FabRuntime 已正式接入产品运行时（空/可替换命令源）、多 FAB 数据驱动 UI 与只读投影完成；M5b/M6 未开始）
+- V2.1 架构基线：[架构基线](docs/architecture.md)（ADR-0009 Router/Query 边界、ADR-0010 Realtime/Workflow 桥接、ARCH-01…12 规则、M0–M6 迁移计划；状态：M1–M4 已落地、M5a/M5b 完成——TanStack Query 独占服务端数据、Zustand 独占客户端状态、Redux/RTK Query 与旧 URL 已删除；XState v6/FabRuntime 已接入产品运行时、多 FAB 数据驱动 UI、只读投影、rendering/lite 目录归位、TypedArray/Worker 骨架与 CPU 基线完成；M6 未开始）
 
 ## 原版数据导入
 

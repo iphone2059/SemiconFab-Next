@@ -2,8 +2,8 @@ import type {
   AmhsStats, CutAxis, FabPlacement, HoveredTool, PickedTool, SceneBackend, SceneLayer, SceneViewPreset, XRayFilter,
 } from './fab-scene';
 import type { FabToolState } from './fab-layout';
-import { createLiteRuntime, type LiteRuntime } from './render/lite/runtime';
-import { createLiteWorld, type LiteWorld } from './render/lite/world';
+import { createLiteRuntime, type LiteRuntime } from './rendering/lite/runtime';
+import { createLiteWorld, type LiteWorld } from './rendering/lite/world';
 
 type PerfBridge = { dispose(): void };
 

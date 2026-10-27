@@ -17,7 +17,7 @@ vi.mock('@babylonjs/lite', async importOriginal => ({
 import { createSceneContext, disposeScene, getMeshGeometry, getPbrEmissiveColor, getPbrTransmission, hasMaterialUvTransform,
   type EngineContext, type PbrMaterialProps, type StandardMaterialProps } from '@babylonjs/lite';
 import reference from './fixtures/lite-static-structure-reference.json';
-import { createLiteStaticStructure, type StaticSurfaceDefinition } from '../src/render/lite/geometry/static-structure';
+import { createLiteStaticStructure, type StaticSurfaceDefinition } from '../src/rendering/lite/geometry/static-structure';
 const surfaces = reference.materials as Record<string, StaticSurfaceDefinition>;
 
 beforeEach(() => { textureGpu.live.clear(); textureGpu.upload.mockReset(); });

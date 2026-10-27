@@ -9,7 +9,7 @@ vi.mock('@babylonjs/lite', async importOriginal => {
   };
 });
 import { addFacingBillboardSystem, createSceneContext, getMeshGeometry, releaseTexture, updateBillboardSpriteIndex, updateDynamicTexture, type EngineContext } from '@babylonjs/lite';
-import { createLiteEnvironment } from '../src/render/lite/environment';
+import { createLiteEnvironment } from '../src/rendering/lite/environment';
 import { advanceLaminarParticle } from '../src/cleanroom-pressure';
 import { FAB_LAYOUT } from '../src/fab-layout';
 import { ORIGINAL_EXPLODED_LINKS, explodedLinkFrame } from '../src/original-exploded-link-data';

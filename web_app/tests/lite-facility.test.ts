@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest';
 vi.hoisted(() => Object.assign(globalThis, { GPUBufferUsage: { VERTEX: 32, INDEX: 16, COPY_DST: 8 } }));
 import { createSceneContext, disposeScene, getMeshGeometry, type EngineContext } from '@babylonjs/lite';
 import reference from './fixtures/lite-facility-reference.json';
-import { createLiteFacility } from '../src/render/lite/geometry/facility';
+import { createLiteFacility } from '../src/rendering/lite/geometry/facility';
 
 // The frozen reference was extracted from the legacy CPU scene before the P11 renderer
 // source removal (see provenance); the native Lite port must keep every source part

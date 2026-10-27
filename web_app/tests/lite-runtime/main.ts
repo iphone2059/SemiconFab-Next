@@ -8,13 +8,13 @@ import {
   type ArcRotateCamera, type EngineContext, type SceneContext,
   type PbrMaterialProps,
 } from '@babylonjs/lite';
-import { createLiteRuntime, type LiteRuntime } from '../../src/render/lite/runtime';
-import { createLiteEquipment, type LiteEquipment } from '../../src/render/lite/geometry/tool-families';
-import { createLiteStaticStructure, prepareStaticStructureEnvironment, type LiteStaticStructure } from '../../src/render/lite/geometry/static-structure';
-import { attachNextCoordinateFrame, createNextReferenceCamera, applyNextReferenceView } from '../../src/render/lite/next-coordinate-frame';
-import { createLiteLighting } from '../../src/render/lite/lighting';
-import { createLiteShadows } from '../../src/render/lite/shadows/native-lite-shadow';
-import { createLiteFacility } from '../../src/render/lite/geometry/facility';
+import { createLiteRuntime, type LiteRuntime } from '../../src/rendering/lite/runtime';
+import { createLiteEquipment, type LiteEquipment } from '../../src/rendering/lite/geometry/tool-families';
+import { createLiteStaticStructure, prepareStaticStructureEnvironment, type LiteStaticStructure } from '../../src/rendering/lite/geometry/static-structure';
+import { attachNextCoordinateFrame, createNextReferenceCamera, applyNextReferenceView } from '../../src/rendering/lite/next-coordinate-frame';
+import { createLiteLighting } from '../../src/rendering/lite/lighting';
+import { createLiteShadows } from '../../src/rendering/lite/shadows/native-lite-shadow';
+import { createLiteFacility } from '../../src/rendering/lite/geometry/facility';
 
 const canvas = document.querySelector('canvas')!;
 const output = document.querySelector('output')!;

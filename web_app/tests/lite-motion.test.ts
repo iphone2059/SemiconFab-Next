@@ -4,7 +4,7 @@ vi.hoisted(() => Object.assign(globalThis, { GPUBufferUsage: { VERTEX: 32, INDEX
   GPUTextureUsage: { TEXTURE_BINDING: 4, COPY_DST: 2, RENDER_ATTACHMENT: 16 } }));
 import { createSceneContext, disposeScene, getMeshGeometry, setParent, createTransformNode, setSubtreeVisible,
   type EngineContext, type Mesh } from '@babylonjs/lite';
-import { createLiteMotion } from '../src/render/lite/motion';
+import { createLiteMotion } from '../src/rendering/lite/motion';
 import { advanceAmhsState, createAmhsRandom, createAmhsState } from '../src/amhs-timeline';
 
 const personnel = JSON.parse(readFileSync(new URL('./fixtures/original-personnel-vectors.json', import.meta.url), 'utf8'));

@@ -69,6 +69,24 @@ it('ARCH-09: runtime imports realtime/application/workflows as the assembly laye
   }
 });
 
+it('ARCH-11: high-frequency buffers/workers and rendering do not import state containers', () => {
+  for (const directory of ['realtime/buffers', 'realtime/workers', 'rendering']) {
+    for (const file of files(directory)) {
+      const path = relative(sourceRoot, file).replaceAll('\\', '/');
+      for (const specifier of importsOf(file)) {
+        expect(specifier, path).not.toMatch(/^(react|react-dom|@tanstack|zustand|xstate)$/);
+        expect(specifier, path).not.toMatch(/state\//);
+        expect(specifier, path).not.toMatch(/application\/(coordination|contracts)/);
+      }
+    }
+  }
+});
+
+it('M5b: the legacy src/render directory is gone and rendering/lite exists', () => {
+  expect(() => statSync(join(sourceRoot, 'render'))).toThrow();
+  expect(statSync(join(sourceRoot, 'rendering', 'lite')).isDirectory()).toBe(true);
+});
+
 it('ARCH-08: the public CommandWorkflow contract is defined only once', () => {
   const declarations = files('application').filter((file) =>
     readFileSync(file, 'utf8').includes('export interface CommandWorkflow '),

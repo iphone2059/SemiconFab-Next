@@ -5,8 +5,8 @@ import {
   disposeEngine, disposeScene, onEngineGpuError, registerScene, setPbrTransmission,
   setShaderUniform, startEngine, stopEngine, waitForGpuIdle, type ShaderMaterial,
 } from '@babylonjs/lite';
-import { createLiteEffects } from '../../src/render/lite/effects';
-import { prepareStaticStructureEnvironment } from '../../src/render/lite/geometry/static-structure';
+import { createLiteEffects } from '../../src/rendering/lite/effects';
+import { prepareStaticStructureEnvironment } from '../../src/rendering/lite/geometry/static-structure';
 
 const output = document.querySelector('output')!;
 const errors: string[] = [];

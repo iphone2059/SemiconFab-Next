@@ -7,8 +7,8 @@ import { addToScene, createBox, createCsmDirectionalShadowGenerator, createDirec
   createLineMaterial, createLines, createPbrMaterial, createSceneContext, disposeScene,
   getCsmReceiverTexture, getMeshGeometry, getMeshIndexedDrawInfo, getShaderTexture, getShaderUniform,
   type EngineContext, type ShaderMaterial } from '@babylonjs/lite';
-import { createLiteEffects } from '../src/render/lite/effects';
-import { liteXraySurfaceState, liteXraySystemMatches } from '../src/render/lite/effects-xray-state';
+import { createLiteEffects } from '../src/rendering/lite/effects';
+import { liteXraySurfaceState, liteXraySystemMatches } from '../src/rendering/lite/effects-xray-state';
 
 function harness() {
   const buffers: { destroyed: boolean; size: number }[] = [];

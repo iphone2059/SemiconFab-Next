@@ -1,10 +1,10 @@
 # 渲染管线（Rendering）
 
 - 版本：V2.1 / 2026-10-27
-- 状态：**渲染约束已存在并部分落地；V2.1 高频旁路为 SPECIFIED，未实现**（当前使用 Babylon Lite 1.36）
+- 状态：**M5b 已完成 rendering/lite 目录归位与 TypedArray/Worker 骨架；真实高频源/渲染消费与 GPU/浏览器性能门禁未完成**（当前使用 Babylon Lite 1.36）
 - 依据：[ADR-0010](adr/0010-command-event-bridge.md) 的 `ARCH-11`、[ADR-0003](adr/0003-single-web-app.md) 的 WebGPU-only、宿主规范 [09-WEBGPU-RENDERING](SemiconFab-Next-Engineering-v1.1/09-WEBGPU-RENDERING.md) 与 [15-FRONTEND](SemiconFab-Next-Engineering-v1.1/engineering/15-FRONTEND-AND-WEBGPU-PROJECTS.md)
 - 总览：[架构基线](architecture.md)；状态所有权：[状态管理](state-management.md)；实时协议：[实时协议](realtime-protocol.md)
-- 现有实现与迁移证据以仓库的 [Babylon Lite 迁移指南](SemiconFab-Next_Babylon-Lite_Native-Migration_Guide_2026-10-26.md) 与 [babylon-lite 迁移目录](migration/babylon-lite/) 为准；本文档**不重新声明**那些验收结论，也不提供 V2.1 新证据
+- 现有实现与迁移证据以仓库的 [Babylon Lite 迁移指南](SemiconFab-Next_Babylon-Lite_Native-Migration_Guide_2026-10-26.md) 与 [babylon-lite 迁移目录](migration/babylon-lite/) 为准；M5b 新增 `realtime/buffers/FrameRingBuffer` 与 Worker handler 仅提供基础设施/CPU 基线，不代表 GPU 验收。
 
 ## 1. 强制约束
 
@@ -22,7 +22,7 @@
 | 现有路径 | 作用 |
 |---|---|
 | `src/fab-scene.ts` | 引擎无关的 `SceneBackend`/`SceneFacade` 端口与 DTO |
-| `src/render/lite/` | Babylon Lite 运行时、世界/几何/材质/光照/选择/裁剪/动效/设备恢复 |
+| `src/rendering/lite/` | Babylon Lite 运行时、世界/几何/材质/光照/选择/裁剪/动效/设备恢复 |
 | `src/lite-backend.ts` | 把 Lite runtime/world 封装为 `SceneBackend` 的产品后端 |
 | `src/fab-viewer.tsx` 等 | React 侧挂载、生命周期、HUD 交互 |
 
@@ -71,7 +71,7 @@ WebSocket -> realtime/transport -> MessageDecoder（或在 Worker 内）
 
 ## 5. 当前实现事实（不夸大）
 
-- `src/render/lite` 已有 Babylon Lite 运行时、场景/几何/光照/选择/裁剪等模块；`lite-backend.ts` 在挂载前检查 `isSecureContext`/`navigator.gpu`/adapter 与纹理限制，并实现设备丢失后的场景重建策略（代码注释说明 Native 1.36 就地恢复路径的库限制）。
+- `src/rendering/lite` 已有 Babylon Lite 运行时、场景/几何/光照/选择/裁剪等模块（M5b 从 `src/render/lite` 归位）；`lite-backend.ts` 在挂载前检查 `isSecureContext`/`navigator.gpu`/adapter 与纹理限制，并实现设备丢失后的场景重建策略（代码注释说明 Native 1.36 就地恢复路径的库限制）。
 - 当前场景是原版 121 台设备的**单 FAB** 布局（`src/fab-layout.ts` 注释与数据）；不是三 FAB 同屏。
 - 现有浏览器验收、视觉冻结/差分测试与迁移证据记录在 `docs/migration/babylon-lite/` 与 `docs/migration/twin-parity/`；它们的状态以那些文档为准，本文档不复制其结论。
 - **V2.1 的高频 Worker/TypedArray 旁路尚未实现**：当前仍有 `store/telemetry-buffer.ts` 的 100ms 合批进 Redux 的过渡实现；这不等价于 ARCH-11 目标，属于 M5 迁移项。
@@ -83,7 +83,7 @@ WebSocket -> realtime/transport -> MessageDecoder（或在 Worker 内）
 | Worker 解码/合批 | 高频遥测在 Worker 内处理，主线程只收摘要/缓冲 | OPEN-V21-06/15（协议/topic） |
 | TypedArray 缓冲 | 变换/状态/告警标记的有界缓冲与脏实体集合 | 帧预算定义 |
 | Lite 接入 | 渲染循环消费缓冲，保持现有 SceneBackend 端口 | 现有 Lite 迁移收尾 |
-| 目录归位 | `render/lite` -> `rendering`；相关 React 入口 -> `features` | 与 twin-parity 改动协调（R-08） |
+| 目录归位 | `render/lite` -> `rendering/lite`（M5b 完成）；相关 React 入口 -> `features`（未完成） | 已完成引擎目录；features 归位仍待后续 |
 | 性能测试 | `web_app/tests/performance`；记录基线而非宣称达标 | 真实 GPU/驱动冻结 |
 
 约束：M5 不得改变 Vite `server`/`build` 参数（G-01）；Worker 打包方式若需要 Vite 配置调整，必须确认属于允许的插件/配置范围或改用 `new Worker(new URL(...), { type: 'module' })` 的现有能力。

@@ -8,7 +8,7 @@ import {
 } from '@babylonjs/lite';
 import reference from './fixtures/original-tool-reference.json';
 import identities from '../../docs/migration/twin-parity/layout-identities.json';
-import { createLiteEquipment } from '../src/render/lite/geometry/tool-families';
+import { createLiteEquipment } from '../src/rendering/lite/geometry/tool-families';
 
 // Only WebGPU buffer allocation is doubled. Geometry, transforms, materials,
 // thin-instance arrays, scene membership and disposal execute the real Lite API.

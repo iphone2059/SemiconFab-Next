@@ -13,7 +13,7 @@
  *    (read as `pluginUbo.*`) with `dynamic: true`, which re-uploads every frame.
  *
  * The plane conversion is identical to the effects module
- * (web_app/src/render/lite/effects.ts:setCutPlane): the source plane is authored in
+ * (web_app/src/rendering/lite/effects.ts:setCutPlane): the source plane is authored in
  * Next's RH domain and the render boundary reflects Z once, so only the Z normal
  * flips while the clamp stays -60..60. Both plugins discard the same half-space
  * with the same `dot(vec4(worldPos, 1), plane) > 0` rule as the frozen

@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { createBox, createDirectionalLight, createLineSystem, createPbrMaterial, createSceneContext,
   getCsmReceiverTexture, getTextureMetadata, type EngineContext } from '@babylonjs/lite';
-import { createLiteShadows, selectLiteShadowCasters } from '../src/render/lite/shadows/native-lite-shadow';
+import { createLiteShadows, selectLiteShadowCasters } from '../src/rendering/lite/shadows/native-lite-shadow';
 
 vi.hoisted(() => Object.assign(globalThis, { GPUBufferUsage: { UNIFORM: 64, COPY_DST: 8, VERTEX: 32, INDEX: 16 },
   GPUTextureUsage: { RENDER_ATTACHMENT: 16, TEXTURE_BINDING: 4, COPY_DST: 2 } }));

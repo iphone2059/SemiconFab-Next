@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { createNullEngine, createSceneContext, createArcRotateCamera, runHeadlessSteps } from '@babylonjs/lite';
-import { createLiteCamera } from '../src/render/lite/camera';
+import { createLiteCamera } from '../src/rendering/lite/camera';
 
 function fixture() {
   const engine = createNullEngine(), scene = createSceneContext(engine, { defaultRenderTask: false });

@@ -8,11 +8,11 @@ import {
   type EngineContext, type LineMaterial, type Mesh,
 } from '@babylonjs/lite';
 import { FAB_LAYOUT, FAB_TOOL_STATES } from '../src/fab-layout';
-import { createLiteEquipment, type LiteEquipment } from '../src/render/lite/geometry/tool-families';
+import { createLiteEquipment, type LiteEquipment } from '../src/rendering/lite/geometry/tool-families';
 import {
   createLiteSelection, createSelectionPickResolver,
   type LiteSelection, type LiteSelectionCallbacks, type SelectionPickSeam,
-} from '../src/render/lite/selection';
+} from '../src/rendering/lite/selection';
 import type { HoveredTool, PickedTool } from '../src/fab-scene';
 
 type Triple = [number, number, number];
