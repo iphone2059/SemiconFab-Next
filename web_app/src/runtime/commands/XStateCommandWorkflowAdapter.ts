@@ -7,9 +7,9 @@ import {
   type EquipmentCommandContext,
   type EquipmentCommandState,
 } from './equipmentCommand.logic';
-import { createEquipmentCommandMachine } from './equipmentCommand.machine';
+import { equipmentCommandMachine } from './equipmentCommand.machine';
 
-type EquipmentMachine = ReturnType<typeof createEquipmentCommandMachine>;
+type EquipmentMachine = typeof equipmentCommandMachine;
 
 /**
  * XState v6 implementation hidden behind the public CommandWorkflow contract.
@@ -18,7 +18,6 @@ type EquipmentMachine = ReturnType<typeof createEquipmentCommandMachine>;
  * imported outside the workflows layer (ARCH-08).
  */
 export class XStateCommandWorkflowAdapter implements CommandWorkflow {
-  private readonly machine: EquipmentMachine;
   private readonly actor: Actor<EquipmentMachine>;
   private readonly reconciler?: CommandReconciler;
 
@@ -27,8 +26,7 @@ export class XStateCommandWorkflowAdapter implements CommandWorkflow {
     readonly commandId: string,
     reconciler?: CommandReconciler,
   ) {
-    this.machine = createEquipmentCommandMachine(fabId, commandId);
-    this.actor = createActor(this.machine);
+    this.actor = createActor(equipmentCommandMachine, { input: { fabId, commandId } });
     this.reconciler = reconciler;
     this.actor.start();
   }

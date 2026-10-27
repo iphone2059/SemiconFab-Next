@@ -105,7 +105,7 @@ Bridge 不 import 工作流实现、不 import `xstate`、不操作 React、不�
 | `CommandReconciler` | 缺口/缺失 actor/断线后的状态核对 | 通过 CommandWorkflow.reconcile 暴露 |
 | `XStateCommandWorkflowAdapter` | 实现公共 `CommandWorkflow` 接口，包住 actor 生命周期 | 唯一对外实现 |
 
-其他层只能拿到 `CommandWorkflow` 接口；装配层负责创建实现。实现文件放在哪个目录属于组织选择，不属于架构约束；未来替换 XState 版本或实现方式时，实时层、Bridge、页面都不受影响。
+其他层只能拿到 `CommandWorkflow` 接口；装配层负责创建实现。实现文件放在哪个目录属于组织选择，不属于架构约束；未来替换 XState 版本或实现方式时，实时层、Bridge、页面都不受影响。机器使用 `setup` + `types` schema 的静态定义，每个命令的身份通过 actor input 注入，事件 schema 只描述 payload；refresh 采用 v6 transition function 返回 `{ target, context }` patch。
 
 ### 5. FabRuntime 是唯一装配层
 

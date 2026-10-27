@@ -6,58 +6,59 @@ import {
   type EquipmentCommandState,
 } from './equipmentCommand.logic';
 
-export type EquipmentCommandEvent =
-  | { readonly type: 'RESULT'; readonly event: CommandResultEvent }
-  | { readonly type: 'RECONCILE'; readonly event: CommandResultEvent | null };
+export interface EquipmentCommandInput {
+  readonly fabId: string;
+  readonly commandId: string;
+}
 
 const commandSetup = setup({
   schemas: {
     context: types<EquipmentCommandContext>(),
+    input: types<EquipmentCommandInput>(),
     events: {
-      RESULT: types<{ type: 'RESULT'; event: CommandResultEvent }>(),
-      RECONCILE: types<{ type: 'RECONCILE'; event: CommandResultEvent | null }>(),
+      // The event key is the event type; the schema describes the payload only.
+      RESULT: types<{ event: CommandResultEvent }>(),
     },
   },
 });
 
 /**
- * XState v6 statechart for one equipment command. The adapter enforces
- * monotonic revisions before sending RESULT; states mirror the authoritative
- * command outcomes and terminal states are final.
+ * XState v6 statechart for one equipment command. The machine is a static,
+ * reusable definition; per-command identity enters through actor input, per the
+ * v6 input-schema pattern. States mirror authoritative command outcomes and
+ * terminal states are final. Stale revisions are ignored by the transition
+ * function (the adapter also filters before send for the external contract).
  */
-export function createEquipmentCommandMachine(fabId: string, commandId: string) {
-  return commandSetup.createMachine({
-    id: 'equipmentCommand',
-    initial: 'idle',
-    context: {
-      fabId,
-      commandId,
-      revision: -1,
-      outcome: 'pending',
-    } satisfies EquipmentCommandContext,
-    states: {
-      idle: {
-        on: {
-          RESULT: ({ context, event }) => transition(context, event.event),
-          RECONCILE: ({ context, event }) => (event.event ? transition(context, event.event) : undefined),
-        },
+export const equipmentCommandMachine = commandSetup.createMachine({
+  id: 'equipmentCommand',
+  initial: 'idle',
+  context: ({ input }) => ({
+    fabId: input.fabId,
+    commandId: input.commandId,
+    revision: -1,
+    outcome: 'pending',
+  }),
+  states: {
+    idle: {
+      on: {
+        RESULT: ({ context, event }) => transition(context, event.event),
       },
-      accepted: {
-        on: {
-          RESULT: ({ context, event }) => transition(context, event.event),
-        },
-      },
-      executing: {
-        on: {
-          RESULT: ({ context, event }) => transition(context, event.event),
-        },
-      },
-      succeeded: { type: 'final' },
-      failed: { type: 'final' },
-      cancelled: { type: 'final' },
     },
-  });
-}
+    accepted: {
+      on: {
+        RESULT: ({ context, event }) => transition(context, event.event),
+      },
+    },
+    executing: {
+      on: {
+        RESULT: ({ context, event }) => transition(context, event.event),
+      },
+    },
+    succeeded: { type: 'final' },
+    failed: { type: 'final' },
+    cancelled: { type: 'final' },
+  },
+});
 
 /** Returns a v6 transition patch: target plus the partial context update. */
 function transition(
