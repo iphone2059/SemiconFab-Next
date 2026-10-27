@@ -9,9 +9,11 @@ function initialLocale(): Preferences {
       try { return localStorage.getItem(key); } catch { return null; }
     },
   };
+  // URL/search overrides are applied by the Router-aware catalog/Twin pages;
+  // the store itself initializes from persisted preferences only.
   return {
-    language: readTwinLanguage(storage, location.search, navigator.language),
-    theme: readPreferences(storage, location.search).theme,
+    language: readTwinLanguage(storage, '', navigator.language),
+    theme: readPreferences(storage, '').theme,
   };
 }
 

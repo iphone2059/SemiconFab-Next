@@ -23,6 +23,8 @@ import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from './original-tour';
 import { buildTourScenario, TOUR_INITIAL_CAMERA, TOUR_INITIAL_TARGET } from './tour-scenario';
 import { createTourTimeline, createWaferTimeline, type TourFrame, type TourTimeline, type WaferTimeline, type WaferHud } from './tour-wafer-timeline';
 import { useTwinUiStore, twinUiActions } from './state/twinUiStore';
+import { readPreferences, languageTag } from './preferences';
+import { searchToQueryString, twinModalFrom, twinModeFrom, twinSiteIdFrom, type RouterSearch } from './app/router/search';
 import { useTwinPageStore, twinPageActions } from './state/twinPageStore';
 import { useTwinDemoStore, twinDemoActions } from './state/twinDemoStore';
 import { useRuntimeStore, runtimeActions } from './state/runtimeStore';
@@ -74,8 +76,17 @@ const XRAY_FILTERS: { filter: XRayFilter; label: string }[] = [
   { filter: 'amhs', label: 'AMHS Track' },
 ];
 
-function TwinContent({ fabId }: { fabId?: string }) {
+interface TwinContentProps {
+  fabId?: string;
+  /** Router-owned search state; the page never reads window.location for product state. */
+  search?: RouterSearch;
+  onSearchChange?: (patch: Partial<RouterSearch>, replace?: boolean) => void;
+}
+
+function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const { t, language, toggleLanguage } = useTwinLocale();
+  const theme = useLocaleStore((state) => state.theme);
+  const searchQuery = searchToQueryString(search ?? {});
   const scene = useRef<FabViewportHandle>(null);
   const queryClient = useQueryClient();
   const ui = useTwinUiStore((state) => state);
@@ -185,12 +196,37 @@ function TwinContent({ fabId }: { fabId?: string }) {
 
   useEffect(() => { scene.current?.setLanguage(language); }, [language, status]);
 
+  // URL is the owner of persisted language/theme overrides; the store is synced
+  // from the router search and writes back through it (no history/location use).
+  useEffect(() => {
+    try {
+      useLocaleStore.setState(readPreferences(localStorage, searchQuery), true);
+    } catch {
+      /* Storage denial must not prevent opening the FAB. */
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const requested = twinModeFrom(search ?? {});
+    if (requested && useTwinUiStore.getState().entryMode !== requested) twinUiActions.modeSet(requested);
+  }, [search?.mode]);
+
+  useEffect(() => {
+    const patch = { mode };
+    if (searchToQueryString({ ...(search ?? {}), ...patch }) !== searchQuery) onSearchChange?.(patch, true);
+  }, [mode, onSearchChange, search, searchQuery]);
+
+  useEffect(() => {
+    const patch = { lang: languageTag(language), theme };
+    if (searchToQueryString({ ...(search ?? {}), ...patch }) !== searchQuery) onSearchChange?.(patch, true);
+  }, [language, theme, onSearchChange, search, searchQuery]);
+
   useEffect(() => {
     if (!sitesQuery.data) return;
     // Canonical route identity (/fabs/$fabId/3d) wins over the transitional
     // ?siteId= compatibility parameter; the legacy parameter is still honoured
     // when the route does not carry a FAB id.
-    const legacySiteId = new URL(location.href).searchParams.get('siteId');
+    const legacySiteId = twinSiteIdFrom(search ?? {});
     let next: SiteDto | undefined;
     if (fabId) {
       next = sitesQuery.data.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
@@ -250,11 +286,11 @@ function TwinContent({ fabId }: { fabId?: string }) {
   }, [siteId, queryClient]);
 
   useEffect(() => {
-    const modal = new URL(location.href).searchParams.get('modal');
+    const modal = twinModalFrom(search ?? {});
     if (modal === 'database' || modal === 'catalog') twinPageActions.infoDialogSet('database');
     else if (modal === 'arch') twinPageActions.infoDialogSet('architecture');
     else if (modal === 'yms') { twinPageActions.ymsOpenSet(true); twinPageActions.ymsTabSet('map'); }
-  }, []);
+  }, [search?.modal]);
 
   useEffect(() => {
     if (ui.statusSource !== 'demo' || !demo.playing) return;
@@ -266,11 +302,7 @@ function TwinContent({ fabId }: { fabId?: string }) {
     if (site) document.title = `${site.code} / FAB-01 · 3D FAB`;
   }, [site]);
 
-  useEffect(() => {
-    const url = new URL(location.href);
-    url.searchParams.set('mode', mode);
-    history.replaceState({}, '', url);
-  }, [mode]);
+  // Mode changes are written through the router search above; no history writes here.
 
   useEffect(() => {
     if (!status.startsWith('WebGPU')) return;
@@ -426,12 +458,12 @@ function TwinContent({ fabId }: { fabId?: string }) {
 
   useEffect(() => {
     try {
-      const modal = new URL(location.href).searchParams.get('modal');
+      const modal = twinModalFrom(search ?? {});
       if (!modal && localStorage.getItem(ONBOARDING_KEY) !== '1') twinUiActions.onboardingOpen();
     } catch {
       // Storage may be blocked; the page still works without onboarding memory.
     }
-  }, []);
+  }, [search?.modal]);
 
   useEffect(() => () => {
     if (tourLoopRef.current !== null) cancelAnimationFrame(tourLoopRef.current);
@@ -1135,6 +1167,16 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
   );
 }
 
-export function TwinPage({ fabId }: { fabId?: string } = {}) {
-  return <TwinLocaleProvider><TwinContent fabId={fabId} /></TwinLocaleProvider>;
+export interface TwinPageProps {
+  fabId?: string;
+  search?: RouterSearch;
+  onSearchChange?: (patch: Partial<RouterSearch>, replace?: boolean) => void;
+}
+
+export function TwinPage({ fabId, search, onSearchChange }: TwinPageProps = {}) {
+  return (
+    <TwinLocaleProvider>
+      <TwinContent fabId={fabId} search={search} onSearchChange={onSearchChange} />
+    </TwinLocaleProvider>
+  );
 }

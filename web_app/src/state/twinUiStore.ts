@@ -13,8 +13,8 @@ import {
 import { useTwinPageStore } from './twinPageStore';
 
 function initialUi(): TwinUiState {
-  const requested = typeof location === 'undefined' ? null : new URL(location.href).searchParams.get('mode');
-  return createTwinUiState(requested === 'visitor' || requested === 'research' ? requested : 'engineer');
+  // URL mode is applied by the Router-aware TwinPage; the store must not read location.
+  return createTwinUiState('engineer');
 }
 
 export const useTwinUiStore = create<TwinUiState>()(() => initialUi());

@@ -156,7 +156,13 @@ HTTP 写入:  用户操作 -> mutation -> HTTP API -> 成功 -> invalidateQuerie
 - 已删除：`src/store/`（7 slice、hooks、store、api 残留）、`react-redux`、`@reduxjs/toolkit`；`AppProviders` 只保留 QueryClientProvider + ErrorBoundary。
 - 测试：`redux-store.test.ts` 改写为 Zustand 状态/action 测试；需要已挂载状态的组件测试改用 jsdom + Testing Library（Zustand SSR 快照为初始状态）。
 - 证据：`tsc --noEmit` 0；`npx vitest run` 57 文件 / 260 测试 PASS；`vite build` 0；`./scripts/verify.ps1` exit 0。
-- 遗留：目录筛选/对比选择与 Twin 的 `siteId/modal/mode` 仍在页面直接读写 `location`，未迁 Router search；不影响 M2 出口门禁，列入后续清理。
+- 后续 M2c 已完成：目录筛选/对比选择与 Twin 的 `siteId/modal/mode`/`lang`/`theme` 已全部改由 TanStack Router search 拥有，页面不再直接读写 `location`/`history`（仅渲染内部调试开关仍读 `location.search`）。
+## 12. M2c 实现记录：URL/search 状态（2026-10-27）
+
+- 目录/对比：`CatalogPage` 接收 `search`、`onSearchChange`、`onViewChange` props；路由组件用 `Route.useSearch()`/`Route.useNavigate()` 驱动 URL；筛选、隐藏 draft、对比选择、`lang`/`theme` 的写入通过 Router search patch（replace）完成，页面自身不再调用 `location`/`history`。
+- Twin：`TwinPage` 接收 `search`/`onSearchChange`；`siteId`/`modal`/`mode`/`lang`/`theme` 从 Router search 读取，模式/语言/主题变化经 Router replace 写回；`twin-i18n` 只负责持久化与 DOM 属性，`localeStore` 初始化只读本地存储。
+- 渲染内部诊断开关（`perf`/`liteDebug`/`hoverPickMs`）保留直接 `location.search` 读取，不进状态容器。
+- 测试：`web_app/tests/integration/router-search.test.ts` 覆盖 catalog/Twin search 解析与 patch；`catalog-page.test.tsx` 更新为 props 化渲染；`tsc --noEmit` 0，Vitest 58 文件 / 262 测试 PASS，`vite build` 0，`./scripts/verify.ps1` exit 0。
 ## 10. 验证与证据状态
 
 - Zustand store 与 action 行为由 `web_app/tests/redux-store.test.ts`（已改写为 state-store 测试）、`remaining-state.test.ts` 等覆盖；ARCH-02/05 的自动化静态检查仍在 M6 计划中（[架构基线](architecture.md) R-09）。

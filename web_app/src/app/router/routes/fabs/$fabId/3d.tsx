@@ -1,8 +1,10 @@
+import { useCallback } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { TwinPage } from '../../../../../twin-page';
 import { requireFabSites } from '../../../route-data';
+import type { RouterSearch } from '../../../search';
 
-/** Canonical 3D FAB page. The FAB identity comes from the route param. */
+/** Canonical 3D FAB page. FAB identity comes from the route param; URL/search state comes from the router. */
 export const Route = createFileRoute('/fabs/$fabId/3d')({
   loader: async ({ context, params }) => {
     const site = await requireFabSites(context.queryClient, params.fabId);
@@ -13,5 +15,10 @@ export const Route = createFileRoute('/fabs/$fabId/3d')({
 
 function FabSceneRoute() {
   const { fabId } = Route.useParams();
-  return <TwinPage fabId={fabId} />;
+  const search = Route.useSearch() as RouterSearch;
+  const navigate = Route.useNavigate();
+  const updateSearch = useCallback((patch: Partial<RouterSearch>, replace = true) => {
+    void navigate({ search: (prev: RouterSearch) => ({ ...prev, ...patch }), replace });
+  }, [navigate]);
+  return <TwinPage fabId={fabId} search={search} onSearchChange={updateSearch} />;
 }

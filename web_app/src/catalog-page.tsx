@@ -15,11 +15,16 @@ import {
   catalogFields,
   filterCatalog,
   parseCatalogEntries,
-  readCatalogRoute,
   safeExternalUrl,
   type CatalogField,
 } from './catalog-data';
 import { languageTag, readPreferences, type Preferences } from './preferences';
+import {
+  catalogSearchFrom,
+  catalogSearchPatch,
+  searchToQueryString,
+  type RouterSearch,
+} from './app/router/search';
 import '../assets/catalog.css';
 import legacyLicenseUrl from '../assets/legacy-LICENSE.txt?url';
 
@@ -306,18 +311,27 @@ function EquipmentDetails({
   );
 }
 
-function initialPreferences(): Preferences {
+function preferencesFromSearch(search: RouterSearch): Preferences {
+  const query = searchToQueryString(search);
   try {
-    return readPreferences(localStorage, location.search);
+    return readPreferences(localStorage, query);
   } catch {
-    return readPreferences({ getItem: () => null }, location.search);
+    return readPreferences({ getItem: () => null }, query);
   }
 }
 
-export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare' }) {
+export interface CatalogPageProps {
+  view: 'catalog' | 'compare';
+  /** Router-owned search state; the page never reads window.location for product state. */
+  search: RouterSearch;
+  onSearchChange: (patch: Partial<RouterSearch>, replace?: boolean) => void;
+  onViewChange: (next: 'catalog' | 'compare', patch: Partial<RouterSearch>) => void;
+}
+
+export function CatalogPage({ view: initialView, search, onSearchChange, onViewChange }: CatalogPageProps) {
   const {
     view, domain, category, query, hideDrafts, selected,
-    detailId, page, localEntries, localImportId, importError, hydrated,
+    detailId, page, localEntries, localImportId, importError,
   } = useCatalogStore();
   const preferences = useLocaleStore();
   const language = preferences.language;
@@ -352,48 +366,29 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
 
+  const searchKey = searchToQueryString(search);
+
+  // URL is the owner: hydrate page state whenever the router search changes
+  // (first load, back/forward, programmatic navigation).
   useEffect(() => {
-    // StrictMode replays this setup before a new render. Read the current store
-    // instead of the first render's hydrated=false closure.
-    if (useCatalogStore.getState().hydrated) return;
-    const route = readCatalogRoute(new URL(location.href));
+    const route = catalogSearchFrom(search);
     catalogActions.hydrate({
       view: initialView,
       domain: route.domain,
       category: route.category,
       query: route.query,
       hideDrafts: route.hideDrafts,
-      selected: [...route.compare],
+      selected: route.compare,
       page: 0,
     });
-    localeActions.preferencesSet(initialPreferences());
-  }, [initialView, hydrated]);
-
-  useEffect(() => {
-    // The router owns /equipment vs /equipment/compare; keep page state aligned when
-    // a route change (not the transitional pushState path) mounts this view.
-    if (useCatalogStore.getState().view !== initialView) catalogActions.viewSet(initialView);
-  }, [initialView]);
+    localeActions.preferencesSet(preferencesFromSearch(search));
+  }, [initialView, searchKey]);
 
   useEffect(() => {
     if (view !== 'compare' || selected.length > 0 || entries.length === 0) return;
-    if (new URL(location.href).searchParams.has('compare')) return;
+    if (catalogSearchFrom(search).compare.length > 0) return;
     catalogActions.selectedSet(entries.filter((entry) => entry.category === 'lithography').slice(0, 3).map((entry) => entry.recordId));
-  }, [view, selected.length, entries]);
-
-  useEffect(() => {
-    const restore = () => {
-      const route = readCatalogRoute(new URL(location.href));
-      if (route.view === 'workbench' || route.view === 'twin') { location.reload(); return; }
-      catalogActions.hydrate({
-        view: route.view, domain: route.domain, category: route.category, query: route.query,
-        hideDrafts: route.hideDrafts, selected: [...route.compare], page: 0,
-      });
-      localeActions.preferencesSet(initialPreferences());
-    };
-    window.addEventListener('popstate', restore);
-    return () => window.removeEventListener('popstate', restore);
-  }, []);
+  }, [view, selected.length, entries, searchKey]);
 
   useEffect(() => {
     document.documentElement.lang = languageTag(language);
@@ -405,34 +400,42 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
     } catch {
       /* Storage may be unavailable. */
     }
-    const url = new URL(location.href);
-    for (const [key, value] of Object.entries({
-      domain: domain === 'ALL' ? '' : domain.toLowerCase(),
+    const patch = catalogSearchPatch({
+      domain,
       category,
-      q: query,
-      hideDrafts: hideDrafts ? '1' : '',
-      compare: selected.join(','),
-      lang: languageTag(language),
+      query,
+      hideDrafts,
+      selected,
+      language,
       theme: preferences.theme,
-    }))
-      if (value) url.searchParams.set(key, value);
-      else url.searchParams.delete(key);
-    history.replaceState(null, '', url);
-  }, [language, preferences.theme, view, domain, category, query, selected, hideDrafts]);
+    });
+    if (searchToQueryString({ ...search, ...patch }) !== searchToQueryString(search)) {
+      onSearchChange(patch, true);
+    }
+  }, [language, preferences.theme, view, domain, category, query, selected, hideDrafts, search, onSearchChange]);
 
   function toggle(id: string): void {
     catalogActions.selectedToggled(id);
   }
   function openView(next: 'catalog' | 'compare'): void {
-    // Transitional page-internal navigation: filters stay in the catalog store and are
-    // mirrored into the canonical URL with history APIs. The pushState path is a
-    // canonical /equipment/* path (never the legacy /catalog or /compare aliases);
-    // the router owns every other top-level navigation.
-    const url = new URL(location.href);
-    url.pathname = next === 'compare' ? '/equipment/compare' : '/equipment';
-    url.searchParams.set('compare', selected.join(','));
-    if (location.pathname !== url.pathname) history.pushState(null, '', url);
+    const patch = {
+      ...catalogSearchPatch({
+        domain, category, query, hideDrafts, selected, language, theme: preferences.theme,
+      }),
+      compare: selected.join(',') || undefined,
+    };
     catalogActions.viewSet(next);
+    onViewChange(next, patch);
+  }
+  function hrefFor(next: 'catalog' | 'compare'): string {
+    const patch = {
+      ...catalogSearchPatch({
+        domain, category, query, hideDrafts, selected, language, theme: preferences.theme,
+      }),
+      compare: next === 'compare' ? selected.join(',') || undefined : undefined,
+    };
+    const qs = searchToQueryString({ ...search, ...patch });
+    return `${next === 'compare' ? '/equipment/compare' : '/equipment'}${qs ? `?${qs}` : ''}`;
   }
   function navigate(event: MouseEvent<HTMLAnchorElement>, next: 'catalog' | 'compare'): void {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
@@ -469,14 +472,14 @@ export function CatalogPage({ view: initialView }: { view: 'catalog' | 'compare'
           <a href="/">{t('基地工作台', 'Workbench')}</a>
           <a
             className={view === 'catalog' ? 'active' : ''}
-            href={`/equipment?lang=${languageTag(language)}`}
+            href={hrefFor('catalog')}
             onClick={(event) => navigate(event, 'catalog')}
           >
             {t('设备目录', 'Catalog')}
           </a>
           <a
             className={view === 'compare' ? 'active' : ''}
-            href={`/equipment/compare?compare=${selected.join(',')}&lang=${languageTag(language)}`}
+            href={hrefFor('compare')}
             onClick={(event) => navigate(event, 'compare')}
           >
             {t('设备对比', 'Compare')}

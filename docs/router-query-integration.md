@@ -1,7 +1,7 @@
 # 路由与查询集成（Router / TanStack Query）
 
 - 版本：V2.1 / 2026-10-27
-- 状态：**M1/M2 已实现；Zustand 已在 M2b 接管客户端状态**（M2 implemented）
+- 状态：**M1/M2 已实现；Zustand 接管客户端状态、Router search 接管 URL 状态（M2c）**（M2 implemented）
 - 依据：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)；总览见 [架构基线](architecture.md)；状态所有权见 [状态管理](state-management.md)
 - 当前实现：`main.tsx` 已改为 `AppProviders + RouterProvider`；TanStack Router 接管顶层路由；**全部 HTTP 端点**由 TanStack Query 独占；客户端 UI 状态由 Zustand 承载；Redux/RTK Query 已删除
 - 门禁状态：RQ-01..RQ-05 **均已真实运行（PASS）**。证据见 [架构基线](architecture.md) §15/§16、`tests/integration/router-query.test.tsx` 与 `tests/integration/query-cache.test.tsx`
@@ -247,7 +247,7 @@ export const queryKeys = {
 | Query 隔离 | 每个测试新建 `QueryClient`（`retry: false`、按需 `gcTime`），避免跨测试缓存污染 | 已实现 |
 | 网络模拟 | 在 `api/endpoints` 层 mock `fetch`；断言调用次数与参数 | 已实现（`vi.stubGlobal('fetch')` + 调用次数断言） |
 | 时钟 | RQ-02 使用假时钟覆盖 `staleTime`，不得用真实 sleep | 已实现（`query-cache.test.tsx` 用 `updatedAt` 老化缓存，无真实 sleep） |
-| 运行命令 | `pnpm test`（Vitest）纳入 CI/verify；浏览器专用测试仍用现有独立配置 | 已纳入：`npx vitest run` = 57 文件 / 260 测试；`./scripts/verify.ps1` PASS |
+| 运行命令 | `pnpm test`（Vitest）纳入 CI/verify；浏览器专用测试仍用现有独立配置 | 已纳入：`npx vitest run` = 58 文件 / 262 测试；`./scripts/verify.ps1` PASS |
 
 ## 12. 风险与开放问题
 

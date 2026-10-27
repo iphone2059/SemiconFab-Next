@@ -1,7 +1,7 @@
 # SemiconFab Next V2.1 架构基线
 
 - 版本：V2.1（2026-10-27）
-- 状态：**基线已采纳；M1、M2a、M2b 已落地并验证（M2b：Zustand 接管客户端状态、Redux/react-redux 删除）；M3–M6 未开始**（Baseline adopted / M1+M2 implemented / M3-M6 pending）
+- 状态：**基线已采纳；M1、M2（含 M2c：Router search 清理）已落地并验证；M3–M6 未开始**（Baseline adopted / M1+M2 implemented / M3-M6 pending）
 - 适用对象：`web_app` 前端架构。后端 `fab_app`/`fab_shared` 的项目与命名空间边界沿用 ADR-0001…ADR-0007
 - 权威决策：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0010](adr/0010-command-event-bridge.md)（实时/命令/工作流边界）；本文档负责汇总、目录结构与迁移计划
 - 当前实现事实：所有 HTTP 端点由 TanStack Query 独占；客户端 UI 状态由 5 个 Zustand store（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale 归属其中）独占；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已全部删除。XState 按用户指示锁定 6.0.0-alpha.70（无 stable v6），在 M4 接入工作流。详细证据见 [实施状态](IMPLEMENTATION-STATUS.md)、§15–§17。
@@ -274,7 +274,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 | 维度 | 当前（2026-10-27 可核对事实） | V2.1 目标 | 落点/阶段 | 状态 |
 |---|---|---|---|---|
-| 路由 | TanStack Router 已接管顶层路由；生成式路由树 + 最终 URL（M1）；旧地址与重定向已在 M2 删除 | TanStack Router + 类型化 URL + intent 预加载 | M1 | **M1/M2 PASS** |
+| 路由 | TanStack Router 接管顶层路由/URL/search；生成式路由树 + 最终 URL（M1）；旧地址与重定向已删除（M2）；目录筛选、compare、Twin 的 siteId/modal/mode/lang/theme 已由 Router search 拥有（M2c） | TanStack Router + 类型化 URL + intent 预加载 | M1/M2 | **M1/M2 PASS** |
 | HTTP 服务端缓存 | 全部端点已由 TanStack Query 独占（M2a）；RTK Query/api.ts 已删除，无双缓存 | TanStack Query 唯一缓存；loader 复用 Query Options | M1/M2 | **M2a PASS** |
 | 客户端状态 | 5 个 Zustand store（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale 字段）承载 UI 状态；Redux/react-redux 已删除 | Zustand/组件局部；不复制 Query 数据 | M2b | **M2b PASS** |
 | 实时推送 | 仅设备状态 SSE（`EventSource` -> 有序消费者 -> Zustand/Query 缓存；无 WebSocket 命令流） | WebSocket -> Decoder -> RxJS -> 类型化流 | M3 | 未开始 |
@@ -285,7 +285,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | 高频遥测 | 现有 `state/telemetry-buffer.ts` 100ms 合批后进 Zustand（非逐帧框架状态） | Worker/TypedArray -> Babylon Lite，不进 Query/Zustand/XState | M5 | 过渡实现；M5 迁 Worker/TypedArray |
 | 渲染 | Babylon Lite 1.36 已在 `src/render/lite`，WebGPU-only 校验已有 | 保留；渲染目录归位 `rendering` | M5 | 部分（引擎已就位） |
 | 依赖 | TanStack Router 1.170.46 / Query 5.105.0 / Router plugin 1.168.48、Zustand 5.0.16、RxJS 7.8.2、Zod 4.6.7、XState 6.0.0-alpha.70（用户指示直接用 v6）；jsdom 30.1.3 + Testing Library（dev）；Redux/react-redux 已移除 | 按阶段引入并锁版本；XState v6 当前仅 alpha，M4 前评估升级但不回退 v5 | M1..M4 | M2b 已移除 Redux；v6 alpha 锁定 |
-| 测试基建 | Vitest + jsdom + Testing Library；RQ-01..05 与 Zustand store 行为已真实运行 | RQ/CE 集成与契约测试；性能测试目录 | M1 起 | **M1/M2a/M2b PASS**；CE/性能未开始 |
+| 测试基建 | Vitest + jsdom + Testing Library；RQ-01..05、Zustand store、Router search 映射已真实运行 | RQ/CE 集成与契约测试；性能测试目录 | M1 起 | **M1/M2a/M2b/M2c PASS**；CE/性能未开始 |
 | 架构检查 | `tools/check_architecture.py` 只查既有前端边界（TS/TSX、禁止 WebGL、单 web_app） | 增加 ARCH 依赖方向/双缓存/契约位置检查 | M6 | 未开始 |
 | 文档 | V2.1 基线 + ADR-0009/0010 + 7 篇专项已合入 main（e18595f）；本文档补充 M1 证据 | 本基线 + ADR-0009/0010 + 7 篇专项 | M0 | **M0 PASS；M1 增量已更新** |
 
@@ -354,7 +354,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ### 12.3 当前测试基建事实
 
 - 已安装 jsdom 30.1.3、@testing-library/react 16.3.3、TanStack Router/Query、Zustand、XState 6.0.0-alpha.70、RxJS、Zod，并建立 `web_app/tests/integration`。
-- RQ-01..RQ-05 已真实运行（`router-query.test.tsx` + `query-cache.test.tsx`）；`url-mapping.test.ts` 覆盖最终 URL 并断言旧地址无映射（无重定向）；`api-queries.test.ts`/`sites-queries.test.ts` 覆盖 Query transport。M2a 后共 57 文件 / 260 测试 PASS。
+- RQ-01..RQ-05 已真实运行（`router-query.test.tsx` + `query-cache.test.tsx`）；`url-mapping.test.ts` 覆盖最终 URL 并断言旧地址无映射；`router-search.test.ts` 覆盖 catalog/Twin 搜索参数转换；`api-queries.test.ts`/`sites-queries.test.ts` 覆盖 Query transport。M2c 后共 58 文件 / 262 测试 PASS。
 - CE-01..08 与性能门禁仍未运行；不存在任何“已通过”的 CE/性能证据。
 
 ## 13. 文档地图
@@ -456,13 +456,13 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ### 16.3 过渡与遗留
 
 - ~~Redux Toolkit 仍承载 7 个客户端 UI slice~~：M2b 已迁 Zustand 并删除 Redux/react-redux（§17）。
-- 目录/对比页内部筛选、Twin 的 `?siteId/?modal/?mode` 仍是 history/直接 location 过渡；这项 Router search 迁移未随 M2b 完成，留待后续清理。
+- ~~目录/对比页内部筛选、Twin 的 `?siteId/?modal/?mode` 仍是 history/直接 location 过渡~~：已在 M2c 迁到 TanStack Router search（§18）。
 - XState v6 为 alpha：M4 需复核 API 并在 `CommandWorkflow` 实现内隔离，不向页面泄漏 actor。
 - CE-01..08、性能门禁、M3–M6 未开始。
 
 ## 17. M2b 落地记录（2026-10-27）
 
-> 本轮完成客户端状态迁移与 Redux 退役；Router search 迁移（目录筛选/Twin URL 参数）未包含在本轮，作为后续清理项。
+> 本轮完成客户端状态迁移与 Redux 退役；Router search 清理（目录筛选/Twin URL 参数）随后在 M2c 完成，见 §18。
 
 ### 17.1 交付
 
@@ -480,8 +480,30 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 ### 17.3 遗留
 
-- 目录筛选、对比选择与 Twin 的 `siteId/modal/mode` 仍由页面直接读写 `location`，尚未迁到 Router search；不影响 M2 出口门禁，列入后续清理（可与 M3/M5 同批完成）。
+- ~~目录筛选、对比选择与 Twin 的 `siteId/modal/mode` 仍由页面直接读写 `location`~~：M2c 已完成（§18）。
 - ARCH-02/05 的自动化静态检查留待 M6（当前由“无第二缓存/无 DTO 副本”的代码审查与 RQ-03/04 覆盖）。
+- M3–M6 未开始；CE-01..08、性能门禁仍为 SPECIFIED / NOT RUN。
+## 18. M2c 落地记录：Router 拥有 URL/search 状态（2026-10-27）
+
+> 补齐 M2 的 URL/搜索状态所有权：页面不再直接读写 `location`/`history` 来保存产品状态。
+
+### 18.1 交付
+
+- Router search 已是 catalog 与 Twin 产品状态的唯一来源：目录筛选、隐藏 draft、对比选择、Twin 的 `siteId`/`modal`/`mode`、`lang`/`theme` 均通过 `RouterSearch` 传入/写回。
+- 目录/对比：路由组件通过 `Route.useSearch()`/`Route.useNavigate()` 提供 `search` + `onSearchChange`/`onViewChange`；`catalog-page.tsx` 不再使用 `location`、`history`、`readCatalogRoute`，搜索参数变化即 hydrate 页面状态；翻页/导入等纯客户端状态仍留 store。
+- Twin：`/fabs/$fabId/3d` 路由组件传入 `search`/`onSearchChange`；`twin-page.tsx` 的 modal/mode/siteId/语言主题改由 search 驱动，模式切换经 Router 写回；`twin-i18n.tsx` 与 `localeStore.ts` 不再写/读 `location`。
+- 保留的 `location` 读取仅限渲染内部调试开关（`liteDebug`、`perf`、`hoverPickMs`），不参与产品状态。
+- `catalog-data.readCatalogRoute` 已删除（旧 URL 解析残留）；`url-mapping.test.ts` 继续覆盖最终 URL/旧地址无映射。
+
+### 18.2 测试与证据
+
+- 新增 `web_app/tests/integration/router-search.test.ts`：catalog 筛选/对比 ID 解析、搜索 patch 序列化、Twin mode/modal/siteId 转换。
+- 更新 `catalog-page.test.tsx`（显式传入 Router search props）及依赖 `readCatalogRoute` 的旧测试。
+- 实际运行：`tsc --noEmit` 0；`npx vitest run` **58 文件 / 262 测试 PASS**；`vite build` 0；`./scripts/verify.ps1` exit 0（契约/架构、16 Python、3 .NET + 67、冻结向量、前端全量）。
+
+### 18.3 遗留
+
+- 渲染层调试开关（`perf`/`liteDebug`/`hoverPickMs`）继续直接读 `location.search`，属于诊断用途，不进入状态容器。
 - M3–M6 未开始；CE-01..08、性能门禁仍为 SPECIFIED / NOT RUN。
 ## 附录 A. 关键术语
 

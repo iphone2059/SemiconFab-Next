@@ -1,31 +1,10 @@
 import type { CatalogEntryDto } from './contracts';
-import { canonicalViewForPathname } from './app/router/url-mapping';
 
 export type CatalogDomain = 'ALL' | 'FAB' | 'OSAT';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export function readCatalogRoute(url: URL) {
-  const domain = url.searchParams.get('domain')?.toUpperCase();
-  return {
-    // Transitional hydration helper for the canonical /equipment URLs only;
-    // top-level navigation is owned by TanStack Router and legacy aliases are gone.
-    view: canonicalViewForPathname(url.pathname) ?? 'workbench',
-    domain: (domain === 'OSAT' || domain === 'FAB' ? domain : 'ALL') as CatalogDomain,
-    category: url.searchParams.get('category') ?? '',
-    query: url.searchParams.get('q') ?? '',
-    hideDrafts: url.searchParams.get('hideDrafts') === '1',
-    compare: [
-      ...new Set(
-        (url.searchParams.get('compare') ?? '')
-          .split(',')
-          .map((s) => s.trim())
-          .filter((s) => uuid.test(s)),
-      ),
-    ].slice(0, 4),
-  };
-}
 
 export function filterCatalog(
   entries: readonly CatalogEntryDto[],

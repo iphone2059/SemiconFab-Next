@@ -4,9 +4,9 @@ import {
   catalogFields,
   filterCatalog,
   parseCatalogEntries,
-  readCatalogRoute,
   safeExternalUrl,
 } from '../src/catalog-data';
+import { catalogSearchFrom } from '../src/app/router/search';
 
 const pointer = JSON.parse(
   readFileSync(new URL('../../assets/legacy/current.json', import.meta.url), 'utf8'),
@@ -53,20 +53,16 @@ it('flattens value/provenance fields for inspection and comparison', () => {
   );
 });
 
-it('preserves canonical route query semantics while bounding and deduplicating comparisons', () => {
+it('parses canonical comparison query semantics with bounded, deduplicated ids', () => {
   const ids = ['3acd7b05-e6e8-5312-bb5b-045e7dd3074b', 'e3021724-ec73-534e-be7c-ba3374f4ddb8'];
-  const route = readCatalogRoute(
-    new URL(
-      `https://example.test/equipment/compare?compare=${ids[0]},${ids[0]},${ids[1]}&domain=osat&lang=en#details`,
-    ),
-  );
-  expect(route.view).toBe('compare');
+  const route = catalogSearchFrom({
+    compare: `${ids[0]},${ids[0]},${ids[1]}`,
+    domain: 'osat',
+    category: 'lithography',
+  });
   expect(route.domain).toBe('OSAT');
   expect(route.compare).toEqual(ids);
-  expect(
-    readCatalogRoute(new URL('https://example.test/equipment?category=lithography')).view,
-  ).toBe('catalog');
-  expect(readCatalogRoute(new URL('https://example.test/fabs/fab-1/3d')).view).toBe('twin');
+  expect(route.category).toBe('lithography');
 });
 
 it('does not turn arbitrary provenance strings into executable links', () => {

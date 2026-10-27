@@ -98,7 +98,12 @@ it('renders the migrated catalog page from the shared Query cache', () => {
   });
   const html = renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
-      <CatalogPage view="catalog" />
+      <CatalogPage
+        view="catalog"
+        search={{}}
+        onSearchChange={() => {}}
+        onViewChange={() => {}}
+      />
     </QueryClientProvider>,
   );
   expect(html).toContain('FPA');

@@ -32,9 +32,8 @@ export function TwinLocaleProvider({ children }: PropsWithChildren) {
     try { persistTwinLanguage(localStorage, language); } catch { /* Storage getter can also be denied. */ }
     document.documentElement.lang = languageTag(language);
     document.documentElement.dataset.lang = language;
-    const url = new URL(location.href);
-    url.searchParams.set('lang', languageTag(language));
-    history.replaceState({}, '', url);
+    // The Twin page writes lang through TanStack Router search; this provider
+    // only persists the preference and mirrors the document/attributes.
   }, [language]);
   const value = useMemo(() => ({ language, t: twinTranslator(language), toggleLanguage: () => localeActions.languageToggled() }), [language]);
   return <TwinLocale.Provider value={value}>{children}</TwinLocale.Provider>;

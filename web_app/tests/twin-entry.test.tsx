@@ -3,7 +3,6 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import WorkbenchApp from '../src/workbench';
-import { readCatalogRoute } from '../src/catalog-data';
 import { sitesQueryOptions } from '../src/api/queries/sites.queries';
 import { resetWorkbenchStore, workbenchActions } from '../src/state/workbenchStore';
 
@@ -13,13 +12,6 @@ beforeEach(() => resetWorkbenchStore());
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-});
-
-it('resolves only the canonical V2.1 route views', () => {
-  expect(readCatalogRoute(new URL('https://example.test/fabs/fab-1/3d')).view).toBe('twin');
-  expect(readCatalogRoute(new URL('https://example.test/equipment')).view).toBe('catalog');
-  expect(readCatalogRoute(new URL('https://example.test/equipment/compare')).view).toBe('compare');
-  expect(readCatalogRoute(new URL('https://example.test/')).view).toBe('workbench');
 });
 
 it('keeps the website entrance free of 3D preview rendering and links to the canonical 3D URL', () => {
