@@ -10,9 +10,9 @@ import type { CommandWorkflow } from '../../application/contracts/CommandWorkflo
 export class CommandReconciler {
   constructor(private readonly gateway: CommandGateway) {}
 
-  async reconcile(workflow: CommandWorkflow, fabId: string, commandId: string): Promise<boolean> {
+  async reconcile(workflow: CommandWorkflow, fabId: string, commandId: string, isCurrent: () => boolean = () => true): Promise<boolean> {
     const event = await this.gateway.getCommandStatus(fabId, commandId);
-    if (!event) return false;
+    if (!event || !isCurrent()) return false;
     workflow.receive(event);
     return true;
   }

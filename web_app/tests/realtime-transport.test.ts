@@ -6,6 +6,7 @@ import { submitEquipmentCommand } from '../src/api/mutations/commands.mutations'
 import { TelemetryRuntime, flattenTelemetryFrame, toolStatesFromValues } from '../src/realtime/telemetry/TelemetryRuntime';
 
 class FakeEventSource {
+  onopen: (() => void) | null = null;
   onmessage: ((event: { data: string }) => void) | null = null;
   onerror: ((event: unknown) => void) | null = null;
   closed = false;
@@ -46,6 +47,20 @@ it('queries authoritative command status and maps 404 to null', async () => {
   await expect(gateway.getCommandStatus('fab-a', 'missing')).resolves.toBeNull();
 });
 
+it('reports SSE reconnection so runtimes can reconcile results outside the replay journal', () => {
+  const sources: FakeEventSource[] = [];
+  const source = createSseCommandEventSource('fake', { eventSourceFactory: url => { const value = new FakeEventSource(url); sources.push(value); return value; } });
+  let reconnects = 0;
+  const changes = source.reconnected$?.subscribe(() => { reconnects++; });
+  const results = source.commandResult$.subscribe(() => {});
+  sources[0].onopen?.();
+  expect(reconnects).toBe(0);
+  sources[0].onopen?.();
+  expect(reconnects).toBe(1);
+  results.unsubscribe(); changes?.unsubscribe();
+  expect(sources[0].closed).toBe(true);
+});
+
 it('submits equipment commands over HTTP', async () => {
   const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
     commandId: '11111111-1111-4111-8111-111111111111', siteId: 'site-1', fabId: 'fab-a',
@@ -80,7 +95,7 @@ it('feeds telemetry frames through the Worker and exposes renderer tool states',
   expect(sent[0]).toMatchObject({ type: 'frame', sequence: 5 });
   expect((sent[0] as { values: number[] }).values).toHaveLength(32);
   const values = (sent[0] as { values: number[] }).values;
-  worker.onmessage?.({ data: { type: 'frame-written', sequence: 5, latest: values } });
+  worker.onmessage?.({ data: { type: 'frame-written', sequence: 5, latest: values, generation: 0 } });
   expect(runtime.getSnapshot()?.sequence).toBe(5);
   expect(runtime.getToolStates()?.[0]).toBe('running');
   expect(runtime.getToolStates()?.[2]).toBe('down');

@@ -54,6 +54,8 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
   const canvas = useRef<HTMLCanvasElement>(null);
   const surface = useRef<HTMLDivElement>(null);
   const facade = useRef<SceneFacade | undefined>(undefined);
+  const frameSource = useRef({ getToolStates, toolStates });
+  frameSource.current = { getToolStates, toolStates };
   const status = useRuntimeStore(state => state.viewer.status);
   const generation = useRuntimeStore(state => state.viewer.generation);
   const hoveredTool = useRuntimeStore(state => state.viewer.hover);
@@ -98,7 +100,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
           (tool) => { onToolChange?.(tool ?? undefined); },
           (stats) => { onAmhsStatsChange?.(stats); },
           (hover) => hoverBatcher.push(hover ?? undefined),
-          getToolStates,
+          () => frameSource.current.getToolStates?.() ?? frameSource.current.toolStates,
         );
       })
       .catch((error: unknown) => {

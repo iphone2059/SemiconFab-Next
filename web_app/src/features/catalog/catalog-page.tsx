@@ -329,10 +329,11 @@ export interface CatalogPageProps {
 }
 
 export function CatalogPage({ view: initialView, search, onSearchChange, onViewChange }: CatalogPageProps) {
+  const catalogState = useCatalogStore();
   const {
     view, domain, category, query, hideDrafts, selected,
     detailId, page, localEntries, localImportId, importError,
-  } = useCatalogStore();
+  } = catalogState;
   const preferences = useLocaleStore();
   const language = preferences.language;
   const t = (zh: string, en: string) => text(language, zh, en);
@@ -391,6 +392,10 @@ export function CatalogPage({ view: initialView, search, onSearchChange, onViewC
   }, [view, selected.length, entries, searchKey]);
 
   useEffect(() => {
+    // Hydration (or another effect) can replace these snapshots earlier in this
+    // commit. Only write the current render back; otherwise URL input and old
+    // store values repeatedly overwrite each other.
+    if (useCatalogStore.getState() !== catalogState || useLocaleStore.getState() !== preferences) return;
     document.documentElement.lang = languageTag(language);
     document.title = `${t(view === 'compare' ? '设备对比' : '设备目录', view === 'compare' ? 'Equipment comparison' : 'Equipment catalog')} · SemiconFab Next`;
     try {
@@ -412,7 +417,7 @@ export function CatalogPage({ view: initialView, search, onSearchChange, onViewC
     if (searchToQueryString({ ...search, ...patch }) !== searchToQueryString(search)) {
       onSearchChange(patch, true);
     }
-  }, [language, preferences.theme, view, domain, category, query, selected, hideDrafts, search, onSearchChange]);
+  }, [catalogState, preferences, language, preferences.theme, view, domain, category, query, selected, hideDrafts, search, onSearchChange]);
 
   function toggle(id: string): void {
     catalogActions.selectedToggled(id);

@@ -1,8 +1,9 @@
-import { Observable, share } from 'rxjs';
+import { Observable, Subject, share } from 'rxjs';
 import type { CommandEventSource, CommandResultEvent } from '../../application/contracts/CommandEvents';
 import { MessageDecoder } from '../protocol/MessageDecoder';
 
 interface EventSourceLike {
+  onopen: (() => void) | null;
   onmessage: ((event: { data: string }) => void) | null;
   onerror: ((event: unknown) => void) | null;
   close(): void;
@@ -19,7 +20,9 @@ export interface SseCommandEventSourceOptions {
  * events only. EventSource reconnection is delegated to the browser.
  */
 export function createSseCommandEventSource(url: string, options: SseCommandEventSourceOptions = {}): CommandEventSource {
+  const reconnected = new Subject<void>();
   return {
+    reconnected$: reconnected.asObservable(),
     commandResult$: new Observable<CommandResultEvent>((subscriber) => {
       const factory = options.eventSourceFactory ??
         (typeof EventSource === 'undefined' ? undefined : (target: string) => new EventSource(target) as unknown as EventSourceLike);
@@ -29,6 +32,12 @@ export function createSseCommandEventSource(url: string, options: SseCommandEven
       }
       const decoder = new MessageDecoder();
       const source = factory(url);
+      let opened = false;
+      source.onopen = () => {
+        if (subscriber.closed) return;
+        if (opened) reconnected.next();
+        opened = true;
+      };
       source.onmessage = (event) => {
         try {
           const decoded = decoder.decode(event.data);
@@ -42,7 +51,10 @@ export function createSseCommandEventSource(url: string, options: SseCommandEven
         // EventSource reconnects automatically; a terminal error surfaces when
         // the runtime is disposed and closes the source.
       };
-      return () => source.close();
+      return () => {
+        source.onopen = null; source.onmessage = null; source.onerror = null;
+        source.close();
+      };
     }).pipe(share()),
   };
 }

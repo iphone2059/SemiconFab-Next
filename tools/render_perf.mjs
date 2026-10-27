@@ -5,8 +5,8 @@
  * Usage (start scripts/start-dev.ps1 first so API + Vite are running):
  *   node tools/render_perf.mjs --url http://127.0.0.1:5173/fabs/FAB-01/3d
  *
- * Measures requestAnimationFrame deltas on the real product route and verifies
- * navigator.gpu + adapter. Exits non-zero when WebGPU/rendering is unavailable
+ * Measures actual renderer frame progress through the product perf bridge and
+ * verifies navigator.gpu + adapter. Exits non-zero when WebGPU/rendering is unavailable
  * or p95 frame time exceeds the threshold. Not part of scripts/verify.ps1
  * because it requires a GPU/browser environment; record the JSON evidence in docs.
  */
@@ -14,22 +14,26 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isRendererReady, renderGateFailures } from './render_perf_checks.mjs';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const arg = (name, fallback) => {
   const index = process.argv.indexOf('--' + name);
   return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : fallback;
 };
-const url = arg('url', 'http://127.0.0.1:5173/fabs/FAB-01/3d');
+const targetUrl = new URL(arg('url', 'http://127.0.0.1:5173/fabs/FAB-01/3d'));
+targetUrl.searchParams.set('perf', '1');
+const url = targetUrl.href;
 const chrome = arg('chrome', 'C:/Program Files/Google/Chrome/Application/chrome.exe');
 const frames = Number(arg('frames', '180'));
 const warmupFrames = Number(arg('warmup', '30'));
 const timeoutMs = Number(arg('timeout', '60000'));
 const out = arg('out', path.join(root, '.local/render-perf.json'));
+if (!Number.isInteger(frames) || frames < 1 || !Number.isInteger(warmupFrames) || warmupFrames < 0 || !Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('Invalid frame count or timeout');
 const port = 9300 + Math.floor(Math.random() * 300);
-const userDir = path.join(root, '.local/render-perf-chrome');
 fs.mkdirSync(path.dirname(out), { recursive: true });
-fs.mkdirSync(userDir, { recursive: true });
+fs.mkdirSync(path.join(root, '.local'), { recursive: true });
+const userDir = fs.mkdtempSync(path.join(root, '.local/render-perf-chrome-'));
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const child = spawn(chrome, [
@@ -38,9 +42,11 @@ const child = spawn(chrome, [
   '--use-angle=d3d11', '--disable-gpu-sandbox',
   '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
   '--disable-backgrounding-occluded-windows', url,
-], { stdio: 'ignore' });
+], { stdio: 'ignore', windowsHide: true });
 
 let ws;
+let readiness;
+const browserErrors = [];
 try {
   let version;
   for (let attempt = 0; attempt < 80; attempt += 1) {
@@ -61,10 +67,13 @@ try {
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
     if (message.id && pending.has(message.id)) { pending.get(message.id)(message); pending.delete(message.id); }
+    if (message.method === 'Runtime.exceptionThrown') browserErrors.push(message.params.exceptionDetails.text);
+    if (message.method === 'Runtime.consoleAPICalled' && message.params.type === 'error') browserErrors.push(message.params.args.map(arg => arg.value ?? arg.description).join(' '));
   };
-  const send = (method, params = {}) => new Promise((resolve) => {
+  const send = (method, params = {}) => new Promise((resolve, reject) => {
     const id = ++nextId;
-    pending.set(id, resolve);
+    const timer = setTimeout(() => { pending.delete(id); reject(new Error(`CDP timeout: ${method}`)); }, 30000);
+    pending.set(id, message => { clearTimeout(timer); resolve(message); });
     ws.send(JSON.stringify({ id, method, params }));
   });
   const evaluate = async (expression, awaitPromise = false) => {
@@ -76,24 +85,37 @@ try {
   await send('Page.enable');
 
   const started = Date.now();
-  let readiness;
   while (Date.now() - started < timeoutMs) {
-    readiness = await evaluate("({ ready: document.readyState, text: document.body ? document.body.innerText.slice(-400) : '', canvas: !!document.querySelector('canvas') })").catch(() => undefined);
-    if (readiness?.ready === 'complete' && readiness.canvas && /WebGPU|FAB|设备/.test(readiness.text)) break;
+    readiness = await evaluate(`(() => {
+      const bridge = window.__SEMICONFAB_PERF__;
+      const stats = bridge?.getStats();
+      return { ready: document.readyState, text: document.body?.innerText.slice(-400), canvas: !!document.querySelector('canvas'),
+        renderer: bridge ? { status: bridge.getLifecycle().status, frames: stats.frames, drawCalls: stats.drawCalls } : null,
+        gpuErrors: bridge?.getDiagnostics()?.gpuErrors ?? [] };
+    })()`).catch(() => undefined);
+    if (isRendererReady(readiness)) break;
+    if (browserErrors.length || readiness?.gpuErrors?.length) throw new Error('Renderer reported GPU or browser errors');
     await sleep(500);
   }
+  if (!isRendererReady(readiness)) throw new Error('Renderer did not become ready before timeout');
   const measurement = await evaluate(`(async () => {
     const adapter = navigator.gpu ? await navigator.gpu.requestAdapter() : null;
+    const bridge = window.__SEMICONFAB_PERF__;
+    const initialFrames = bridge.getStats().frames;
     const deltas = await new Promise((resolve) => {
       const values = [];
       let last = 0;
-      let count = 0;
+      let lastFrames = initialFrames;
       const deadline = performance.now() + 20000;
       function tick(now) {
-        if (last) values.push(now - last);
-        last = now;
-        count += 1;
-        if (count >= ${frames + warmupFrames} || performance.now() > deadline) { resolve(values); return; }
+        const stats = bridge.getStats();
+        // Count intervals only when the engine actually renders a new frame.
+        if (stats.frames > lastFrames) {
+          if (last) values.push(now - last);
+          last = now;
+          lastFrames = stats.frames;
+        }
+        if (values.length >= ${frames + warmupFrames} || performance.now() > deadline) { resolve(values); return; }
         requestAnimationFrame(tick);
       }
       requestAnimationFrame(tick);
@@ -106,6 +128,10 @@ try {
       canvas: !!document.querySelector('canvas'),
       bodyText: document.body ? document.body.innerText.slice(-600) : '',
       canvasSize: (() => { const c = document.querySelector('canvas'); return c ? { width: c.width, height: c.height } : null; })(),
+      rendererReady: bridge.getLifecycle().status === 'ready',
+      rendererFrames: bridge.getStats().frames - initialFrames,
+      drawCalls: bridge.getStats().drawCalls,
+      gpuErrors: bridge.getDiagnostics()?.gpuErrors ?? [],
       deltas,
     };
   })()`, true);
@@ -115,6 +141,8 @@ try {
   const sorted = [...deltas].sort((a, b) => a - b);
   const average = deltas.reduce((sum, value) => sum + value, 0) / Math.max(1, deltas.length);
   const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? 0;
+  const gpuErrors = [...measurement.gpuErrors, ...browserErrors];
+  const failures = renderGateFailures({ ...measurement, gpuErrors, measuredFrames: deltas.length, p95FrameMs: p95 }, frames);
   const report = {
     measuredAt: new Date().toISOString(),
     browser: version.Browser,
@@ -131,17 +159,24 @@ try {
     adapterInfo: measurement.adapterInfo,
     canvas: measurement.canvas,
     canvasSize: measurement.canvasSize,
+    rendererFrames: measurement.rendererFrames,
+    drawCalls: measurement.drawCalls,
+    gpuErrors,
+    failures,
     bodyText: measurement.bodyText,
     readiness,
   };
   fs.writeFileSync(out, JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));
-  const failed = !measurement.secure || !measurement.adapter || !measurement.canvas || deltas.length < Math.floor(frames * 0.8) || p95 > 100;
-  process.exitCode = failed ? 1 : 0;
+  process.exitCode = failures.length ? 1 : 0;
 } catch (error) {
   console.error('render_perf failed:', error instanceof Error ? error.message : error);
+  fs.writeFileSync(out, JSON.stringify({ url, error: error instanceof Error ? error.message : String(error), readiness, browserErrors }, null, 2) + '\n');
   process.exitCode = 1;
 } finally {
-  try { ws?.close(); } catch { /* ignore */ }
+  try {
+    if (ws?.readyState === 1) ws.send(JSON.stringify({ id: 1000000, method: 'Browser.close' }));
+    ws?.close();
+  } catch { /* ignore */ }
   child.kill();
 }

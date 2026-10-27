@@ -6,6 +6,8 @@ python tools/check_architecture.py
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 python -m unittest discover -s tools -p 'test_*.py'
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
+node --test tools/test_render_perf_checks.mjs
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
 python tools/migrate_legacy_data.py --check
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 $fabProjects = @(Get-ChildItem -LiteralPath . -Directory |

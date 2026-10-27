@@ -42,6 +42,64 @@ describe('FabRuntime multi-FAB assembly (CE-07)', () => {
 });
 
 describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
+  it('recovers a terminal result evicted before HTTP submission registers its workflow', async () => {
+    const source = new FakeCommandEventSource();
+    const gateway: CommandGateway = { getCommandStatus: async (fabId, commandId) => commandResult({ fabId, commandId, revision: 2, outcome: 'succeeded' }) };
+    const runtime = new FabRuntimeFactory({ sourceFor: () => source, gateway }).create('fab-a');
+    runtime.start();
+    source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'succeeded' }));
+    for (let index = 0; index < 256; index++) source.emit(commandResult({ fabId: 'fab-a', commandId: `other-${index}`, revision: 2, outcome: 'succeeded' }));
+    runtime.trackCommand(commandId);
+    source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'succeeded' }));
+    await expect.poll(() => runtime.getProjection(commandId)?.outcome, { timeout: 150 }).toBe('succeeded');
+    runtime.dispose();
+  });
+
+  it('automatically reconciles active commands when the source reconnects', async () => {
+    const source = new FakeCommandEventSource();
+    let outcome: 'accepted' | 'succeeded' = 'accepted';
+    const gateway: CommandGateway = { getCommandStatus: async (fabId, commandId) => commandResult({ fabId, commandId, revision: outcome === 'accepted' ? 0 : 2, outcome }) };
+    const runtime = new FabRuntimeFactory({ sourceFor: () => source, gateway }).create('fab-a');
+    runtime.start(); runtime.trackCommand(commandId);
+    await runtime.reconcileCommand(commandId);
+    outcome = 'succeeded'; source.reconnect();
+    await expect.poll(() => runtime.getProjection(commandId)?.outcome, { timeout: 150 }).toBe('succeeded');
+    runtime.dispose();
+  });
+
+  it('coalesces authoritative queries and ignores their results after disposal', async () => {
+    const source = new FakeCommandEventSource();
+    let complete!: (event: ReturnType<typeof commandResult>) => void;
+    let queries = 0;
+    const gateway: CommandGateway = { getCommandStatus: () => { queries++; return new Promise(resolve => { complete = resolve; }); } };
+    const runtime = new FabRuntimeFactory({ sourceFor: () => source, gateway }).create('fab-a');
+    runtime.start(); runtime.trackCommand(commandId);
+    const pending = runtime.reconcileCommand(commandId);
+    const concurrent = runtime.reconcileCommand(commandId);
+    expect(queries).toBe(1);
+    runtime.dispose();
+    complete(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'succeeded' }));
+    await expect(pending).resolves.toBe(false);
+    await expect(concurrent).resolves.toBe(false);
+    expect(queries).toBe(1);
+    expect(runtime.getProjection(commandId)).toBeUndefined();
+  });
+
+  it('contains failed background recovery and retries when the connection returns', async () => {
+    const source = new FakeCommandEventSource();
+    let available = false;
+    const gateway: CommandGateway = { getCommandStatus: async (fabId, commandId) => {
+      if (!available) throw new Error('offline');
+      return commandResult({ fabId, commandId, revision: 2, outcome: 'succeeded' });
+    } };
+    const runtime = new FabRuntimeFactory({ sourceFor: () => source, gateway }).create('fab-a');
+    runtime.start(); runtime.trackCommand(commandId);
+    await expect(runtime.reconcileCommand(commandId)).resolves.toBe(false);
+    available = true; source.reconnect();
+    await expect.poll(() => runtime.getProjection(commandId)?.outcome, { timeout: 150 }).toBe('succeeded');
+    runtime.dispose();
+  });
+
   it('converges through the authoritative gateway after the stream stops (CE-06)', async () => {
     const source = new FakeCommandEventSource();
     const gateway: CommandGateway = {

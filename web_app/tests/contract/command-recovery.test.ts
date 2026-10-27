@@ -27,6 +27,17 @@ it('replaces a duplicate revision instead of growing the queue', () => {
   recovery.hold(commandResult({ fabId: 'fab', commandId: 'cmd', revision: 2, outcome: 'failed' }));
   expect(recovery.pendingFor('fab', 'cmd')).toHaveLength(1);
   expect(recovery.pendingFor('fab', 'cmd')[0].outcome).toBe('failed');
+  expect(recovery.size).toBe(1);
+});
+
+it('does not evict real events after repeatedly replacing the same revision', () => {
+  const recovery = new CommandEventRecovery({ maxTotal: 2 });
+  for (let index = 0; index < 3; index++) recovery.hold(event('fab', 'cmd', 1));
+  recovery.hold(event('fab', 'other', 1));
+  expect(recovery.size).toBe(2);
+  expect(recovery.pendingFor('fab', 'cmd')).toHaveLength(1);
+  expect(recovery.pendingFor('fab', 'other')).toHaveLength(1);
+  expect(recovery.droppedCount).toBe(0);
 });
 
 it('drains in arrival order and can reconcile through the authoritative gateway', async () => {

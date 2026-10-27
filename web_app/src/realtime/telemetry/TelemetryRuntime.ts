@@ -3,6 +3,7 @@ import type { FabToolState } from '../../fab-layout';
 import { MessageDecoder } from '../protocol/MessageDecoder';
 
 interface EventSourceLike {
+  onopen: (() => void) | null;
   onmessage: ((event: { data: string }) => void) | null;
   close(): void;
 }
@@ -80,25 +81,40 @@ export class TelemetryRuntime {
     if (!eventSourceFactory || !workerFactory) return;
     this.started = true;
     const decoder = new MessageDecoder();
+    let generation = 0;
+    let submittedSequence = -1;
     try {
       const worker = workerFactory();
       this.worker = worker;
       worker.onmessage = (event) => {
-        const data = event.data as { type?: string; sequence?: number; latest?: number[] } | undefined;
+        if (!this.started || this.worker !== worker) return;
+        const data = event.data as { type?: string; sequence?: number; generation?: number; latest?: number[] } | undefined;
         if (!data || data.type !== 'frame-written' || typeof data.sequence !== 'number' || !Array.isArray(data.latest)) return;
+        if (data.generation !== generation) return;
         if (this.snapshot && data.sequence <= this.snapshot.sequence) return;
         const values = Float32Array.from(data.latest);
         this.snapshot = { sequence: data.sequence, values, toolStates: toolStatesFromValues(values) };
       };
       const source = eventSourceFactory(this.options.url);
       this.source = source;
+      source.onopen = () => {
+        if (!this.started || this.source !== source) return;
+        // Backend sequences are local to each SSE connection. Tag Worker
+        // replies so an old in-flight response cannot restore the old watermark.
+        generation += 1;
+        submittedSequence = -1;
+        this.snapshot = undefined;
+        worker.postMessage({ type: 'reset' });
+      };
       source.onmessage = (event) => {
+        if (!this.started || this.source !== source) return;
         try {
           const decoded = decoder.decode(event.data);
           if (decoded.kind !== 'telemetry') return;
           const frame = flattenTelemetryFrame(decoded.event);
-          if (this.snapshot && frame.sequence <= this.snapshot.sequence) return;
-          worker.postMessage({ type: 'frame', sequence: frame.sequence, values: frame.values });
+          if (frame.sequence <= submittedSequence) return;
+          worker.postMessage({ type: 'frame', sequence: frame.sequence, values: frame.values, generation });
+          submittedSequence = frame.sequence;
         } catch {
           // Ignore malformed frames; the next authoritative frame converges.
         }

@@ -19,6 +19,8 @@ export interface CommandResultEvent {
 
 export interface CommandEventSource {
   readonly commandResult$: Observable<CommandResultEvent>;
+  /** A live connection was restored; replay may no longer contain every result. */
+  readonly reconnected$?: Observable<void>;
 }
 
 export interface AlarmEvent {

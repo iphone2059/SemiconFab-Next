@@ -38,7 +38,11 @@ export class FakeWorkflowRegistry implements CommandWorkflowRegistry {
 
 export class FakeCommandEventSource implements CommandEventSource {
   private readonly subject = new Subject<CommandResultEvent>();
+  private readonly reconnects = new Subject<void>();
   readonly commandResult$ = this.subject.asObservable();
+  readonly reconnected$ = this.reconnects.asObservable();
+
+  reconnect(): void { this.reconnects.next(); }
 
   emit(event: CommandResultEvent): void {
     this.subject.next(event);

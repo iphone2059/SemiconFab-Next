@@ -214,11 +214,14 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   }, [search?.mode]);
 
   useEffect(() => {
+    if (useTwinUiStore.getState().entryMode !== mode) return;
     const patch = { mode };
     if (searchToQueryString({ ...(search ?? {}), ...patch }) !== searchQuery) onSearchChange?.(patch, true);
   }, [mode, onSearchChange, search, searchQuery]);
 
   useEffect(() => {
+    const current = useLocaleStore.getState();
+    if (current.language !== language || current.theme !== theme) return;
     const patch = { lang: languageTag(language), theme };
     if (searchToQueryString({ ...(search ?? {}), ...patch }) !== searchQuery) onSearchChange?.(patch, true);
   }, [language, theme, onSearchChange, search, searchQuery]);
@@ -364,7 +367,8 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   directToolStates.current = toolStates;
   const getToolStates = useMemo(() => (): readonly FabToolState[] => {
     if (useTwinUiStore.getState().entryMode === 'research') return directToolStates.current;
-    const base = useTwinUiStore.getState().statusSource === 'demo' ? useTwinDemoStore.getState().states : useTwinPageStore.getState().liveToolStates;
+    if (useTwinUiStore.getState().statusSource === 'demo') return useTwinDemoStore.getState().states;
+    const base = useTwinPageStore.getState().liveToolStates;
     // Telemetry Worker output is read inside the scene frame loop; no React
     // state update is involved on the high-frequency path (ARCH-11).
     const liveTelemetry = telemetry?.getToolStates();

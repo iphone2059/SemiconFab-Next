@@ -40,8 +40,8 @@ export class CommandEventRecovery {
     // displace the current pending head unnecessarily.
     const sameRevision = queue.findIndex((value) => value.revision === event.revision);
     if (sameRevision >= 0) queue.splice(sameRevision, 1);
+    else this.total += 1;
     queue.push(event);
-    this.total += 1;
     if (queue.length > this.maxPerCommand) {
       this.total -= queue.length - this.maxPerCommand;
       this.dropped += queue.length - this.maxPerCommand;
