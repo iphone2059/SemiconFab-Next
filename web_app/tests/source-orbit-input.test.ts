@@ -9,13 +9,19 @@ function motionFixture(position: readonly [number, number, number] = [0, 0, 10])
   return { motion, pose: () => pose };
 }
 
-it('uses r128 CSS-height rotation and per-update 0.06 damping with 0.94 retention', () => {
+it('applies rotation immediately at half the r128 amplitude and stops while the pointer is held still', () => {
   const { motion, pose } = motionFixture();
-  motion.rotate(100, 0, 200); // exactly -PI radians accumulated
-  motion.update(); // apply 0.06 * (-PI)
-  expect(Math.atan2(pose().position[0], pose().position[2])).toBeCloseTo(-Math.PI * 0.06, 10);
-  motion.update(); // retained 94% of prior accumulated delta
-  expect(Math.atan2(pose().position[0], pose().position[2])).toBeCloseTo(-Math.PI * (0.06 + 0.94 * 0.06), 10);
+  const angle = () => Math.atan2(pose().position[0], pose().position[2]);
+  motion.beginDrag();
+  motion.rotate(100, 0, 200); // r128 would accumulate -PI radians here
+  motion.update(); // consumed in full: half sensitivity -> -PI/2
+  expect(angle()).toBeCloseTo(-Math.PI * 0.5, 10);
+  const held = angle();
+  // The frame loop keeps calling update() while the button is still down; with no
+  // new pointer movement the camera must not keep rotating.
+  for (let frame = 0; frame < 10; frame += 1) motion.update();
+  expect(angle()).toBe(held);
+  motion.release();
   motion.clear();
   const before = pose().position;
   motion.update();
@@ -43,6 +49,52 @@ it('uses camera-aligned perspective pan and damps it like r128', () => {
   expect(pose().target[1]).toBeCloseTo(0, 10);
   motion.update();
   expect(pose().target[0]).toBeCloseTo(expected * (1 + 0.94), 10);
+});
+
+it('carries a small decaying inertia after a quick release but not after a pause', async () => {
+  const { motion, pose } = motionFixture();
+  const angle = () => Math.atan2(pose().position[0], pose().position[2]);
+  motion.beginDrag();
+  motion.rotate(100, 0, 200);
+  motion.update();
+  const released = angle();
+  motion.release();
+  let previous = released;
+  for (let frame = 0; frame < 6; frame += 1) {
+    motion.update();
+    const current = angle();
+    expect(current, 'frame ' + frame).toBeLessThan(previous);
+    previous = current;
+  }
+  for (let frame = 0; frame < 80; frame += 1) motion.update();
+  const tail = angle() - released;
+  expect(tail).toBeLessThan(0); // same direction as the drag
+  expect(tail).toBeGreaterThan(-0.15); // only a few degrees
+  const settled = angle();
+  motion.update();
+  expect(angle()).toBe(settled); // the tail ends instead of drifting forever
+
+  // A pause before release means no inertia at all.
+  motion.clear();
+  motion.beginDrag();
+  motion.rotate(100, 0, 200);
+  motion.update();
+  const paused = angle();
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  motion.release();
+  for (let frame = 0; frame < 10; frame += 1) motion.update();
+  expect(angle()).toBe(paused);
+
+  // Starting a new drag clears any pending tail as well.
+  motion.clear();
+  motion.beginDrag();
+  motion.rotate(100, 0, 200);
+  motion.update();
+  motion.release();
+  const beforeNewDrag = angle();
+  motion.beginDrag();
+  for (let frame = 0; frame < 10; frame += 1) motion.update();
+  expect(angle()).toBe(beforeNewDrag);
 });
 
 it('enforces source zoom and polar limits', () => {
@@ -103,6 +155,22 @@ it('routes left drag to rotate, right drag and left+ctrl to pan, middle drag to 
   expect(canvas.focusCalls).toBe(4);
   release();
   expect(canvas.style.touchAction).toBe('');
+});
+
+it('stops the camera while the button is held still and eases slightly after release', () => {
+  const canvas = new TestCanvas(), { motion, pose } = motionFixture();
+  const release = bindSourceOrbitInput(canvas as unknown as HTMLCanvasElement, motion);
+  const angle = () => Math.atan2(pose().position[0], pose().position[2]);
+  canvas.dispatchEvent(pointer('pointerdown'));
+  canvas.ownerDocument.dispatchEvent(pointer('pointermove', { clientX: 100 }));
+  const held = angle();
+  // Per-frame updates while the button is still down must not drift.
+  motion.update(); motion.update();
+  expect(angle()).toBe(held);
+  canvas.ownerDocument.dispatchEvent(pointer('pointerup', { clientX: 100 }));
+  motion.update();
+  expect(angle()).toBeLessThan(held); // quick release eases a little further
+  release();
 });
 
 it('consumes wheel only on the canvas, preserving source sign-only increments and cleanup', () => {

@@ -82,7 +82,7 @@ export function createLiteCamera(scene: SceneContext, camera: ArcRotateCamera) {
         if (transition) { transition.abort(); transition = undefined; }
       });
     },
-    /** OrbitControls r128 updates on input and before each rendered frame. */
+    /** Drag rotation applies in the input update; the release inertia decays in the per-frame update. */
     update: sourceOrbit.update,
     zoom(deltaY: number) {
       if (disposed || !Number.isFinite(deltaY)) return;
