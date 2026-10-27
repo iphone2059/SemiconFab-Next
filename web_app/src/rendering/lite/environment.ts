@@ -8,7 +8,7 @@ import {
 } from '@babylonjs/lite';
 import { createOverlayBillboards } from './overlay-billboards';
 import { FAB_LAYOUT } from '../../fab-layout';
-import { advanceLaminarParticle, cleanroomPressureField } from '../../cleanroom-pressure';
+import { advanceLaminarParticle, classifyCleanroomPressure, cleanroomPressureField } from '../../cleanroom-pressure';
 import { renderAirflowHeatmapCanvas } from '../../airflow-texture';
 import { ORIGINAL_EXPLODED_LINKS, explodedLinkFrame } from '../../original-exploded-link-data';
 import {
@@ -21,7 +21,7 @@ import {
 type Triple = [number, number, number];
 const rgb = (hex: number): Triple => [hex >>> 16 & 255, hex >>> 8 & 255, hex & 255].map(v => v / 255) as Triple;
 type BillboardSystem = ReturnType<typeof createFacingBillboardSystem>;
-interface AirflowParticle { x: number; y: number; z: number; vy: number; patch: Partial<BillboardSpriteInit> & { position: Triple } }
+interface AirflowParticle { x: number; y: number; z: number; vy: number; colorIndex: number; patch: Partial<BillboardSpriteInit> & { position: Triple } }
 interface RoofParticle { x: number; y: number; z: number; speed: number; patch: Partial<BillboardSpriteInit> & { position: Triple } }
 
 /** Source RH metres. The composition owner reflects `root` once at the render boundary.
@@ -53,6 +53,10 @@ export function createLiteEnvironment(scene: SceneContext, engine: EngineContext
   const lithoColor: [number, number, number, number] = [0.98, 0.75, 0.14, 0.72];
   const airlockColor: [number, number, number, number] = [0.98, 0.55, 0.2, 0.72];
   const bayColor: [number, number, number, number] = [0.22, 0.74, 0.98, 0.72];
+  /** Classified pressure band -> sprite colour; the band index is cached per particle so the patch is only written on a change. */
+  const airflowColor = (colorIndex: number): [number, number, number, number] =>
+    colorIndex === 0 ? lithoColor : colorIndex === 1 ? airlockColor : bayColor;
+  const airflowColorIndex = (highPressure: boolean, isAirlock: boolean) => highPressure ? 0 : isAirlock ? 1 : 2;
   const shaded = (name: string, color: number, metallic = 0, roughness = 1) => {
     const material = createPbrMaterial({ baseColorFactor: [...rgb(color), 1], metallicFactor: metallic,
       roughnessFactor: roughness, directIntensity: Math.PI, environmentIntensity: 0, usePhysicalLightFalloff: false });
@@ -175,8 +179,9 @@ export function createLiteEnvironment(scene: SceneContext, engine: EngineContext
     for (let index = 0; index < 1500; index++) {
       const x = -46 + random() * 92, z = -34 + random() * 68, y = 0.05 + random() * 7.85;
       const field = cleanroomPressureField(x, z), vy = (field.isLitho ? 0.046 : 0.036) + (random() - 0.5) * 0.008;
-      const patch = { position: [x, y, z] as Triple, color: field.pressure >= 26 ? lithoColor : field.isAirlock ? airlockColor : bayColor };
-      addBillboardSpriteIndex(airflowSystem, { ...patch, sizeWorld: [0.45, 0.45] }); airflowParticles.push({ x, y, z, vy, patch });
+      const colorIndex = airflowColorIndex(field.pressure >= 26, field.isAirlock);
+      const patch = { position: [x, y, z] as Triple, color: airflowColor(colorIndex) };
+      addBillboardSpriteIndex(airflowSystem, { ...patch, sizeWorld: [0.45, 0.45] }); airflowParticles.push({ x, y, z, vy, patch, colorIndex });
     }
     for (const record of maus) {
       const label = canvas(ROOF_SPRITE_CANVAS.width, ROOF_SPRITE_CANVAS.height);
@@ -237,8 +242,14 @@ export function createLiteEnvironment(scene: SceneContext, engine: EngineContext
         const dt = Number.isFinite(deltaMs) ? Math.min(0.05, Math.max(0, deltaMs / 1000)) : 0; clock += dt;
         if (airflowVisible) for (const particle of airflowParticles) {
           advanceLaminarParticle(particle, dt, obstacles, random);
-          const field = cleanroomPressureField(particle.x, particle.z);
-          particle.patch.color = field.pressure >= 26 ? lithoColor : field.isAirlock ? airlockColor : bayColor;
+          // Original semantics: the colour band comes from the pressure field at the POST-move
+          // position. The classification is trig-free, so this replaces the second field sample
+          // exactly; the per-particle cache skips redundant patch writes.
+          const region = classifyCleanroomPressure(particle.x, particle.z);
+          const colorIndex = airflowColorIndex(region.highPressure, region.isAirlock);
+          if (colorIndex !== particle.colorIndex) {
+            particle.colorIndex = colorIndex; particle.patch.color = airflowColor(colorIndex);
+          }
         }
         if (heatmapVisible && clock - lastTextureUpdate >= 0.1) {
           renderAirflowHeatmapCanvas(heatmapCanvas, clock); updateDynamicTexture(engine, heatmapTexture, heatmapCanvas, { invertY: false }); lastTextureUpdate = clock;

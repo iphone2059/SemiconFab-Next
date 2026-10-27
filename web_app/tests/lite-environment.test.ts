@@ -10,7 +10,7 @@ vi.mock('@babylonjs/lite', async importOriginal => {
 });
 import { addFacingBillboardSystem, createSceneContext, getMeshGeometry, releaseTexture, updateBillboardSpriteIndex, updateDynamicTexture, type EngineContext } from '@babylonjs/lite';
 import { createLiteEnvironment } from '../src/rendering/lite/environment';
-import { advanceLaminarParticle } from '../src/cleanroom-pressure';
+import { advanceLaminarParticle, cleanroomPressureField } from '../src/cleanroom-pressure';
 import { FAB_LAYOUT } from '../src/fab-layout';
 import { ORIGINAL_EXPLODED_LINKS, explodedLinkFrame } from '../src/original-exploded-link-data';
 
@@ -70,6 +70,54 @@ it('retains the exact seeded 1500-particle generator and pressure update, includ
   model.setLayer('heatmap', true); model.update(1000, 6000);
   expect(model.diagnostics.airflowParticles[0].y).toBe(y);
   expect(model.diagnostics.airflowClock).toBeCloseTo(190 * 0.016 + 0.05);
+  model.dispose();
+});
+
+it('keeps the original post-move pressure-band colour semantics on every airflow frame', () => {
+  const { model } = fixture();
+  // Rebuild the frozen seeded generator and motion stream exactly as the environment does.
+  let seed = 0x464142;
+  const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 0x100000000; };
+  const source = Array.from({ length: 1500 }, () => {
+    const x = -46 + random() * 92, z = -34 + random() * 68, y = 0.05 + random() * 7.85;
+    return { x, y, z, vy: (x <= -16.5 && z <= 4.5 ? 0.046 : 0.036) + (random() - 0.5) * 0.008 };
+  });
+  const obstacles = FAB_LAYOUT.map(t => ({ x: t.x, z: t.z, halfW: t.width / 2 + 0.35, halfL: t.depth / 2 + 0.35, topY: t.height }));
+  const lithoColor = [0.98, 0.75, 0.14, 0.72], airlockColor = [0.98, 0.55, 0.2, 0.72], bayColor = [0.22, 0.74, 0.98, 0.72];
+  // The original implementation recoloured from the pressure field sampled AFTER the move.
+  const originalColor = (particle: { x: number; z: number }) => {
+    const field = cleanroomPressureField(particle.x, particle.z);
+    return field.pressure >= 26 ? lithoColor : field.isAirlock ? airlockColor : bayColor;
+  };
+  model.setLayer('airflow', true);
+  expect(model.diagnostics.airflowParticles.map(particle => particle.patch.color)).toEqual(source.map(originalColor));
+  let dtSeed = 0x2545f491;
+  const dtRandom = () => { dtSeed = (Math.imul(dtSeed, 1664525) + 1013904223) >>> 0; return dtSeed / 0x100000000; };
+  const deltas = Array.from({ length: 40 }, () => Math.round(dtRandom() * 1200) - 60);
+  const bands = new Set<string>();
+  let transitions = 0, mismatch: { frame: number; index: number } | null = null;
+  for (let frame = 0; frame < 300 && !mismatch; frame++) {
+    const deltaMs = deltas[frame % deltas.length];
+    const dt = Number.isFinite(deltaMs) ? Math.min(0.05, Math.max(0, deltaMs / 1000)) : 0;
+    for (const particle of source) advanceLaminarParticle(particle, dt, obstacles, random);
+    const previous = model.diagnostics.airflowParticles.map(particle => particle.patch.color);
+    model.update(deltaMs, 1000 + frame * 16);
+    for (let index = 0; index < source.length; index++) {
+      const expected = originalColor(source[index]);
+      const actual = model.diagnostics.airflowParticles[index].patch.color;
+      if (!actual || actual[0] !== expected[0] || actual[1] !== expected[1]
+        || actual[2] !== expected[2] || actual[3] !== expected[3]) {
+        mismatch = { frame, index };
+        break;
+      }
+      bands.add(expected.join(','));
+      if (previous[index] !== actual) transitions++;
+    }
+  }
+  expect(mismatch).toBeNull();
+  expect(model.diagnostics.airflowParticles.map(({ x, y, z, vy }) => ({ x, y, z, vy }))).toEqual(source);
+  expect(bands.size).toBe(3);
+  expect(transitions).toBeGreaterThan(0);
   model.dispose();
 });
 
