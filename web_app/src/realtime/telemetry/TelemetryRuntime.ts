@@ -1,4 +1,4 @@
-import type { TelemetryFrame } from '../../application/contracts/CommandEvents';
+import type { TelemetryFrame, TelemetrySample } from '../../application/contracts/CommandEvents';
 import type { FabToolState } from '../../fab-layout';
 import { MessageDecoder } from '../protocol/MessageDecoder';
 import { createTelemetryWorker } from '../workers/createTelemetryWorker';
@@ -96,6 +96,41 @@ export function flattenTelemetryFrame(
   return { sequence: frame.sequence, values, toolStates: toolStatesFromValues(values) };
 }
 
+/**
+ * Merge a later telemetry frame into an earlier one by entity identity.
+ *
+ * The protocol sends full snapshots today, but a sparse/delta frame only
+ * carries the entities that changed. During Worker backpressure the runtime
+ * keeps exactly one pending frame; merging rather than replacing it preserves
+ * every entity's update while keeping the bounded latest-wins slot:
+ * - samples keep the base frame order;
+ * - a sample for the same `entityId` is overridden by the incoming one;
+ * - entities that only appear in the incoming frame are appended in arrival
+ *   order (duplicates after the first occurrence are ignored);
+ * - `fabId`/`sequence`/`capturedAt` describe the newest (incoming) frame.
+ *
+ * Pure: neither input frame nor its samples are mutated.
+ */
+export function mergeTelemetryFrames(base: TelemetryFrame, incoming: TelemetryFrame): TelemetryFrame {
+  const incomingById = new Map<string, TelemetrySample>();
+  for (const sample of incoming.samples) {
+    if (!incomingById.has(sample.entityId)) incomingById.set(sample.entityId, sample);
+  }
+  const merged: TelemetrySample[] = [];
+  const seen = new Set<string>();
+  for (const sample of base.samples) {
+    if (seen.has(sample.entityId)) continue;
+    seen.add(sample.entityId);
+    merged.push(incomingById.get(sample.entityId) ?? sample);
+  }
+  for (const [entityId, sample] of incomingById) {
+    if (seen.has(entityId)) continue;
+    seen.add(entityId);
+    merged.push(sample);
+  }
+  return { fabId: incoming.fabId, sequence: incoming.sequence, capturedAt: incoming.capturedAt, samples: merged };
+}
+
 /** Map worker-returned Float32 values back to renderer tool states. */
 export function toolStatesFromValues(values: ArrayLike<number>): FabToolState[] {
   const states: FabToolState[] = [];
@@ -113,9 +148,10 @@ export function toolStatesFromValues(values: ArrayLike<number>): FabToolState[] 
  * Query, Zustand or XState (ARCH-11).
  *
  * At most one frame is in flight to the Worker at a time. Frames decoded while
- * a reply is outstanding replace a single pending slot (latest-wins) instead of
- * queueing, so a slow Worker can never grow an unbounded backlog; the pending
- * frame is submitted as soon as the current reply arrives.
+ * a reply is outstanding are merged by `entityId` into a single pending slot
+ * (bounded latest-wins) instead of being queued or replaced: full snapshots
+ * still converge to the newest frame, while sparse/delta frames cannot lose
+ * entity updates. The pending frame is submitted as soon as the reply arrives.
  */
 export class TelemetryRuntime {
   private source?: EventSourceLike;
@@ -123,7 +159,7 @@ export class TelemetryRuntime {
   private snapshot?: TelemetrySnapshot;
   /** Last submitted slot-keyed frame; missing entities inherit these values. */
   private lastValues?: Float32Array;
-  /** Newest decoded frame waiting for the in-flight Worker reply (latest-wins). */
+  /** Bounded latest-wins slot: decoded frames merged while the Worker reply is outstanding. */
   private pendingFrame?: TelemetryFrame;
   /** True between a frame postMessage and its `frame-written` reply. */
   private inFlight = false;
@@ -203,11 +239,12 @@ export class TelemetryRuntime {
           if (this.options.fabId !== undefined && decoded.event.fabId !== this.options.fabId) return;
           if (decoded.event.sequence <= acceptedSequence) return;
           acceptedSequence = decoded.event.sequence;
-          // Latest-wins: while one frame awaits its reply, keep only the newest
-          // decoded frame. Superseded frames are dropped (never queued); the
-          // retained frame is slot-merged against the last submitted frame.
+          // Bounded latest-wins with delta-safe merge: while one frame awaits its
+          // reply, merge the newer decoded frame into the single pending slot
+          // (no queue). Full snapshots keep the newest values; sparse/delta
+          // frames never lose the entity updates decoded in between.
           if (this.inFlight) {
-            this.pendingFrame = decoded.event;
+            this.pendingFrame = this.pendingFrame ? mergeTelemetryFrames(this.pendingFrame, decoded.event) : decoded.event;
             return;
           }
           submit(decoded.event);

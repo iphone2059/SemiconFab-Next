@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
+import type { TelemetryFrame } from '../src/application/contracts/CommandEvents';
 import type { TelemetryWorkerEvent } from '../src/realtime/workers/telemetryWorker.logic';
-import { TelemetryRuntime } from '../src/realtime/telemetry/TelemetryRuntime';
+import { TelemetryRuntime, mergeTelemetryFrames } from '../src/realtime/telemetry/TelemetryRuntime';
 import { createTelemetryWorkerHandler } from '../src/realtime/workers/telemetryWorker.logic';
 
 interface PostedCommand {
@@ -46,6 +47,36 @@ function harness(deferred = false) {
   const wasTerminated = () => terminated;
   return { runtime, source, worker, send, sendSamples, deliver, commands, replies, frames, wasTerminated };
 }
+
+it('merges telemetry frames by entityId with incoming overrides and stable order', () => {
+  const base: TelemetryFrame = {
+    fabId: 'fab-a', sequence: 1, capturedAt: '2026-10-27T00:00:00Z',
+    samples: [
+      { entityId: 'equipment-0', values: { state: 0, utilization: 0.1 } },
+      { entityId: 'equipment-2', values: { state: 2 } },
+    ],
+  };
+  const incoming: TelemetryFrame = {
+    fabId: 'fab-a', sequence: 5, capturedAt: '2026-10-27T00:00:05Z',
+    samples: [
+      { entityId: 'equipment-2', values: { state: 3 } }, // override in base position
+      { entityId: 'equipment-1', values: { state: 1 } }, // appended after base entities
+      { entityId: 'equipment-1', values: { state: 9 } }, // duplicate after first occurrence ignored
+    ],
+  };
+  const merged = mergeTelemetryFrames(base, incoming);
+  expect(merged.fabId).toBe('fab-a');
+  expect(merged.sequence).toBe(5);
+  expect(merged.capturedAt).toBe('2026-10-27T00:00:05Z');
+  expect(merged.samples).toEqual([
+    { entityId: 'equipment-0', values: { state: 0, utilization: 0.1 } },
+    { entityId: 'equipment-2', values: { state: 3 } },
+    { entityId: 'equipment-1', values: { state: 1 } },
+  ]);
+  // Pure and non-destructive: the input frames keep their own samples.
+  expect(base.samples[1].values.state).toBe(2);
+  expect(incoming.samples).toHaveLength(3);
+});
 
 it('preserves wire sequence through the Worker and rejects older frames in the same connection', () => {
   const { runtime, send } = harness();
@@ -166,11 +197,11 @@ it('stores the Worker reply Float32Array directly instead of converting it', () 
   runtime.stop();
 });
 
-it('submits only the newest frame while a Worker reply is deferred (latest-wins)', () => {
+it('submits only one bounded pending frame while a Worker reply is deferred (latest-wins)', () => {
   const { runtime, send, deliver, frames } = harness(true);
   send(1, 0); // submitted, reply deferred
   send(2, 1); // pending
-  send(3, 2); // replaces pending: latest wins
+  send(3, 2); // merged into pending: same entity takes the newest value
   expect(frames().map((frame) => frame.sequence)).toEqual([1]);
   deliver(0); // reply for frame 1 unblocks exactly one newer frame
   expect(frames().map((frame) => frame.sequence)).toEqual([1, 3]);
@@ -181,10 +212,64 @@ it('submits only the newest frame while a Worker reply is deferred (latest-wins)
   runtime.stop();
 });
 
+it('merges sparse pending frames so delta updates survive Worker backpressure', () => {
+  const { runtime, sendSamples, deliver, frames } = harness(true);
+  sendSamples(1, [{ entityId: 'equipment-0', state: 0 }]); // in flight, reply deferred
+  sendSamples(2, [{ entityId: 'equipment-1', state: 2 }]); // pending delta
+  sendSamples(3, [{ entityId: 'equipment-2', state: 1 }]); // merged into pending
+  sendSamples(4, [{ entityId: 'equipment-3', state: 3 }]); // merged into pending
+  expect(frames().map((frame) => frame.sequence)).toEqual([1]);
+  deliver(0); // flush exactly one merged pending frame
+  const submitted = frames();
+  expect(submitted.map((frame) => frame.sequence)).toEqual([1, 4]);
+  // equipment-1/2/3 updates survive the merge; equipment-0 is inherited from
+  // the last submitted frame instead of being lost by replacement.
+  const values = submitted[1].values!;
+  expect(values[0]).toBe(0);
+  expect(values[2]).toBe(2);
+  expect(values[4]).toBe(1);
+  expect(values[6]).toBe(3);
+  deliver(1);
+  expect(runtime.getSnapshot()?.sequence).toBe(4);
+  expect(runtime.getToolStates()?.[0]).toBe('running');
+  expect(runtime.getToolStates()?.[1]).toBe('down');
+  expect(runtime.getToolStates()?.[2]).toBe('idle');
+  expect(runtime.getToolStates()?.[3]).toBe('maint');
+  runtime.stop();
+});
+
+it('still collapses full-snapshot frames to one latest pending frame during backpressure', () => {
+  const { runtime, sendSamples, deliver, frames } = harness(true);
+  sendSamples(1, [
+    { entityId: 'equipment-0', state: 0 },
+    { entityId: 'equipment-1', state: 0 },
+  ]);
+  sendSamples(2, [
+    { entityId: 'equipment-0', state: 1 },
+    { entityId: 'equipment-1', state: 2 },
+  ]);
+  sendSamples(3, [
+    { entityId: 'equipment-0', state: 3 },
+    { entityId: 'equipment-1', state: 1 },
+  ]);
+  expect(frames().map((frame) => frame.sequence)).toEqual([1]);
+  deliver(0);
+  expect(frames().map((frame) => frame.sequence)).toEqual([1, 3]);
+  const values = frames()[1].values!;
+  expect(values[0]).toBe(3); // full snapshots: the newest value wins per entity
+  expect(values[2]).toBe(1);
+  deliver(1);
+  expect(runtime.getSnapshot()?.sequence).toBe(3);
+  expect(runtime.getToolStates()?.[0]).toBe('maint');
+  expect(runtime.getToolStates()?.[1]).toBe('idle');
+  runtime.stop();
+});
+
 it('drops the pending frame on SSE reopen and starts a new Worker generation', () => {
   const { runtime, source, send, deliver, frames } = harness(true);
   send(1, 2); // in flight
   send(2, 0); // pending while the reply is deferred
+  send(3, 1); // merged into the pending frame, still dropped by the reconnect
   source.onopen?.();
   expect(runtime.getSnapshot()).toBeUndefined();
   send(1, 1); // first frame of the new connection is submitted immediately

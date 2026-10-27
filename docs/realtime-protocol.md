@@ -96,6 +96,16 @@
 - 缓冲上限、帧大小、maxHz、ACK 超时由后端冻结（Engineering 08）；前端不得通过超限订阅绕过。
 - 无法发送控制消息时应关闭连接重建，避免 `RESYNC_REQUIRED` 被堵在满队列里（Engineering 08）。
 
+### 5.4 前端 Worker 背压与增量合并
+
+高频遥测经 Worker 旁路（ARCH-11），其背压策略与本层合并语义一致，但实现为**有界、不排队**：
+
+- **单帧在途**：同一时刻最多只有一个遥测帧等待 Worker 回包；回包前到达的帧不排队，只保留一个有界 Pending 槽位。
+- **全量快照维持 latest-wins**：Pending 槽中的旧帧被更新帧覆盖，flush 时只提交最新的一帧；连接内已接受序列（accepted sequence）单调，更旧的帧按序列丢弃。
+- **稀疏/增量帧不丢实体更新**：Pending 帧与新到帧按 `entityId` 合并——同一实体由新帧覆盖，实体顺序沿用 Pending 帧顺序，仅出现在新帧的实体追加；flush 时提交合并结果。因此背压期间对 entity1/entity2/entity3 的先后更新都会保留，而不是只剩最后一帧。
+- **身份字段取新帧**：合并结果的 `fabId`/`sequence`/`capturedAt` 来自最后接受的帧；`sequence` 仍是连接内局部单调值，不跨连接比较。
+- **重连重置**：SSE 重连或 `stop()` 清空 Pending/在途状态并发送 Worker `reset`；旧连接的迟到回包按 generation 丢弃，不恢复旧序列。
+
 ## 6. EventRouter 与类型化流
 
 ```ts
