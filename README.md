@@ -67,7 +67,7 @@ npx --yes pnpm@12.15.0 build
 - 模块档案：`docs/modules/M01.md` … `M18.md`
 - 实施状态：`docs/IMPLEMENTATION-STATUS.md`
 - 决策记录：`docs/adr/`
-- V2.1 架构基线：[架构基线](docs/architecture.md)（ADR-0009 Router/Query 边界、ADR-0010 Realtime/Workflow 桥接、ARCH-01…12 规则、M0–M6 迁移计划；状态：M1/M2 已落地——TanStack Query 独占服务端数据、Zustand 独占客户端状态、Redux/RTK Query 与旧 URL 已删除；M3–M6 未开始）
+- V2.1 架构基线：[架构基线](docs/architecture.md)（ADR-0009 Router/Query 边界、ADR-0010 Realtime/Workflow 桥接、ARCH-01…12 规则、M0–M6 迁移计划；状态：M1–M3 已落地——TanStack Query 独占服务端数据、Zustand 独占客户端状态、Redux/RTK Query 与旧 URL 已删除、实时契约/CommandEventBridge 以假源验证；M4–M6 未开始）
 
 ## 原版数据导入
 

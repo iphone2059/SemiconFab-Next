@@ -1,9 +1,9 @@
 # 命令核对（Command Reconciliation）
 
 - 版本：V2.1 / 2026-10-27
-- 状态：**SPECIFIED，未实现**（Decision accepted / implementation pending）
+- 状态：**M3 已实现（内存有界队列 + 假 gateway 验证）**（M3 implemented / backend reconciliation pending）
 - 依据：[ADR-0010](adr/0010-command-event-bridge.md)；桥与契约定见 [命令事件桥](command-event-bridge.md)；协议见 [实时协议](realtime-protocol.md)；装配见 [FAB 运行时](fab-runtime.md)
-- 当前实现：无命令链路。本文档是目标设计，所有核对场景均为 **SPECIFIED / NOT RUN**
+- 当前实现：`CommandEventRecovery` 已实现有界 pending 队列、按 (fabId, commandId) 查询与 `CommandGateway` 权威对账；CE-05 在假源/假 gateway 上 PASS。持久恢复与真实后端查询仍为 M4+。
 - 边界：**前端只做有界尽力恢复；持久化/权威恢复是后端责任**。本文档不承诺“关闭浏览器也不丢命令结果”
 
 ## 1. 为什么需要核对

@@ -1,9 +1,9 @@
 # ADR-0010 — 实时基础设施只提供类型化流，Application 层 CommandEventBridge 协调，XState 工作流隐藏在契约之后
 
-- 状态：已采纳（2026-10-27）；实施状态：未开始（Status: Accepted / implementation pending）
+- 状态：已采纳（2026-10-27）；实施状态：M3 契约/类型化流/CommandEventBridge/恢复队列已实现并用假源验证；XState 工作流与 Runtime 装配未开始（Status: Accepted / M3 implemented / M4+ pending）
 - 取代：迁移完成后取代 [ADR-0008](0008-redux-toolkit-rtk-query.md) 中“SSE 帧直接 dispatch 进 Redux slice”的命令/实时接线方式；ADR-0008 的“Babylon 对象不进入状态容器、遥测合批”原则保留，但在 `ARCH-11` 下进一步收紧
 - 关联：[ADR-0009](0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0003](0003-single-web-app.md)；细则见 [命令事件桥](../command-event-bridge.md)、[命令核对](../command-reconciliation.md)、[实时协议](../realtime-protocol.md)、[FAB 运行时](../fab-runtime.md)；基线见 [架构基线](../architecture.md)
-- 决策范围：仅前端 `web_app` 的实时/命令链路。本文档不修改代码、依赖或 Vite 配置；后端实时服务当前是占位模式（`fab_app -- --realtime` 退出码 2），因此生产 WebSocket 源尚不存在
+- 决策范围：仅前端 `web_app` 的实时/命令链路。M3 已按本决策实现 contracts/realtime/application coordination（无 XState/Runtime）；后端实时服务仍是占位模式（`fab_app -- --realtime` 退出码 2），生产 WebSocket 源尚不存在
 
 ## 背景
 
