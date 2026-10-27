@@ -35,8 +35,10 @@ web_app/      唯一前端站点
     state/        Zustand UI stores、遥测合批
     application/  命令契约 + CommandEventBridge/恢复协调层
     realtime/     协议解码/序列、类型化流、缓冲区/Worker、传输骨架
-    runtime/      FabRuntime/Factory/Registry/Lifecycle、命令源 seam
+    runtime/      FabRuntime/Factory/Registry/Lifecycle、SSE/gateway 装配
     runtime/commands/  XState 命令工作流实现（位置非强制，经 CommandWorkflow 契约暴露）
+    features/     twin / catalog / workbench 页面模块
+    components/   共享 UI（ui/widgets/charting/error-boundary）
     rendering/    Babylon Lite/WebGPU 渲染实现
   tests/          单元/契约/集成/性能测试（Vitest）
   assets/         CSS、i18n/许可与静态数据
@@ -54,6 +56,9 @@ infrastructure/ scripts/ tools/ .github/
 
 # 全量校验：契约/架构检查、Python 工具测试、3 个 .NET 项目构建 + 测试、前端 typecheck/test/build
 ./scripts/verify.ps1
+
+# 真实 GPU/浏览器性能门禁（需先 ./scripts/start-dev.ps1）
+./scripts/perf-render.ps1 -Url http://127.0.0.1:5173/fabs/{fabId}/3d
 ```
 
 前端单独运行（在 `web_app` 内）：
@@ -65,7 +70,7 @@ npx --yes pnpm@12.15.0 test
 npx --yes pnpm@12.15.0 build
 ```
 
-当前验证基线：`tsc --noEmit` 0、Vitest **60 文件 / 265 测试 PASS**、`vite build` 0、`./scripts/verify.ps1` exit 0（8 个 Python 工具测试、3 个 .NET 项目 + 67 测试、契约/架构检查、前端全量；旧冻结向量门禁已随 M6 退役）。
+当前验证基线：`tsc --noEmit` 0、Vitest **61 文件 / 271 测试 PASS**、`vite build` 0、后端 **73/73**、真实 Chrome WebGPU 门禁 **p95 8.5ms**、`./scripts/verify.ps1` exit 0（8 个 Python 工具测试、3 个 .NET 项目、契约/架构检查、前端全量）。
 
 ## 产品 URL（仅 canonical，无重定向）
 
@@ -107,6 +112,6 @@ python tools/migrate_legacy_data.py --check
 
 ## 已知边界
 
-- 后端 `--realtime` / OT 仍是占位模式；真实 WebSocket 命令流与命令状态查询端点未提供，因此产品命令源保持可替换 seam，CE-06 的生产证据待后端。
-- Worker 高频路径已有 TypedArray/Worker 基础设施与 CPU 基线，但尚未接真实遥测源/渲染器；GPU/浏览器性能门禁需真实 GPU 环境。
-- 多 FAB UI 已按数据驱动实现，当前产品数据仍为单 FAB。
+- 后端 `--realtime`（WebSocket）/OT 仍是占位；当前产品使用新增的 HTTP 命令 API + 命令 SSE + 20Hz 遥测 SSE 模拟实现，WebSocket 生产传输可后续替换同契约。
+- Worker 高频路径已接模拟遥测 SSE 并供渲染 frame loop 读取；SharedArrayBuffer/COOP-COEP 未启用。
+- GPU 门禁是单机 headless Chrome 基线，不是生产设备矩阵；多 FAB UI 已数据驱动，当前产品数据仍为单 FAB。

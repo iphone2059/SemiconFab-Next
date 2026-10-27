@@ -1,11 +1,11 @@
 import { useTwinLocale } from './twin-i18n';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { useRuntimeStore, runtimeActions } from './state/runtimeStore';
-import { createCoalescedDispatcher } from './state/telemetry-buffer';
-import type { FabDto, SiteDto } from './contracts';
-import { bindViewerZoom } from './viewer-zoom';
-import { SceneFacade, type AmhsStats, type CutAxis, type HoveredTool, type PickedTool, type SceneLayer, type SceneViewPreset, type XRayFilter } from './fab-scene';
-import { FAB_TOOL_STATE_META, type FabToolState } from './fab-layout';
+import { useRuntimeStore, runtimeActions } from '../../state/runtimeStore';
+import { createCoalescedDispatcher } from '../../state/telemetry-buffer';
+import type { FabDto, SiteDto } from '../../contracts';
+import { bindViewerZoom } from '../../viewer-zoom';
+import { SceneFacade, type AmhsStats, type CutAxis, type HoveredTool, type PickedTool, type SceneLayer, type SceneViewPreset, type XRayFilter } from '../../fab-scene';
+import { FAB_TOOL_STATE_META, type FabToolState } from '../../fab-layout';
 
 export interface FabViewportProps {
   site: SiteDto;
@@ -81,7 +81,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
     };
     window.addEventListener('keydown', onKeyDown);
     let scene: SceneFacade | undefined;
-    void import('./lite-backend')
+    void import('../../lite-backend')
       .then(({ createLiteBackend }) => {
         if (controller.signal.aborted) return;
         scene = new SceneFacade(createLiteBackend());

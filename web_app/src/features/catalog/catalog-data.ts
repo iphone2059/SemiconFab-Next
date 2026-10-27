@@ -1,4 +1,4 @@
-import type { CatalogEntryDto } from './contracts';
+import type { CatalogEntryDto } from '../../contracts';
 
 export type CatalogDomain = 'ALL' | 'FAB' | 'OSAT';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

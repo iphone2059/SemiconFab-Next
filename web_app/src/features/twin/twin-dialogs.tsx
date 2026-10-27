@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTwinLocale } from './twin-i18n';
-import { ORIGINAL_TWIN_UI, filterOriginalOem, type OriginalOem } from './original-twin-data';
-import { useTwinPageStore, twinPageActions } from './state/twinPageStore';
-import { useDialogFocusTrap } from './dialog-focus';
+import { ORIGINAL_TWIN_UI, filterOriginalOem, type OriginalOem } from '../../original-twin-data';
+import { useTwinPageStore, twinPageActions } from '../../state/twinPageStore';
+import { useDialogFocusTrap } from '../../dialog-focus';
 
 const ARCH_LAYERS = [
   {

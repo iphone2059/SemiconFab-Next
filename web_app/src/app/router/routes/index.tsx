@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { sitesQueryOptions } from '../../../api/queries/sites.queries';
-import WorkbenchApp from '../../../workbench';
+import WorkbenchApp from '../../../features/workbench/workbench';
 
 /**
  * Canonical workbench URL. The Query cache is warmed here so WorkbenchApp renders

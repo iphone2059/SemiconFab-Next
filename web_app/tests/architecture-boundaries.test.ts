@@ -65,6 +65,18 @@ it('M5b: the legacy src/render directory is gone and rendering/lite exists', () 
   expect(statSync(join(sourceRoot, 'rendering', 'lite')).isDirectory()).toBe(true);
 });
 
+it('M5c: page modules live under features/ and shared UI under components/', () => {
+  for (const directory of ['features/twin', 'features/catalog', 'features/workbench']) {
+    expect(statSync(join(sourceRoot, directory)).isDirectory()).toBe(true);
+  }
+  for (const file of ['ui.tsx', 'widgets.tsx', 'charting.tsx', 'error-boundary.tsx']) {
+    expect(statSync(join(sourceRoot, 'components', file)).isFile()).toBe(true);
+  }
+  for (const legacy of ['twin-page.tsx', 'catalog-page.tsx', 'workbench.tsx', 'ui.tsx']) {
+    expect(() => statSync(join(sourceRoot, legacy))).toThrow();
+  }
+});
+
 it('ARCH-08: the public CommandWorkflow contract is defined only once', () => {
   const declarations = files('application').filter((file) =>
     readFileSync(file, 'utf8').includes('export interface CommandWorkflow '),

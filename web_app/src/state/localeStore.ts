@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { TwinLanguage } from '../twin-i18n';
+import type { TwinLanguage } from '../features/twin/twin-i18n';
 import { readPreferences, readTwinLanguage, type Preferences } from '../preferences';
 
 function initialLocale(): Preferences {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { CatalogDomain } from '../../catalog-data';
+import type { CatalogDomain } from '../../features/catalog/catalog-data';
 
 /**
  * Search params parsed on every canonical route. Every known key is optional and

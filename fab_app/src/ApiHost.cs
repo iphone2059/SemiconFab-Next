@@ -12,6 +12,8 @@ namespace Fab.App;
 
 internal static class ApiHost
 {
+    private static readonly System.Text.Json.JsonSerializerOptions SseJsonOptions = new(System.Text.Json.JsonSerializerDefaults.Web);
+
     public static async Task RunAsync(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
@@ -25,6 +27,8 @@ internal static class ApiHost
         var data = Path.GetFullPath(builder.Configuration["Fab:DataDirectory"] ?? Path.Combine(builder.Environment.ContentRootPath, ".local", "data"));
         builder.Services.AddSingleton(new SiteDirectory());
         builder.Services.AddSingleton<EquipmentStatusService>();
+        builder.Services.AddSingleton<EquipmentCommandService>();
+        builder.Services.AddSingleton<TelemetrySimulationService>();
         builder.Services.AddSingleton(new CatalogService(Path.GetFullPath(builder.Configuration["Fab:CatalogDirectory"]
             ?? Path.Combine(AppContext.BaseDirectory, "assets", "legacy"))));
         builder.Services.AddLocalOrchestration(data);
@@ -84,6 +88,86 @@ internal static class ApiHost
                     await context.Response.WriteAsync($"data: {json}\n\n", cancellationToken);
                     await context.Response.Body.FlushAsync(cancellationToken);
                     await Task.Delay(TimeSpan.FromSeconds(4), cancellationToken);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Client disconnected.
+            }
+        });
+        api.MapPost("/sites/{siteId:guid}/commands", (Guid siteId, EquipmentCommandRequest? request, EquipmentCommandService commands) =>
+        {
+            if (!EquipmentCommandService.TryValidate(request, out var error))
+                return Results.Problem(statusCode: 400, title: "Invalid command request", detail: error);
+            var result = commands.Submit(siteId, request!);
+            return result.Status switch
+            {
+                EquipmentCommandSubmitStatus.UnknownSite => Results.Problem(statusCode: 404, title: "Site not found"),
+                EquipmentCommandSubmitStatus.UnknownFab => Results.Problem(statusCode: 404, title: "FAB not found in Site"),
+                _ => Results.Accepted($"/api/v1/commands/{result.Command!.CommandId}", result.Command)
+            };
+        });
+        api.MapGet("/commands/{commandId:guid}", (Guid commandId, EquipmentCommandService commands) =>
+            commands.Get(commandId) is { } command
+                ? Results.Ok(command)
+                : Results.Problem(statusCode: 404, title: "Command not found"));
+        api.MapGet("/sites/{siteId:guid}/commands/stream", async (Guid siteId, EquipmentCommandService commands, SiteDirectory directory, HttpContext context, CancellationToken cancellationToken) =>
+        {
+            if (!directory.TryGetSite(siteId, out _))
+            {
+                await Results.Problem(statusCode: 404, title: "Site not found").ExecuteAsync(context);
+                return;
+            }
+            context.Response.Headers.ContentType = "text/event-stream";
+            context.Response.Headers.CacheControl = "no-cache";
+            context.Response.Headers.Connection = "keep-alive";
+            context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
+            var sequence = 0L;
+            try
+            {
+                await context.Response.StartAsync(cancellationToken);
+                await context.Response.Body.FlushAsync(cancellationToken);
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    var pending = commands.ReadJournalSince(siteId, sequence);
+                    foreach (var envelope in pending)
+                    {
+                        var json = System.Text.Json.JsonSerializer.Serialize(envelope, SseJsonOptions);
+                        await context.Response.WriteAsync($"data: {json}\n\n", cancellationToken);
+                        sequence = envelope.Sequence;
+                    }
+                    if (pending.Length > 0) await context.Response.Body.FlushAsync(cancellationToken);
+                    await Task.Delay(TimeSpan.FromMilliseconds(EquipmentCommandService.StreamPollMilliseconds), cancellationToken);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Client disconnected.
+            }
+        });
+        api.MapGet("/sites/{siteId:guid}/telemetry/stream", async (Guid siteId, TelemetrySimulationService telemetry, HttpContext context, CancellationToken cancellationToken) =>
+        {
+            if (!telemetry.TryGetFabId(siteId, out var fabId))
+            {
+                await Results.Problem(statusCode: 404, title: "Site not found").ExecuteAsync(context);
+                return;
+            }
+            context.Response.Headers.ContentType = "text/event-stream";
+            context.Response.Headers.CacheControl = "no-cache";
+            context.Response.Headers.Connection = "keep-alive";
+            context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
+            var sequence = 0L;
+            try
+            {
+                await context.Response.StartAsync(cancellationToken);
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    sequence++;
+                    var frame = telemetry.CreateFrame(fabId, sequence);
+                    var json = System.Text.Json.JsonSerializer.Serialize(frame, SseJsonOptions);
+                    await context.Response.WriteAsync($"data: {json}\n\n", cancellationToken);
+                    await context.Response.Body.FlushAsync(cancellationToken);
+                    await Task.Delay(TimeSpan.FromMilliseconds(TelemetrySimulationService.FrameIntervalMilliseconds), cancellationToken);
                 }
             }
             catch (OperationCanceledException)

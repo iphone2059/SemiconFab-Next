@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { ErrorBoundary } from '../../error-boundary';
+import { ErrorBoundary } from '../../components/error-boundary';
 import { QueryProvider } from './QueryProvider';
 import { RuntimeBootstrap } from './RuntimeBootstrap';
 

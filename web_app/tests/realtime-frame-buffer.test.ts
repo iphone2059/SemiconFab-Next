@@ -29,9 +29,9 @@ it('rejects malformed frames and invalid targets', () => {
 
 it('handles worker commands without touching application state', () => {
   const handler = createTelemetryWorkerHandler({ capacity: 2, frameSize: 2 });
-  expect(handler.handle({ type: 'frame', sequence: 0, values: [1, 2] })).toEqual({ type: 'frame-written', sequence: 0, dropped: 0 });
-  expect(handler.handle({ type: 'frame', sequence: 1, values: [3, 4] })).toEqual({ type: 'frame-written', sequence: 1, dropped: 0 });
-  expect(handler.handle({ type: 'frame', sequence: 2, values: [5, 6] })).toEqual({ type: 'frame-written', sequence: 2, dropped: 1 });
+  expect(handler.handle({ type: 'frame', sequence: 0, values: [1, 2] })).toEqual({ type: 'frame-written', sequence: 0, dropped: 0, latest: [1, 2] });
+  expect(handler.handle({ type: 'frame', sequence: 1, values: [3, 4] })).toEqual({ type: 'frame-written', sequence: 1, dropped: 0, latest: [3, 4] });
+  expect(handler.handle({ type: 'frame', sequence: 2, values: [5, 6] })).toEqual({ type: 'frame-written', sequence: 2, dropped: 1, latest: [5, 6] });
   expect(handler.handle({ type: 'snapshot' })).toEqual({ type: 'snapshot', sequence: 2, values: [5, 6] });
   expect(handler.handle({ type: 'frame', sequence: 3, values: [7] })).toBeUndefined();
   expect(handler.handle({ type: 'frame', sequence: 4, values: [Number.NaN] })).toBeUndefined();

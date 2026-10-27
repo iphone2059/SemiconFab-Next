@@ -1,6 +1,6 @@
 import { createRootRouteWithContext, Outlet, type ErrorComponentProps } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
-import { ErrorBoundary } from '../../../error-boundary';
+import { ErrorBoundary } from '../../../components/error-boundary';
 import { routerSearchSchema } from '../search';
 
 export interface RouterContext {

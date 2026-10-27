@@ -1,10 +1,10 @@
 # 命令事件桥（Command Event Bridge）
 
 - 版本：V2.1 / 2026-10-27
-- 状态：**M3/M4 已实现（假源/测试源验证）**（M3/M4 implemented / real backend pending）
+- 状态：**已实现并接入模拟后端 HTTP/SSE**（implemented / simulated backend）
 - 依据：[ADR-0010](adr/0010-command-event-bridge.md)；总览见 [架构基线](architecture.md)；恢复细节见 [命令核对](command-reconciliation.md)；上层协议见 [实时协议](realtime-protocol.md)；装配见 [FAB 运行时](fab-runtime.md)
-- 当前实现：Bridge/恢复/契约已实现；XState v6 工作流与 FabRuntime 装配在 M4 完成（`runtime/commands`、`runtime`）；真实 WebSocket 与后端命令状态端点仍缺，设备状态仍走 SSE -> Zustand/Query。
-- 门禁：CE-01..CE-08 已在假源/假 gateway/三 FAB 测试源上 PASS；真实生产链路待后端。
+- 当前实现：Bridge/恢复/契约与 XState/FabRuntime 已实现；`RuntimeBootstrap` 接入后端模拟命令 API/SSE 与权威查询；Workbench 有命令提交面板。WebSocket 生产传输仍缺。
+- 门禁：CE-01..CE-08 已在测试源/模拟后端 PASS；浏览器 e2e 命令链路已验证。
 
 ## 1. 定位
 

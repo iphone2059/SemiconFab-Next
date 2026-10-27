@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, type PropsWithChildren } from 'react';
-import { useLocaleStore, localeActions } from './state/localeStore';
-import { TWIN_EN } from './twin-translations';
-import { GENERATED_TWIN_EN } from './twin-translations.generated';
-import { languageTag } from './preferences';
+import { useLocaleStore, localeActions } from '../../state/localeStore';
+import { TWIN_EN } from '../../twin-translations';
+import { GENERATED_TWIN_EN } from '../../twin-translations.generated';
+import { languageTag } from '../../preferences';
 
 export type TwinLanguage = 'zh' | 'en';
 export function persistTwinLanguage(storage: Pick<Storage, 'setItem'>, language: TwinLanguage): void {

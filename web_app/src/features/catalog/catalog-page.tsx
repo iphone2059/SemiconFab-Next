@@ -7,10 +7,10 @@ import {
   type MouseEvent,
 } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { catalogActions, useCatalogStore } from './state/catalogStore';
-import { localeActions, useLocaleStore } from './state/localeStore';
-import { catalogQueryOptions } from './api/queries/catalog.queries';
-import type { CatalogEntryDto } from './contracts';
+import { catalogActions, useCatalogStore } from '../../state/catalogStore';
+import { localeActions, useLocaleStore } from '../../state/localeStore';
+import { catalogQueryOptions } from '../../api/queries/catalog.queries';
+import type { CatalogEntryDto } from '../../contracts';
 import {
   catalogFields,
   filterCatalog,
@@ -18,15 +18,15 @@ import {
   safeExternalUrl,
   type CatalogField,
 } from './catalog-data';
-import { languageTag, readPreferences, type Preferences } from './preferences';
+import { languageTag, readPreferences, type Preferences } from '../../preferences';
 import {
   catalogSearchFrom,
   catalogSearchPatch,
   searchToQueryString,
   type RouterSearch,
-} from './app/router/search';
-import '../assets/catalog.css';
-import legacyLicenseUrl from '../assets/legacy-LICENSE.txt?url';
+} from '../../app/router/search';
+import '../../../assets/catalog.css';
+import legacyLicenseUrl from '../../../assets/legacy-LICENSE.txt';
 
 type Language = Preferences['language'];
 const text = (language: Language, zh: string, en: string) => (language === 'zh' ? zh : en);

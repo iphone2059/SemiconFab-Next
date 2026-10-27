@@ -1,5 +1,5 @@
 import { createElement, type CSSProperties, type ReactNode } from 'react';
-import source from '../assets/original-elevations.json';
+import source from '../../../assets/original-elevations.json';
 
 interface SvgNode { tag:string;attrs:Record<string,string>;children:(SvgNode|string)[] }
 const graphics:Readonly<Record<string,SvgNode>>=source as unknown as Record<string,SvgNode>;

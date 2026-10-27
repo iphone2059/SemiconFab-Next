@@ -1,5 +1,5 @@
 import type { CatalogEntryDto } from '../contracts';
-import type { CatalogDomain } from '../catalog-data';
+import type { CatalogDomain } from '../features/catalog/catalog-data';
 import { createSliceStore } from './createSliceStore';
 
 export interface CatalogState {

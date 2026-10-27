@@ -1,7 +1,7 @@
 import reference from '../assets/original-twin-ui.json';
 import { FAB_LAYOUT, type FabToolState } from './fab-layout';
 import { originalLayoutRenderOrder, TWIN_LAYOUT_IDENTITIES } from './layout-identities';
-import type { TwinLanguage } from './twin-i18n';
+import type { TwinLanguage } from './features/twin/twin-i18n';
 
 export interface OriginalEquipment {
   id: string; name: string; brand: string; model: string; category: string; categoryName: string;

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { TwinPage } from '../../../../../twin-page';
+import { TwinPage } from '../../../../../features/twin/twin-page';
 import { requireFabSites } from '../../../route-data';
 import type { RouterSearch } from '../../../search';
 

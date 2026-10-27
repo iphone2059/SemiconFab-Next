@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { CatalogPage } from '../../../../catalog-page';
+import { CatalogPage } from '../../../../features/catalog/catalog-page';
 import type { RouterSearch } from '../../search';
 
 /** Canonical equipment catalog URL. The router owns URL/search state. */

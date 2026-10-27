@@ -1,20 +1,22 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { CommandWorkflowProjection } from '../../application/contracts/CommandWorkflow';
 import type { FabRuntimeRegistry } from '../../runtime/FabRuntimeRegistry';
 
-const FabRuntimeContext = createContext<FabRuntimeRegistry | null>(null);
+interface RuntimeContextValue {
+  readonly registry: FabRuntimeRegistry;
+  /** Bumped when the bootstrap finishes assembling runtimes. */
+  readonly version: number;
+}
 
-/**
- * Exposes the assembled FAB runtime registry to the React tree. RuntimeBootstrap
- * mounts this in the product; tests may render components without it (hooks
- * return null/undefined).
- */
-export function RuntimeProvider({ registry, children }: { registry: FabRuntimeRegistry; children: ReactNode }) {
-  return <FabRuntimeContext.Provider value={registry}>{children}</FabRuntimeContext.Provider>;
+const FabRuntimeContext = createContext<RuntimeContextValue | null>(null);
+
+export function RuntimeProvider({ registry, version = 0, children }: { registry: FabRuntimeRegistry; version?: number; children: ReactNode }) {
+  const value = useMemo(() => ({ registry, version }), [registry, version]);
+  return <FabRuntimeContext.Provider value={value}>{children}</FabRuntimeContext.Provider>;
 }
 
 export function useFabRuntimeRegistry(): FabRuntimeRegistry | null {
-  return useContext(FabRuntimeContext);
+  return useContext(FabRuntimeContext)?.registry ?? null;
 }
 
 /**

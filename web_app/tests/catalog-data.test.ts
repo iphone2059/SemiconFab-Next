@@ -5,7 +5,7 @@ import {
   filterCatalog,
   parseCatalogEntries,
   safeExternalUrl,
-} from '../src/catalog-data';
+} from '../src/features/catalog/catalog-data';
 import { catalogSearchFrom } from '../src/app/router/search';
 
 const pointer = JSON.parse(

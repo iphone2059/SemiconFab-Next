@@ -1,12 +1,12 @@
 # SemiconFab Next V2.1 架构基线
 
 - 版本：V2.1（2026-10-27）
-- 状态：**基线已采纳；M1–M5 已落地并验证；M6 清理收口已完成（旧迁移文档/证据/parity 工具与测试删除，旧路径/依赖/XState 边界检查可执行）**（M1-M6 implemented / legacy migration assets removed）
+- 状态：**基线已采纳；M1–M6 已落地并验证；M6 后补：页面级 features/components 归位、后端模拟命令+遥测链路、Worker 渲染接线与真实 GPU 性能门禁已完成**（M1-M6 implemented / real simulated backend + GPU gate）
 - 适用对象：`web_app` 前端架构。后端 `fab_app`/`fab_shared` 的项目与命名空间边界沿用 ADR-0001…ADR-0007
 - 权威决策：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0010](adr/0010-command-event-bridge.md)（实时/命令/工作流边界）；本文档负责汇总、目录结构与迁移计划
 - 当前实现事实：所有 HTTP 端点由 TanStack Query 独占；客户端 UI 状态由 5 个 Zustand store（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale 归属其中）独占；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已全部删除；XState 工作流已接入，实现位于 `runtime/commands` 并经 `CommandWorkflow` 契约暴露（位置不构成架构约束）。详细证据见 [实施状态](IMPLEMENTATION-STATUS.md)、§15–§17。
 
-> RQ-01..RQ-05、CE-01..CE-08 均已真实运行（测试源/假 gateway，见 §12.2）；性能门禁仍为 **SPECIFIED / NOT RUN**。任何“已通过/已验证”的表述都必须指向真实测试记录。
+> RQ-01..RQ-05、CE-01..CE-08、ARCH 检查与真实 Chrome/WebGPU 性能门禁均已真实运行（见 §12.2/§26）；任何“已通过/已验证”的表述都必须指向真实测试记录。
 
 ## 1. 基线与范围
 
@@ -276,16 +276,16 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | 路由 | TanStack Router 接管顶层路由/URL/search；生成式路由树 + 最终 URL（M1）；旧地址与重定向已删除（M2）；目录筛选、compare、Twin 的 siteId/modal/mode/lang/theme 已由 Router search 拥有（M2c） | TanStack Router + 类型化 URL + intent 预加载 | M1/M2 | **M1/M2 PASS** |
 | HTTP 服务端缓存 | 全部端点已由 TanStack Query 独占（M2a）；RTK Query/api.ts 已删除，无双缓存 | TanStack Query 唯一缓存；loader 复用 Query Options | M1/M2 | **M2a PASS** |
 | 客户端状态 | 5 个 Zustand store（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale 字段）承载 UI 状态；Redux/react-redux 已删除 | Zustand/组件局部；不复制 Query 数据 | M2b | **M2b PASS** |
-| 实时推送 | 设备状态 SSE（产品链路）+ 类型化流契约与假源（M3）；真实 WebSocket 服务仍未接入 | WebSocket -> Decoder -> RxJS -> 类型化流 | M3/M4 | **M3/M4 PASS（假源）；真实后端仍缺** |
-| 命令链路 | 契约 + Bridge + 恢复 + XState v6 工作流 + FabRuntime/Factory/Registry/Lifecycle；M5a 已挂入 AppProviders（每 FAB 一个 runtime，空/可替换命令源），Workbench 显示 runtime/FAB 选择；真实后端命令流未接 | CommandEventBridge + CommandWorkflow + 恢复 | M3/M4/M5 | **M4 PASS；M5a 产品接线完成；真实命令链路待后端** |
+| 实时推送 | 设备状态 SSE + 后端模拟命令/遥测 SSE（20Hz）已接入产品；类型化流解码/序列/桥接 M3 已验证；WebSocket 传输仍可后续替换 | WebSocket/SSE -> Decoder -> RxJS -> 类型化流 | M3/M4/M5c | **PASS（HTTP/SSE 模拟后端）；WebSocket 未接** |
+| 命令链路 | 契约 + Bridge + 恢复 + XState 工作流 + FabRuntime；M5c 接入后端模拟命令 API（POST/GET/SSE）与 Workbench 命令面板；浏览器实测 accepted→executing→succeeded；WebSocket 生产链路可后续替换 | CommandEventBridge + CommandWorkflow + 恢复 | M3/M4/M5c | **PASS（HTTP/SSE 模拟后端 + 浏览器 e2e）；WebSocket 未接** |
 | XState | 未安装/未使用 | XState v6（隐藏在 `CommandWorkflow` 后） | M4 | 未开始 |
 | FabRuntime | 无；单站点页面直接装配 | `FabRuntime` 等四件套，按 FAB 装配/销毁 | M4 | 未开始 |
 | 多 FAB | 产品为单 FAB（121 台设备布局，`fab-layout.ts`） | 三 FAB 隔离：独立 actor、订阅、复合身份 | M4 | 未开始（依赖产品/后端） |
-| 高频遥测 | `realtime/buffers` FrameRingBuffer（TypedArray）+ Worker handler/entry 已实现（M5b）；现有 UI 合批仍用 `state/telemetry-buffer.ts` | Worker/TypedArray -> Babylon Lite，不进 Query/Zustand/XState | M5b | **M5b PASS（缓冲/Worker 骨架 + CPU 基线）**；真实遥测源/渲染消费接线待后续 |
-| 渲染 | Babylon Lite 1.36 已在 `src/rendering/lite`（M5b 目录归位），WebGPU-only 校验已有 | 保留；渲染目录归位 `rendering` | M5 | **M5b PASS（目录归位）**；GPU/浏览器性能门禁待补 |
+| 高频遥测 | 后端 20Hz 遥测 SSE → TelemetryRuntime → Worker FrameRingBuffer → 渲染 frame loop 读取 tool states；不经 Query/Zustand/XState（ARCH-11） | Worker/TypedArray -> Babylon Lite | M5b/M5c | **PASS（模拟后端 + Worker + 渲染接线）**；SharedArrayBuffer/COOP-COEP 未启用 |
+| 渲染 | Babylon Lite 1.36 在 `src/rendering/lite`（M5b 目录归位），WebGPU-only；M5c 真实浏览器 WebGPU 性能门禁已运行 | 保留 | M5/M5c | **PASS（目录归位 + Chrome WebGPU 门禁）** |
 | 依赖 | TanStack Router 1.170.46 / Query 5.105.0 / Router plugin 1.168.48、Zustand 5.0.16、RxJS 7.8.2、Zod 4.6.7、XState v6；jsdom 30.1.3 + Testing Library（dev）；Redux/react-redux 已移除 | 按阶段引入并锁版本；XState 实现经契约隔离 | M1..M4 | M2b 已移除 Redux；XState v6 已接入 |
-| 测试基建 | Vitest + jsdom + Testing Library；RQ-01..05、Zustand store、Router search 映射已真实运行 | RQ/CE 集成与契约测试；性能测试目录 | M1 起 | **M1/M2a/M2b/M2c PASS**；CE/性能未开始 |
-| 架构检查 | `tools/check_architecture.py` 只查既有前端边界（TS/TSX、禁止 WebGL、单 web_app） | 增加 ARCH 依赖方向/双缓存/契约位置检查 | M6 | 未开始 |
+| 测试基建 | Vitest + jsdom + Testing Library；RQ/CE/架构/传输/Worker 测试真实运行；真实 GPU 性能脚本 | 契约/集成 + CPU/GPU 性能门禁 | M1 起 | **M1–M5 PASS；GPU 门禁已运行** |
+| 架构检查 | `tools/check_architecture.py` 检查终态路径/依赖/ARCH-11；Vitest 检查 ARCH-06/07/08 契约边界与 features 归位 | 可执行检查 | M6 | **PASS（实际运行）** |
 | 文档 | V2.1 基线 + ADR-0009/0010 + 7 篇专项已合入 main（e18595f）；本文档补充 M1 证据 | 本基线 + ADR-0009/0010 + 7 篇专项 | M0 | **M0 PASS；M1 增量已更新** |
 
 ## 10. 分阶段迁移计划
@@ -345,16 +345,16 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | CE-03 | 乱序事件不回退 | 同上 | **PASS（M3 假源）** |
 | CE-04 | 确认先于 HTTP 响应仍关联 | 同上 | **PASS（M3 假源；真实 WS/HTTP 竞态 M4）** |
 | CE-05 | actor 缺失时通过核对恢复 | 同上 + `tests/contract/command-recovery.test.ts` | **PASS（M3 假源/假 gateway）** |
-| CE-06 | 重连后通过后端权威查询收敛 | `tests/contract/command-workflow.test.ts`、`tests/integration/fab-runtime.test.ts` | **PASS（M4 假 gateway）** |
+| CE-06 | 重连后通过后端权威查询收敛 | `tests/contract/command-workflow.test.ts`、`tests/integration/fab-runtime.test.ts`、真实后端 `GET /api/v1/commands/{id}` | **PASS（测试源 + 模拟后端端点已接）** |
 | CE-07 | 三 FAB 相同 commandId 隔离 | `tests/integration/fab-runtime.test.ts` | **PASS（M4 三 FAB 测试源）** |
 | CE-08 | Runtime 关闭后取消订阅/停止 actor | `tests/integration/command-event-bridge.test.ts`、`tests/integration/fab-runtime.test.ts` | **PASS（M4 FabRuntime 生命周期）** |
-| 性能 | 渲染/高频路径帧预算与帧率 | `web_app/tests/performance` | SPECIFIED / NOT RUN |
+| 性能 | 渲染/高频路径帧预算与帧率 | `web_app/tests/performance`、`tools/render_perf.mjs` | **PASS（CPU TypedArray 基线 + Chrome WebGPU 门禁：179 frames，p95 8.5ms）** |
 
 ### 12.3 当前测试基建事实
 
 - 已安装 jsdom 30.1.3、@testing-library/react 16.3.3、TanStack Router/Query、Zustand、XState v6、RxJS、Zod，并建立 `web_app/tests/integration`。
-- RQ-01..RQ-05、CE-01..CE-08、ARCH-01..12 的静态检查与产品装配测试均在真实运行；M6 与后续 XState 目录规则调整后共 **60 文件 / 265 测试 PASS**。
-- CE-06 的生产链路、真实遥测 Worker 接线与 GPU/浏览器性能门禁仍缺；CPU TypedArray 基线已有。
+- RQ/CE/ARCH 与产品装配测试真实运行：前端 **61 文件 / 271 测试 PASS**；后端 **73/73 PASS**；真实 Chrome WebGPU 性能门禁已运行。
+- 剩余边界：WebSocket 生产传输、SharedArrayBuffer/COOP-COEP、后端非模拟实现；见 §24/§26。
 
 ## 13. 文档地图
 
@@ -582,7 +582,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 - **目录归位**：`web_app/src/render/` → `web_app/src/rendering/`（git mv，所有 src/tests/tools 导入同步）；旧 `src/render/` 不存在，架构检查新增 M5b 断言。
 - **TypedArray 高频缓冲**：`realtime/buffers/FrameRingBuffer.ts`（固定容量 Float32Array 环形缓冲、单调 sequence、latest/按序列读取、drop 统计）。
-- **Worker 路径**：`realtime/workers/telemetryWorker.logic.ts`（纯 handler，输入校验 + FrameRingBuffer，不依赖 React/Query/Zustand/XState）、`telemetryWorker.ts` Worker 入口（未装配，等待真实遥测源/COOP-COEP）。
+- **Worker 路径**：`realtime/workers/telemetryWorker.logic.ts`（纯 handler，输入校验 + FrameRingBuffer，不依赖 React/Query/Zustand/XState）、`telemetryWorker.ts` Worker 入口（M5c 已接模拟后端遥测并接入渲染，见 §26）。
 - **ARCH-11 静态检查**：`architecture-boundaries.test.ts` 断言 realtime/buffers、realtime/workers、rendering 不 import React/TanStack Query/Zustand/XState/application 状态层。
 - **性能基线**：`tests/performance/telemetry-frame-buffer.test.ts` 记录桌面 CPU 写路径基线（本次 100k frames × 8 floats ≈ 1.8 ms，约 56M frames/s）并设 5s 回归上限；不是 GPU/WebGPU 性能证据。
 
@@ -594,7 +594,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ### 22.3 遗留
 
 - **真实高频链路未接**：Worker 入口未被产品引用；遥测源/SharedArrayBuffer/COOP-COEP 策略（OPEN-V21-14）与渲染器消费 TypedArray 的接线未做。
-- **GPU/浏览器性能门禁**：现只有 CPU 缓冲基线；WebGPU 帧时间/显存/长任务门禁需真实浏览器/GPU 证据。
+- **GPU/浏览器性能门禁**：M5b 时只有 CPU 缓冲基线；M5c 已补真实 Chrome/WebGPU 门禁（§26）。
 - `features` 目录与页面级 feature 归位尚未做（M5 范围剩余部分）；真实后端实时命令流仍缺。
 ## 23. M6 落地记录：收口与退役（2026-10-27）
 
@@ -622,13 +622,14 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ### 23.4 证据
 
 - `./scripts/verify.ps1` exit 0；`tsc --noEmit` 0；Vitest **60 文件 / 265 测试 PASS**；`vite build` 0；.NET 67/67；8 个 Python 工具测试；契约/架构检查 PASS。
-- 仍存在的边界：真实后端命令流/命令状态端点、真实遥测 Worker 接线、GPU/浏览器性能门禁；见 §24 已知边界。
+- 仍存在的边界：真实 WebSocket 生产传输、SharedArrayBuffer/COOP-COEP、非模拟后端；见 §24/§26。
 ## 24. 最终已知边界（M6 后）
 
-- **后端实时命令链路**：`fab_app -- --realtime` 仍是占位（退出码 2），没有 WebSocket 命令流/命令状态查询端点；产品 `RuntimeBootstrap` 使用空/可替换命令源，命令提交 UI 未提供。CE-06 的生产证据需后端就绪。
-- **Worker/遥测接线**：`FrameRingBuffer`、Worker handler/entry 与 CPU 基线已完成；真实遥测源、SharedArrayBuffer/COOP-COEP（OPEN-V21-14）与渲染器消费尚未接线。
-- **GPU/浏览器性能门禁**：当前只有 CPU TypedArray 基线；WebGPU 帧时间/显存/长任务门禁需真实 GPU 浏览器环境。
-- **目录收口**：`rendering/lite` 已归位；页面级 `features/` 目录迁移未作为功能交付执行，页面仍位于 `web_app/src` 顶层，按现有相对导入工作。
+- **后端传输**：`fab_app -- --realtime`（WebSocket）仍是占位；M5c 已增加 HTTP 命令 API + 命令 SSE + 20Hz 遥测 SSE 模拟实现，产品已接入并完成浏览器 e2e。WebSocket 生产传输可后续替换同契约。
+- **后端状态**：命令/遥测状态为内存模拟，重启丢失；非模拟后端与持久恢复仍待真实服务。
+- **Worker/遥测接线**：M5c 已完成 20Hz 模拟遥测 SSE → Worker → FrameRingBuffer → 渲染 frame loop 读取；SharedArrayBuffer/COOP-COEP（OPEN-V21-14）未启用。
+- **GPU/浏览器性能门禁**：已运行 Chrome 155 headless WebGPU 门禁（桌面 GPU）；生产设备矩阵/显存/长任务门禁仍待扩展。
+- **目录收口**：`rendering/lite`、页面级 `features/{twin,catalog,workbench}`、共享 `components/` 已归位；旧顶层页面文件已删除。
 - **XState**：实现位于 `runtime/commands`，经 `CommandWorkflow` 契约暴露；位置不强制，升级实现需重跑 workflow/contract 测试。
 - **历史保留**：旧代码与旧迁移证据已从工作树删除，但保留在 Git 历史中；仓库只有一个 `main` 分支，无旧 URL 重定向。
 ## 25. M6 后续调整：保留 CommandWorkflow 契约，取消 XState 目录强制（2026-10-27）
@@ -650,6 +651,43 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ### 25.3 验证
 
 - `tsc --noEmit` 0；Vitest **60 文件 / 265 测试 PASS**（架构测试由 7 条减为 5 条）；`vite build` 0；契约/架构检查 PASS。
+## 26. M5c/后续落地：features 归位 + 模拟后端真实链路 + Worker 渲染接线 + GPU 门禁（2026-10-27）
+
+> 本轮把用户列出的三个剩余项处理完：页面 features 目录迁移、后端命令/遥测链路（用后端模拟实现）、Worker/遥测渲染接线与真实浏览器 GPU 性能门禁。
+
+### 26.1 features/components 归位
+
+- 页面模块迁入 `features/twin/`（twin-page、sidebar、dialogs、elevation、inspector、i18n、fab-viewer）、`features/catalog/`（catalog-page/data）、`features/workbench/`（workbench + command-console）；共享 UI 迁入 `components/`（ui/widgets/charting/error-boundary）。
+- 旧顶层页面文件删除；所有相对 import（含 asset URL 由脚本解析）重算；`tests/architecture-boundaries.test.ts` 增加 M5c 归位断言。
+
+### 26.2 后端模拟命令/遥测链路
+
+- 后端新增 `EquipmentCommandService`、`TelemetrySimulationService` 与 4 个 `/api/v1` 端点：POST 命令、GET 命令权威状态、命令 SSE、20Hz 遥测 SSE；命令 202 accepted → 150ms executing → 600ms succeeded。
+- 前端新增 `SseCommandEventSource`（复用 MessageDecoder envelope）、`HttpCommandGateway`、`submitEquipmentCommand`、`RuntimeBootstrap` 的 SSE/gateway 接线，以及 Workbench `CommandConsole`；提交后 `trackCommand`，SSE 推进 XState 工作流，面板通过 `useCommandProjection` 只读展示。
+- 浏览器 e2e（Chrome headless，真实 API/SSE）：命令面板从 disabled 到可提交，点击后观察到 accepted → executing → succeeded。
+- 后端测试：**73/73 PASS**（67 既有 + 6 新增）；构建 3 个项目 Release 0 警告。
+
+### 26.3 Worker 遥测与渲染接线
+
+- `TelemetryRuntime`：浏览器 EventSource 接收 20Hz `telemetry.frame` → MessageDecoder → 16 样本 × 2 值压成 32 float → module Worker `telemetryWorker` → FrameRingBuffer → Worker 回传 latest；渲染帧循环通过 `getToolStates()` 读取，不触发 React/Query/Zustand/XState 更新。
+- 浏览器证据：页面存在 dedicated worker target，加载 `telemetryWorker.ts?worker_file&type=module`；后端日志显示遥测 SSE 连接。
+
+### 26.4 真实 GPU/浏览器性能门禁
+
+- 新增 `tools/render_perf.mjs` + `scripts/perf-render.ps1`：启动 headless Chrome（localhost、`--enable-unsafe-webgpu --use-angle=d3d11`），验证 `navigator.gpu`/adapter/canvas，并在真实 3D 路由采集 rAF 帧。
+- 本次运行：Chrome 155，`http://127.0.0.1:5173/fabs/{fabId}/3d`，180 采集帧去除 30 warmup 后 **179 frames，avg 8.61ms、p95 8.5ms、avg 116.1fps、canvas 754×424、WebGPU adapter=true**；证据 `.local/render-perf.json`。
+- 该门禁需本机 GPU/Chrome，不放进 `scripts/verify.ps1`；命令：先 `./scripts/start-dev.ps1`，再 `./scripts/perf-render.ps1 -Url http://127.0.0.1:5173/fabs/{fabId}/3d`。
+
+### 26.5 验证
+
+- 前端 `tsc --noEmit` 0；Vitest **61 文件 / 271 测试 PASS**；`vite build` 0。
+- 后端 73/73；契约/架构检查 PASS；`./scripts/verify.ps1` exit 0（最终状态在提交前复跑）。
+
+### 26.6 剩余边界
+
+- WebSocket 生产传输/非模拟后端仍未接；HTTP/SSE 模拟链路满足当前产品集成。
+- SharedArrayBuffer/COOP-COEP（OPEN-V21-14）未启用；Worker 使用 postMessage。
+- GPU 门禁为单机 headless Chrome 基线，不是生产设备矩阵/显存/长任务门禁。
 ## 附录 A. 关键术语
 
 | 术语 | 含义 |

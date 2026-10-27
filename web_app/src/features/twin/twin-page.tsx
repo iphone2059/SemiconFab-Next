@@ -1,41 +1,42 @@
-import { OriginalIcon } from './original-icons';
+import { OriginalIcon } from '../../original-icons';
 import { useTwinLocale, TwinLocaleProvider } from './twin-i18n';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus, type EquipmentStatusSnapshot } from './equipment-status';
-import { FAB_LAYOUT, FAB_TOOL_STATE_META, type FabToolState } from './fab-layout';
-import type { AmhsStats, CutAxis, PickedTool, SceneLayer, XRayFilter } from './fab-scene';
+import { createOrderedEquipmentStatusConsumer, watchEquipmentStatus, type EquipmentStatusSnapshot } from '../../equipment-status';
+import { FAB_LAYOUT, FAB_TOOL_STATE_META, type FabToolState } from '../../fab-layout';
+import type { AmhsStats, CutAxis, PickedTool, SceneLayer, XRayFilter } from '../../fab-scene';
 import { FabViewport, type FabViewportHandle } from './fab-viewer';
 import { TwinSidebar } from './twin-sidebar';
 import { OriginalInspector } from './twin-inspector';
 import { TwinInfoDialog } from './twin-dialogs';
-import { ORIGINAL_TWIN_UI, type TwinSelection } from './original-twin-data';
-import { ResearchReplay, researchClock } from './research-replay';
-import type { WaferProduct } from './wafer-route';
-import { buildWaferScenario } from './wafer-scenario';
-import { applyMesAction, buildTelemetry, computeSpc, createMesJob, type MesAction, type MesJob } from './process-control';
-import { BIN_COLORS, BIN_LABELS, WM811K_DEFECT_METADATA, generateWaferMap, stdfSummary, theoreticalYieldModels, waferMetrics, type BinCode, type DefectPattern } from './wafer-map';
-import { computeFabYield, DEFAULT_YIELD_INPUT, scenarioStates, YIELD_SCENARIOS, type YieldInput } from './fab-yield';
-import { projectTwinSceneState, type EntryMode, type TwinView as CameraView } from './twin-state';
-import { DEMO_TICK_MS, projectReplayStates, resolveScenario, TWIN_LAYOUT_IDENTITIES } from './twin-equipment';
-import { cleanroomPressureField } from './cleanroom-pressure';
-import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from './original-tour';
-import { buildTourScenario, TOUR_INITIAL_CAMERA, TOUR_INITIAL_TARGET } from './tour-scenario';
-import { createTourTimeline, createWaferTimeline, type TourFrame, type TourTimeline, type WaferTimeline, type WaferHud } from './tour-wafer-timeline';
-import { useTwinUiStore, twinUiActions } from './state/twinUiStore';
-import { readPreferences, languageTag } from './preferences';
-import { searchToQueryString, twinModalFrom, twinModeFrom, twinSiteIdFrom, type RouterSearch } from './app/router/search';
-import { useTwinPageStore, twinPageActions } from './state/twinPageStore';
-import { useTwinDemoStore, twinDemoActions } from './state/twinDemoStore';
-import { useRuntimeStore, runtimeActions } from './state/runtimeStore';
-import { useLocaleStore } from './state/localeStore';
+import { ORIGINAL_TWIN_UI, type TwinSelection } from '../../original-twin-data';
+import { ResearchReplay, researchClock } from '../../research-replay';
+import type { WaferProduct } from '../../wafer-route';
+import { buildWaferScenario } from '../../wafer-scenario';
+import { applyMesAction, buildTelemetry, computeSpc, createMesJob, type MesAction, type MesJob } from '../../process-control';
+import { BIN_COLORS, BIN_LABELS, WM811K_DEFECT_METADATA, generateWaferMap, stdfSummary, theoreticalYieldModels, waferMetrics, type BinCode, type DefectPattern } from '../../wafer-map';
+import { computeFabYield, DEFAULT_YIELD_INPUT, scenarioStates, YIELD_SCENARIOS, type YieldInput } from '../../fab-yield';
+import { projectTwinSceneState, type EntryMode, type TwinView as CameraView } from '../../twin-state';
+import { DEMO_TICK_MS, projectReplayStates, resolveScenario, TWIN_LAYOUT_IDENTITIES } from '../../twin-equipment';
+import { cleanroomPressureField } from '../../cleanroom-pressure';
+import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '../../original-tour';
+import { buildTourScenario, TOUR_INITIAL_CAMERA, TOUR_INITIAL_TARGET } from '../../tour-scenario';
+import { createTourTimeline, createWaferTimeline, type TourFrame, type TourTimeline, type WaferTimeline, type WaferHud } from '../../tour-wafer-timeline';
+import { useTwinUiStore, twinUiActions } from '../../state/twinUiStore';
+import { readPreferences, languageTag } from '../../preferences';
+import { searchToQueryString, twinModalFrom, twinModeFrom, twinSiteIdFrom, type RouterSearch } from '../../app/router/search';
+import { useTwinPageStore, twinPageActions } from '../../state/twinPageStore';
+import { useTwinDemoStore, twinDemoActions } from '../../state/twinDemoStore';
+import { useRuntimeStore, runtimeActions } from '../../state/runtimeStore';
+import { useLocaleStore } from '../../state/localeStore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SiteDto } from './contracts';
-import { sitesQueryOptions } from './api/queries/sites.queries';
-import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from './api/queries/equipment.queries';
-import { researchEventsQueryOptions } from './api/queries/research.queries';
-import { waferRoutesQueryOptions } from './api/queries/wafer.queries';
-import { createCoalescedDispatcher } from './state/telemetry-buffer';
+import type { SiteDto } from '../../contracts';
+import { sitesQueryOptions } from '../../api/queries/sites.queries';
+import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from '../../api/queries/equipment.queries';
+import { researchEventsQueryOptions } from '../../api/queries/research.queries';
+import { waferRoutesQueryOptions } from '../../api/queries/wafer.queries';
+import { createCoalescedDispatcher } from '../../state/telemetry-buffer';
+import { useSiteTelemetry } from '../../app/providers/TelemetryProvider';
 const ONBOARDING_KEY = 'semicon_twin_onboarding_dismissed';
 const ONBOARDING_STEPS = [
   { title: '一个单 FAB 洁净室', body: '121 台设备、双环 OHT、天花板 FFU 与 Subfab 都在同一场景中。' },
@@ -120,6 +121,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const waferFollow = useTwinPageStore(state => state.wafer.follow);
   const { open: ymsOpen, tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, yieldInput, yieldScenario, stdfCopied } = page.yms;
 
+  const telemetry = useSiteTelemetry(siteId ?? undefined);
   const sitesQuery = useQuery(sitesQueryOptions());
   const site = useMemo(() => sitesQuery.data?.find((value) => value.siteId === siteId), [sitesQuery.data, siteId]);
   // TanStack Query owns the server cache (ARCH-02/G-02). The SSE effect below
@@ -362,8 +364,15 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   directToolStates.current = toolStates;
   const getToolStates = useMemo(() => (): readonly FabToolState[] => {
     if (useTwinUiStore.getState().entryMode === 'research') return directToolStates.current;
-    return useTwinUiStore.getState().statusSource === 'demo' ? useTwinDemoStore.getState().states : useTwinPageStore.getState().liveToolStates;
-  }, []);
+    const base = useTwinUiStore.getState().statusSource === 'demo' ? useTwinDemoStore.getState().states : useTwinPageStore.getState().liveToolStates;
+    // Telemetry Worker output is read inside the scene frame loop; no React
+    // state update is involved on the high-frequency path (ARCH-11).
+    const liveTelemetry = telemetry?.getToolStates();
+    if (!liveTelemetry) return base;
+    const merged = [...base];
+    for (let index = 0; index < liveTelemetry.length && index < merged.length; index += 1) merged[index] = liveTelemetry[index];
+    return merged;
+  }, [telemetry]);
 
   const selectedTelemetry = useMemo(() => selected ? buildTelemetry(FAB_LAYOUT[selected.index], selected.index) : undefined, [selected?.index]);
   const selectedSpc = useMemo(() => selectedTelemetry ? computeSpc(selectedTelemetry.history, selectedTelemetry.sensors[0], toolStates[selected?.index ?? 0] === 'down') : undefined, [selectedTelemetry, toolStates, selected?.index]);

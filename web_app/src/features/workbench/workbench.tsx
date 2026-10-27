@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateRunRequest, SiteDto } from './contracts';
-import { Panel, StatusPill } from './ui';
-import { Metric } from './widgets';
-import { CompletionBar } from './charting';
-import { ScopeGate } from './state-sync';
-import { validateScenario } from './scenario';
-import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from './api/queries/runs.queries';
-import { createRun, invalidateRuns } from './api/mutations/runs.mutations';
-import { sitesQueryOptions } from './api/queries/sites.queries';
-import { fab3dPath } from './app/router/url-mapping';
-import { useWorkbenchStore, workbenchActions } from './state/workbenchStore';
-import { useFabRuntimeRegistry } from './app/providers/RuntimeProvider';
+import type { CreateRunRequest, SiteDto } from '../../contracts';
+import { Panel, StatusPill } from '../../components/ui';
+import { Metric } from '../../components/widgets';
+import { CompletionBar } from '../../components/charting';
+import { ScopeGate } from '../../state-sync';
+import { validateScenario } from '../../scenario';
+import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from '../../api/queries/runs.queries';
+import { createRun, invalidateRuns } from '../../api/mutations/runs.mutations';
+import { sitesQueryOptions } from '../../api/queries/sites.queries';
+import { fab3dPath } from '../../app/router/url-mapping';
+import { useWorkbenchStore, workbenchActions } from '../../state/workbenchStore';
+import { useFabRuntimeRegistry } from '../../app/providers/RuntimeProvider';
+import { CommandConsole } from './command-console';
 const message = (error: unknown): string => {
   if (error instanceof Error) return error.message;
   if (error && typeof error === 'object') {
@@ -407,6 +408,7 @@ export default function WorkbenchApp() {
               </button>
             </div>
           )}
+          {site && selectedFab && <CommandConsole siteId={site.siteId} fabId={selectedFab.fabId} />}
           {loading && <div className="empty">正在读取站点…</div>}
           {!loading && !error && !site && <div className="empty">API 未返回可用站点。</div>}
           <div id="runs">{site && <Workbench site={site} key={site.siteId} />}</div>

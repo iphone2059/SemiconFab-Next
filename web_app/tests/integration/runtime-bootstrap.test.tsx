@@ -5,7 +5,7 @@ import { afterEach, expect, it } from 'vitest';
 import { AppProviders } from '../../src/app/providers/AppProviders';
 import { useFabRuntimeRegistry } from '../../src/app/providers/RuntimeProvider';
 import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import WorkbenchApp from '../../src/workbench';
+import WorkbenchApp from '../../src/features/workbench/workbench';
 import type { FabRuntimeRegistry } from '../../src/runtime/FabRuntimeRegistry';
 
 const sites = [{

@@ -1,9 +1,9 @@
 # FAB 运行时（Fab Runtime）
 
 - 版本：V2.1 / 2026-10-27
-- 状态：**M4 已实现（测试源验证；产品接线待 M5）**（M4 implemented / product wiring pending）
+- 状态：**已实现并接入产品（模拟后端命令 SSE/HTTP）**（implemented / simulated backend）
 - 依据：[ADR-0010](adr/0010-command-event-bridge.md)；桥见 [命令事件桥](command-event-bridge.md)；恢复见 [命令核对](command-reconciliation.md)；协议见 [实时协议](realtime-protocol.md)
-- 当前实现：`web_app/src/runtime/` 已有 FabRuntime/Factory/Registry/LifecycleCoordinator；M5a 通过 `RuntimeBootstrap` 挂入 AppProviders，按 sites 为每个 FAB 装配并启停，`RuntimeProvider`/`useCommandProjection` 提供只读投影。命令源当前为空/可替换（`runtime/commandSources.ts`），真实命令流待后端；Workbench 在数据含多 FAB 时显示 FAB 选择器。
+- 当前实现：`web_app/src/runtime/` 已有 FabRuntime/Factory/Registry/LifecycleCoordinator；RuntimeBootstrap 按 sites 为每个 FAB 装配，命令源为后端命令 SSE（`SseCommandEventSource`），gateway 为权威 HTTP 查询；`CommandConsole` 提交并通过 `useCommandProjection` 只读展示。无 EventSource/Worker 的测试环境回退空源 seam。
 
 ## 1. 定位
 

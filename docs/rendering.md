@@ -1,10 +1,10 @@
 # 渲染管线（Rendering）
 
 - 版本：V2.1 / 2026-10-27
-- 状态：**M5b 已完成 rendering/lite 目录归位与 TypedArray/Worker 骨架；真实高频源/渲染消费与 GPU/浏览器性能门禁未完成**（当前使用 Babylon Lite 1.36）
+- 状态：**M5b/M5c 已完成 rendering/lite 归位、遥测 SSE→Worker→渲染接线与真实 Chrome/WebGPU 性能门禁**（当前使用 Babylon Lite 1.36）
 - 依据：[ADR-0010](adr/0010-command-event-bridge.md) 的 `ARCH-11`、[ADR-0003](adr/0003-single-web-app.md) 的 WebGPU-only、宿主规范 [09-WEBGPU-RENDERING](SemiconFab-Next-Engineering-v1.1/09-WEBGPU-RENDERING.md) 与 [15-FRONTEND](SemiconFab-Next-Engineering-v1.1/engineering/15-FRONTEND-AND-WEBGPU-PROJECTS.md)
 - 总览：[架构基线](architecture.md)；状态所有权：[状态管理](state-management.md)；实时协议：[实时协议](realtime-protocol.md)
-- 原版资产署名见 [attribution](attribution.md)。M5b 新增 `realtime/buffers/FrameRingBuffer` 与 Worker handler 仅提供基础设施/CPU 基线，不代表 GPU 验收；旧迁移证据已在 M6 删除。
+- 原版资产署名见 [attribution](attribution.md)。`TelemetryRuntime` 将后端 20Hz 遥测帧经 Worker/FrameRingBuffer 提供给渲染 frame loop；`tools/render_perf.mjs` 记录真实 GPU 门禁（179 frames，p95 8.5ms）。旧迁移证据已在 M6 删除。
 
 ## 1. 强制约束
 

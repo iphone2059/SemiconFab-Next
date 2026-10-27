@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, expect, it } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { CatalogEntryDto } from '../src/contracts';
-import { CatalogComparison, CatalogPage, RecordFields } from '../src/catalog-page';
+import { CatalogComparison, CatalogPage, RecordFields } from '../src/features/catalog/catalog-page';
 import { catalogQueryOptions } from '../src/api/queries/catalog.queries';
 import { resetCatalogStore } from '../src/state/catalogStore';
 import { resetLocaleStore } from '../src/state/localeStore';

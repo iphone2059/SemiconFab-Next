@@ -15,7 +15,9 @@ web_app/
 │  ├─ state/                   # Zustand UI stores、遥测合批
 │  ├─ application/             # CommandEvents/CommandWorkflow 契约、Bridge/恢复协调
 │  ├─ realtime/                # MessageDecoder/SequenceTracker、类型化流、缓冲区/Worker
-│  ├─ runtime/commands/     # XState v6 命令工作流实现
+│  ├─ runtime/commands/     # XState 命令工作流实现（经契约暴露）
+│  ├─ features/             # twin / catalog / workbench 页面模块
+│  ├─ components/           # 共享 UI
 │  ├─ runtime/                 # FabRuntime/Factory/Registry/Lifecycle、命令源 seam
 │  ├─ rendering/lite/          # Babylon Lite/WebGPU 渲染实现
 │  ├─ contracts.generated.ts   # 由 tools/generate_contracts.py 生成，勿手改
@@ -41,7 +43,7 @@ npm run dev                  # Vite 127.0.0.1:5173
 - 浏览器请求中的同名身份头会被移除并由代理注入服务器端开发密钥；不要使用 `VITE_` 变量保存密钥。
 - 仅使用 WebGPU：缺少安全上下文 / `navigator.gpu` / adapter 时明确报错，不回退 WebGL。
 - 产品 URL 只有 canonical 地址（`/`、`/fabs/{fabId}/3d`、`/equipment`、`/equipment/compare`），旧地址已删除。
-- 设备状态走 REST 初值/轮询 + SSE；命令生命周期为 XState v6，后端实时命令流未提供时使用空/可替换命令源。
+- 设备状态走 REST 初值/轮询 + SSE；命令生命周期为 XState，通过后端 HTTP 命令 API + SSE 命令流 + 权威状态查询接线；遥测走 20Hz SSE → Worker → 渲染 frame loop。
 
 ## 验证
 
@@ -52,4 +54,4 @@ npm test
 npm run build
 ```
 
-当前基线：`tsc --noEmit` 0、Vitest 60 文件 / 265 测试 PASS、`vite build` 0。架构/边界检查由 Vitest 的 `tests/architecture-boundaries.test.ts` 与根目录 `tools/check_architecture.py` 共同覆盖。
+当前基线：`tsc --noEmit` 0、Vitest 61 文件 / 271 测试 PASS、`vite build` 0。架构/边界检查由 Vitest 的 `tests/architecture-boundaries.test.ts` 与根目录 `tools/check_architecture.py` 共同覆盖；真实 GPU 性能门禁见根目录 `scripts/perf-render.ps1`。

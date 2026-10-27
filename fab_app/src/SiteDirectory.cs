@@ -24,6 +24,36 @@ public sealed class SiteDirectory
     public SiteDto[] GetSites() => [new SiteDto(_site.Id.ToString(), _site.Code, _site.TemplateHash,
         _site.Fabs.Select(f => new FabDto(f.Id.ToString(), f.Code)).ToArray())];
 
+    /// <summary>Returns true when the id is the configured Site.</summary>
+    public bool TryGetSite(Guid siteId, out SiteDefinition site)
+    {
+        if (siteId == _site.Id)
+        {
+            site = _site;
+            return true;
+        }
+        site = null!;
+        return false;
+    }
+
+    /// <summary>Returns true when the FAB id belongs to the configured Site.</summary>
+    public bool TryGetFab(Guid siteId, Guid fabId, out FabUnit fab)
+    {
+        if (TryGetSite(siteId, out var site))
+        {
+            foreach (var candidate in site.Fabs)
+            {
+                if (candidate.Id == fabId)
+                {
+                    fab = candidate;
+                    return true;
+                }
+            }
+        }
+        fab = null!;
+        return false;
+    }
+
     public void ValidateMembership(ScenarioDefinition scenario)
     {
         ArgumentNullException.ThrowIfNull(scenario);

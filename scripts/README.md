@@ -30,4 +30,14 @@
 
 启动构建产物保存在所选本地目录的 `artifacts/`，避免覆盖另一运行中 API 持有的默认 Debug DLL。脚本为本次启动显式设置 API 地址与 Vite 代理目标，退出后恢复调用终端的相关环境变量。冒烟检查保留 `.local/startup smoke */` 日志与隔离数据，便于诊断。
 
+## 性能门禁
+
+真实 GPU/浏览器门禁需要先启动 `./scripts/start-dev.ps1`，再运行：
+
+```powershell
+./scripts/perf-render.ps1 -Url http://127.0.0.1:5173/fabs/{fabId}/3d
+```
+
+结果写入 `.local/render-perf.json`；该门禁不在 `verify.ps1` 中执行（依赖本机 Chrome/GPU）。
+
 工程边界已预留；功能与验证状态见 `docs/IMPLEMENTATION-STATUS.md`。

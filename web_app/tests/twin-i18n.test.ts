@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { twinTranslator, persistTwinLanguage } from '../src/twin-i18n';
+import { twinTranslator, persistTwinLanguage } from '../src/features/twin/twin-i18n';
 import { readTwinLanguage } from '../src/preferences';
 import { GENERATED_TWIN_EN } from '../src/twin-translations.generated';
 

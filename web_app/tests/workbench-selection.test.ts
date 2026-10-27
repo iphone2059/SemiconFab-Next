@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { createElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import WorkbenchApp from '../src/workbench';
+import WorkbenchApp from '../src/features/workbench/workbench';
 import { sitesQueryOptions } from '../src/api/queries/sites.queries';
 import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from '../src/api/queries/runs.queries';
 import {

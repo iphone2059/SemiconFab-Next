@@ -6,7 +6,7 @@ export type TelemetryWorkerCommand =
   | { readonly type: 'reset' };
 
 export type TelemetryWorkerEvent =
-  | { readonly type: 'frame-written'; readonly sequence: number; readonly dropped: number }
+  | { readonly type: 'frame-written'; readonly sequence: number; readonly dropped: number; readonly latest: number[] }
   | { readonly type: 'snapshot'; readonly sequence: number; readonly values: number[] };
 
 export interface TelemetryWorkerHandler {
@@ -35,7 +35,7 @@ export function createTelemetryWorkerHandler(options: { capacity?: number; frame
       if (type === 'frame') {
         if (!isFrame(command) || command.values.length !== buffer.frameSize) return undefined;
         const sequence = buffer.write(command.values);
-        return { type: 'frame-written', sequence, dropped: buffer.droppedFrames };
+        return { type: 'frame-written', sequence, dropped: buffer.droppedFrames, latest: [...buffer.readLatest()!] };
       }
       if (type === 'snapshot') {
         const latest = buffer.readLatest();

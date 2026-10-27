@@ -5,16 +5,24 @@ import { FabLifecycleCoordinator } from '../../runtime/FabLifecycleCoordinator';
 import { FabRuntimeFactory } from '../../runtime/FabRuntimeFactory';
 import { FabRuntimeRegistry } from '../../runtime/FabRuntimeRegistry';
 import { createPendingCommandEventSource } from '../../runtime/commandSources';
+import { createHttpCommandGateway } from '../../realtime/transport/HttpCommandGateway';
+import { createSseCommandEventSource } from '../../realtime/transport/SseCommandEventSource';
+import { TelemetryRuntime } from '../../realtime/telemetry/TelemetryRuntime';
+import { SiteTelemetryRegistry } from '../../realtime/telemetry/SiteTelemetryRegistry';
 import { RuntimeProvider } from './RuntimeProvider';
+import { TelemetryProvider } from './TelemetryProvider';
 
 /**
  * Product runtime wiring: one FabRuntime per FAB discovered from the sites
- * document. The command source is a replaceable CommandEventSource (currently
- * empty because the backend realtime transport is still a placeholder); XState
- * v6 is now part of the product lifecycle/bundle, not only tests.
+ * document, backed by the backend SSE command stream + HTTP authoritative
+ * gateway, plus one site telemetry runtime (SSE -> Worker -> typed frame).
+ * When the browser lacks EventSource/Worker (tests/jsdom), the runtime falls
+ * back to the empty CommandEventSource seam.
  */
 export function RuntimeBootstrap({ children }: { children: ReactNode }) {
   const [registry] = useState(() => new FabRuntimeRegistry());
+  const [telemetryRegistry] = useState(() => new SiteTelemetryRegistry());
+  const [runtimeVersion, setRuntimeVersion] = useState(0);
   const lifecycle = useRef<FabLifecycleCoordinator | undefined>(undefined);
   const signature = useRef('');
   const sitesQuery = useQuery(sitesQueryOptions());
@@ -27,20 +35,58 @@ export function RuntimeBootstrap({ children }: { children: ReactNode }) {
     if (nextSignature === signature.current) return;
     lifecycle.current?.dispose();
     lifecycle.current = undefined;
+    telemetryRegistry.disposeAll();
     registry.disposeAll();
-    const factory = new FabRuntimeFactory({ sourceFor: () => createPendingCommandEventSource() });
+
+    const siteByFab = new Map(fabs.map((fab) => [fab.fabId, fab.siteId]));
+    const sources = new Map<string, ReturnType<typeof createSseCommandEventSource>>();
+    for (const site of sites) {
+      sources.set(
+        site.siteId,
+        typeof EventSource === 'undefined'
+          ? createPendingCommandEventSource()
+          : createSseCommandEventSource(`/api/v1/sites/${site.siteId}/commands/stream`),
+      );
+    }
+    const gateway = typeof fetch === 'function' ? createHttpCommandGateway() : undefined;
+    const factory = new FabRuntimeFactory({
+      sourceFor: (fabId) => {
+        const siteId = siteByFab.get(fabId);
+        return (siteId ? sources.get(siteId) : undefined) ?? createPendingCommandEventSource();
+      },
+      gateway,
+    });
     for (const fab of fabs) registry.register(factory.create(fab.fabId));
+
+    if (typeof EventSource !== 'undefined' && typeof Worker !== 'undefined') {
+      const telemetry = new Map<string, TelemetryRuntime>();
+      for (const site of sites) {
+        const runtime = new TelemetryRuntime({ url: `/api/v1/sites/${site.siteId}/telemetry/stream` });
+        runtime.start();
+        telemetry.set(site.siteId, runtime);
+      }
+      telemetryRegistry.replaceAll(telemetry);
+    }
+
     const coordinator = new FabLifecycleCoordinator(registry);
     coordinator.start();
     lifecycle.current = coordinator;
     signature.current = nextSignature;
-  }, [sites, registry]);
+    // Registry mutations are not React state; re-render once so consumers
+    // (command console/sidebar) see the assembled runtimes.
+    setRuntimeVersion((value) => value + 1);
+  }, [sites, registry, telemetryRegistry]);
 
   useEffect(() => () => {
     lifecycle.current?.dispose();
     lifecycle.current = undefined;
+    telemetryRegistry.disposeAll();
     signature.current = '';
-  }, [registry]);
+  }, [registry, telemetryRegistry]);
 
-  return <RuntimeProvider registry={registry}>{children}</RuntimeProvider>;
+  return (
+    <RuntimeProvider registry={registry} version={runtimeVersion}>
+      <TelemetryProvider registry={telemetryRegistry} version={runtimeVersion}>{children}</TelemetryProvider>
+    </RuntimeProvider>
+  );
 }
