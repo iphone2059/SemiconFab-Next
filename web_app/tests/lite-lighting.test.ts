@@ -122,6 +122,53 @@ it('repacks into the same caller-owned buffer with stable content', () => {
   lighting.dispose();
 });
 
+it('reuses the packed packet across frame and material writes and repacks after toggles', () => {
+  const scene = createSceneContext({} as EngineContext, { defaultRenderTask: false });
+  const material = createPbrMaterial({ baseColorFactor: [0.5, 0.6, 0.7, 1] });
+  const lighting = createLiteLighting(scene, []);
+  lighting.configureMaterials([{ id: 'batched', material }]);
+  try {
+    const plugin = material.plugins![0];
+    const offsets = new Map([['fabAmbient', 0], ['fabLightInfo', 16], ['fabLocalLights', 32]]);
+    const data = new Float32Array(24 * 16 + 8);
+    const frame = () => {
+      for (const callback of (scene as unknown as { _beforeRender: (() => void)[] })._beforeRender) callback();
+    };
+    frame();
+    plugin.writeUbo!(data, offsets);
+    const first = Array.from(data);
+    expect(first[0]).toBeCloseTo(207 / 255 * 0.48);
+    expect(first[1]).toBeCloseTo(216 / 255 * 0.48);
+    expect(first[2]).toBeCloseTo(220 / 255 * 0.48);
+    expect(first[3]).toBe(0);
+    expect(first[4]).toBe(6);
+    // Repeated frames and per-material UBO writes must leave the exact same bytes in place.
+    for (let repeat = 0; repeat < 2; repeat++) {
+      frame();
+      for (let materialWrite = 0; materialWrite < 3; materialWrite++) {
+        plugin.writeUbo!(data, offsets);
+        expect(Array.from(data)).toEqual(first);
+      }
+    }
+    // Toggling locals invalidates the packet: even without an intervening frame the next UBO
+    // write repacks the restored lights and reproduces the first-frame bytes exactly.
+    lighting.setLocalLightsEnabled(false);
+    frame(); plugin.writeUbo!(data, offsets);
+    expect(data[4]).toBe(0);
+    lighting.setLocalLightsEnabled(true);
+    plugin.writeUbo!(data, offsets);
+    expect(Array.from(data)).toEqual(first);
+    // Ambient toggle rewrites only the ambient vec4; the packed light block stays byte-identical.
+    lighting.setAmbientEnabled(false);
+    plugin.writeUbo!(data, offsets);
+    expect(Array.from(data.slice(0, 4))).toEqual([0, 0, 0, 0]);
+    expect(Array.from(data.slice(4))).toEqual(first.slice(4));
+    lighting.setAmbientEnabled(true);
+    plugin.writeUbo!(data, offsets);
+    expect(Array.from(data)).toEqual(first);
+  } finally { lighting.dispose(); }
+});
+
 it('keeps the source local-light capacity overflow contract', () => {
   const lights = Array.from({ length: 24 }, (_, index) => createPointLight([index, 0, 0], 1));
   expect(packLiteLocalLightsInto(lights, new Float32Array(24 * 16))).toBe(24);

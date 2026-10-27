@@ -84,16 +84,18 @@ export function createLiteLighting(scene: SceneContext, basementLights: readonly
   setFog(scene, { mode: 2, density: 0.0055, start: 0, end: 1000, color: [0.945, 0.961, 0.976] });
 
   let localsEnabled = true, ambientEnabled = true, disposed = false;
-  let cached: { count: number; data: Float32Array } | null = null;
   let previousCount = -1, previousHash = 0;
+  // Frame state kept as scalars (no wrapper object): the active packed-light count and
+  // whether `packet` already holds data for the current frame.
+  let packedCount = 0, packetReady = false;
   const materials = new Set<PbrMaterialProps>();
   function dirty() { for (const material of materials) markMaterialUboDirty(material); }
   // One packet owned by this lighting instance: onBeforeRender and every material's UBO
   // write share it instead of allocating a fresh 384-float array per frame.
   const packet = new Float32Array(packetSize);
   function repack() {
-    cached = { count: packLiteLocalLightsInto(localLights, packet), data: packet };
-    return cached;
+    packedCount = packLiteLocalLightsInto(localLights, packet);
+    packetReady = true;
   }
   const plugin: MaterialPlugin = {
     name: 'next-source-linear-lighting',
@@ -103,10 +105,17 @@ export function createLiteLighting(scene: SceneContext, basementLights: readonly
       { name: 'fabLocalLights', type: 'array<vec4<u32>, 96>' },
     ] }),
     writeUbo(data, offsets) {
-      const packed = cached ?? repack();
-      data.set([...ambientColor.map(value => value * (ambientEnabled ? 1 : 0)), 0], offsets.get('fabAmbient')! / 4);
-      data.set([localsEnabled ? packed.count : 0, 0, 0, 0], offsets.get('fabLightInfo')! / 4);
-      data.set(packed.data, offsets.get('fabLocalLights')! / 4);
+      if (!packetReady) repack();
+      const ambientOffset = offsets.get('fabAmbient')! / 4;
+      const ambientScale = ambientEnabled ? 1 : 0;
+      data[ambientOffset] = ambientColor[0] * ambientScale;
+      data[ambientOffset + 1] = ambientColor[1] * ambientScale;
+      data[ambientOffset + 2] = ambientColor[2] * ambientScale;
+      data[ambientOffset + 3] = 0;
+      const infoOffset = offsets.get('fabLightInfo')! / 4;
+      data[infoOffset] = localsEnabled ? packedCount : 0;
+      data[infoOffset + 1] = 0; data[infoOffset + 2] = 0; data[infoOffset + 3] = 0;
+      data.set(packet, offsets.get('fabLocalLights')! / 4);
     },
     getCustomCode: stage => stage === 'fragment' ? {
       CUSTOM_FRAGMENT_MAIN_BEGIN: 'var fabLinearColor=vec3<f32>(0.0);',
@@ -149,11 +158,11 @@ export function createLiteLighting(scene: SceneContext, basementLights: readonly
   // and let the material UBO writer reuse the same packet instead of repacking per material.
   onBeforeRender(scene, () => {
     if (disposed) return;
-    const packed = repack();
+    repack();
     let hash = 0;
-    for (let i = 0; i < packed.count * 16; i += 1) hash = (hash * 31 + Math.round(packed.data[i] * 10000)) | 0;
-    if (packed.count !== previousCount || hash !== previousHash) {
-      previousCount = packed.count; previousHash = hash; dirty();
+    for (let i = 0; i < packedCount * 16; i += 1) hash = (hash * 31 + Math.round(packet[i] * 10000)) | 0;
+    if (packedCount !== previousCount || hash !== previousHash) {
+      previousCount = packedCount; previousHash = hash; dirty();
     }
   });
   return {
@@ -173,7 +182,7 @@ export function createLiteLighting(scene: SceneContext, basementLights: readonly
       for (const light of [ambient, ...localLights]) light.excludedMeshIds = pbrIds;
     },
     setLocalLightsEnabled(enabled: boolean) {
-      localsEnabled = enabled; cached = null;
+      localsEnabled = enabled; packetReady = false;
       for (const light of localLights) {
         light.visible = enabled;
         setLightIntensity(light, enabled ? baseIntensities.get(light) ?? 0 : 0);
@@ -181,7 +190,7 @@ export function createLiteLighting(scene: SceneContext, basementLights: readonly
       dirty();
     },
     setAmbientEnabled(enabled: boolean) {
-      ambientEnabled = enabled; cached = null;
+      ambientEnabled = enabled; packetReady = false;
       setLightIntensity(ambient, enabled ? 0.48 : 0); dirty();
     },
     setFillEnabled(enabled: boolean) { setLightIntensity(fill, enabled ? 0.32 : 0); },
