@@ -7,6 +7,65 @@ namespace Fab.Tests;
 public sealed class EquipmentStatusTests
 {
     [Fact]
+    public void RestAndStreamSnapshotIncludesServerEpoch()
+    {
+        var snapshot = new EquipmentStatusService().Get(Guid.NewGuid(), Guid.NewGuid());
+        var json = System.Text.Json.JsonSerializer.SerializeToElement(snapshot,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        Assert.InRange(json.GetProperty("epoch").GetInt64(), 1, 9_007_199_254_740_991L);
+    }
+
+    [Fact]
+    public void PersistedEpochIncreasesAcrossRestartsRegardlessOfDisplayClock()
+    {
+        var directory = Directory.CreateTempSubdirectory("fab-status-epoch-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "epoch.txt"), "1000000000000");
+            var site = Guid.NewGuid();
+            var fab = Guid.NewGuid();
+            var before = new EquipmentStatusService(directory);
+            var first = before.Get(site, fab, DateTimeOffset.UtcNow);
+            Assert.Equal(first.Epoch, before.Get(site, Guid.NewGuid()).Epoch);
+            var restarted = new EquipmentStatusService(directory).Get(site, fab, DateTimeOffset.UnixEpoch);
+            Assert.Equal(1_000_000_000_001L, first.Epoch);
+            Assert.Equal(first.Epoch + 1, restarted.Epoch);
+            Assert.Equal(1, restarted.Sequence);
+            Assert.True(DateTimeOffset.Parse(restarted.GeneratedAt) < DateTimeOffset.Parse(first.GeneratedAt));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
+    public void ConcurrentServiceStartsAllocateDistinctOrderedEpochs()
+    {
+        var directory = Directory.CreateTempSubdirectory("fab-status-epoch-").FullName;
+        try
+        {
+            var epochs = Enumerable.Range(0, 12).AsParallel().Select(_ =>
+                new EquipmentStatusService(directory).Get(Guid.NewGuid(), Guid.NewGuid()).Epoch).Order().ToArray();
+            Assert.Equal(Enumerable.Range(1, 12).Select(value => (long)value), epochs);
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Theory]
+    [InlineData("-1")]
+    [InlineData("not-an-integer")]
+    [InlineData("9007199254740991")]
+    public void CorruptOrExhaustedEpochFailsClosed(string persisted)
+    {
+        var directory = Directory.CreateTempSubdirectory("fab-status-epoch-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "epoch.txt"), persisted);
+            Assert.Throws<InvalidDataException>(() => new EquipmentStatusService(directory));
+            Assert.Equal(persisted, File.ReadAllText(Path.Combine(directory, "epoch.txt")));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
     public void SequenceIsStableWithinBucketAndMonotonicPerFab()
     {
         var service = new EquipmentStatusService();

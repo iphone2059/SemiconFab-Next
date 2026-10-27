@@ -17,6 +17,7 @@ export function createLiteBackend(): SceneBackend {
   let world: LiteWorld | undefined;
   let perf: PerfBridge | undefined;
   let disposed = false;
+  let detachInput: (() => void) | undefined;
   const lifecycle = { backendId: crypto.randomUUID(), statuses: [] as string[], losses: 0, recoveries: 0, lastStatus: '' };
   // GPU validation errors observed by scenes that were torn down on device loss (diagnostics of
   // a replaced world would otherwise disappear with it).
@@ -25,10 +26,8 @@ export function createLiteBackend(): SceneBackend {
   // A08: the post-recovery replay is a one-shot initialization phase. Its timers are owned by the
   // backend so disposal or the next recovery can clear them, and each callback validates the
   // recovery generation + interaction version so it can never overwrite newer user input.
-  // User interaction counters are bumped by the discrete SceneBackend camera/selection calls
-  // (setCameraPose/zoom/selectTool/clearSelection/...). setView is intentionally not counted:
-  // twin-page.tsx re-applies the active view preset from its status effect right after a
-  // recovery, and the 300 ms replay exists precisely to win that ordering race. The ambient
+  // Both SceneBackend instructions and direct canvas input invalidate the replay.
+  // The page reapplies presets only on a fresh viewport or a requested view change. The ambient
   // mode setters (setBasement/setDual) are re-applied by the same status effect, so they only
   // count as interaction when their value actually changes; otherwise a normal recovery would
   // cancel its own replay before the preserved pose/selection could be restored. The tracked
@@ -119,6 +118,14 @@ export function createLiteBackend(): SceneBackend {
       if (!adapter || adapter.limits.maxTextureDimension2D < 2048) {
         throw new Error('WebGPU adapter 或必要纹理限制不满足要求。');
       }
+      const inputEvents = ['pointerdown', 'touchstart', 'wheel', 'dblclick'] as const;
+      // Capture at the actual input boundary, before the native orbit/picking
+      // handlers update world state. These paths never call backend setters.
+      for (const event of inputEvents) canvas.addEventListener(event, markUserInteraction, { capture: true, passive: true });
+      detachInput = () => {
+        for (const event of inputEvents) canvas.removeEventListener(event, markUserInteraction, true);
+      };
+      signal.addEventListener('abort', () => { cancelRecoveryReplay(); detachInput?.(); detachInput = undefined; }, { once: true });
       let mountedWorld: LiteWorld | undefined;
       let restarting = false;
       // A loss during the replacement-scene build cannot start a second rebuild inline; queue it so
@@ -230,12 +237,17 @@ export function createLiteBackend(): SceneBackend {
     dispose(): void {
       if (disposed) return;
       disposed = true;
+      detachInput?.(); detachInput = undefined;
       cancelRecoveryReplay();
       perf?.dispose(); perf = undefined;
       runtime?.dispose(); runtime = undefined;
       world = undefined;
     },
-    setView(preset: SceneViewPreset, fabId?: string): void { if (!disposed) world?.setView(preset, fabId); },
+    setView(preset: SceneViewPreset, fabId?: string): void {
+      if (disposed) return;
+      markUserInteraction();
+      world?.setView(preset, fabId);
+    },
     setCameraPose(position, target, durationMs): void {
       if (disposed) return;
       markUserInteraction();

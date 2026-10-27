@@ -62,7 +62,7 @@ function queueWorld(pose: { position: Point; target: Point } | null, selection: 
   mocks.worlds.push(world);
   return world;
 }
-const canvas = {} as HTMLCanvasElement;
+let canvas: HTMLCanvasElement;
 const flush = async (steps = 80) => { for (let index = 0; index < steps; index++) await Promise.resolve(); };
 async function mountBackend(pose: { position: Point; target: Point } | null, selection: number | null) {
   const firstWorld = queueWorld(pose, selection);
@@ -85,6 +85,7 @@ function runReplays(): void {
 }
 
 beforeEach(() => {
+  canvas = new EventTarget() as HTMLCanvasElement;
   mocks.runtimes.length = 0;
   mocks.worlds.length = 0;
   mocks.created.length = 0;
@@ -104,6 +105,36 @@ beforeEach(() => {
   });
   vi.stubGlobal('location', { search: '' });
   vi.stubGlobal('navigator', { gpu: { requestAdapter: async () => ({ limits: { maxTextureDimension2D: 4096 } }) } });
+});
+
+it.each(['pointerdown', 'wheel', 'touchstart', 'dblclick'])('keeps canvas %s input newer than the recovery replay', async (eventType) => {
+  const { backend } = await mountBackend({ position: [1, 2, 3], target: [4, 5, 6] }, 42);
+  try {
+    queueWorld(null, null);
+    await loseDevice();
+    const replacement = mocks.created[1];
+    mocks.timers[0].run();
+    canvas.dispatchEvent(new Event(eventType));
+    // The real camera/selection input handlers change world state without
+    // invoking backend setters. Keep that boundary independent of the GPU.
+    replacement.setCameraPose([9, 9, 9], [0, 0, 0]);
+    replacement.selectTool(7);
+    mocks.timers[1].run();
+    expect(replacement.pose.position).toEqual([9, 9, 9]);
+    expect(replacement.selected).toBe(7);
+  } finally { backend.dispose(); }
+});
+
+it('a user preset cancels recovery replay', async () => {
+  const { backend } = await mountBackend({ position: [1, 2, 3], target: [4, 5, 6] }, 42);
+  try {
+    queueWorld(null, null);
+    await loseDevice();
+    backend.setView!('top');
+    runReplays();
+    expect(mocks.created[1].setCameraPose).not.toHaveBeenCalled();
+    expect(activeTimers()).toHaveLength(0);
+  } finally { backend.dispose(); }
 });
 
 it('restores the preserved camera pose and selection after a normal GPU recovery', async () => {

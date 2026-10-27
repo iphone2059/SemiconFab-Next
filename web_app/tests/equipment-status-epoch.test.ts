@@ -21,6 +21,32 @@ const base = (patch: Partial<EquipmentStatusSnapshot>): EquipmentStatusSnapshot 
   ...patch,
 });
 
+it('rejects a lower sequence within an explicit epoch even with a newer display time', () => {
+  const gate = createEquipmentStatusGate(scope, 2);
+  expect(gate.accept(base({ epoch: 2, sequence: 100 }))).toBeDefined();
+  expect(gate.accept(base({ epoch: 2, sequence: 1, generatedAt: '2026-10-24T01:00:10Z' }))).toBeUndefined();
+});
+
+it('rejects missing epoch or sequence after explicit generation ordering is established', () => {
+  const gate = createEquipmentStatusGate(scope, 2);
+  expect(gate.accept(base({ epoch: 2, sequence: 1 }))).toBeDefined();
+  expect(gate.accept(base({ sequence: 101 }))).toBeUndefined();
+  expect(gate.accept(base({ epoch: 2, sequence: undefined, generatedAt: '2026-10-24T02:00:00Z' }))).toBeUndefined();
+  expect(gate.accept(base({ epoch: 2, sequence: 2 }))).toBeDefined();
+});
+
+it('the first explicit epoch replaces legacy high-water marks even when display time goes backwards', () => {
+  const gate = createEquipmentStatusGate(scope, 2);
+  expect(gate.accept(base({ sequence: 100, generatedAt: '2026-10-24T02:00:00Z' }))).toBeDefined();
+  expect(gate.accept(base({ epoch: 1, sequence: 0, generatedAt: '2026-10-24T01:00:00Z' }))).toBeDefined();
+});
+
+it('requires a sequence on the first explicit epoch without advancing its high-water', () => {
+  const gate = createEquipmentStatusGate(scope, 2);
+  expect(gate.accept(base({ epoch: 9, sequence: undefined }))).toBeUndefined();
+  expect(gate.accept(base({ epoch: 8, sequence: 1 }))).toBeDefined();
+});
+
 it('A03: a restarted server (higher epoch) is not rolled back by a delayed old-server frame', () => {
   const onSnapshot = vi.fn();
   const apply = createOrderedEquipmentStatusConsumer(scope, 2, onSnapshot);

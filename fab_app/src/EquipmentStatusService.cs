@@ -4,7 +4,7 @@ namespace Fab.App;
 
 public sealed record EquipmentStatusItemDto(string State);
 
-public sealed record EquipmentStatusSnapshotDto(string SiteId, string FabId, string GeneratedAt, long Sequence, EquipmentStatusItemDto[] Tools);
+public sealed record EquipmentStatusSnapshotDto(string SiteId, string FabId, string GeneratedAt, long Sequence, EquipmentStatusItemDto[] Tools, long Epoch);
 
 /// <summary>
 /// Development-only synthetic equipment feed. It gives the preview a server-backed,
@@ -17,6 +17,17 @@ public sealed record EquipmentStatusSnapshotDto(string SiteId, string FabId, str
 public sealed class EquipmentStatusService
 {
     public const int ToolCount = 121;
+    // Unit consumers can remain in-memory; the API always supplies its configured
+    // data directory so generations persist across server processes/restarts.
+    private static long inMemoryEpoch;
+    private readonly long epoch;
+
+    public EquipmentStatusService(string? epochDirectory = null)
+    {
+        epoch = epochDirectory is null
+            ? Interlocked.Increment(ref inMemoryEpoch)
+            : EquipmentStatusEpoch.Allocate(epochDirectory);
+    }
 
     private readonly ConcurrentDictionary<Guid, FabState> states = new();
 
@@ -51,7 +62,7 @@ public sealed class EquipmentStatusService
                 }).ToArray();
                 var generatedAt = DateTimeOffset.FromUnixTimeSeconds(bucket * 8);
                 state.Snapshot = new EquipmentStatusSnapshotDto(
-                    siteId.ToString("D"), fabId.ToString("D"), generatedAt.ToString("O"), state.Sequence, tools);
+                    siteId.ToString("D"), fabId.ToString("D"), generatedAt.ToString("O"), state.Sequence, tools, epoch);
             }
 
             return state.Snapshot;

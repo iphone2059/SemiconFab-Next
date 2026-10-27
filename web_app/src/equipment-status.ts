@@ -128,23 +128,25 @@ export function createEquipmentStatusGate(
       const timestamp = Date.parse(snapshot.generatedAt);
       const hasSequence = snapshot.sequence !== undefined;
       const hasEpoch = snapshot.epoch !== undefined;
-      if (hasEpoch && lastEpoch !== undefined) {
+      if (hasEpoch) {
+        // Explicit generation ordering never falls back to display time. The
+        // first epoch also replaces all legacy high-water marks.
+        if (!hasSequence) { onInvalid?.(); return undefined; }
         const epoch = snapshot.epoch as number;
-        // A delayed frame from an older server generation must never roll the
-        // projection back, even when its sequence/timestamp look newer.
-        if (epoch < lastEpoch) return undefined;
-        if (epoch > lastEpoch) {
-          // New server generation: its sequence/timestamp restart at zero and the
-          // previous high-water is meaningless. Display time stays display time.
-          lastSequence = -1;
-          lastGeneratedAt = Number.NEGATIVE_INFINITY;
-        }
+        const sequence = snapshot.sequence as number;
+        if (lastEpoch !== undefined && (epoch < lastEpoch || (epoch === lastEpoch && sequence <= lastSequence))) return undefined;
+        lastEpoch = epoch;
+        lastSequence = sequence;
+        lastGeneratedAt = timestamp;
+        return snapshot;
       }
+      // A legacy/late response must not downgrade a feed that has established
+      // an explicit server generation.
+      if (lastEpoch !== undefined) return undefined;
       if (hasSequence) {
         const sequence = snapshot.sequence as number;
         if (sequence < lastSequence) {
-          // A newer timestamp with a lower sequence within the same epoch is the
-          // legacy server-restart heuristic; delayed old frames have older times.
+          // Legacy-only server-restart heuristic (no explicit epoch observed).
           if (timestamp <= lastGeneratedAt) return undefined;
         } else if (sequence === lastSequence) {
           return undefined;
@@ -154,7 +156,6 @@ export function createEquipmentStatusGate(
       }
       if (hasSequence) lastSequence = snapshot.sequence as number;
       lastGeneratedAt = timestamp;
-      if (hasEpoch) lastEpoch = snapshot.epoch as number;
       return snapshot;
     },
   };

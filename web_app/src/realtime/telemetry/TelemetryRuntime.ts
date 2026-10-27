@@ -201,6 +201,8 @@ export class TelemetryRuntime {
   private statusValue: TelemetryRuntimeStatus = 'stopped';
   private workerFailed = false;
   private inFlightTimer?: ReturnType<typeof setTimeout>;
+  private retryTimer?: ReturnType<typeof setTimeout>;
+  private inFlightFrame?: TelemetryFrame;
   private readonly workerTimeoutMs: number;
 
   constructor(private readonly options: TelemetryRuntimeOptions) {
@@ -240,6 +242,30 @@ export class TelemetryRuntime {
     let generation = 0;
     let acceptedSequence = -1;
     let rebuilding = false;
+    let retryDelayMs = 250;
+    let immediateRebuildAvailable = true;
+
+    const scheduleRetry = (): void => {
+      if (!this.started || this.retryTimer !== undefined) return;
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = undefined;
+        if (!this.started) return;
+        if (!this.worker) rebuildWorker();
+        if (this.worker && !this.inFlight) flushPending();
+      }, retryDelayMs);
+      retryDelayMs = Math.min(8_000, retryDelayMs * 2);
+    };
+
+    const retireWorker = (): void => {
+      const previous = this.worker;
+      this.worker = undefined;
+      generation += 1;
+      if (!previous) return;
+      previous.onmessage = null;
+      previous.onerror = null;
+      previous.onmessageerror = null;
+      previous.terminate();
+    };
 
     const clearInFlightTimeout = (): void => {
       if (this.inFlightTimer === undefined) return;
@@ -261,8 +287,11 @@ export class TelemetryRuntime {
       if (!worker) {
         // No usable Worker: keep one bounded pending frame so a later rebuild
         // can flush the newest decoded state instead of silently dropping it.
-        this.pendingFrame = boundTelemetryFrame(frame);
+        this.pendingFrame = this.pendingFrame
+          ? mergeTelemetryFrames(this.pendingFrame, frame)
+          : boundTelemetryFrame(frame);
         this.statusValue = 'stale';
+        scheduleRetry();
         return;
       }
       const flattened = flattenTelemetryFrame(frame, this.lastValues);
@@ -270,19 +299,15 @@ export class TelemetryRuntime {
       // Mark in flight before posting: a test/worker reply may be delivered
       // synchronously and only a reply may release the in-flight slot.
       this.inFlight = true;
+      this.inFlightFrame = boundTelemetryFrame(frame);
       armInFlightTimeout();
       try {
         worker.postMessage({ type: 'frame', sequence: flattened.sequence, values: flattened.values, generation });
       } catch {
         // Synchronous postMessage failure: roll the in-flight slot back, retain
         // the frame in the bounded pending slot and rebuild the Worker.
-        this.inFlight = false;
-        clearInFlightTimeout();
-        this.pendingFrame = this.pendingFrame
-          ? mergeTelemetryFrames(this.pendingFrame, frame)
-          : boundTelemetryFrame(frame);
-        this.statusValue = 'stale';
-        rebuildWorker();
+        onWorkerFailure(false);
+        scheduleRetry();
         return;
       }
       if (this.statusValue !== 'stale') this.statusValue = 'live';
@@ -294,15 +319,33 @@ export class TelemetryRuntime {
       if (pending) submit(pending);
     };
 
-    const onWorkerFailure = (): void => {
+    const onWorkerFailure = (flushAfterRebuild = true): void => {
       if (!this.started) return;
       // A failed/timed-out Worker never releases the slot on its own, so release
       // it here and swap in a fresh generation instead of waiting forever.
       this.inFlight = false;
+      const failedFrame = this.inFlightFrame;
+      this.inFlightFrame = undefined;
       clearInFlightTimeout();
       this.statusValue = 'stale';
-      rebuildWorker();
-      if (this.worker) flushPending();
+      if (immediateRebuildAvailable) {
+        rebuildWorker();
+        // A healthy replacement resumes the existing pending slot. If allocation
+        // failed (or postMessage threw), retain the unsent frame for the retry.
+        if ((!this.worker || !flushAfterRebuild) && failedFrame) {
+          this.pendingFrame = this.pendingFrame
+            ? mergeTelemetryFrames(failedFrame, this.pendingFrame)
+            : boundTelemetryFrame(failedFrame);
+        }
+        if (this.worker && flushAfterRebuild) flushPending();
+      } else {
+        if (failedFrame) this.pendingFrame = this.pendingFrame
+          ? mergeTelemetryFrames(failedFrame, this.pendingFrame)
+          : boundTelemetryFrame(failedFrame);
+        retireWorker();
+        this.workerFailed = true;
+        scheduleRetry();
+      }
     };
 
     const attachWorker = (worker: WorkerLike): void => {
@@ -315,9 +358,16 @@ export class TelemetryRuntime {
         // obsolete stream.
         if (data.generation !== generation) return;
         this.inFlight = false;
+        this.inFlightFrame = undefined;
         clearInFlightTimeout();
         this.workerFailed = false;
         this.statusValue = 'live';
+        immediateRebuildAvailable = true;
+        retryDelayMs = 250;
+        if (this.retryTimer !== undefined) {
+          clearTimeout(this.retryTimer);
+          this.retryTimer = undefined;
+        }
         const values = workerFrameValues(data.latest);
         if (values && (!this.snapshot || data.sequence > this.snapshot.sequence)) {
           // Store the reply typed array directly: the Worker already sent a copy.
@@ -338,24 +388,16 @@ export class TelemetryRuntime {
     const rebuildWorker = (): void => {
       if (rebuilding) return;
       rebuilding = true;
+      immediateRebuildAvailable = false;
       try {
-        const previous = this.worker;
-        this.worker = undefined;
-        if (previous) {
-          previous.onmessage = null;
-          previous.onerror = null;
-          previous.onmessageerror = null;
-          previous.terminate();
-        }
-        // Always advance the generation so late replies from the failed Worker
-        // are ignored by the generation check above.
-        generation += 1;
+        retireWorker();
         let replacement: WorkerLike;
         try {
           replacement = workerFactory();
         } catch {
           this.workerFailed = true;
           this.statusValue = 'stale';
+          scheduleRetry();
           return;
         }
         this.worker = replacement;
@@ -364,8 +406,10 @@ export class TelemetryRuntime {
         try {
           replacement.postMessage({ type: 'reset' });
         } catch {
+          retireWorker();
           this.workerFailed = true;
           this.statusValue = 'stale';
+          scheduleRetry();
         }
       } finally {
         rebuilding = false;
@@ -373,9 +417,16 @@ export class TelemetryRuntime {
     };
 
     try {
-      const worker = workerFactory();
-      this.worker = worker;
-      attachWorker(worker);
+      try {
+        const worker = workerFactory();
+        this.worker = worker;
+        attachWorker(worker);
+      } catch {
+        this.workerFailed = true;
+        this.statusValue = 'stale';
+        immediateRebuildAvailable = false;
+        scheduleRetry();
+      }
       const source = eventSourceFactory(this.options.url);
       this.source = source;
       source.onopen = () => {
@@ -388,13 +439,14 @@ export class TelemetryRuntime {
         this.snapshot = undefined;
         this.pendingFrame = undefined;
         this.inFlight = false;
+        this.inFlightFrame = undefined;
         clearInFlightTimeout();
-        this.statusValue = 'idle';
+        this.statusValue = this.worker ? 'idle' : 'stale';
         if (this.worker) {
           try {
             this.worker.postMessage({ type: 'reset' });
           } catch {
-            this.statusValue = 'stale';
+            onWorkerFailure();
           }
         }
       };
@@ -445,9 +497,14 @@ export class TelemetryRuntime {
     this.lastValues = undefined;
     this.pendingFrame = undefined;
     this.inFlight = false;
+    this.inFlightFrame = undefined;
     this.started = false;
     this.statusValue = 'stopped';
     this.workerFailed = false;
+    if (this.retryTimer !== undefined) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = undefined;
+    }
     if (this.inFlightTimer !== undefined) {
       clearTimeout(this.inFlightTimer);
       this.inFlightTimer = undefined;
@@ -468,7 +525,7 @@ export class TelemetryRuntime {
 
   /** Renderer frame-loop read; returns undefined until the first worker frame. */
   getToolStates(): readonly FabToolState[] | undefined {
-    return this.snapshot?.toolStates;
+    return this.stale ? undefined : this.snapshot?.toolStates;
   }
 
   getSnapshot(): TelemetrySnapshot | undefined {

@@ -1,0 +1,206 @@
+{
+  "review": "2026-10-27 TS/TSX audit residual boundary repairs R01-R04",
+  "sourceBase": "5bc224b62aac2bd0e202daa4f8979d74cbae5918",
+  "verifiedAt": "2026-10-27T15:41:07.077Z",
+  "sourceSha256": {
+    "fab_app/src/ApiHost.cs": "e29461d362d2c8a1d60d4f6608a0ab204a5b063dffeb659b979a47e7b0f53ff3",
+    "fab_app/src/EquipmentStatusService.cs": "1fb6d8371e3fae13c6ca76c2f77ab5a2a9aa5804f2aa96474ca460799fd0e9a4",
+    "fab_app/src/EquipmentStatusEpoch.cs": "e05af3cb432bb1dac348d11b957d8c52685849a971cba81284491e65450e4b9e",
+    "web_app/src/equipment-status.ts": "d588362da1bebb9566dfe19fe4568edcdbb1beca97f50dfbd1ce2f807481d16b",
+    "web_app/src/features/twin/twin-page.tsx": "e208f7ef450be9ff5fb682a53a30e2bbc1b2b3d1b5900c1ec28a69db76577916",
+    "web_app/src/lite-backend.ts": "19f7d86d7055f5b2f5b90c611de14f14679e8b8e33764f21bf90d7619ccf6567",
+    "web_app/src/realtime/telemetry/TelemetryRuntime.ts": "1ebbb04527a9e3070cda3ac84c2f7ad2ba210559d8375b8b9ca8b049d064432f",
+    "web_app/src/runtime/FabRuntime.ts": "225b1cc061309079488dd8df28684cf396fa19a0fb14adb3c3008da9dd2cd60b"
+  },
+  "changes": {
+    "R01": "durable monotonic JS-safe API epoch and strict shared REST/SSE gate",
+    "R02": "capture direct canvas input and explicit presets; preserve recovered viewer pose",
+    "R03": "coalesced exponential Worker retry, sparse retention, autonomous postMessage recovery, stale projection fallback",
+    "R04": "single-command terminal bookkeeping during registration, stream delivery and reconciliation"
+  },
+  "verification": {
+    "frontendTypecheck": {
+      "command": "npm --prefix web_app run typecheck",
+      "exitCode": 0
+    },
+    "frontendTests": {
+      "command": "npm --prefix web_app test -- --maxWorkers=2",
+      "exitCode": 0,
+      "files": 86,
+      "passed": 492
+    },
+    "frontendBuild": {
+      "command": "npm --prefix web_app run build",
+      "exitCode": 0,
+      "warning": "Existing large-chunk advisory remains; no threshold was relaxed."
+    },
+    "backend": {
+      "command": "dotnet test fab_tests/fab_tests.csproj -c Release --verbosity quiet",
+      "exitCode": 0,
+      "passed": 177
+    },
+    "contracts": {
+      "command": "python tools/generate_contracts.py --check",
+      "exitCode": 0
+    },
+    "architecture": {
+      "command": "python tools/check_architecture.py",
+      "exitCode": 0
+    },
+    "pythonTools": {
+      "command": "python -m unittest discover -s tools -p 'test_*.py'",
+      "exitCode": 0,
+      "passed": 8
+    },
+    "renderCheckTests": {
+      "command": "node --test tools/test_render_perf_checks.mjs",
+      "exitCode": 0,
+      "passed": 13
+    },
+    "legacyData": {
+      "command": "python tools/migrate_legacy_data.py --check",
+      "exitCode": 0
+    },
+    "whitespace": {
+      "command": "git diff --check",
+      "exitCode": 0
+    }
+  },
+  "independentReview": {
+    "unresolvedCritical": 0,
+    "unresolvedImportant": 0,
+    "notes": "Read-only source review plus independent in-memory Worker fault/race checks; recorded browser evidence reviewed."
+  },
+  "browserEvidence": {
+    "sourceBase": "5bc224b",
+    "testedAt": "2026-10-27T15:35:38.410Z",
+    "api": {
+      "epoch": 1,
+      "sequence": 1,
+      "tools": 121
+    },
+    "rounds": [
+      {
+        "input": "drag",
+        "before": {
+          "position": [
+            38,
+            48,
+            58
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ]
+        },
+        "afterInput": {
+          "position": [
+            -0.7840456366539001,
+            57.71170425415039,
+            61.48775863647461
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ]
+        },
+        "afterReplay": {
+          "position": [
+            -0.7840456366539001,
+            57.71170425415039,
+            61.48775863647461
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ]
+        },
+        "lifecycle": {
+          "backendId": "356d3337-0b18-4513-a03e-7afa4dbd77b2",
+          "statuses": [
+            "initializing",
+            "ready",
+            "lost",
+            "ready"
+          ],
+          "losses": 1,
+          "recoveries": 1,
+          "lastStatus": "WebGPU · 程序化 FAB · 121 台设备",
+          "status": "ready"
+        },
+        "gpuErrors": []
+      },
+      {
+        "input": "wheel",
+        "before": {
+          "position": [
+            -4.202369213104248,
+            61.28681182861328,
+            57.77775573730469
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ]
+        },
+        "afterInput": {
+          "position": [
+            -3.992250680923462,
+            58.222469329833984,
+            54.88886642456055
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ]
+        },
+        "afterReplay": {
+          "position": [
+            -3.992250680923462,
+            58.222469329833984,
+            54.88886642456055
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ]
+        },
+        "lifecycle": {
+          "backendId": "356d3337-0b18-4513-a03e-7afa4dbd77b2",
+          "statuses": [
+            "initializing",
+            "ready",
+            "lost",
+            "ready",
+            "lost",
+            "ready"
+          ],
+          "losses": 2,
+          "recoveries": 2,
+          "lastStatus": "WebGPU · 程序化 FAB · 121 台设备",
+          "status": "ready"
+        },
+        "gpuErrors": []
+      }
+    ],
+    "scope": "Live development API plus real Chrome WebGPU loss/rebuild; DOM input before the delayed replay; not a performance or visual parity gate."
+  },
+  "browserSourceNote": "Browser run preceded only the final Worker retry refinement; native recovery/input sources are hash-bound here and unchanged since that run. Final Worker changes passed the subsequent full frontend suite and independent race review.",
+  "temporaryServices": {
+    "apiPort": 5091,
+    "webPort": 5181,
+    "stopped": true,
+    "existing5080and5173": "preserved"
+  },
+  "limitations": [
+    "Targeted development-build Chrome WebGPU recovery, not a full performance/visual parity acceptance matrix.",
+    "No long-duration soak, native touch-device or repeated cross-process crash test was run.",
+    "Persist the equipment-status epoch directory across API restarts; intentionally replacing data history requires a fresh browser QueryClient."
+  ]
+}

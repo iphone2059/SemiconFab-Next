@@ -169,6 +169,36 @@ class CountingWorkflow implements CommandWorkflow {
 }
 
 describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => {
+  it('registers active commands without visiting all earlier workflow projections', () => {
+    const workflows: CountingWorkflow[] = [];
+    const runtime = new FabRuntimeFactory({ sourceFor: () => new FakeCommandEventSource(), createWorkflow: () => {
+      const workflow = new CountingWorkflow(); workflows.push(workflow); return workflow;
+    } }).create(fabId);
+    try {
+      for (let index = 0; index < 100; index++) runtime.trackCommand('cmd-' + index);
+      expect(workflows.reduce((sum, workflow) => sum + workflow.accesses, 0)).toBeLessThanOrEqual(200);
+    } finally { runtime.dispose(); }
+  });
+
+  it('reconciles a batch with only linear projection visits and retains terminal outcomes', async () => {
+    const workflows: CountingWorkflow[] = [];
+    let outcome: CommandOutcome = 'executing';
+    const runtime = new FabRuntimeFactory({ sourceFor: () => new FakeCommandEventSource(),
+      gateway: { getCommandStatus: async (targetFab, commandId) => commandResult({ fabId: targetFab, commandId, revision: outcome === 'executing' ? 1 : 2, outcome }) },
+      createWorkflow: () => { const workflow = new CountingWorkflow(); workflows.push(workflow); return workflow; },
+    }).create(fabId);
+    try {
+      for (let index = 0; index < 40; index++) runtime.trackCommand('cmd-' + index);
+      await runtime.reconcileAll();
+      for (const workflow of workflows) workflow.accesses = 0;
+      outcome = 'succeeded';
+      await expect(runtime.reconcileAll()).resolves.toBe(40);
+      expect(workflows.reduce((sum, workflow) => sum + workflow.accesses, 0)).toBeLessThanOrEqual(200);
+      expect(runtime.terminalWorkflowCount).toBe(40);
+      expect(runtime.getProjection('cmd-0')?.outcome).toBe('succeeded');
+    } finally { runtime.dispose(); }
+  });
+
   it('retains active workflows and evicts terminal workflows by max with a recent projection kept', () => {
     const source = new FakeCommandEventSource();
     const runtime = new FabRuntimeFactory({

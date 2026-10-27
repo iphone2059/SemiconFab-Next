@@ -35,7 +35,7 @@ internal static class ApiHost
         builder.Services.AddSingleton(new SiteDirectory(fabCount));
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton(commandOptions);
-        builder.Services.AddSingleton<EquipmentStatusService>();
+        builder.Services.AddSingleton(_ => new EquipmentStatusService(Path.Combine(data, "equipment-status")));
         builder.Services.AddSingleton(provider => new EquipmentCommandService(
             provider.GetRequiredService<SiteDirectory>(),
             provider.GetRequiredService<TimeProvider>(),

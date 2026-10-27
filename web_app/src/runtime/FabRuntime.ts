@@ -1,4 +1,4 @@
-import type { CommandEventSource, CommandResultEvent } from '../application/contracts/CommandEvents';
+import type { CommandEventSource } from '../application/contracts/CommandEvents';
 import type { CommandGateway } from '../application/contracts/CommandGateway';
 import type { CommandWorkflow, CommandWorkflowProjection, CommandWorkflowRegistry } from '../application/contracts/CommandWorkflow';
 import { CommandCorrelationRegistry } from '../application/coordination/CommandCorrelationRegistry';
@@ -116,7 +116,7 @@ export class FabRuntime {
     this.bridge = new CommandEventBridge(options.source, registry, {
       fabId: options.fabId,
       correlation: this.correlation,
-      onResultDelivered: (event) => { this.afterDelivery(event); },
+      onResultDelivered: (event) => { this.afterDelivery(event.commandId); },
     });
   }
 
@@ -166,7 +166,7 @@ export class FabRuntime {
       this.bridgeStarted = true;
     }
     this.bridge.flushRecovery();
-    this.afterDelivery();
+    this.afterDelivery(commandId);
     // A replay gap means the local stream may hold no evidence for this command;
     // converge from the authoritative query instead of trusting local silence.
     const localEvidence = this.hasLocalEvidence(commandId);
@@ -196,7 +196,7 @@ export class FabRuntime {
     const isCurrent = () => !this.disposed && this.workflows.get(commandId) === workflow;
     const request = this.reconciler.reconcile(workflow, this.fabId, commandId, isCurrent)
       .then(reconciled => {
-        if (reconciled && isCurrent()) { this.afterDelivery(); }
+        if (reconciled && isCurrent()) { this.afterDelivery(commandId); }
         return reconciled;
       })
       // Recovery runs in the background. Keep failures contained and retry on
@@ -296,11 +296,10 @@ export class FabRuntime {
     return this.started;
   }
 
-  private afterDelivery(event?: CommandResultEvent): void {
-    // Hot path (one delivered result): only the affected workflow can have just
-    // become terminal, so no all-workflow scan runs per command.
-    if (event) this.recordTerminal(event.commandId);
-    else this.recordTerminals();
+  private afterDelivery(commandId: string): void {
+    // Registration, authoritative reconciliation and stream delivery all know
+    // the affected command. None needs to revisit unrelated workflows.
+    this.recordTerminal(commandId);
     this.notify();
   }
 
@@ -318,24 +317,6 @@ export class FabRuntime {
       if (!this.terminalAt.has(commandId)) this.terminalAt.set(commandId, now);
     } else if (this.terminalAt.has(commandId)) {
       this.terminalAt.delete(commandId);
-    }
-    this.enforceTerminalLimit();
-    this.scheduleSweep();
-  }
-
-  /**
-   * Full terminal-state sweep. Used only by eventless assembly points (command
-   * tracking, authoritative reconciliation), never per delivered result.
-   */
-  private recordTerminals(): void {
-    if (this.disposed) return;
-    const now = this.retention.now();
-    for (const [commandId, workflow] of this.workflows) {
-      if (TERMINAL_OUTCOMES.has(workflow.projection?.outcome ?? '')) {
-        if (!this.terminalAt.has(commandId)) this.terminalAt.set(commandId, now);
-      } else if (this.terminalAt.has(commandId)) {
-        this.terminalAt.delete(commandId);
-      }
     }
     this.enforceTerminalLimit();
     this.scheduleSweep();

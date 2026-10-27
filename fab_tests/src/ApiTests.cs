@@ -15,6 +15,30 @@ public sealed class ApiTests
     private const string Key = "test-only-development-identity-32-characters";
 
     [Fact]
+    public async Task EquipmentStatusRestAndSseShareThePersistedServerEpoch()
+    {
+        using var factory = Factory();
+        using var client = Authorized(factory);
+        var site = Assert.Single((await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites"))!);
+        var url = $"/api/v1/sites/{site.SiteId}/fabs/{site.Fabs[0].FabId}/equipment-status";
+        var rest = await client.GetFromJsonAsync<System.Text.Json.JsonElement>(url);
+        var epoch = rest.GetProperty("epoch").GetInt64();
+        Assert.True(epoch > 0);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var response = await client.GetAsync(url + "/stream", HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        response.EnsureSuccessStatusCode();
+        using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(timeout.Token));
+        while (await reader.ReadLineAsync(timeout.Token) is { } line)
+        {
+            if (!line.StartsWith("data: ", StringComparison.Ordinal)) continue;
+            using var data = System.Text.Json.JsonDocument.Parse(line[6..]);
+            Assert.Equal(epoch, data.RootElement.GetProperty("epoch").GetInt64());
+            return;
+        }
+        Assert.Fail("The equipment-status stream ended without a data frame.");
+    }
+
+    [Fact]
     public async Task UnauthorizedCannotReadSites()
     {
         using var factory = Factory();

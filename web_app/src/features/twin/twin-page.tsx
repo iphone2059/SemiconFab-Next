@@ -216,6 +216,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     ymsOpen: state.yms.open,
   })));
   const status = useRuntimeStore(state => state.viewer.status);
+  const viewerEpoch = useRuntimeStore(state => state.viewer.epoch);
   const mode = ui.entryMode;
   const view = ui.view;
   const level = ui.level;
@@ -285,7 +286,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   });
   const layers = useMemo(() => ({ ...layerPreferences, airflow: projected.airflow, heatmap: projected.heatmap, xray: projected.xray !== null }),
     [layerPreferences, projected.airflow, projected.heatmap, projected.xray]);
-  const appliedCameraView = useRef<CameraView | undefined>(undefined);
+  const appliedCameraView = useRef<{ epoch: string | undefined; view: CameraView } | undefined>(undefined);
   const tourTimelineRef = useRef<TourTimeline | null>(null);
   const waferTimelineRef = useRef<WaferTimeline | null>(null);
   const waferHudRef = useRef<WaferHud | null>(null);
@@ -419,11 +420,11 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
 
   useEffect(() => {
     if (!status.startsWith('WebGPU')) return;
-    // A rebuilt GPU retains the camera object and its user pose. Fresh mounts
-    // still apply the requested preset; explicit preset changes always apply.
-    if (status.startsWith('WebGPU ·') || appliedCameraView.current !== view) scene.current?.setView(view);
-    appliedCameraView.current = view;
-  }, [status, view]);
+    // GPU recovery belongs to the same viewport lifetime and restores its user
+    // pose. Only a fresh mount/reload or a requested view change applies a preset.
+    if (appliedCameraView.current?.epoch !== viewerEpoch || appliedCameraView.current?.view !== view) scene.current?.setView(view);
+    appliedCameraView.current = { epoch: viewerEpoch, view };
+  }, [status, view, viewerEpoch]);
 
   useEffect(() => {
     if (!status.startsWith('WebGPU')) return;

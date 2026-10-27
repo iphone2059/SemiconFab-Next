@@ -312,20 +312,25 @@ interface RecoveryWorker {
  * Worker-fault harness: replies can be withheld, postMessage failures injected and
  * every Worker generation created by a rebuild is observable.
  */
-function recoveryHarness(options: { deliverNow?: boolean; workerTimeoutMs?: number } = {}) {
+function recoveryHarness(options: { deliverNow?: boolean; workerTimeoutMs?: number; failedConstructions?: readonly number[]; failedResets?: readonly number[] } = {}) {
   const handler = createTelemetryWorkerHandler({ frameSize: 32 });
   const commands: PostedCommand[] = [];
   const replies: TelemetryWorkerEvent[] = [];
   const workers: RecoveryWorker[] = [];
   let deliverNow = options.deliverNow !== false;
   let throwNextPost = false;
+  let constructions = 0;
   const factory = (): RecoveryWorker => {
+    constructions++;
+    if (options.failedConstructions?.includes(constructions)) throw new Error('transient Worker construction failure');
+    const construction = constructions;
     const worker: RecoveryWorker = {
       onmessage: null,
       onerror: null,
       onmessageerror: null,
       terminated: false,
       postMessage(message: unknown) {
+        if ((message as PostedCommand).type === 'reset' && options.failedResets?.includes(construction)) throw new Error('Worker reset failed');
         if (throwNextPost) {
           throwNextPost = false;
           throw new Error('injected postMessage failure');
@@ -372,8 +377,131 @@ function recoveryHarness(options: { deliverNow?: boolean; workerTimeoutMs?: numb
     else current().onmessageerror?.('worker decode failed');
   };
   const throwNextPostMessage = () => { throwNextPost = true; };
-  return { runtime, source, workers, commands, replies, frames, current, deliver, fail, send, sendSamples, throwNextPostMessage };
+  return { runtime, source, workers, commands, replies, frames, current, deliver, fail, send, sendSamples, throwNextPostMessage, constructions: () => constructions };
 }
+
+it('retries transient Worker construction failure and preserves sparse pending slots', () => {
+  vi.useFakeTimers();
+  const h = recoveryHarness({ failedConstructions: [2] });
+  try {
+    h.send(1, 2);
+    h.fail('error');
+    expect(h.runtime.getToolStates()).toBeUndefined();
+    h.sendSamples(2, [{ entityId: 'equipment-1', values: { state: 1 } }]);
+    h.sendSamples(3, [{ entityId: 'equipment-2', values: { state: 3 } }]);
+    expect(h.constructions()).toBe(2);
+    vi.advanceTimersByTime(250);
+    expect(h.constructions()).toBe(3);
+    expect(h.runtime.getSnapshot()?.sequence).toBe(3);
+    expect(h.runtime.getToolStates()?.slice(0, 3)).toEqual(['down', 'idle', 'maint']);
+    expect(h.runtime.stale).toBe(false);
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
+
+it.each(['constructor', 'reset'] as const)('backs off repeated %s faults and cancels recovery on stop', (fault) => {
+  vi.useFakeTimers();
+  const failures = [2, 3, 4, 5, 6, 7, 8, 9];
+  const h = recoveryHarness(fault === 'constructor' ? { failedConstructions: failures } : { failedResets: failures });
+  try {
+    h.fail('error');
+    h.send(1, 2);
+    vi.advanceTimersByTime(249);
+    expect(h.constructions()).toBe(2);
+    vi.advanceTimersByTime(1);
+    expect(h.constructions()).toBe(3);
+    vi.advanceTimersByTime(499);
+    expect(h.constructions()).toBe(3);
+    vi.advanceTimersByTime(1);
+    expect(h.constructions()).toBe(4);
+    const attempts = h.constructions();
+    h.runtime.stop();
+    vi.advanceTimersByTime(60_000);
+    expect(h.constructions()).toBe(attempts);
+    expect(h.runtime.status).toBe('stopped');
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
+
+it('recovers even when the initial Worker constructor fails', () => {
+  vi.useFakeTimers();
+  const h = recoveryHarness({ failedConstructions: [1] });
+  try {
+    h.send(1, 3);
+    expect(h.runtime.failed).toBe(true);
+    vi.advanceTimersByTime(250);
+    expect(h.runtime.getSnapshot()?.sequence).toBe(1);
+    expect(h.runtime.getToolStates()?.[0]).toBe('maint');
+    expect(h.runtime.failed).toBe(false);
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
+
+it('replays a failed postMessage without waiting for another SSE frame', () => {
+  vi.useFakeTimers();
+  const h = recoveryHarness();
+  try {
+    h.throwNextPostMessage();
+    h.send(1, 2);
+    expect(h.runtime.getSnapshot()).toBeUndefined();
+    vi.advanceTimersByTime(250);
+    expect(h.runtime.getSnapshot()?.sequence).toBe(1);
+    expect(h.runtime.getToolStates()?.[0]).toBe('down');
+    expect(h.constructions()).toBe(2); // the healthy replacement is reused
+    expect(vi.getTimerCount()).toBe(0);
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
+
+it('a pending retry never submits a second frame while the replacement is in flight', () => {
+  vi.useFakeTimers();
+  const h = recoveryHarness({ deliverNow: false });
+  try {
+    h.throwNextPostMessage();
+    h.send(1, 2);
+    h.send(2, 1); // healthy replacement now has an in-flight frame
+    h.send(3, 3); // latest pending frame
+    vi.advanceTimersByTime(250);
+    expect(h.frames().map(frame => frame.sequence)).toEqual([2]);
+    h.deliver(0);
+    expect(h.frames().map(frame => frame.sequence)).toEqual([2, 3]);
+    h.deliver(1);
+    expect(h.runtime.getToolStates()?.[0]).toBe('maint');
+    expect(vi.getTimerCount()).toBe(0);
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
+
+it('backs off asynchronously failing replacements instead of rebuilding once per error event', () => {
+  vi.useFakeTimers();
+  const h = recoveryHarness();
+  try {
+    h.send(1, 0);
+    h.fail('error'); // first immediate replacement
+    h.fail('error'); // replacement also crashes before producing a valid frame
+    h.send(2, 2);
+    expect(h.constructions()).toBe(2);
+    vi.advanceTimersByTime(249);
+    expect(h.constructions()).toBe(2);
+    vi.advanceTimersByTime(1);
+    expect(h.constructions()).toBe(3);
+    expect(h.runtime.getSnapshot()?.sequence).toBe(2);
+    expect(h.runtime.getToolStates()?.[0]).toBe('down');
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
+
+it('caps Worker retry delays at eight seconds without making frame bursts create extra attempts', () => {
+  vi.useFakeTimers();
+  const h = recoveryHarness({ failedConstructions: Array.from({ length: 30 }, (_, index) => index + 2) });
+  try {
+    h.fail('error');
+    for (let sequence = 1; sequence <= 100; sequence++) h.send(sequence, 2);
+    expect(h.constructions()).toBe(2);
+    vi.advanceTimersByTime(15_750); // 250 + 500 + 1000 + 2000 + 4000 + 8000
+    expect(h.constructions()).toBe(8);
+    vi.advanceTimersByTime(7_999);
+    expect(h.constructions()).toBe(8);
+    vi.advanceTimersByTime(1);
+    expect(h.constructions()).toBe(9);
+    vi.advanceTimersByTime(8_000);
+    expect(h.constructions()).toBe(10);
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
 
 it('releases the in-flight slot and exposes stale after a Worker error, then recovers', () => {
   const h = recoveryHarness({ deliverNow: false });
