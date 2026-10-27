@@ -12,6 +12,8 @@ export interface CommandEventBridgeOptions {
   readonly correlation?: CommandCorrelationRegistry;
   /** Called when a result has no workflow yet; the event is also held in the bounded recovery queue. */
   readonly onUncorrelated?: (event: CommandResultEvent) => void;
+  /** Called after a result is delivered to a workflow (used by Runtime projections). */
+  readonly onResultDelivered?: (event: CommandResultEvent) => void;
 }
 
 /**
@@ -71,6 +73,7 @@ export class CommandEventBridge {
         continue;
       }
       workflow.receive(event);
+      this.options.onResultDelivered?.(event);
       delivered += 1;
     }
     return delivered;
@@ -104,6 +107,7 @@ export class CommandEventBridge {
     const workflow = this.workflows.get(event.fabId, event.commandId);
     if (workflow) {
       workflow.receive(event);
+      this.options.onResultDelivered?.(event);
       return;
     }
     this.recovery.hold(event);

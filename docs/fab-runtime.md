@@ -3,7 +3,7 @@
 - 版本：V2.1 / 2026-10-27
 - 状态：**M4 已实现（测试源验证；产品接线待 M5）**（M4 implemented / product wiring pending）
 - 依据：[ADR-0010](adr/0010-command-event-bridge.md)；桥见 [命令事件桥](command-event-bridge.md)；恢复见 [命令核对](command-reconciliation.md)；协议见 [实时协议](realtime-protocol.md)
-- 当前实现：`web_app/src/runtime/` 已有 FabRuntime/Factory/Registry/LifecycleCoordinator，并在测试源上通过 CE-06/CE-07/CE-08；`RuntimeProvider` 仅提供 React seam，未挂到 AppProviders。页面仍直接装配设备状态 SSE，真实命令流/多 FAB UI 待 M5+。
+- 当前实现：`web_app/src/runtime/` 已有 FabRuntime/Factory/Registry/LifecycleCoordinator；M5a 通过 `RuntimeBootstrap` 挂入 AppProviders，按 sites 为每个 FAB 装配并启停，`RuntimeProvider`/`useCommandProjection` 提供只读投影。命令源当前为空/可替换（`runtime/commandSources.ts`），真实命令流待后端；Workbench 在数据含多 FAB 时显示 FAB 选择器。
 
 ## 1. 定位
 

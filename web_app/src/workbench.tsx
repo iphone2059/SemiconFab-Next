@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateRunRequest, SiteDto } from './contracts';
 import { Panel, StatusPill } from './ui';
@@ -11,6 +11,7 @@ import { createRun, invalidateRuns } from './api/mutations/runs.mutations';
 import { sitesQueryOptions } from './api/queries/sites.queries';
 import { fab3dPath } from './app/router/url-mapping';
 import { useWorkbenchStore, workbenchActions } from './state/workbenchStore';
+import { useFabRuntimeRegistry } from './app/providers/RuntimeProvider';
 const message = (error: unknown): string => {
   if (error instanceof Error) return error.message;
   if (error && typeof error === 'object') {
@@ -293,6 +294,8 @@ function Workbench({ site }: { site: SiteDto }) {
 
 export default function WorkbenchApp() {
   const siteId = useWorkbenchStore((state) => state.siteId);
+  const runtimeRegistry = useFabRuntimeRegistry();
+  const [fabIndex, setFabIndex] = useState(0);
   const sitesQuery = useQuery(sitesQueryOptions());
   const sites = sitesQuery.data ?? [];
   const loading = sitesQuery.isLoading;
@@ -302,9 +305,11 @@ export default function WorkbenchApp() {
     if (!sites.some((value) => value.siteId === siteId)) workbenchActions.siteIdSet(sites[0].siteId);
   }, [sites, siteId]);
   const site = sites.find((value) => value.siteId === siteId);
-  // The 3D link points at the final canonical URL for the selected site's FAB.
-  const fabId = site?.fabs[0]?.fabId;
-  const threeDeeHref = fabId ? fab3dPath(fabId) : '/';
+  const fabs = site?.fabs ?? [];
+  const selectedFab = fabs[Math.min(fabIndex, Math.max(0, fabs.length - 1))];
+  useEffect(() => { setFabIndex(0); }, [siteId]);
+  // The 3D link points at the final canonical URL for the selected FAB.
+  const threeDeeHref = selectedFab ? fab3dPath(selectedFab.fabId) : '/';
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -327,6 +332,22 @@ export default function WorkbenchApp() {
           <span>▤</span>设备目录
         </a>
         <a className="nav-link" href={threeDeeHref} target="_blank" rel="noopener noreferrer"><span>◇</span>3D FAB</a>
+        {fabs.length > 1 && (
+          <label className="sidebar-note">
+            <span className="technical">FAB</span>
+            <select value={fabIndex} onChange={(event) => setFabIndex(Number(event.target.value))}>
+              {fabs.map((fab, index) => (
+                <option key={fab.fabId} value={index}>{fab.code}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        {runtimeRegistry && runtimeRegistry.size > 0 && (
+          <div className="sidebar-note">
+            <span className="technical">XSTATE RUNTIMES</span>
+            <p>{runtimeRegistry.size} FAB · v6</p>
+          </div>
+        )}
         <div className="sidebar-note">
           <span className="technical">DEVELOPMENT SLICE</span>
           <p>

@@ -87,6 +87,20 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     expect(lifecycle.running).toBe(false);
   });
 
+  it('exposes read-only workflow projections and notifies UI subscribers', () => {
+    const source = new FakeCommandEventSource();
+    const runtime = new FabRuntimeFactory({ sourceFor: () => source }).create('fab-a');
+    const notifications: number[] = [];
+    runtime.subscribe(() => notifications.push(notifications.length));
+    runtime.start();
+    runtime.trackCommand(commandId);
+    expect(runtime.getProjection(commandId)).toMatchObject({ state: 'idle', revision: -1, outcome: 'pending' });
+    source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'accepted' }));
+    expect(runtime.getProjection(commandId)).toMatchObject({ state: 'accepted', revision: 1, outcome: 'accepted' });
+    expect(notifications.length).toBeGreaterThan(0);
+    runtime.dispose();
+  });
+
   it('exposes reconcileCommand only when a gateway is assembled', async () => {
     const source = new FakeCommandEventSource();
     const runtime = new FabRuntimeFactory({ sourceFor: () => source }).create('fab-a');

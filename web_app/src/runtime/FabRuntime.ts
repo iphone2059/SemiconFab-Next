@@ -1,6 +1,6 @@
 import type { CommandEventSource } from '../application/contracts/CommandEvents';
 import type { CommandGateway } from '../application/contracts/CommandGateway';
-import type { CommandWorkflow, CommandWorkflowRegistry } from '../application/contracts/CommandWorkflow';
+import type { CommandWorkflow, CommandWorkflowProjection, CommandWorkflowRegistry } from '../application/contracts/CommandWorkflow';
 import { CommandEventBridge } from '../application/coordination/CommandEventBridge';
 import { CommandReconciler } from '../workflows/equipment/CommandReconciler';
 import { XStateCommandWorkflowAdapter } from '../workflows/equipment/XStateCommandWorkflowAdapter';
@@ -24,6 +24,7 @@ export interface FabRuntimeOptions {
 export class FabRuntime {
   readonly fabId: string;
   private readonly workflows = new Map<string, CommandWorkflow>();
+  private readonly listeners = new Set<() => void>();
   private readonly bridge: CommandEventBridge;
   private readonly reconciler?: CommandReconciler;
   private readonly createWorkflow: CommandWorkflowFactory;
@@ -36,7 +37,10 @@ export class FabRuntime {
     const registry: CommandWorkflowRegistry = {
       get: (fabId, commandId) => (fabId === this.fabId ? this.workflows.get(commandId) : undefined),
     };
-    this.bridge = new CommandEventBridge(options.source, registry, { fabId: options.fabId });
+    this.bridge = new CommandEventBridge(options.source, registry, {
+      fabId: options.fabId,
+      onResultDelivered: () => { this.notify(); },
+    });
   }
 
   start(): void {
@@ -58,6 +62,7 @@ export class FabRuntime {
     const workflow = this.createWorkflow(this.fabId, commandId);
     this.workflows.set(commandId, workflow);
     this.bridge.flushRecovery();
+    this.notify();
     return workflow;
   }
 
@@ -69,14 +74,31 @@ export class FabRuntime {
   async reconcileCommand(commandId: string): Promise<boolean> {
     const workflow = this.workflows.get(commandId);
     if (!workflow || !this.reconciler) return false;
-    return this.reconciler.reconcile(workflow, this.fabId, commandId);
+    const reconciled = await this.reconciler.reconcile(workflow, this.fabId, commandId);
+    if (reconciled) this.notify();
+    return reconciled;
   }
 
   dispose(): void {
     this.stop();
     for (const workflow of this.workflows.values()) workflow.dispose();
     this.workflows.clear();
+    this.listeners.clear();
     this.bridge.dispose();
+  }
+
+  /** UI projection subscription: read-only, never writes workflow state. */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  getProjection(commandId: string): CommandWorkflowProjection | undefined {
+    return this.workflows.get(commandId)?.projection;
+  }
+
+  private notify(): void {
+    for (const listener of this.listeners) listener();
   }
 
   get workflowCount(): number {

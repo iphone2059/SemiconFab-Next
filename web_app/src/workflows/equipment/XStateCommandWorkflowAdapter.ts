@@ -1,6 +1,6 @@
 import { createActor, type Actor } from 'xstate';
 import type { CommandResultEvent } from '../../application/contracts/CommandEvents';
-import type { CommandWorkflow } from '../../application/contracts/CommandWorkflow';
+import type { CommandWorkflow, CommandWorkflowProjection } from '../../application/contracts/CommandWorkflow';
 import { CommandReconciler } from './CommandReconciler';
 import {
   isTerminalState,
@@ -59,5 +59,14 @@ export class XStateCommandWorkflowAdapter implements CommandWorkflow {
 
   get isTerminal(): boolean {
     return isTerminalState(this.state);
+  }
+
+  get projection(): CommandWorkflowProjection {
+    const snapshot = this.actor.getSnapshot();
+    return {
+      state: this.state,
+      revision: snapshot.context.revision,
+      outcome: snapshot.context.outcome,
+    };
   }
 }

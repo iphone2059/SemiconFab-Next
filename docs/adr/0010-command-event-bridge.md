@@ -1,6 +1,6 @@
 # ADR-0010 — 实时基础设施只提供类型化流，Application 层 CommandEventBridge 协调，XState 工作流隐藏在契约之后
 
-- 状态：已采纳（2026-10-27）；实施状态：M3+M4 已实现——契约/类型化流/CommandEventBridge/恢复队列、XState v6 工作流、FabRuntime/Factory/Registry/Lifecycle 已在测试源上验证；真实后端实时链路未接（Status: Accepted / M4 implemented / real backend pending）
+- 状态：已采纳（2026-10-27）；实施状态：M3+M4 + M5a 产品接线已实现——契约/类型化流/CommandEventBridge/恢复队列、XState v6 工作流、FabRuntime/Factory/Registry/Lifecycle、RuntimeBootstrap 产品装配与只读投影；后端命令流仍未接（Status: Accepted / M5a product wiring done / real backend pending）
 - 取代：迁移完成后取代 [ADR-0008](0008-redux-toolkit-rtk-query.md) 中“SSE 帧直接 dispatch 进 Redux slice”的命令/实时接线方式；ADR-0008 的“Babylon 对象不进入状态容器、遥测合批”原则保留，但在 `ARCH-11` 下进一步收紧
 - 关联：[ADR-0009](0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0003](0003-single-web-app.md)；细则见 [命令事件桥](../command-event-bridge.md)、[命令核对](../command-reconciliation.md)、[实时协议](../realtime-protocol.md)、[FAB 运行时](../fab-runtime.md)；基线见 [架构基线](../architecture.md)
 - 决策范围：仅前端 `web_app` 的实时/命令链路。M3/M4 已按本决策实现 contracts/realtime/application coordination 与 XState v6/FabRuntime；`RuntimeProvider` 未挂到产品树；后端实时服务仍是占位模式（`fab_app -- --realtime` 退出码 2），生产 WebSocket 源尚不存在
