@@ -382,7 +382,7 @@ public sealed class LocalOrchestrationTests : IDisposable
         await Task.Delay(100);
         store.Submit(Request(), "operator", "key");
         await waiting.WaitAsync(TimeSpan.FromSeconds(5));
-        // Every new Run releases the semaphore again, so the next wait completes without blocking.
+        // A new Run leaves one coalesced pending wakeup, so the next wait completes without blocking.
         store.Submit(Request() with { Scenario = Request().Scenario with { MasterSeed = "43" } }, "operator", "second");
         await store.WaitForWorkAsync(TimeSpan.FromSeconds(5), CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
     }
@@ -393,6 +393,43 @@ public sealed class LocalOrchestrationTests : IDisposable
         var store = new FileRunStore(directory);
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.WaitForWorkAsync(TimeSpan.FromSeconds(10), cancellation.Token));
+    }
+
+    [Fact]
+    public async Task Batched_submits_leave_at_most_one_pending_wakeup()
+    {
+        var store = new FileRunStore(directory);
+        for (var index = 0; index < 20; index += 1)
+            store.Submit(Request(), "operator", "batch-" + index);
+
+        // Simulate a worker that is busy claiming: it never waits while work exists, so every
+        // Submit wakeup released during the batch piles up until the work drains.
+        var emptyClaims = 0;
+        while (true)
+        {
+            var lease = store.TryClaim("worker");
+            if (lease is not null)
+            {
+                store.Complete(lease, Result());
+                continue;
+            }
+            emptyClaims += 1;
+            if (!await store.WaitForWorkAsync(TimeSpan.FromMilliseconds(50), CancellationToken.None)) break;
+            Assert.True(emptyClaims <= 2, $"expected coalesced wakeups, saw {emptyClaims} consecutive empty claims");
+        }
+
+        // Capacity-one notification: one stale wake may remain after the batch, never one per Submit.
+        Assert.InRange(emptyClaims, 1, 2);
+    }
+
+    [Fact]
+    public async Task Repeated_idempotent_submits_coalesce_into_one_wakeup()
+    {
+        var store = new FileRunStore(directory);
+        for (var index = 0; index < 10; index += 1) store.Submit(Request(), "operator", "same-key");
+
+        Assert.True(await store.WaitForWorkAsync(TimeSpan.FromSeconds(2), CancellationToken.None));
+        Assert.False(await store.WaitForWorkAsync(TimeSpan.FromMilliseconds(100), CancellationToken.None));
     }
 
     [Fact]

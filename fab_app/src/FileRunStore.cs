@@ -19,7 +19,10 @@ public sealed class FileRunStore : IRunService
     private readonly string resultsDirectory;
     private readonly string idempotencyDirectory;
     private readonly string pendingIndexPath;
-    private readonly SemaphoreSlim submittedWork = new(0);
+    // Capacity one: submissions coalesce into a single pending wakeup so a worker that is busy
+    // claiming never accumulates a burst of empty claims after a large batch drains. The durable
+    // pending index remains the source of truth; this signal is only a latency optimization.
+    private readonly SemaphoreSlim submittedWork = new(0, 1);
     private readonly TimeProvider clock;
     private readonly HashSet<string> knownIdempotencyShards = new(StringComparer.Ordinal);
     private volatile bool idempotencyIndexReconciled;
@@ -70,7 +73,7 @@ public sealed class FileRunStore : IRunService
         {
             if (existing.RequestHash != requestHash) throw new IdempotencyConflictException("The idempotency key already identifies a different request.");
             // A replayed Submit may be retrying a Run that is still queued, so idle workers are notified too.
-            submittedWork.Release();
+            SignalSubmittedWork();
             return CreationSummary(ReadRun(existing.RunId) ?? throw new InvalidDataException("Idempotency index references a missing Run."));
         }
         var record = new StoredRun
@@ -81,7 +84,9 @@ public sealed class FileRunStore : IRunService
         };
         Save(record);
         shard.Add(scope, new IdempotencyEntry(record.Id, requestHash));
-        // Only this one shard is rewritten; Submit never touches the rest of the history.
+        // Only this one shard is rewritten; Submit never touches the rest of the history. Shard size
+        // still grows with the idempotency records hashing to the same prefix (about 1/256 of the
+        // total under uniform hashing), which is orders below the single-file index this replaced.
         AtomicWrite(IdempotencyShardPath(shardPrefix), Serialize(shard));
         knownIdempotencyShards.Add(shardPrefix);
         // Publish the claimable executions after the Run is durable. If the process dies between the
@@ -90,7 +95,7 @@ public sealed class FileRunStore : IRunService
         if (pending is null) pending = RebuildPendingIndex(record.CreatedAtUtc);
         else AppendPendingEntries(pending, record);
         WritePendingIndex(pending);
-        submittedWork.Release();
+        SignalSubmittedWork();
         return CreationSummary(record);
     }
 
@@ -114,11 +119,19 @@ public sealed class FileRunStore : IRunService
             ? new RunResult(run.Id.ToString("D"), run.Executions.Select(ReadResult).ToArray()) : null;
     }
 
-    /// <summary>Waits until this store instance learns about submitted work, the timeout elapses, or the token is cancelled.</summary>
-    public Task WaitForWorkAsync(TimeSpan timeout, CancellationToken token)
+    /// <summary>Waits until this store instance learns about submitted work, the timeout elapses, or the token is cancelled.
+    /// Returns true when a coalesced submit notification was consumed, false on timeout.</summary>
+    public async Task<bool> WaitForWorkAsync(TimeSpan timeout, CancellationToken token)
     {
         if (timeout < TimeSpan.Zero && timeout != Timeout.InfiniteTimeSpan) throw new ArgumentOutOfRangeException(nameof(timeout));
-        return submittedWork.WaitAsync(timeout, token);
+        return await submittedWork.WaitAsync(timeout, token);
+    }
+
+    /// <summary>Signals at most one pending wakeup; a burst of Submits coalesces into one notification.</summary>
+    private void SignalSubmittedWork()
+    {
+        try { submittedWork.Release(); }
+        catch (SemaphoreFullException) { }
     }
 
     /// <summary>Forces authoritative recovery of both persisted indexes from the Run records (used at worker startup).</summary>

@@ -74,8 +74,8 @@ public sealed class SimulationWorker(FileRunStore store, ISimulationExecutionPor
         {
             try
             {
-                // Wake as soon as this store instance learns about a Submit; the 1 s timeout still
-                // lets idle workers discover leases that expired without an in-process notification.
+                // Wake on the coalesced Submit notification (at most one pending); the 1 s timeout
+                // still lets idle workers discover leases that expired without an in-process signal.
                 if (!await ProcessNextAsync(stoppingToken)) await store.WaitForWorkAsync(TimeSpan.FromSeconds(1), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
