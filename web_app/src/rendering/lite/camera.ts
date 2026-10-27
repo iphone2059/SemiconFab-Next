@@ -1,5 +1,6 @@
 import { getCameraPosition, runFrameInterpolation, type ArcRotateCamera, type SceneContext } from '@babylonjs/lite';
 import type { SceneViewPreset } from '../../fab-scene';
+import { bindSourceOrbitInput, createSourceOrbitMotion } from './source-orbit-input';
 
 type Point = readonly [number, number, number];
 export interface LiteCameraPose { position: Point; target: Point }
@@ -10,14 +11,18 @@ export function createLiteCamera(scene: SceneContext, camera: ArcRotateCamera) {
     const p = getCameraPosition(camera);
     return { position: [p.x, p.y, -p.z || 0], target: [camera.target.x, camera.target.y, -camera.target.z || 0] };
   };
+  const sourceOrbit = createSourceOrbitMotion(readPose, (position, target, radius) => apply(position, target, radius));
   function cancel() {
+    sourceOrbit.clear();
     transition?.abort(); transition = undefined;
     camera.inertialAlphaOffset = camera.inertialBetaOffset = camera.inertialRadiusOffset = 0;
     camera.inertialPanningX = camera.inertialPanningY = 0;
   }
-  function apply(position: Point, target: Point) {
+  function apply(position: Point, target: Point, radiusOverride?: number) {
     const dx = position[0] - target[0], dy = position[1] - target[1], dz = position[2] - target[2];
-    const radius = Math.max(0.0001, Math.hypot(dx, dy, dz));
+    // The orbit adapter already clamps to the source min/max distance; keep its exact radius so
+    // limit values (e.g. 4/180) are not perturbed by re-deriving the length from rounded components.
+    const radius = Math.max(0.0001, radiusOverride ?? Math.hypot(dx, dy, dz));
     camera.target.x = target[0]; camera.target.y = target[1]; camera.target.z = -target[2];
     camera.alpha = Math.atan2(-dz, dx); camera.beta = Math.acos(Math.max(-1, Math.min(1, dy / radius))); camera.radius = radius;
   }
@@ -72,9 +77,18 @@ export function createLiteCamera(scene: SceneContext, camera: ArcRotateCamera) {
     else setPose([38, 48, 58], [0, 0, 0], durationMs);
   }
   return { readPose, setPose, preset, focus, cancel,
+    attachInput(canvas: HTMLCanvasElement) {
+      return bindSourceOrbitInput(canvas, sourceOrbit, () => {
+        if (transition) { transition.abort(); transition = undefined; }
+      });
+    },
+    /** OrbitControls r128 updates on input and before each rendered frame. */
+    update: sourceOrbit.update,
     zoom(deltaY: number) {
       if (disposed || !Number.isFinite(deltaY)) return;
-      cancel(); camera.radius = Math.min(180, Math.max(4, camera.radius * Math.exp(Math.max(-240, Math.min(240, deltaY)) * 0.0028)));
+      if (transition) { transition.abort(); transition = undefined; }
+      sourceOrbit.wheel(deltaY);
+      sourceOrbit.update();
     },
     dispose() { disposed = true; cancel(); },
   };

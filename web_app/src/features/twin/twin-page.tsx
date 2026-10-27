@@ -885,6 +885,10 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
           toolStates={toolStates}
           onToolChange={handleToolChange}
           onAmhsStatsChange={amhsBatcher.push}
+          onCameraInteraction={() => {
+            if (tourTimelineRef.current) finishTour();
+            if (useTwinPageStore.getState().wafer.follow) twinPageActions.waferFollowSet(false);
+          }}
           getToolStates={getToolStates}
           layers={layers}
           explodeFactor={level === 'EXPLODED' ? explodePercent / 100 : 0}

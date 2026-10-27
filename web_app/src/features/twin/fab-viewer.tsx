@@ -3,7 +3,6 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { useRuntimeStore, runtimeActions } from '../../state/runtimeStore';
 import { createCoalescedDispatcher } from '../../state/telemetry-buffer';
 import type { FabDto, SiteDto } from '../../contracts';
-import { bindViewerZoom } from '../../viewer-zoom';
 import { SceneFacade, type AmhsStats, type CutAxis, type HoveredTool, type PickedTool, type SceneLayer, type SceneViewPreset, type XRayFilter } from '../../fab-scene';
 import { FAB_TOOL_STATE_META, type FabToolState } from '../../fab-layout';
 
@@ -19,6 +18,8 @@ export interface FabViewportProps {
   dual: boolean;
   onStatusChange?: (status: string) => void;
   onAmhsStatsChange?: (stats: AmhsStats) => void;
+  /** Match source OrbitControls start: stop guided camera ownership on user input. */
+  onCameraInteraction?: () => void;
   /** Optional frame-loop source read directly from the store without a React prop pass. */
   getToolStates?: () => readonly FabToolState[];
 }
@@ -47,12 +48,11 @@ export interface FabViewportHandle {
 }
 
 export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(function FabViewport(
-  { site, fab, toolStates, onToolChange, layers, explodeFactor, explodeMode, basement, dual, onStatusChange, onAmhsStatsChange, getToolStates },
+  { site, fab, toolStates, onToolChange, layers, explodeFactor, explodeMode, basement, dual, onStatusChange, onAmhsStatsChange, onCameraInteraction, getToolStates },
   ref,
 ) {
   const { t } = useTwinLocale();
   const canvas = useRef<HTMLCanvasElement>(null);
-  const surface = useRef<HTMLDivElement>(null);
   const facade = useRef<SceneFacade | undefined>(undefined);
   const frameSource = useRef({ getToolStates, toolStates });
   frameSource.current = { getToolStates, toolStates };
@@ -60,11 +60,6 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
   const generation = useRuntimeStore(state => state.viewer.generation);
   const hoveredTool = useRuntimeStore(state => state.viewer.hover);
   const ready = status.startsWith('WebGPU ·') || status.startsWith('WebGPU 设备');
-
-  useEffect(() => {
-    const root = surface.current;
-    if (root) return bindViewerZoom(root, (delta) => facade.current?.zoom(delta));
-  }, []);
 
   useEffect(() => {
     const element = canvas.current;
@@ -169,8 +164,11 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
   useEffect(() => { if (ready) facade.current?.setDual(dual); }, [dual, ready]);
   const hovered = hoveredTool?.tool;
   return (
-    <div ref={surface} className="scene twin-canvas">
-      <canvas ref={canvas} aria-label={t("FAB WebGPU 场景")} />
+    <div className="scene twin-canvas">
+      <canvas ref={canvas} aria-label={t("FAB WebGPU 场景")}
+        onPointerDownCapture={event => { if (event.pointerType !== "touch" && event.button >= 0 && event.button <= 2) onCameraInteraction?.(); }}
+        onTouchStartCapture={() => onCameraInteraction?.()}
+        onWheelCapture={() => onCameraInteraction?.()} />
       {hovered && <div className="twin-hovercard" style={{ left: hoveredTool.x + 12, top: hoveredTool.y + 12 }}>
         <strong>{hovered.vendor} {hovered.model}</strong>
         <span>{t(FAB_TOOL_STATE_META[toolStates[hovered.index] ?? hovered.state].label)} · #{hovered.index + 1}</span>
