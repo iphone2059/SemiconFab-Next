@@ -5,7 +5,7 @@
   - 契约/架构检查 PASS
   - 8 个 Python 工具测试 PASS
   - 3 个 .NET 项目 Release 构建 + 67 测试 PASS
-  - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **60 文件 / 267 测试 PASS**、`vite build` 0
+  - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **60 文件 / 265 测试 PASS**、`vite build` 0
 
 ## 当前架构
 
@@ -20,7 +20,7 @@ Babylon Lite 1.36   WebGPU-only 渲染
 ```
 
 - 产品 URL：`/`、`/fabs/{fabId}/3d`、`/equipment`、`/equipment/compare`；旧地址无重定向。
-- 目录：`src/app`、`src/api`、`src/state`、`src/application`、`src/realtime`、`src/workflows`、`src/runtime`、`src/rendering/lite`。
+- 目录：`src/app`、`src/api`、`src/state`、`src/application`、`src/realtime`、`src/runtime`（含 `runtime/commands` XState 实现）、`src/rendering/lite`。
 - 旧 `src/render`、Redux/`src/store`、RTK Query、immer、Babylon 旧代码/旧迁移文档/parity 工具与测试均已删除（Git 历史保留）。
 
 ## 里程碑
@@ -51,4 +51,4 @@ Babylon Lite 1.36   WebGPU-only 渲染
 - Worker/遥测未接真实数据源；SharedArrayBuffer/COOP-COEP 策略未定（OPEN-V21-14）。
 - GPU/WebGPU 性能门禁需真实 GPU 浏览器环境。
 - 当前产品数据为单 FAB；多 FAB runtime/UI 已数据驱动实现。
-- XState v6 为 alpha（6.0.0-alpha.70），升级需重跑契约/集成测试。
+- XState 工作流实现位于 `runtime/commands`，经 `CommandWorkflow` 契约暴露；目录位置不构成强制。

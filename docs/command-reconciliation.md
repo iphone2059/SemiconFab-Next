@@ -126,7 +126,7 @@ reconcile(commandId):
 |---|---|
 | 实时协议 | 提供事件与序列/缺口信号；不做业务去重（[实时协议](realtime-protocol.md)） |
 | CommandEventBridge | 触发恢复记录、调用 reconcile；不写 Query/UI |
-| workflows/equipment/CommandReconciler | 具体核对逻辑：调用权威查询、把结果应用到 actor |
+| runtime/commands/CommandReconciler | 具体核对逻辑：调用权威查询、把结果应用到 actor |
 | XState actor | 持有命令生命周期；通过受控路径接受 reconcile 结果 |
 | TanStack Query | 只读展示权威状态（`command.queries.ts`）；不是恢复队列/权威来源 |
 | 后端 | 持久化恢复的最终责任方；提供权威查询 |

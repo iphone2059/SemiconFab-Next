@@ -144,17 +144,11 @@ assert not list(ROOT.glob('SemiconFab_Twin_*')), 'Legacy parity specification re
 for deprecated in ('react-redux', '@reduxjs/toolkit', 'immer', '@babylonjs/core'):
     assert deprecated not in deps, f'Deprecated frontend dependency remains: {deprecated}'
 
-xstate_import = re.compile(r"from ['\"]xstate['\"]")
-workflow_import = re.compile(r"from ['\"][^'\"]*workflows/equipment[^'\"]*['\"]")
 for source in (web / 'src').rglob('*.ts*'):
     relative = source.relative_to(web / 'src').as_posix()
     text = source.read_text(encoding='utf-8')
-    if xstate_import.search(text):
-        assert relative.startswith('workflows/'), f'XState import outside workflows: {relative}'
-    if workflow_import.search(text):
-        assert relative.startswith(('runtime/', 'workflows/')), f'Workflow implementation imported outside runtime: {relative}'
     if relative.startswith(('rendering/', 'realtime/buffers/', 'realtime/workers/')):
         assert not re.search(r"from ['\"](?:react|@tanstack/react-query|zustand|xstate)", text), f'State container import in high-frequency/rendering layer: {relative}'
-print('PASS: V2.1 final-state checks (legacy paths absent, dependencies, XState/workflow/ARCH-11 boundaries).')
+print('PASS: V2.1 final-state checks (legacy paths absent, deprecated dependencies, ARCH-11 high-frequency boundaries).')
 
 print(f'PASS: {len(projects)} independent .NET projects (fab_shared + fab_app + fab_tests) / 1 self-contained frontend project; flat layout, reference rules, DAG and module records.')

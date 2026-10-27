@@ -100,7 +100,7 @@ WebSocket -> realtime/transport -> MessageDecoder（或在 Worker 内）
 - FabRuntime 只装配命令/实时链路，不拥有渲染生命周期；渲染由 `SceneFacade`/`rendering` 管理（[FAB 运行时](fab-runtime.md)）。
 - 命令工作流不消费高频遥测，也不驱动逐帧渲染；命令结果只影响 UI/业务状态与必要时的一次性场景标记。
 - 高频告警若要改变 3D 标记，通过缓冲/渲染状态进入，不经过 XState/Query。
-- 渲染层不得 import `workflows`/`application/coordination`。
+- 渲染层不得 import `runtime/commands`/`application/coordination`。
 
 ## 9. 风险与开放问题
 

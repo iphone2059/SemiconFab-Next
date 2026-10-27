@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import type { CommandGateway } from '../../src/application/contracts/CommandGateway';
-import { CommandReconciler } from '../../src/workflows/equipment/CommandReconciler';
-import { XStateCommandWorkflowAdapter } from '../../src/workflows/equipment/XStateCommandWorkflowAdapter';
+import { CommandReconciler } from '../../src/runtime/commands/CommandReconciler';
+import { XStateCommandWorkflowAdapter } from '../../src/runtime/commands/XStateCommandWorkflowAdapter';
 import { commandResult } from '../support/command-fakes';
 
 const fabId = 'fab-a';

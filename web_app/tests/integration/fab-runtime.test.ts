@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CommandGateway } from '../../src/application/contracts/CommandGateway';
-import { XStateCommandWorkflowAdapter } from '../../src/workflows/equipment/XStateCommandWorkflowAdapter';
+import { XStateCommandWorkflowAdapter } from '../../src/runtime/commands/XStateCommandWorkflowAdapter';
 import { FabLifecycleCoordinator } from '../../src/runtime/FabLifecycleCoordinator';
 import { FabRuntimeFactory } from '../../src/runtime/FabRuntimeFactory';
 import { FabRuntimeRegistry } from '../../src/runtime/FabRuntimeRegistry';

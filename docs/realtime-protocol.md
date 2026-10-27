@@ -18,7 +18,7 @@
 | topic -> 类型化流（命令结果/告警/遥测） | Query 服务端缓存（HTTP 查询见 ADR-0009） |
 | 高频遥测到 Worker/缓冲区的通路 | 渲染视觉/性能验收（见 [渲染管线](rendering.md)） |
 
-硬约束（ARCH-06）：`realtime` 不得 import `workflows` 或 `xstate`；也不知道 `CommandEventBridge` 的存在（bridge 是消费者）。
+硬约束（ARCH-06）：`realtime` 不得 import `runtime/commands` 或 `xstate`；也不知道 `CommandEventBridge` 的存在（bridge 是消费者）。
 
 ## 2. 分层与职责
 
@@ -26,7 +26,7 @@
 |---|---|---|---|---|
 | transport | `realtime/transport` | `WebSocketClient` | 建连、鉴权握手、心跳、重连退避、连接状态、背压信号 | 业务语义、UI、工作流 |
 | protocol | `realtime/protocol` | `MessageDecoder`、`SequenceTracker` | 解码、版本校验、字段/单位/精度校验、序列缺口检测 | 业务去重、按“看起来重复”丢消息 |
-| streams | `realtime/streams` | `EventRouter`、`CommandResultStream`、`AlarmStream`、`TelemetryStream` | topic 分发、类型化 Observable、stream 身份管理 | import XState/workflows、写 Query/Redux |
+| streams | `realtime/streams` | `EventRouter`、`CommandResultStream`、`AlarmStream`、`TelemetryStream` | topic 分发、类型化 Observable、stream 身份管理 | import XState/runtime/commands、写 Query/Redux |
 | high-frequency | `realtime/workers`、`realtime/buffers`、`realtime/synchronization` | Worker、环形缓冲、同步 | 高频遥测解码/批处理 -> TypedArray -> 渲染 | 逐帧 React state、逐事件 dispatch |
 
 ## 3. 消息与信封

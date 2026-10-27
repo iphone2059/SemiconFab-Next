@@ -4,7 +4,7 @@
 - 状态：**基线已采纳；M1–M5 已落地并验证；M6 清理收口已完成（旧迁移文档/证据/parity 工具与测试删除，旧路径/依赖/XState 边界检查可执行）**（M1-M6 implemented / legacy migration assets removed）
 - 适用对象：`web_app` 前端架构。后端 `fab_app`/`fab_shared` 的项目与命名空间边界沿用 ADR-0001…ADR-0007
 - 权威决策：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0010](adr/0010-command-event-bridge.md)（实时/命令/工作流边界）；本文档负责汇总、目录结构与迁移计划
-- 当前实现事实：所有 HTTP 端点由 TanStack Query 独占；客户端 UI 状态由 5 个 Zustand store（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale 归属其中）独占；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已全部删除。XState 按用户指示锁定 6.0.0-alpha.70（无 stable v6），在 M4 接入工作流。详细证据见 [实施状态](IMPLEMENTATION-STATUS.md)、§15–§17。
+- 当前实现事实：所有 HTTP 端点由 TanStack Query 独占；客户端 UI 状态由 5 个 Zustand store（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale 归属其中）独占；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已全部删除；XState 工作流已接入，实现位于 `runtime/commands` 并经 `CommandWorkflow` 契约暴露（位置不构成架构约束）。详细证据见 [实施状态](IMPLEMENTATION-STATUS.md)、§15–§17。
 
 > RQ-01..RQ-05、CE-01..CE-08 均已真实运行（测试源/假 gateway，见 §12.2）；性能门禁仍为 **SPECIFIED / NOT RUN**。任何“已通过/已验证”的表述都必须指向真实测试记录。
 
@@ -63,7 +63,7 @@ M1（2026-10-27）已在此基线上落地：依赖安装与锁文件、`app/pro
         |                  | TypedArray/Worker             |           |
         |                  |                               |           |
         |        +---------+---------+          +----------v---+   +---v------------------+
-        |        | realtime/workers  |          | realtime/    |   | workflows/equipment  |
+        |        | realtime/workers  |          | realtime/    |   | runtime/commands  |
         |        | buffers/sync      |          | transport    |   | (XState v6 实现)     |
         |        +-------------------+          | protocol     |   +---+------------------+
         |                                       | streams      |       |
@@ -90,12 +90,12 @@ M1（2026-10-27）已在此基线上落地：依赖安装与锁文件、`app/pro
 |---|---|---|
 | `app/providers`、`app/router` | `runtime`、`api/queries`、`features`、`components` | 具体工作流实现、`realtime/transport` 细节 |
 | `features`、`components`、`rendering` | `api/queries/mutations`、`domain`、`schemas`、`shared`、`state` | 直接 new WebSocket、直接 import XState actor、绕过 Query 自建 HTTP 缓存 |
-| `api/queries/mutations/endpoints` | TanStack Query、`schemas`（Zod）、`domain`、`application/contracts` | `workflows`、`realtime` 传输实现 |
+| `api/queries/mutations/endpoints` | TanStack Query、`schemas`（Zod）、`domain`、`application/contracts` | `runtime/commands`、`realtime` 传输实现 |
 | `application/contracts` | 无（可依赖 RxJS 类型与领域类型；不依赖基础设施/工作流实现） | WebSocket、XState、React、Query |
-| `application/coordination` | `application/contracts` | `workflows/equipment`、XState、React、Query |
-| `realtime` | `application/contracts`、`shared`、`domain` | `workflows`、XState、React、Query |
-| `workflows/equipment` | `application/contracts`、`workflows/contracts`、XState v6、`domain` | `realtime/transport`、`app`、`api` |
-| `runtime` | `application/contracts`、`application/coordination`、`realtime`、`workflows/equipment`、`api/queries`（仅装配 QueryClient 引用） | 页面组件、UI 细节 |
+| `application/coordination` | `application/contracts` | `runtime/commands`、XState、React、Query |
+| `realtime` | `application/contracts`、`shared`、`domain` | `runtime/commands`、XState、React、Query |
+| `runtime/commands` | `application/contracts`、`XState 内部类型`、XState v6、`domain` | `realtime/transport`、`app`、`api` |
+| `runtime` | `application/contracts`、`application/coordination`、`realtime`、`runtime/commands`、`api/queries`（仅装配 QueryClient 引用） | 页面组件、UI 细节 |
 | `state`（Zustand） | `shared`、`domain` | Query 结果副本、XState actor、引擎对象 |
 
 ## 4. 目标目录结构（`web_app/src`）
@@ -127,11 +127,10 @@ web_app/
       workers/
       buffers/
       synchronization/
-    workflows/
-      contracts/            XState 内部契约（不得复制公共 CommandWorkflow）
-      equipment/            equipmentCommand.machine.ts / equipmentCommand.logic.ts /
-                            CommandReconciler / XStateCommandWorkflowAdapter
-    runtime/                FabRuntime / FabRuntimeFactory / FabRuntimeRegistry / FabLifecycleCoordinator
+    runtime/
+      commands/             equipmentCommand.machine.ts / equipmentCommand.logic.ts /
+                            CommandReconciler / XStateCommandWorkflowAdapter（位置非强制）
+                            FabRuntime / FabRuntimeFactory / FabRuntimeRegistry / FabLifecycleCoordinator
     state/                  Zustand（仅 UI 状态）
     domain/
     schemas/                Zod（HTTP 边界校验）
@@ -164,7 +163,7 @@ web_app/
 
 结构说明：
 
-- **公共命令契约只放一次**：`application/contracts/CommandWorkflow.ts` 是权威定义；`workflows/contracts` 只放 XState 内部契约，不复制公共接口（G-03）。
+- **公共命令契约只放一次**：`application/contracts/CommandWorkflow.ts` 是权威定义；`XState 内部类型` 只放 XState 内部契约，不复制公共接口（G-03）。
 - **路由文件位置**：`routes/fabs|equipment|amhs|alarms` 是 V2.1 目标分组；最终 URL 已由 M1 定稿，M2 删除旧地址后不存在别名/重定向（OPEN-V21-01 已解决，见 §4.1）。
 - **测试位置**：按 ADR-0003 与 `tools/check_architecture.py`，测试不得放 `src`；V2.1 门禁统一落 `web_app/tests/integration`、`web_app/tests/contract`、`web_app/tests/performance`。
 - **`state`/`domain`/`schemas`/`rendering`/`features`/`components`/`shared`** 是 V2.1 目标保留目录；M5b 已把渲染实现归位到 `src/rendering/lite/`（旧 `src/render/` 已删除）。其余目标目录按里程碑逐步建立，不把“未创建”描述成“已存在”。
@@ -196,7 +195,7 @@ WebSocket -> RxJS -> CommandEventBridge -> CommandWorkflow -> XState v6
 2. `realtime/protocol` 的 `MessageDecoder` 校验并解码为类型化消息，`SequenceTracker` 检测流序列缺口（只报告，不按业务语义丢弃）。
 3. `realtime/streams` 的 `EventRouter` 按 topic 暴露 `CommandResultStream` 等类型化 Observable；它不知道 XState 与工作流。
 4. `application/coordination/CommandEventBridge` 订阅结果流，按 `fabId` 过滤，按复合身份 `(fabId, commandId)` 关联，按 `revision` 去重，再调用 `CommandWorkflowRegistry.get(fabId, commandId)` 返回的工作流接口。
-5. `workflows/equipment/XStateCommandWorkflowAdapter` 把 `receive(event)` 映射到 `equipmentCommand.machine.ts` 的 actor 事件；`CommandReconciler` 处理缺口/缺失 actor/断线恢复。
+5. `runtime/commands/XStateCommandWorkflowAdapter` 把 `receive(event)` 映射到 `equipmentCommand.machine.ts` 的 actor 事件；`CommandReconciler` 处理缺口/缺失 actor/断线恢复。
 6. 恢复以“关联恢复记录 + 后端权威状态查询 + 有界 pending queue”闭环；持久化恢复是后端责任（[命令核对](command-reconciliation.md)）。
 
 ### 5.3 高频渲染数据流
@@ -226,15 +225,15 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | ARCH-03 | Router 必须配置 `defaultPreloadStaleTime: 0` | ADR-0009 | 路由配置文件检查/单测 | RQ-01、RQ-02 |
 | ARCH-04 | 路由 loader 复用 TanStack Query Options，禁止自带 queryFn/fetch | ADR-0009 | 代码评审 + 静态检查（计划） | RQ-01、RQ-05 |
 | ARCH-05 | Zustand 不保存 Query 结果副本 | ADR-0009 | 状态评审；store 中禁止服务端 DTO 缓存字段 | RQ-03 |
-| ARCH-06 | Realtime 不得 import Workflows/XState | ADR-0010 | 依赖检查（计划纳入 `tools/check_architecture.py`） | CE-01..08 |
+| ARCH-06 | Realtime 不得 import 工作流实现/XState | ADR-0010 | 依赖检查 | CE-01..08 |
 | ARCH-07 | CommandEventBridge 位于 Application 协调层 | ADR-0010 | 目录/依赖评审 | CE-01..05 |
-| ARCH-08 | XState 实现隐藏在公共 `CommandWorkflow` 契约之后 | ADR-0010 | 禁止 workflows 实现被非 runtime 层 import | CE-01、CE-08 |
+| ARCH-08 | XState 实现隐藏在公共 `CommandWorkflow` 契约之后 | ADR-0010 | 契约单点定义 + 行为测试；**不强制目录**（M6 调整） | CE-01、CE-08 |
 | ARCH-09 | Runtime 是事件源、桥、工作流实现的唯一装配层 | ADR-0010 | 装配评审；页面禁止 new 桥/actor | CE-07、CE-08 |
 | ARCH-10 | 命令结果按 FAB+command 复合身份关联、去重、恢复 | ADR-0010 | 契约测试 + 集成测试 | CE-02..CE-07 |
 | ARCH-11 | 高频遥测不得经过 Query/Zustand/XState | ADR-0010 + Engineering 09/15 | 架构评审 + 性能测试；渲染路径禁止读状态容器 | 性能门禁（计划） |
 | ARCH-12 | Babylon Lite 是唯一 3D 引擎，且只允许 WebGPU | ADR-0003/Engineering 09 + ADR-0010 高频路径 | `tools/check_architecture.py` 禁止 WebGL；渲染评审 | 渲染验收（现有） |
 
-规则的可执行检查在 M1..M6 逐步补齐。M1 已为 ARCH-03（router 配置 + 断言测试）与 ARCH-04（loader 只调用 `queryOptions`）提供可复核代码/测试；ARCH-02 由 RQ-03/RQ-04 与“全部端点只有 Query 一处缓存”的代码事实覆盖；ARCH-05 由 M2b 的 store 清单/评审覆盖（Zustand 只含 UI 字段，无 Query DTO 副本）；ARCH-06/07 已由 `tests/architecture-boundaries.test.ts` 静态检查并通过（M3）；ARCH-08/09/10 由 M4 的 XState 边界检查、FabRuntime 装配与三 FAB 隔离测试覆盖。其余规则在 M3–M6 补齐自动化检查前仍由评审负责。
+规则的可执行检查在 M1..M6 逐步补齐。M1 已为 ARCH-03（router 配置 + 断言测试）与 ARCH-04（loader 只调用 `queryOptions`）提供可复核代码/测试；ARCH-02 由 RQ-03/RQ-04 与“全部端点只有 Query 一处缓存”的代码事实覆盖；ARCH-05 由 M2b 的 store 清单/评审覆盖（Zustand 只含 UI 字段，无 Query DTO 副本）；ARCH-06/07 已由 `tests/architecture-boundaries.test.ts` 静态检查并通过（M3）；ARCH-08 由契约单点/行为测试覆盖（M6 起不再检查 XState 所在目录）；ARCH-09/10 由 M4 的 FabRuntime 装配与三 FAB 隔离测试覆盖。其余规则在 M3–M6 补齐自动化检查前仍由评审负责。
 
 补充说明：ARCH-03 的 `defaultPreloadStaleTime: 0` 只是让 Router 不再否决 loader 重跑，是**必要但不充分**条件；Query 的 `staleTime`/`gcTime`、同源 Query Options、页面订阅、失效与显式 `fetchQuery` 共同决定数据新鲜度（见 [ADR-0009](adr/0009-tanstack-router-query-boundary.md) 第 3 节）。
 
@@ -244,8 +243,8 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 |---|---|---|
 | G-01 | Vite server/build 参数冻结 | `web_app/vite.config.ts` 的 `server` 与 `build` 参数（端口 5173/strictPort/host、`/api` 代理、`build.rolldownOptions.manualChunks`）不得改变；允许新增路由生成插件，插件不得改变这些参数与产物结构；若插件不满足约束，路由退回 code-based 实现 |
 | G-02 | 同一端点不得双缓存 | 迁移期 RTK Query 与 TanStack Query 不得同时缓存同一端点；按页面/端点在同一个 PR 内切换，旧缓存同 PR 删除 |
-| G-03 | 公共契约单点定义 | 命令公共契约只在 `application/contracts` 定义一次；`workflows/contracts` 不得复制 |
-| G-04 | 基础设施不得反向依赖业务工作流 | `realtime` 不得 import `workflows`/XState；依赖方向由契约层收口 |
+| G-03 | 公共契约单点定义 | 命令公共契约只在 `application/contracts` 定义一次；XState 实现内部类型不得复制公共契约 |
+| G-04 | 基础设施不得反向依赖业务工作流 | `realtime` 不得 import 工作流实现/XState；依赖方向由契约层收口 |
 | G-05 | 测试位置与证据诚实 | 测试只放 `web_app/tests`；未运行的测试只能标 SPECIFIED / NOT RUN，不得写“已通过” |
 
 ## 8. 与既有决策和外部规范的关系
@@ -284,7 +283,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | 多 FAB | 产品为单 FAB（121 台设备布局，`fab-layout.ts`） | 三 FAB 隔离：独立 actor、订阅、复合身份 | M4 | 未开始（依赖产品/后端） |
 | 高频遥测 | `realtime/buffers` FrameRingBuffer（TypedArray）+ Worker handler/entry 已实现（M5b）；现有 UI 合批仍用 `state/telemetry-buffer.ts` | Worker/TypedArray -> Babylon Lite，不进 Query/Zustand/XState | M5b | **M5b PASS（缓冲/Worker 骨架 + CPU 基线）**；真实遥测源/渲染消费接线待后续 |
 | 渲染 | Babylon Lite 1.36 已在 `src/rendering/lite`（M5b 目录归位），WebGPU-only 校验已有 | 保留；渲染目录归位 `rendering` | M5 | **M5b PASS（目录归位）**；GPU/浏览器性能门禁待补 |
-| 依赖 | TanStack Router 1.170.46 / Query 5.105.0 / Router plugin 1.168.48、Zustand 5.0.16、RxJS 7.8.2、Zod 4.6.7、XState 6.0.0-alpha.70（用户指示直接用 v6）；jsdom 30.1.3 + Testing Library（dev）；Redux/react-redux 已移除 | 按阶段引入并锁版本；XState v6 当前仅 alpha，M4 前评估升级但不回退 v5 | M1..M4 | M2b 已移除 Redux；v6 alpha 锁定 |
+| 依赖 | TanStack Router 1.170.46 / Query 5.105.0 / Router plugin 1.168.48、Zustand 5.0.16、RxJS 7.8.2、Zod 4.6.7、XState v6；jsdom 30.1.3 + Testing Library（dev）；Redux/react-redux 已移除 | 按阶段引入并锁版本；XState 实现经契约隔离 | M1..M4 | M2b 已移除 Redux；XState v6 已接入 |
 | 测试基建 | Vitest + jsdom + Testing Library；RQ-01..05、Zustand store、Router search 映射已真实运行 | RQ/CE 集成与契约测试；性能测试目录 | M1 起 | **M1/M2a/M2b/M2c PASS**；CE/性能未开始 |
 | 架构检查 | `tools/check_architecture.py` 只查既有前端边界（TS/TSX、禁止 WebGL、单 web_app） | 增加 ARCH 依赖方向/双缓存/契约位置检查 | M6 | 未开始 |
 | 文档 | V2.1 基线 + ADR-0009/0010 + 7 篇专项已合入 main（e18595f）；本文档补充 M1 证据 | 本基线 + ADR-0009/0010 + 7 篇专项 | M0 | **M0 PASS；M1 增量已更新** |
@@ -299,7 +298,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | M1 | 路由与查询地基 | 依赖、`app/providers`、`app/router`、`api/queries`、最终 URL（旧地址 M2 删除）、sites 端点迁移、RQ-01/RQ-05 集成测试 | typecheck/build/test 通过；RQ-01/RQ-05 首次运行；无双缓存；vite server/build 参数未变 | 已解除（OPEN-V21-01/02/03 已决策） | **PASS（2026-10-27，§15）** |
 | M2 | 客户端状态与 RTK 退役 | **M2a（完成）**：全部端点迁 Query、RTK Query 删除、RQ-02/03/04 运行、旧地址删除。**M2b（完成）**：5 个 Zustand store、Redux/react-redux/store 删除、测试迁移 jsdom | 无 RTK Query 端点；RQ-02/03/04 PASS；Zustand 不含 Query 副本；Redux 依赖为零 | M1 | **M2 PASS（§16/§17）** |
 | M3 | 实时协议与命令桥 | 契约、解码/序列、类型化流、WebSocket 传输骨架、CommandEventBridge/恢复队列、假源集成测试、ARCH 边界静态检查 | CE-01..CE-05、CE-08 在假源上运行；ARCH-06/07 检查通过 | M1；后端流协议 OPEN-V21-06（真实链路） | **PASS（2026-10-27，§19）；真实 WebSocket M4+** |
-| M4 | XState 工作流与 FabRuntime | `workflows/equipment` 四文件、`runtime` 四件套、`RuntimeProvider` seam、三 FAB 隔离测试 | CE-06/CE-07 在测试源上运行；ARCH-08/09/10 检查通过；单 FAB 产品回归通过（现有 290 测试） | M3；OPEN-V21-07/08；多 FAB 产品范围 | **PASS（2026-10-27，§20）** |
+| M4 | XState 工作流与 FabRuntime | `runtime/commands` 四文件、`runtime` 四件套、`RuntimeProvider` seam、三 FAB 隔离测试 | CE-06/CE-07 在测试源上运行；ARCH-08/09/10 检查通过；单 FAB 产品回归通过（现有 290 测试） | M3；OPEN-V21-07/08；多 FAB 产品范围 | **PASS（2026-10-27，§20）** |
 | M5 | 高频渲染管线与目录归位 | **M5a（完成）**：XState v6 产品 Runtime 接线 + 多 FAB 数据驱动 UI + 工作流只读投影。**M5b（完成）**：`rendering/lite` 目录归位、FrameRingBuffer/Worker 协议骨架、ARCH-11 静态检查、CPU 性能基线 | M5a：产品 bundle/生命周期接入 XState、runtime/FAB UI 可见、投影 API 只读；M5b：ARCH-11 检查、性能基线记录、Lite 回归 | M1/M4 | **M5a/M5b PASS（§21/§22）**；真实 Worker/遥测接线与 GPU 性能门禁留待后续 |
 | M6 | 收口与退役 | 旧迁移文档/证据/parity 工具与测试删除、旧路径/依赖/XState/ARCH-11 静态检查、README/状态文档收口 | `./scripts/verify.ps1` 实际通过并留有记录；ARCH 检查可执行 | M2/M4/M5；后端实时服务 | **PASS（2026-10-27，§23）**；CE-06 真实链路需后端 |
 
@@ -314,7 +313,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | R-03 | 集成测试环境缺失（jsdom/Testing Library） | RQ/CE 无法执行，门禁长期 NOT RUN | M1 前置批准 devDependencies；先写环境 smoke test | RQ 测试无法启动 |
 | R-04 | 后端实时/命令状态端点未提供 | CE-04/CE-06 无法真实闭环 | 假源只用于结构验证；后端契约列为 OPEN-V21-06/07 | 真实链路验收缺失 |
 | R-05 | 多 FAB 产品范围未定 | FabRuntime 三 FAB 隔离只能测试床验证 | 以复合身份与假 FAB 源覆盖 CE-07；产品范围由 Lead 决策 | 需求变化 |
-| R-06 | XState v6 仅有 alpha（6.0.0-alpha.70） | 工作流实现或 API 变化返工 | 按用户指示锁定 v6 alpha 并隔离在 `CommandWorkflow` 实现内；M4 前复核 API/升级，不回退 v5 | alpha 破坏性变更/构建失败 |
+| R-06 | ~~XState 版本风险~~ | **已关闭**：按用户要求固定 v6；实现经 `CommandWorkflow` 契约暴露，升级需重跑契约/集成测试 | — |
 | R-07 | intent 预加载在 loader 误用 `fetchQuery` 时放大请求 | 性能与后端压力 | RQ-01/RQ-05 请求计数断言；loader 评审 | 预加载请求数异常 |
 | R-08 | ~~迁移与 Twin/Lite parity 工作冲突~~ | **已关闭（M6）**：旧迁移/parity 文档与测试已删除，渲染目录已归位 | — |
 | R-09 | 架构检查滞后，ARCH 规则只靠人工评审 | 规则漂移 | M6 前把 ARCH-02/05/06/08/09 纳入 `tools/check_architecture.py` | 评审发现违规 |
@@ -353,8 +352,8 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 ### 12.3 当前测试基建事实
 
-- 已安装 jsdom 30.1.3、@testing-library/react 16.3.3、TanStack Router/Query、Zustand、XState 6.0.0-alpha.70、RxJS、Zod，并建立 `web_app/tests/integration`。
-- RQ-01..RQ-05、CE-01..CE-08、ARCH-01..12 的静态检查与产品装配测试均在真实运行；M6 删除旧 parity/browser 测试后共 **60 文件 / 267 测试 PASS**。
+- 已安装 jsdom 30.1.3、@testing-library/react 16.3.3、TanStack Router/Query、Zustand、XState v6、RxJS、Zod，并建立 `web_app/tests/integration`。
+- RQ-01..RQ-05、CE-01..CE-08、ARCH-01..12 的静态检查与产品装配测试均在真实运行；M6 与后续 XState 目录规则调整后共 **60 文件 / 265 测试 PASS**。
 - CE-06 的生产链路、真实遥测 Worker 接线与 GPU/浏览器性能门禁仍缺；CPU TypedArray 基线已有。
 
 ## 13. 文档地图
@@ -384,7 +383,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | OPEN-V21-05 | `useSuspenseQuery` 的渲染边界与错误/加载 UI | 实施者，M1 |
 | OPEN-V21-06 | 后端实时流协议、序列/ACK/鉴权/maxHz | 后端/Lead，M3 |
 | OPEN-V21-07 | 后端命令状态查询端点（权威恢复） | 后端/Lead，M3 |
-| OPEN-V21-08 | ~~XState 版本与 actor 粒度~~ | **已解决（M4）**：v6 alpha 锁定；每个 command 一个 actor，由 `XStateCommandWorkflowAdapter` 隔离 |
+| OPEN-V21-08 | ~~XState 版本与 actor 粒度~~ | **已解决（M4）**：按用户要求采用 v6；每个 command 一个 actor，由 `XStateCommandWorkflowAdapter` 实现 |
 | OPEN-V21-09 | ~~前端恢复记录生命周期~~ | **已决策（M3）**：内存有界队列（`CommandEventRecovery`，per-command/global 上限）；持久恢复仍归后端 |
 | OPEN-V21-10 | CommandGateway HTTP 提交契约 | **部分解决（M4）**：状态查询接口已定义；提交/幂等契约仍待后端 |
 | OPEN-V21-11 | ~~FabRuntime 实例化/卸载语义~~ | **已完成（M5a）**：RuntimeBootstrap 按 sites 数据为每个 FAB 装配并启停；StrictMode 安全清理 |
@@ -409,7 +408,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | 最终 URL | §4.1 的新地址；旧地址/别名/重定向已在 M2 删除（无 catch-all 别名路由） | `web_app/src/app/router/url-mapping.ts`、`routes/fabs/...`、`routes/equipment/...` |
 | 路由 loader | 只调用 `queryClient.ensureQueryData(sitesQueryOptions())`；FAB 不存在时返回路由错误（无重定向） | `web_app/src/app/router/route-data.ts`、`routes/fabs/$fabId/3d.tsx` |
 | 入口 | `main.tsx` 改为 `StrictMode → AppProviders → RouterProvider`，删除自定义 pathname switch | `web_app/src/main.tsx` |
-| 依赖 | Router 1.170.46、Query 5.105.0、router-plugin 1.168.48、Zustand 5.0.16、RxJS 7.8.2、XState 5.33.3（M2a 已改 6.0.0-alpha.70，见 §16）、Zod 4.6.7；dev：jsdom 30.1.3、Testing Library 16.3.3 | `web_app/package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml` |
+| 依赖 | Router 1.170.46、Query 5.105.0、router-plugin 1.168.48、Zustand 5.0.16、RxJS 7.8.2、XState v6（见 §16）、Zod 4.6.7；dev：jsdom 30.1.3、Testing Library 16.3.3 | `web_app/package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml` |
 | Vite | 仅新增 `tanstackRouter({ autoCodeSplitting: false })` 插件；`server`/`build` 原文未变（G-01） | `web_app/vite.config.ts` |
 | 路由树 | `routeTree.gen.ts` 由插件生成并提交，不手工维护 | `web_app/src/app/router/routeTree.gen.ts` |
 
@@ -430,7 +429,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 - 设备目录/对比页内部筛选与视图切换仍用 `history` + Redux 过渡：路径已改为最终 URL，页面内部状态迁移留待 M2（代码注释已标注）。
 - Twin 的 `?siteId=`/`?modal=`/`?mode=` 仍直接读写 `location.search`；路由参数 `$fabId` 优先于旧 `siteId`，M2 迁到 Router search。
 - 仅 `/api/v1/sites` 迁到 TanStack Query；其余 7 个 RTK Query 端点与 Redux slice 按 M2 的“同一变更内逐端点切换、无双缓存”执行。
-- XState 稳定版为 5.33.3（6.0 仅 alpha）；已按用户批准安装 5.33.3，M4 前必须复核是否升级 v6。
+- XState 按用户要求直接采用 v6；M4 接入工作流。
 - 以上是 M1 当时的记录；M2a/M2b 之后已由 §16/§17 取代。CE-01..08、性能门禁仍为 SPECIFIED / NOT RUN。
 
 ## 16. M2a 落地记录（2026-10-27）
@@ -443,7 +442,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 - **RTK Query 退役**：删除 `web_app/src/store/api.ts`、`twinApi` reducer/middleware 与 `tests/rtk-api.test.ts`；Redux 只剩临时客户端 UI slice（M2b）。
 - **SSE 走 Query 缓存**：Twin 的 `watchEquipmentStatus` 快照除有序消费外写入 `equipmentStatusQueryKey(siteId)`，Query 是唯一服务端缓存；轮询仅作回退。
 - **旧地址与重定向彻底删除**：`/twin*`、`/preview*`、`/catalog*`、`/compare*`、`/workbench` 不再有别名/catch-all 重定向（访问返回 not-found）；`/fabs/$fabId` 的 M1 重定向入口也删除，仅保留 `/fabs/$fabId/3d`。
-- **XState**：按用户指示将依赖从 5.33.3 换成 **6.0.0-alpha.70**（当前无 stable v6），actor/工作流仍在 M4 接入。
+- **XState**：按用户要求改为 v6；actor/工作流在 M4 接入。
 - 其余 Query 模块：`queryKeys.ts` 增加 equipment/catalog/runs/research/wafer 工厂；transport 统一在 `api/queries/http.ts`（same-origin、no-store、Zod envelope 校验、ProblemDetails）。
 
 ### 16.2 证据（本次实际运行）
@@ -457,7 +456,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 - ~~Redux Toolkit 仍承载 7 个客户端 UI slice~~：M2b 已迁 Zustand 并删除 Redux/react-redux（§17）。
 - ~~目录/对比页内部筛选、Twin 的 `?siteId/?modal/?mode` 仍是 history/直接 location 过渡~~：已在 M2c 迁到 TanStack Router search（§18）。
-- XState v6 为 alpha：M4 需复核 API 并在 `CommandWorkflow` 实现内隔离，不向页面泄漏 actor。
+- XState v6：M4 接入工作流并经 `CommandWorkflow` 契约暴露，不向页面泄漏 actor。
 - CE-01..08、性能门禁、M3–M6 未开始。
 
 ## 17. M2b 落地记录（2026-10-27）
@@ -470,7 +469,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 - **Redux 彻底删除**：删除 `web_app/src/store/`（7 个 slice、hooks、store、api 残留）、`react-redux`/`@reduxjs/toolkit` 依赖；`AppProviders` 仅保留 QueryClientProvider + ErrorBoundary。
 - **Twin 保留性能边界**：twin-page 仍用 wafer-excluded shallow 订阅避免逐帧 HUD 更新触发整页渲染；帧循环通过 `getState()` 读取 live 状态，不新增 React 状态。
 - **测试迁移**：Redux slice 测试改写为 Zustand store/action 测试；需要已挂载状态的组件测试改为 jsdom + Testing Library（Zustand SSR 快照为初始状态）；telemetry-buffer 路径迁移。
-- **依赖**：未新增第三方包（Zustand 原生 + 纯不可变 reducer）；`react-redux`、`@reduxjs/toolkit` 移除。XState 仍为 6.0.0-alpha.70。
+- **依赖**：未新增第三方包（Zustand 原生 + 纯不可变 reducer）；`react-redux`、`@reduxjs/toolkit` 移除。XState 为 v6。
 
 ### 17.2 证据（本次实际运行）
 
@@ -514,7 +513,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 - **Application 契约**（`web_app/src/application/contracts/`）：`CommandEvents`（CommandResultEvent/CommandEventSource/Alarm/Telemetry）、`CommandWorkflow`（公共契约单点）、`CommandGateway`（权威状态查询）、`RealtimeGateway`（类型化流接口）。
 - **Application 协调**（`application/coordination/`）：`CommandCorrelationRegistry`（FAB+command 复合身份与 revision 水位）、`CommandEventRecovery`（有界恢复队列 + 权威对账）、`CommandEventBridge`（订阅/过滤/去重/分发/重试；无 WebSocket/XState 依赖）。
 - **Realtime**：`protocol/MessageDecoder`（手写 Zod envelope + command/alarm/telemetry 校验）、`protocol/SequenceTracker`（per-topic 顺序/重复/缺口/乱序）、`streams/EventRouter`（共享一次解码的 RxJS 类型化流 + 错误/缺口流）、`CommandResultStream`/`AlarmStream`/`TelemetryStream`、`transport/WebSocketClient` 骨架（未装配，保留后续接入能力）。
-- **ARCH 静态检查**：`tests/architecture-boundaries.test.ts` 验证 ARCH-06/07/08（realtime 不依赖 workflows/XState/React 状态库；application 只依赖 contracts；CommandWorkflow 契约单点定义）。
+- **ARCH 静态检查**：`tests/architecture-boundaries.test.ts` 验证 ARCH-06/07（realtime 不依赖工作流实现/XState/React 状态库；application 只依赖 contracts）与 CommandWorkflow 契约单点定义。
 
 ### 19.2 证据（假源/假 gateway）
 
@@ -535,22 +534,22 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 ### 20.1 交付
 
-- **XState v6 工作流**（`web_app/src/workflows/equipment/`）：`equipmentCommand.machine.ts`（setup + `types<>` schemas、idle/accepted/executing/终态）、`equipmentCommand.logic.ts`（纯状态/修订/终态判定）、`XStateCommandWorkflowAdapter.ts`（实现公共 `CommandWorkflow`，revision 单调过滤、终态不再推进、dispose 停 actor）、`CommandReconciler.ts`（`CommandGateway` 权威查询后投递）。
+- **XState v6 工作流**（`web_app/src/runtime/commands/`）：`equipmentCommand.machine.ts`（setup + `types<>` schemas、idle/accepted/executing/终态）、`equipmentCommand.logic.ts`（纯状态/修订/终态判定）、`XStateCommandWorkflowAdapter.ts`（实现公共 `CommandWorkflow`，revision 单调过滤、终态不再推进、dispose 停 actor）、`CommandReconciler.ts`（`CommandGateway` 权威查询后投递）。
 - **FabRuntime 装配**（`web_app/src/runtime/`）：`FabRuntime`（每 FAB 一个 Bridge + workflow registry + 可选 reconciler；`trackCommand`/`reconcileCommand`/start/stop/dispose）、`FabRuntimeFactory`（按 FAB 注入 source/gateway/workflow 工厂）、`FabRuntimeRegistry`（fabId 唯一，startAll/stopAll/disposeAll）、`FabLifecycleCoordinator`（幂等生命周期）。
 - **RuntimeProvider seam**（`app/providers/RuntimeProvider.tsx`）：暴露 registry 的 React context，未在 AppProviders 装配（无真实源）。
-- **边界**：`XStateCommandWorkflowAdapter` 是唯一 XState 使用点且只在 `workflows/`；`runtime/` 是唯一 import workflow 实现的层；页面/实时/application 均不依赖 XState（ARCH-08/09）。
+- **边界**：XState 位于 `runtime/commands`；其他层只依赖 `CommandWorkflow` 契约；页面/实时/application 均不直接 import 工作流实现。目录位置不构成强制（M6 调整）。
 
 ### 20.2 证据（测试源/假 gateway）
 
 - CE-06：stream 停止后经 `CommandGateway` 权威查询收敛到 succeeded；CE-07：三个 FAB 使用相同 commandId 时各自 runtime/workflow 状态互不污染；CE-08：lifecycle stop 后不再投递、dispose 清理 workflow/registry。
-- `tests/integration/fab-runtime.test.ts`（5）、`tests/contract/command-workflow.test.ts`（3）、`tests/architecture-boundaries.test.ts`（+2 条 ARCH-08/09 检查）PASS。
+- `tests/integration/fab-runtime.test.ts`（5）、`tests/contract/command-workflow.test.ts`（3）、`tests/architecture-boundaries.test.ts`（契约/边界检查）PASS。
 - 实际运行：`tsc --noEmit` 0；`npx vitest run` **64 文件 / 290 测试 PASS**；`vite build` 0；`./scripts/verify.ps1` exit 0。
 
 ### 20.3 遗留与边界
 
 - **真实链路未接**：后端 `--realtime` 仍是占位、命令状态查询端点未提供；CE-06 的真实生产证据需后端就绪。
 - **产品装配未接线**：`RuntimeProvider` 未被 AppProviders 使用；多 FAB 目前是 runtime/测试能力，产品 UI 仍单 FAB；M5 按后端能力接线。
-- **XState v6 为 alpha（6.0.0-alpha.70）**：API 可能变化，已隔离在 workflows 层；M4 未回退 v5。
+- XState 工作流位于 `runtime/commands`，经 `CommandWorkflow` 契约暴露；升级实现需重跑契约/集成测试。
 - **UI 只读投影**：adapter 的 state/context getter 仅供 runtime/测试；页面如何只读展示工作流状态仍是 M5/OPEN-V21-13。
 - M5–M6 未开始；性能门禁仍为 SPECIFIED / NOT RUN。
 ## 21. M5a 落地记录：XState v6 正式产品接线 + 多 FAB UI + 只读投影（2026-10-27）
@@ -617,12 +616,12 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 ### 23.3 可执行检查
 
-- `tools/check_architecture.py` 新增 V2.1 终态检查：旧路径（`docs/migration`、`docs/repair`、`docs/superpowers`、`src/render`、`src/store`）不存在；旧依赖（react-redux/RTK/immer/@babylonjs/core）不存在；xstate 只在 `workflows/`；workflow 实现只被 `runtime/` 导入；rendering/buffers/workers 不 import 状态容器。
+- `tools/check_architecture.py` 新增 V2.1 终态检查：旧路径（`docs/migration`、`docs/repair`、`docs/superpowers`、`src/render`、`src/store`）不存在；旧依赖（react-redux/RTK/immer/@babylonjs/core）不存在；rendering/buffers/workers 不 import 状态容器。**M6 后续移除了 XState 目录强制检查**。
 - `scripts/verify.ps1` 现在 = 契约检查 + 架构检查 + Python 工具测试 + 数据导入检查 + 3 个 .NET 项目构建/测试 + 前端 install --frozen-lockfile/typecheck/test/build。
 
 ### 23.4 证据
 
-- `./scripts/verify.ps1` exit 0；`tsc --noEmit` 0；Vitest **60 文件 / 267 测试 PASS**；`vite build` 0；.NET 67/67；8 个 Python 工具测试；契约/架构检查 PASS。
+- `./scripts/verify.ps1` exit 0；`tsc --noEmit` 0；Vitest **60 文件 / 265 测试 PASS**；`vite build` 0；.NET 67/67；8 个 Python 工具测试；契约/架构检查 PASS。
 - 仍存在的边界：真实后端命令流/命令状态端点、真实遥测 Worker 接线、GPU/浏览器性能门禁；见 §24 已知边界。
 ## 24. 最终已知边界（M6 后）
 
@@ -630,8 +629,27 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 - **Worker/遥测接线**：`FrameRingBuffer`、Worker handler/entry 与 CPU 基线已完成；真实遥测源、SharedArrayBuffer/COOP-COEP（OPEN-V21-14）与渲染器消费尚未接线。
 - **GPU/浏览器性能门禁**：当前只有 CPU TypedArray 基线；WebGPU 帧时间/显存/长任务门禁需真实 GPU 浏览器环境。
 - **目录收口**：`rendering/lite` 已归位；页面级 `features/` 目录迁移未作为功能交付执行，页面仍位于 `web_app/src` 顶层，按现有相对导入工作。
-- **XState v6**：使用 6.0.0-alpha.70（用户指定 v6），实现隔离在 `workflows/`；升级 alpha 版本需重跑 workflow/contract 测试。
+- **XState**：实现位于 `runtime/commands`，经 `CommandWorkflow` 契约暴露；位置不强制，升级实现需重跑 workflow/contract 测试。
 - **历史保留**：旧代码与旧迁移证据已从工作树删除，但保留在 Git 历史中；仓库只有一个 `main` 分支，无旧 URL 重定向。
+## 25. M6 后续调整：保留 CommandWorkflow 契约，取消 XState 目录强制（2026-10-27）
+
+> 决定：保留“实现隐藏在 `CommandWorkflow` 契约之后”，但不再强制 XState 必须位于 `runtime/commands`（原为 `workflows/equipment`）。目录位置属于组织选择，不是架构约束。
+
+### 25.1 变更
+
+- 实现文件从 `workflows/equipment/` 移到 `runtime/commands/`：`equipmentCommand.machine.ts`、`equipmentCommand.logic.ts`、`CommandReconciler.ts`、`XStateCommandWorkflowAdapter.ts`；删除空的 `src/workflows/`。
+- `FabRuntime` 改为从 `./commands` 装配；`CommandWorkflow` 契约、Bridge、恢复队列、FabRuntime 的契约边界不变。
+- 移除 ARCH-08 的目录强制：`tests/architecture-boundaries.test.ts` 删除“XState 只能在 `workflows/`”“工作流实现只能被 runtime 导入”两条断言；`tools/check_architecture.py` 删除 xstate/workflow 路径检查。
+- 保留的边界：`realtime`/`application` 不 import 工作流实现或 XState；`CommandWorkflow` 契约单点定义；`rendering`/`buffers`/`workers` 不 import 状态容器。
+
+### 25.2 理由
+
+- XState 只是当前工作流实现，不是架构层；把它钉在特定目录对功能没有收益，反而增加搬迁成本。
+- 契约边界已经能保证页面/实时层不依赖 actor；目录规则属于过度约束。
+
+### 25.3 验证
+
+- `tsc --noEmit` 0；Vitest **60 文件 / 265 测试 PASS**（架构测试由 7 条减为 5 条）；`vite build` 0；契约/架构检查 PASS。
 ## 附录 A. 关键术语
 
 | 术语 | 含义 |

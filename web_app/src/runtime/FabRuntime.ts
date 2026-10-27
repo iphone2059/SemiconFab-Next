@@ -2,8 +2,8 @@ import type { CommandEventSource } from '../application/contracts/CommandEvents'
 import type { CommandGateway } from '../application/contracts/CommandGateway';
 import type { CommandWorkflow, CommandWorkflowProjection, CommandWorkflowRegistry } from '../application/contracts/CommandWorkflow';
 import { CommandEventBridge } from '../application/coordination/CommandEventBridge';
-import { CommandReconciler } from '../workflows/equipment/CommandReconciler';
-import { XStateCommandWorkflowAdapter } from '../workflows/equipment/XStateCommandWorkflowAdapter';
+import { CommandReconciler } from './commands/CommandReconciler';
+import { XStateCommandWorkflowAdapter } from './commands/XStateCommandWorkflowAdapter';
 
 export type CommandWorkflowFactory = (fabId: string, commandId: string) => CommandWorkflow;
 

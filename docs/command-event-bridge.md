@@ -3,7 +3,7 @@
 - 版本：V2.1 / 2026-10-27
 - 状态：**M3/M4 已实现（假源/测试源验证）**（M3/M4 implemented / real backend pending）
 - 依据：[ADR-0010](adr/0010-command-event-bridge.md)；总览见 [架构基线](architecture.md)；恢复细节见 [命令核对](command-reconciliation.md)；上层协议见 [实时协议](realtime-protocol.md)；装配见 [FAB 运行时](fab-runtime.md)
-- 当前实现：Bridge/恢复/契约已实现；XState v6 工作流与 FabRuntime 装配在 M4 完成（`workflows/equipment`、`runtime`）；真实 WebSocket 与后端命令状态端点仍缺，设备状态仍走 SSE -> Zustand/Query。
+- 当前实现：Bridge/恢复/契约已实现；XState v6 工作流与 FabRuntime 装配在 M4 完成（`runtime/commands`、`runtime`）；真实 WebSocket 与后端命令状态端点仍缺，设备状态仍走 SSE -> Zustand/Query。
 - 门禁：CE-01..CE-08 已在假源/假 gateway/三 FAB 测试源上 PASS；真实生产链路待后端。
 
 ## 1. 定位
@@ -59,7 +59,7 @@ export interface CommandWorkflowRegistry {
 
 契约规则：
 
-1. **`application/contracts` 是唯一权威定义**。`workflows/contracts` 只允许 XState 内部契约（机器 context/event 等），不得复制 `CommandWorkflow`/`CommandResultEvent`（G-03）。
+1. **`application/contracts` 是唯一权威定义**。`XState 内部类型` 只允许 XState 内部契约（机器 context/event 等），不得复制 `CommandWorkflow`/`CommandResultEvent`（G-03）。
 2. 契约版本无关：不 import WebSocket 帧类型、不 import XState、不 import Query/React；允许 RxJS 类型（`Observable`）。
 3. 命令身份是复合身份 `(fabId, commandId)`；registry 查询必须同时带两者。
 4. `CommandEventSource` 只读；Bridge 不得反向向实时层写消息。
@@ -83,7 +83,7 @@ application/coordination/CommandEventBridge
 application/contracts/CommandWorkflowRegistry.get(fabId, commandId)
         |
         v
-workflows/equipment/XStateCommandWorkflowAdapter -> equipmentCommand.machine.ts (XState v6)
+runtime/commands/XStateCommandWorkflowAdapter -> equipmentCommand.machine.ts (XState v6)
         |
         v
 CommandReconciler（缺失 actor/断线时，按后端权威状态核对）
@@ -266,7 +266,7 @@ const source: CommandEventSource = { commandResult$: subject.asObservable() };
 
 禁止：
 
-- ❌ Bridge 里直接 import `workflows/equipment` 或 `xstate`（应只通过 `CommandWorkflowRegistry` 契约）。
+- ❌ Bridge 里直接 import `runtime/commands` 或 `xstate`（应只通过 `CommandWorkflowRegistry` 契约）。
 - ❌ `EventRouter` 按重复/过期丢弃业务消息。
 - ❌ 在 Bridge 内写 Query 缓存/Redux/Zustand。
 - ❌ 用 `occurredAt` 排序或去重。

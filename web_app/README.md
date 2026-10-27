@@ -15,7 +15,7 @@ web_app/
 │  ├─ state/                   # Zustand UI stores、遥测合批
 │  ├─ application/             # CommandEvents/CommandWorkflow 契约、Bridge/恢复协调
 │  ├─ realtime/                # MessageDecoder/SequenceTracker、类型化流、缓冲区/Worker
-│  ├─ workflows/equipment/     # XState v6 命令工作流实现
+│  ├─ runtime/commands/     # XState v6 命令工作流实现
 │  ├─ runtime/                 # FabRuntime/Factory/Registry/Lifecycle、命令源 seam
 │  ├─ rendering/lite/          # Babylon Lite/WebGPU 渲染实现
 │  ├─ contracts.generated.ts   # 由 tools/generate_contracts.py 生成，勿手改
@@ -52,4 +52,4 @@ npm test
 npm run build
 ```
 
-当前基线：`tsc --noEmit` 0、Vitest 60 文件 / 267 测试 PASS、`vite build` 0。架构/边界检查由 Vitest 的 `tests/architecture-boundaries.test.ts` 与根目录 `tools/check_architecture.py` 共同覆盖。
+当前基线：`tsc --noEmit` 0、Vitest 60 文件 / 265 测试 PASS、`vite build` 0。架构/边界检查由 Vitest 的 `tests/architecture-boundaries.test.ts` 与根目录 `tools/check_architecture.py` 共同覆盖。

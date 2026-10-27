@@ -1,6 +1,6 @@
 # ADR-0010 — 实时基础设施只提供类型化流，Application 层 CommandEventBridge 协调，XState 工作流隐藏在契约之后
 
-- 状态：已采纳（2026-10-27）；实施状态：M3+M4 + M5a 产品接线已实现——契约/类型化流/CommandEventBridge/恢复队列、XState v6 工作流、FabRuntime/Factory/Registry/Lifecycle、RuntimeBootstrap 产品装配与只读投影；后端命令流仍未接（Status: Accepted / M5a product wiring done / real backend pending）
+- 状态：已采纳（2026-10-27）；实施状态：M3+M4+M5a 已实现——契约/类型化流/CommandEventBridge/恢复队列、XState 工作流、FabRuntime/Factory/Registry/Lifecycle、RuntimeBootstrap 产品装配与只读投影；M6 后续保留契约并取消 XState 目录强制，实现当前位于 `runtime/commands`；后端命令流仍未接（Status: Accepted / directory rule relaxed / real backend pending）
 - 取代：迁移完成后取代 [ADR-0008](0008-redux-toolkit-rtk-query.md) 中“SSE 帧直接 dispatch 进 Redux slice”的命令/实时接线方式；ADR-0008 的“Babylon 对象不进入状态容器、遥测合批”原则保留，但在 `ARCH-11` 下进一步收紧
 - 关联：[ADR-0009](0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0003](0003-single-web-app.md)；细则见 [命令事件桥](../command-event-bridge.md)、[命令核对](../command-reconciliation.md)、[实时协议](../realtime-protocol.md)、[FAB 运行时](../fab-runtime.md)；基线见 [架构基线](../architecture.md)
 - 决策范围：仅前端 `web_app` 的实时/命令链路。M3/M4 已按本决策实现 contracts/realtime/application coordination 与 XState v6/FabRuntime；`RuntimeProvider` 未挂到产品树；后端实时服务仍是占位模式（`fab_app -- --realtime` 退出码 2），生产 WebSocket 源尚不存在
@@ -25,12 +25,12 @@ V2.1 要引入设备命令工作流（提交、执行、成功/失败/取消、�
 |---|---|---|---|
 | transport | `realtime/transport`（`WebSocketClient`） | 连接、鉴权、心跳、重连、背压信号 | 业务事件语义、actor、React |
 | protocol | `realtime/protocol`（`MessageDecoder`、`SequenceTracker`） | 线上消息格式、版本、序列/缺口检测 | 业务去重、工作流调用 |
-| streams | `realtime/streams`（`EventRouter`、`CommandResultStream`、`AlarmStream`、`TelemetryStream`） | topic 分发、类型化 Observable | import workflows/XState；按业务判断丢弃消息 |
+| streams | `realtime/streams`（`EventRouter`、`CommandResultStream`、`AlarmStream`、`TelemetryStream`） | topic 分发、类型化 Observable | import 工作流实现/XState；按业务判断丢弃消息 |
 | consumers | `application/coordination`、`realtime/workers` | 类型化事件、命令契约 | 反向依赖具体工作流实现 |
 
 ### 2. 版本无关契约只放在 `application/contracts`
 
-公共命令契约只有一处权威定义：`application/contracts`。`workflows/contracts` 仅允许放 XState 内部契约（例如机器 context/event 的内部类型），**不得复制**公共 `CommandWorkflow`/`CommandResultEvent`。这样实时层与工作流层都只依赖 `application/contracts`，装配层通过契约注入实现。
+公共命令契约只有一处权威定义：`application/contracts`。XState 实现内部只允许定义机器 context/event 等实现类型，**不得复制**公共 `CommandWorkflow`/`CommandResultEvent`。这样实时层与工作流实现都只依赖 `application/contracts`，装配层通过契约注入实现。
 
 ```ts
 // application/contracts/CommandEvents.ts
@@ -92,20 +92,20 @@ export interface CommandWorkflowRegistry {
 6. 在 actor 缺失时进入恢复路径（`CommandEventRecovery`），不丢弃结果；
 7. 提供 `start()`/`stop()`/`dispose()` 生命周期，RxJS 订阅在 `dispose` 时取消。
 
-Bridge 不 import `workflows/equipment`、不 import `xstate`、不操作 React、不写 Query 缓存。它只依赖 `application/contracts` 与 `application/coordination` 内部模块。
+Bridge 不 import 工作流实现、不 import `xstate`、不操作 React、不写 Query 缓存。它只依赖 `application/contracts` 与 `application/coordination` 内部模块。
 
-### 4. XState v6 实现隐藏在公共契约之后
+### 4. XState v6 实现隐藏在公共契约之后（位置不强制）
 
-工作流实现位于 `workflows/equipment`：
+工作流实现当前位于 `runtime/commands`（这是实现选择，不是架构强制；可移动到其他功能目录，只要仍通过 `CommandWorkflow` 契约暴露）：
 
 | 文件 | 职责 | 对外可见性 |
 |---|---|---|
-| `equipmentCommand.machine.ts` | 命令生命周期状态机（accepted/executing/terminal，含失败/取消/重试边界） | 仅 workflows 内部 |
-| `equipmentCommand.logic.ts` | actor 输入、命令提交、后端状态查询等业务逻辑 | 仅 workflows 内部 |
+| `equipmentCommand.machine.ts` | 命令生命周期状态机（accepted/executing/terminal，含失败/取消/重试边界） | 实现细节 |
+| `equipmentCommand.logic.ts` | actor 输入、命令提交、后端状态查询等业务逻辑 | 实现细节 |
 | `CommandReconciler` | 缺口/缺失 actor/断线后的状态核对 | 通过 CommandWorkflow.reconcile 暴露 |
 | `XStateCommandWorkflowAdapter` | 实现公共 `CommandWorkflow` 接口，包住 actor 生命周期 | 唯一对外实现 |
 
-其他层只能拿到 `CommandWorkflow` 接口；只有 `runtime` 装配层 import `XStateCommandWorkflowAdapter`。未来替换 XState 版本或实现方式时，实时层、Bridge、页面都不受影响。
+其他层只能拿到 `CommandWorkflow` 接口；装配层负责创建实现。实现文件放在哪个目录属于组织选择，不属于架构约束；未来替换 XState 版本或实现方式时，实时层、Bridge、页面都不受影响。
 
 ### 5. FabRuntime 是唯一装配层
 
@@ -165,9 +165,9 @@ Bridge 不 import `workflows/equipment`、不 import `xstate`、不操作 React�
 
 ### 10. 迁移与生效条件
 
-- 当前 SSE -> Redux 的设备状态链路在迁移完成前继续存在，属于 ADR-0008 的当前实现；本 ADR 只描述目标。
-- 迁移顺序：契约与实时协议骨架 -> Bridge/恢复（假源可测，CE-01..CE-05/CE-08）-> XState 工作流与 Runtime 装配（CE-07）-> 真实后端 WebSocket 接通后补 CE-06/CE-04 的真实链路验证。
-- 真实 WebSocket 依赖后端 `--realtime` 模式与流协议落地（当前占位，见 [实时协议](../realtime-protocol.md) 的当前状态）；在此之前不得声称生产实时链路已验收。
+- 当前设备状态链路走 SSE -> Zustand/Query 缓存，属于 V2.1 实现；本 ADR 描述命令/实时链路边界。
+- 迁移顺序已完成：契约/实时协议 -> Bridge/恢复 -> XState 工作流与 Runtime 装配 -> 真实后端命令流接通后补 CE-06/CE-04 的生产链路验证。
+- 真实命令链路依赖后端 `--realtime` 与命令状态端点（当前占位）；在生产链路完成前不声称 CE-06 生产验收。
 
 ## 不改变的事项
 

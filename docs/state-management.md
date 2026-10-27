@@ -13,7 +13,7 @@
 | 服务端数据 | 设备列表/详情、目录、Run、命令权威状态 | TanStack Query | `api/queries` | Query `staleTime`/`gcTime`/失效/后台刷新 | Zustand、Redux、组件 state 副本、Router |
 | URL/导航状态 | 路径参数、筛选条件、选中 id、视图模式（可分享部分） | TanStack Router | URL/search params | 导航即变化；可前进/后退 | Query 缓存、Zustand 副本 |
 | 客户端 UI 状态 | 面板开合、临时 Tab、对话框、视图偏好 | Zustand 或组件局部 state | `state` 或组件内 | 会话内；偏好可持久化 | Query 结果副本、XState actor、引擎对象 |
-| 命令/工作流状态 | 命令进行中/成功/失败/取消、核对状态 | XState v6（经 `CommandWorkflow` 契约） | `workflows/equipment` | actor 生命周期；FAB 运行时管理 | Query 缓存、Zustand、Redux |
+| 命令/工作流状态 | 命令进行中/成功/失败/取消、核对状态 | XState v6（经 `CommandWorkflow` 契约） | `runtime/commands` | actor 生命周期；FAB 运行时管理 | Query 缓存、Zustand、Redux |
 | 高频遥测/渲染数据 | 设备状态流、AMHS 统计、变换矩阵、帧数据 | Worker + TypedArray 缓冲 | `realtime/workers`、`realtime/buffers` | 帧/批次；渲染循环消费 | Query、Zustand、XState、React state（逐帧） |
 | 3D 引擎对象 | Babylon 场景、mesh、材质、GPU buffer | Babylon Lite 封装 | `rendering` | 引擎生命周期；设备丢失重建 | 所有状态容器（ARCH-12/ADR-0008 原则） |
 | 派生/格式化值 | 排序后的列表、格式化文本 | 计算方（组件/selector） | 使用处 | 随源数据计算 | 长驻 store 副本 |
@@ -92,9 +92,9 @@ Zustand 只保存**不影响服务端事实**的客户端状态，例如：HUD/�
 
 ## 5. 工作流状态（XState v6）
 
-- 命令生命周期由 XState v6 actor 拥有（M4 已实现 `workflows/equipment/equipmentCommand.machine.ts` + `XStateCommandWorkflowAdapter`），经 `CommandWorkflow` 契约暴露，由 `FabRuntime` 装配；UI 只读投影仍待 M5。
+- 命令生命周期由 XState v6 actor 拥有（M4 已实现 `runtime/commands/equipmentCommand.machine.ts` + `XStateCommandWorkflowAdapter`），经 `CommandWorkflow` 契约暴露，由 `FabRuntime` 装配；UI 只读投影仍待 M5。
 - 公共契约只有 `CommandWorkflow`（`receive`/`reconcile`/`dispose`）；页面不得直接 import actor/machine。
-- **工作流状态如何只读暴露给 UI**：本基线不虚构额外公共接口。M4 需要决定一种方式（例如 workflows/equipment 提供的专用 hook，经 RuntimeProvider 暴露只读快照），并明确它不是第二份权威状态；在此之前页面用“提交态组件局部状态 + Query 权威状态”展示命令结果。该问题登记为 OPEN-V21-13（[架构基线](architecture.md) 第 14 节）。
+- **工作流状态如何只读暴露给 UI**：本基线不虚构额外公共接口。M4 需要决定一种方式（例如 runtime/commands 提供的专用 hook，经 RuntimeProvider 暴露只读快照），并明确它不是第二份权威状态；在此之前页面用“提交态组件局部状态 + Query 权威状态”展示命令结果。该问题登记为 OPEN-V21-13（[架构基线](architecture.md) 第 14 节）。
 - 工作流状态不写入 Zustand/Redux/Query 缓存；如果 UI 需要缓存展示，只能缓存“展示投影”，且不得反写工作流。
 
 ## 6. 高频遥测与渲染状态
@@ -167,4 +167,4 @@ HTTP 写入:  用户操作 -> mutation -> HTTP API -> 成功 -> invalidateQuerie
 
 - Zustand store 与 action 行为由 `web_app/tests/redux-store.test.ts`（已改写为 state-store 测试）、`remaining-state.test.ts` 等覆盖；ARCH-02/05 的自动化静态检查仍在 M6 计划中（[架构基线](architecture.md) R-09）。
 - RQ-03（mutation 失效）与 RQ-04（FAB 隔离）**已运行 PASS**（M2a）。
-- 当前依赖与实现：TanStack Query/Zustand/XState v6 alpha 均已安装，未引入 Immer；`src/store` 与 Redux/react-redux 已删除（M2b，见 §11）。
+- 当前依赖与实现：TanStack Query/Zustand/XState v6 均已接入，未引入 Immer；`src/store` 与 Redux/react-redux 已删除（M2b，见 §11）。
