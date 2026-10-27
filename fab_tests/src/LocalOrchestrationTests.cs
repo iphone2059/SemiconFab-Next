@@ -217,6 +217,183 @@ public sealed class LocalOrchestrationTests : IDisposable
         Assert.Throws<InvalidDataException>(() => store.GetResults(Guid.Parse(run.RunId)));
     }
 
+    [Fact]
+    public void Pending_index_survives_restart_and_claim_works()
+    {
+        var store = new FileRunStore(directory);
+        var run = store.Submit(Request(), "operator", "key");
+        var indexPath = Path.Combine(directory, "pending-index.json");
+        Assert.True(File.Exists(indexPath));
+        Assert.Contains(run.RunId, File.ReadAllText(indexPath));
+        var lease = new FileRunStore(directory).TryClaim("worker");
+        Assert.NotNull(lease);
+        Assert.Equal(run.RunId, lease.RunId.ToString("D"));
+    }
+
+    [Fact]
+    public void Deleted_pending_index_is_rebuilt_from_runs()
+    {
+        var store = new FileRunStore(directory);
+        var run = store.Submit(Request(), "operator", "key");
+        var indexPath = Path.Combine(directory, "pending-index.json");
+        File.Delete(indexPath);
+        var lease = new FileRunStore(directory).TryClaim("worker");
+        Assert.Equal(run.RunId, lease!.RunId.ToString("D"));
+        Assert.True(File.Exists(indexPath));
+    }
+
+    [Fact]
+    public void Corrupt_pending_index_is_rebuilt_from_runs()
+    {
+        var store = new FileRunStore(directory);
+        var run = store.Submit(Request(), "operator", "key");
+        File.WriteAllText(Path.Combine(directory, "pending-index.json"), "{not valid json");
+        var lease = new FileRunStore(directory).TryClaim("worker");
+        Assert.Equal(run.RunId, lease!.RunId.ToString("D"));
+    }
+
+    [Fact]
+    public void Stale_pending_index_is_rebuilt_from_runs()
+    {
+        var store = new FileRunStore(directory);
+        var run = store.Submit(Request(), "operator", "key");
+        const string staleIndex = """{"version":1,"rebuiltAtUtc":"2000-01-01T00:00:00+00:00","entries":[]}""";
+        File.WriteAllText(Path.Combine(directory, "pending-index.json"), staleIndex);
+        var lease = new FileRunStore(directory).TryClaim("worker");
+        Assert.Equal(run.RunId, lease!.RunId.ToString("D"));
+    }
+
+    [Fact]
+    public void Idle_claim_does_not_parse_unrelated_completed_runs()
+    {
+        var store = new FileRunStore(directory);
+        var run = store.Submit(Request(), "operator", "key");
+        store.Complete(store.TryClaim("worker")!, Result());
+        var completedRunPath = Path.Combine(directory, "runs", Guid.Parse(run.RunId).ToString("N") + ".json");
+        File.WriteAllText(completedRunPath, "{not valid json");
+        // The completed execution is gone from the pending index, so an idle claim must not read its Run file.
+        Assert.Null(new FileRunStore(directory).TryClaim("idle"));
+    }
+
+    [Fact]
+    public void Claim_keeps_created_at_order_and_skips_completed_executions()
+    {
+        var clock = new ManualClock();
+        var store = new FileRunStore(directory, clock, TimeSpan.FromSeconds(10));
+        var first = store.Submit(Request(), "operator", "first");
+        clock.Advance(TimeSpan.FromSeconds(1));
+        var second = store.Submit(Request() with { Scenario = Request().Scenario with { MasterSeed = "43" } }, "operator", "second");
+        var oldest = store.TryClaim("worker")!;
+        Assert.Equal(first.RunId, oldest.RunId.ToString("D"));
+        store.Complete(oldest, Result());
+        Assert.Equal(second.RunId, store.TryClaim("worker")!.RunId.ToString("D"));
+    }
+
+    [Fact]
+    public void Submit_repairs_deleted_pending_index_without_losing_queued_runs()
+    {
+        var clock = new ManualClock();
+        var store = new FileRunStore(directory, clock, TimeSpan.FromSeconds(10));
+        var first = store.Submit(Request(), "operator", "first");
+        File.Delete(Path.Combine(directory, "pending-index.json"));
+        clock.Advance(TimeSpan.FromSeconds(1));
+        var second = store.Submit(Request() with { Scenario = Request().Scenario with { MasterSeed = "43" } }, "operator", "second");
+        Assert.Equal(first.RunId, store.TryClaim("worker")!.RunId.ToString("D"));
+        Assert.Equal(second.RunId, store.TryClaim("worker")!.RunId.ToString("D"));
+    }
+
+    [Fact]
+    public void Submit_from_one_instance_is_visible_to_another_under_the_lock()
+    {
+        var submitter = new FileRunStore(directory);
+        var claimant = new FileRunStore(directory);
+        var run = submitter.Submit(Request(), "operator", "key");
+        var lease = claimant.TryClaim("worker");
+        Assert.Equal(run.RunId, lease!.RunId.ToString("D"));
+        Assert.Null(submitter.TryClaim("competitor"));
+    }
+
+    [Fact]
+    public void Renewal_refreshes_pending_index_and_protects_the_lease()
+    {
+        var clock = new ManualClock();
+        var store = new FileRunStore(directory, clock, TimeSpan.FromSeconds(10));
+        store.Submit(Request(), "operator", "key");
+        var lease = store.TryClaim("worker")!;
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.True(store.Renew(lease));
+        clock.Advance(TimeSpan.FromSeconds(6));
+        Assert.Null(new FileRunStore(directory, clock, TimeSpan.FromSeconds(10)).TryClaim("competitor"));
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.NotNull(new FileRunStore(directory, clock, TimeSpan.FromSeconds(10)).TryClaim("replacement"));
+    }
+
+    [Fact]
+    public void Expired_lease_is_reclaimed_by_a_restarted_instance_through_the_index()
+    {
+        var clock = new ManualClock();
+        var store = new FileRunStore(directory, clock, TimeSpan.FromSeconds(10));
+        var run = store.Submit(Request(), "operator", "key");
+        var first = store.TryClaim("first")!;
+        clock.Advance(TimeSpan.FromSeconds(11));
+        var second = new FileRunStore(directory, clock, TimeSpan.FromSeconds(10)).TryClaim("second");
+        Assert.Equal(run.RunId, second!.RunId.ToString("D"));
+        Assert.True(second.Epoch > first.Epoch);
+        Assert.Throws<LeaseLostException>(() => store.Complete(first, Result()));
+        new FileRunStore(directory, clock, TimeSpan.FromSeconds(10)).Complete(second, Result());
+        Assert.Equal("COMPLETED", store.Get(Guid.Parse(run.RunId))!.Status);
+    }
+
+    [Fact]
+    public void Completion_removes_the_execution_from_the_pending_index()
+    {
+        var store = new FileRunStore(directory);
+        var run = store.Submit(Request(), "operator", "key");
+        store.Complete(store.TryClaim("worker")!, Result());
+        Assert.DoesNotContain(run.RunId, File.ReadAllText(Path.Combine(directory, "pending-index.json")));
+        Assert.Null(store.TryClaim("idle"));
+    }
+
+    [Fact]
+    public async Task Concurrent_instances_claim_each_execution_exactly_once()
+    {
+        var clock = new ManualClock();
+        var submitter = new FileRunStore(directory, clock, TimeSpan.FromSeconds(10));
+        submitter.Submit(Request(), "operator", "first");
+        submitter.Submit(Request() with { Scenario = Request().Scenario with { MasterSeed = "43" } }, "operator", "second");
+        var stores = new[] { new FileRunStore(directory, clock, TimeSpan.FromSeconds(10)), new FileRunStore(directory, clock, TimeSpan.FromSeconds(10)) };
+        var attempts = stores
+            .SelectMany((store, storeIndex) => Enumerable.Range(0, 3).Select(attempt => Task.Run(() => store.TryClaim($"worker-{storeIndex}-{attempt}"))))
+            .ToArray();
+        var leases = (await Task.WhenAll(attempts)).OfType<ExecutionLease>().ToArray();
+        Assert.Equal(2, leases.Length);
+        Assert.Equal(2, leases.Select(lease => (lease.RunId, lease.FabId)).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task WaitForWorkAsync_wakes_on_submit_and_times_out()
+    {
+        var store = new FileRunStore(directory);
+        var timer = Stopwatch.StartNew();
+        await store.WaitForWorkAsync(TimeSpan.FromMilliseconds(150), CancellationToken.None);
+        Assert.InRange(timer.Elapsed, TimeSpan.FromMilliseconds(100), TimeSpan.FromSeconds(5));
+        var waiting = store.WaitForWorkAsync(TimeSpan.FromSeconds(10), CancellationToken.None);
+        await Task.Delay(100);
+        store.Submit(Request(), "operator", "key");
+        await waiting.WaitAsync(TimeSpan.FromSeconds(5));
+        // Every new Run releases the semaphore again, so the next wait completes without blocking.
+        store.Submit(Request() with { Scenario = Request().Scenario with { MasterSeed = "43" } }, "operator", "second");
+        await store.WaitForWorkAsync(TimeSpan.FromSeconds(5), CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task WaitForWorkAsync_honours_cancellation()
+    {
+        var store = new FileRunStore(directory);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.WaitForWorkAsync(TimeSpan.FromSeconds(10), cancellation.Token));
+    }
+
     private async Task<string> RunProcess(string operation)
     {
         var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };

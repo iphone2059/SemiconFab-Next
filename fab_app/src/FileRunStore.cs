@@ -11,10 +11,14 @@ namespace Fab.Orchestration;
 /// <summary>Development-only single-machine store. The public constructor permits explicit test use.</summary>
 public sealed class FileRunStore : IRunService
 {
+    private const int PendingIndexVersion = 1;
+    private static readonly TimeSpan PendingIndexRebuildInterval = TimeSpan.FromMinutes(10);
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly string directory;
     private readonly string runsDirectory;
     private readonly string resultsDirectory;
+    private readonly string pendingIndexPath;
+    private readonly SemaphoreSlim submittedWork = new(0);
     private readonly TimeProvider clock;
     public TimeSpan LeaseDuration { get; }
 
@@ -30,6 +34,7 @@ public sealed class FileRunStore : IRunService
             throw new ArgumentOutOfRangeException(nameof(leaseDuration));
         runsDirectory = Path.Combine(this.directory, "runs");
         resultsDirectory = Path.Combine(this.directory, "results");
+        pendingIndexPath = Path.Combine(this.directory, "pending-index.json");
         Directory.CreateDirectory(runsDirectory);
         Directory.CreateDirectory(resultsDirectory);
     }
@@ -66,6 +71,8 @@ public sealed class FileRunStore : IRunService
         if (existing is not null)
         {
             if (existing.RequestHash != requestHash) throw new IdempotencyConflictException("The idempotency key already identifies a different request.");
+            // A replayed Submit may be retrying a Run that is still queued, so idle workers are notified too.
+            submittedWork.Release();
             return CreationSummary(ReadRun(existing.RunId) ?? throw new InvalidDataException("Idempotency index references a missing Run."));
         }
         var record = new StoredRun
@@ -77,6 +84,13 @@ public sealed class FileRunStore : IRunService
         Save(record);
         index.Add(scope, new(record.Id, requestHash));
         AtomicWrite(indexPath, Serialize(index));
+        // Publish the claimable executions after the Run is durable. If the process dies between the
+        // two writes, a later pending-index rebuild repairs the index from the Run records.
+        var pending = TryLoadPendingIndex();
+        if (pending is null) pending = RebuildPendingIndex(record.CreatedAtUtc);
+        else AppendPendingEntries(pending, record);
+        WritePendingIndex(pending);
+        submittedWork.Release();
         return CreationSummary(record);
     }
 
@@ -100,23 +114,59 @@ public sealed class FileRunStore : IRunService
             ? new RunResult(run.Id.ToString("D"), run.Executions.Select(ReadResult).ToArray()) : null;
     }
 
+    /// <summary>Waits until this store instance learns about submitted work, the timeout elapses, or the token is cancelled.</summary>
+    public Task WaitForWorkAsync(TimeSpan timeout, CancellationToken token)
+    {
+        if (timeout < TimeSpan.Zero && timeout != Timeout.InfiniteTimeSpan) throw new ArgumentOutOfRangeException(nameof(timeout));
+        return submittedWork.WaitAsync(timeout, token);
+    }
+
     public ExecutionLease? TryClaim(string owner)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(owner);
         using var gate = AcquireLock();
+        // The index is a cache: it is re-read under the lock, candidates are ordered exactly like the
+        // original full scan, and every candidate is re-verified against its Run record before claiming.
         var now = clock.GetUtcNow();
-        foreach (var run in ReadRuns().OrderBy(run => run.CreatedAtUtc).ThenBy(run => run.Id))
+        var index = TryLoadPendingIndex();
+        var dirty = false;
+        if (index is null || now - index.RebuiltAtUtc > PendingIndexRebuildInterval)
         {
-            var execution = run.Executions.FirstOrDefault(e => e.Status == "QUEUED" || (e.Status == "RUNNING" && e.ExpiresAtUtc <= now));
-            if (execution is null) continue;
+            index = RebuildPendingIndex(now);
+            dirty = true;
+        }
+        var candidates = index.Entries
+            .Where(entry => entry.Status == "QUEUED" || (entry.Status == "RUNNING" && entry.ExpiresAtUtc <= now))
+            .OrderBy(entry => entry.CreatedAtUtc).ThenBy(entry => entry.RunId).ThenBy(entry => entry.Order)
+            .ToArray();
+        foreach (var entry in candidates)
+        {
+            var run = ReadRun(entry.RunId);
+            var execution = run?.Executions.FirstOrDefault(candidate => candidate.FabId == entry.FabId);
+            if (run is null || execution is null || execution.Status is "COMPLETED" or "FAILED")
+            {
+                RemovePendingEntry(index, entry);
+                dirty = true;
+                continue;
+            }
+            if (execution.Status != "QUEUED" && (execution.Status != "RUNNING" || execution.ExpiresAtUtc > now))
+            {
+                // The cached entry was stale: another process claimed or renewed the lease and already
+                // refreshed the index, or the file changed underneath us. Only the Run record is authoritative.
+                if (ApplyExecutionState(entry, execution)) dirty = true;
+                continue;
+            }
             execution.Status = "RUNNING";
             execution.Owner = owner;
             execution.Epoch = checked(execution.Epoch + 1);
             execution.ExpiresAtUtc = now + LeaseDuration;
             run.Version = checked(run.Version + 1);
             Save(run);
+            ApplyExecutionState(entry, execution);
+            WritePendingIndex(index);
             return new(run.Id, execution.FabId, owner, execution.Epoch, execution.ExpiresAtUtc, run.Request.Scenario);
         }
+        if (dirty) WritePendingIndex(index);
         return null;
     }
 
@@ -131,6 +181,7 @@ public sealed class FileRunStore : IRunService
         run.Version = checked(run.Version + 1);
         try { Save(run, previousExpiration); }
         catch (LeaseLostException) { return false; }
+        PersistLeaseRenewed(run.Id, execution.FabId, execution.ExpiresAtUtc);
         return true;
     }
 
@@ -152,6 +203,7 @@ public sealed class FileRunStore : IRunService
         execution.Owner = null;
         run.Version = checked(run.Version + 1);
         Save(run, execution.ExpiresAtUtc);
+        PersistExecutionFinished(run.Id, execution.FabId);
     }
 
     public void Fail(ExecutionLease lease, string error)
@@ -163,6 +215,7 @@ public sealed class FileRunStore : IRunService
         execution.Owner = null;
         run.Version = checked(run.Version + 1);
         Save(run, execution.ExpiresAtUtc);
+        PersistExecutionFinished(run.Id, execution.FabId);
     }
 
     private bool IsCurrent(StoredExecution execution, ExecutionLease lease) => execution.Status == "RUNNING"
@@ -174,6 +227,93 @@ public sealed class FileRunStore : IRunService
         var execution = run?.Executions.SingleOrDefault(e => e.FabId == lease.FabId);
         if (run is null || execution is null || !IsCurrent(execution, lease)) throw new LeaseLostException("The execution lease is no longer current.");
         return (run, execution);
+    }
+
+    /// <summary>Loads the persisted pending index, returning null when it is missing or structurally invalid.</summary>
+    private PendingIndex? TryLoadPendingIndex()
+    {
+        if (!File.Exists(pendingIndexPath)) return null;
+        try
+        {
+            var index = Read<PendingIndex>(pendingIndexPath);
+            if (index.Version != PendingIndexVersion || index.Entries is null) return null;
+            foreach (var entry in index.Entries)
+            {
+                if (entry is null || entry.RunId == Guid.Empty || string.IsNullOrWhiteSpace(entry.FabId)) return null;
+                if (entry.Status is not ("QUEUED" or "RUNNING")) return null;
+                if (entry.Order < 0) return null;
+            }
+            return index;
+        }
+        catch (Exception error) when (error is InvalidDataException or JsonException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Full-scan repair: reconstruct the claimable candidate set from the authoritative Run records.</summary>
+    private PendingIndex RebuildPendingIndex(DateTimeOffset now)
+    {
+        var entries = new List<PendingEntry>();
+        foreach (var run in ReadRuns())
+            for (var order = 0; order < run.Executions.Length; order++)
+                if (CreatePendingEntry(run, run.Executions[order], order) is { } entry) entries.Add(entry);
+        return new PendingIndex { Version = PendingIndexVersion, RebuiltAtUtc = now, Entries = entries.ToArray() };
+    }
+
+    private static void AppendPendingEntries(PendingIndex index, StoredRun run)
+    {
+        var entries = index.Entries.ToList();
+        for (var order = 0; order < run.Executions.Length; order++)
+        {
+            if (CreatePendingEntry(run, run.Executions[order], order) is not { } entry) continue;
+            if (entries.Any(existing => existing.RunId == run.Id && existing.FabId == entry.FabId)) continue;
+            entries.Add(entry);
+        }
+        index.Entries = entries.ToArray();
+    }
+
+    private static PendingEntry? CreatePendingEntry(StoredRun run, StoredExecution execution, int order) =>
+        execution.Status is "QUEUED" or "RUNNING"
+            ? new PendingEntry { RunId = run.Id, FabId = execution.FabId, Order = order, CreatedAtUtc = run.CreatedAtUtc, Status = execution.Status, ExpiresAtUtc = execution.ExpiresAtUtc }
+            : null;
+
+    private static bool ApplyExecutionState(PendingEntry entry, StoredExecution execution)
+    {
+        var changed = entry.Status != execution.Status || entry.ExpiresAtUtc != execution.ExpiresAtUtc;
+        entry.Status = execution.Status;
+        entry.ExpiresAtUtc = execution.ExpiresAtUtc;
+        return changed;
+    }
+
+    private static void RemovePendingEntry(PendingIndex index, PendingEntry entry) =>
+        index.Entries = index.Entries.Where(candidate => candidate.RunId != entry.RunId || candidate.FabId != entry.FabId).ToArray();
+
+    private void PersistLeaseRenewed(Guid runId, string fabId, DateTimeOffset expiresAtUtc)
+    {
+        var index = TryLoadPendingIndex();
+        var entry = index?.Entries.FirstOrDefault(candidate => candidate.RunId == runId && candidate.FabId == fabId);
+        if (index is null || entry is null) return;
+        if (entry.Status == "RUNNING" && entry.ExpiresAtUtc == expiresAtUtc) return;
+        entry.Status = "RUNNING";
+        entry.ExpiresAtUtc = expiresAtUtc;
+        WritePendingIndex(index);
+    }
+
+    private void PersistExecutionFinished(Guid runId, string fabId)
+    {
+        var index = TryLoadPendingIndex();
+        if (index is null) return;
+        var remaining = index.Entries.Where(entry => entry.RunId != runId || entry.FabId != fabId).ToArray();
+        if (remaining.Length == index.Entries.Length) return;
+        index.Entries = remaining;
+        WritePendingIndex(index);
+    }
+
+    private void WritePendingIndex(PendingIndex index)
+    {
+        index.Entries = index.Entries.OrderBy(entry => entry.CreatedAtUtc).ThenBy(entry => entry.RunId).ThenBy(entry => entry.Order).ToArray();
+        AtomicWrite(pendingIndexPath, Serialize(index));
     }
 
     private static RunSummary CreationSummary(StoredRun run) => new(run.Id.ToString("D"), run.Request.Scenario.SiteId,
@@ -244,6 +384,23 @@ public sealed class FileRunStore : IRunService
     }
 
     private sealed record IdempotencyEntry(Guid RunId, string RequestHash);
+
+    private sealed class PendingIndex
+    {
+        public int Version { get; set; }
+        public DateTimeOffset RebuiltAtUtc { get; set; }
+        public PendingEntry[] Entries { get; set; } = [];
+    }
+
+    private sealed class PendingEntry
+    {
+        public Guid RunId { get; set; }
+        public string FabId { get; set; } = "";
+        public int Order { get; set; }
+        public DateTimeOffset CreatedAtUtc { get; set; }
+        public string Status { get; set; } = "QUEUED";
+        public DateTimeOffset ExpiresAtUtc { get; set; }
+    }
     private sealed class StoredRun
     {
         public Guid Id { get; set; }
