@@ -1,0 +1,195 @@
+{
+  "review": "Performance optimization round: render hot paths, telemetry round trips, RunStore polling, static asset packaging, render gate budgets and simulation value types",
+  "baseCommit": "536b44e1d2b62f958344fa1bb701659384c2a2de",
+  "changeCommits": {
+    "runStoreIndex": "a373c56478c43a182eeae174e9fd65a3e0ec4804",
+    "simulationValueTypes": "30e91f12b65b9338db2452cb5fca5b32a3468cf1",
+    "renderHotPaths": "38eec96df1ef9b33a60f1979bddb60223755d7f1",
+    "motionAndLamps": "f5fdad7116c6d3b3d7e5e278d343579ee728d285",
+    "telemetryTransport": "96a1e2af7385a379c85d63107430eac0a1926f07",
+    "airflowPressure": "117e9dc7924b1c3b118e5935c3aa9a99001ff15d",
+    "twinSubscriptions": "4b94376845c7471a8718929b5219f53dd09cd476",
+    "staticStructurePack": "87f2b99805ec17a02f27ec17f976b940ab576ab1",
+    "renderGateProfiles": "cf4e8cb6528ecd0b92fb5c8053f9fee6142b9cbb"
+  },
+  "verifiedAt": "2026-10-27T14:11:44.2070495+08:00",
+  "environment": {
+    "os": "Windows",
+    "browser": "Chrome/155.0.8059.86 (headless, localhost secure context)",
+    "backend": ".NET 11 Release",
+    "frontend": "React 19 / Vite 8 / TypeScript 7 / @babylonjs/lite 1.36.0",
+    "node": "26.12.1"
+  },
+  "automatedVerification": {
+    "command": "./scripts/verify.ps1",
+    "exitCode": 0,
+    "frontend": {
+      "typecheck": "tsc --noEmit exit 0",
+      "tests": {
+        "files": 73,
+        "passed": 370,
+        "failed": 0
+      },
+      "build": "vite build exit 0 (1804 modules)"
+    },
+    "backend": {
+      "passed": 160,
+      "failed": 0,
+      "total": 160
+    },
+    "pythonToolTests": {
+      "passed": 8,
+      "failed": 0
+    },
+    "renderGateUnitTests": {
+      "passed": 11,
+      "failed": 0
+    },
+    "contractsArchitecture": "PASS"
+  },
+  "browserEvidence": {
+    "renderGateDev": {
+      "source": ".local/render-perf-final.json",
+      "profile": "dev",
+      "url": "http://127.0.0.1:5174/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?perf=1",
+      "frames": 600,
+      "averageFrameMs": 8.42,
+      "p95FrameMs": 8.5,
+      "p99FrameMs": 16.5,
+      "averageFps": 118.8,
+      "rendererFrames": 631,
+      "drawCalls": 903,
+      "workerTargets": 1,
+      "heapGrowthMb": 10.93,
+      "readyMs": 2664.8,
+      "firstFrameMs": 2675.5,
+      "gpuErrors": [],
+      "failures": []
+    },
+    "renderGate60hz": {
+      "source": ".local/render-perf-final-60hz.json",
+      "profile": "60hz",
+      "thresholds": {
+        "p95Ms": 16.7,
+        "p99Ms": 33,
+        "heapGrowthMb": 32
+      },
+      "frames": 600,
+      "averageFrameMs": 8.4,
+      "p95FrameMs": 8.5,
+      "p99FrameMs": 8.6,
+      "averageFps": 119,
+      "rendererFrames": 631,
+      "drawCalls": 903,
+      "heapGrowthMb": 6.17,
+      "gpuErrors": [],
+      "failures": []
+    },
+    "workerStress": {
+      "source": ".local/telemetry-stress-final.json",
+      "seconds": 5,
+      "rateHz": 60,
+      "results": [
+        {
+          "entities": 500,
+          "frameSize": 1000,
+          "sent": 300,
+          "received": 300,
+          "receiveRatio": 1,
+          "p95LatencyMs": 0.4,
+          "maxLatencyMs": 0.6
+        },
+        {
+          "entities": 2000,
+          "frameSize": 4000,
+          "sent": 300,
+          "received": 300,
+          "receiveRatio": 1,
+          "p95LatencyMs": 0.5,
+          "maxLatencyMs": 0.7
+        },
+        {
+          "entities": 5000,
+          "frameSize": 10000,
+          "sent": 300,
+          "received": 300,
+          "receiveRatio": 1,
+          "p95LatencyMs": 0.6,
+          "maxLatencyMs": 0.9
+        }
+      ],
+      "failures": []
+    }
+  },
+  "measuredChanges": {
+    "runStoreIdleClaim": {
+      "completedRuns": 150,
+      "beforeMsPerClaim": 5.529,
+      "afterMsPerClaim": 0.078,
+      "factor": 70,
+      "note": "Idle claim no longer parses Run files; Submit/Complete +18% for the durable pending-index write."
+    },
+    "staticStructure": {
+      "sourceBytes": 2276023,
+      "packedBytes": 1721856,
+      "gzipSourceBytes": 139971,
+      "gzipPackedBytes": 123650,
+      "liteBackendChunkKbBefore": 2360.06,
+      "liteBackendChunkKbAfter": 1788.16,
+      "liteBackendGzipKbBefore": 192.68,
+      "liteBackendGzipKbAfter": 176.38,
+      "jsonParseMs": 4.17,
+      "packedDecodeMs": 2.98,
+      "constructionMsBefore": 7.15,
+      "constructionMsAfter": 5.47,
+      "note": "Packed module parity is asserted against the committed JSON; pack --check exit 0."
+    },
+    "telemetry": {
+      "productRingBytesBefore": 32768,
+      "productRingBytesAfter": 1024,
+      "stressRingBytesBefore": 10240000,
+      "stressRingBytesAfter": 320000,
+      "structuredClone10000FloatsMsBefore": 0.1245,
+      "structuredClone10000FloatsMsAfter": 0.02,
+      "remainingCopiesPerFrame": 4
+    },
+    "motionThinInstances": {
+      "instanceMatricesRewrittenPerFrameBefore": 332,
+      "poolVersionBumpsPerFrameBefore": 19,
+      "staticPoolUploadsPerFrameAfter": 0,
+      "dirtySpanAfter": "exact changed slot span; unchanged frames upload nothing"
+    },
+    "toolLamps": {
+      "tools": 121,
+      "downIndicesWhenSixDown": 6,
+      "noDownFastPath": true
+    },
+    "twinSubscriptions": {
+      "amhsHz": 10,
+      "waferHz": 20,
+      "tourHz": 60,
+      "twinContentRendersPerUpdateBefore": 1,
+      "twinContentRendersPerUpdateAfter": 0
+    },
+    "airflowPressure": {
+      "sinCosPerFrameBefore": 2992,
+      "sinCosPerFrameAfter": 0,
+      "hotPathMedianMsBefore": "0.104-0.115",
+      "hotPathMedianMsAfter": "0.049-0.058"
+    },
+    "lightingAndToolStateMerge": {
+      "fixedLightPacketAllocationsPerFrameBefore": 1,
+      "fixedLightPacketAllocationsPerFrameAfter": 0,
+      "toolStateMergeAllocationsWhenUnchangedBefore": 1,
+      "toolStateMergeAllocationsWhenUnchangedAfter": 0
+    }
+  },
+  "knownBoundaries": [
+    "Browser gates are a single-machine headless Chrome baseline; the 60 Hz profile numbers are environment-dependent and must be re-measured on an idle target machine before being frozen as a release budget.",
+    "TwinContent still rerenders on liveToolStates/statusFeed (~10 Hz in SSE mode) and research time (~10 Hz during playback) because it renders or forwards those values to FabViewport; further isolation needs a FabViewport data-flow change.",
+    "The packed static structure (1,721,856 B generated module) is committed with the change; the JSON asset remains the source of truth and drift is covered by tests/static-structure-pack.test.ts and `node tools/pack_static_structure.mjs --check` (not yet wired into scripts/verify.ps1).",
+    "RunStore recovers a crash between Save(run) and the pending-index write through the 10-minute staleness rebuild; the recovery window is bounded but not zero.",
+    "Telemetry latest-wins assumes the Worker replies for every valid monotonic frame; four typed-array copies per frame remain (flatten, main->worker clone, ring write, ring read copy, worker->main clone).",
+    "WGSL fault-lamp pulse, GPU compute airflow and SharedArrayBuffer were intentionally not implemented; per the audit they require GPU A/B or COOP-COEP infrastructure and are deferred."
+  ]
+}

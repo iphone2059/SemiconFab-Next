@@ -1,14 +1,16 @@
 # 实施状态（V2.1 最终）
 
-- 状态：**M0–M6 与后续 review 修复（多 FAB、SSE 游标/缺口、命令保留/幂等/能力、FAB 级遥测/设备状态、真实 GPU/Worker 压力门禁）已完成；PostgreSQL/Outbox/生产身份因基础设施缺失保留边界。**
+- 状态：**M0–M6 与后续 review 修复（多 FAB、SSE 游标/缺口、命令保留/幂等/能力、FAB 级遥测/设备状态、真实 GPU/Worker 压力门禁）已完成；性能优化专项（渲染热路径、遥测传输、RunStore 索引、静态资源打包、门禁加强、仿真值类型）已完成；PostgreSQL/Outbox/生产身份因基础设施缺失保留边界。**
 - 最后验证（提交前）：
   - 契约/架构检查 PASS
-  - 8 个 Python 工具测试 PASS
-  - 3 个 .NET 项目 Release 构建 + **139/139 测试 PASS**
-  - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **69 文件 / 315 测试 PASS**、`vite build` 0
+  - 8 个 Python 工具测试 + 11 个渲染门禁单元测试 PASS
+  - 3 个 .NET 项目 Release 构建 + **160/160 测试 PASS**
+  - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **73 文件 / 370 测试 PASS**、`vite build` 0（1804 modules）
   - `./scripts/verify.ps1` exit 0
-  - 真实 Chrome/WebGPU 持续门禁：600 帧，p95 8.5ms，116.5fps，1 个按需 Worker，heap 65.59MB，rendererFrames 631，drawCalls 903，gpuErrors []（`.local/render-perf.json`）
-  - Worker 压力：500/2000/5000 entities × 60Hz × 5s，真实浏览器 Worker 收发 100%，p95 0.6/1.1/2.0ms；CPU/Heap 微基准约 18.6/60/141ms
+  - 真实 Chrome/WebGPU dev 门禁：600 帧，p95 8.5ms，p99 16.5ms，118.8fps，1 个按需 Worker，heap growth 10.93MB，rendererFrames 631，drawCalls 903，gpuErrors []（`.local/render-perf-final.json`）
+  - 真实 Chrome/WebGPU 60Hz profile：600 帧，p95 8.5ms，p99 8.6ms，heap growth 6.17MB，failures []
+  - Worker 压力：500/2000/5000 entities × 60Hz × 5s，真实浏览器 Worker 收发 100%，p95 0.4/0.5/0.6ms
+  - 性能优化证据：`docs/evidence/perf-2026-10-27.json`（base `536b44e`，9 个主题提交）
 
 ## 当前架构
 
@@ -47,7 +49,7 @@ Babylon Lite 1.36   WebGPU-only 渲染
 - **遥测/设备状态**：FAB 级 20Hz 遥测 SSE → 每 FAB `TelemetryRuntime` → MessageDecoder → Worker FrameRingBuffer → 渲染 frame loop；设备状态 REST/SSE 同样按 FAB 作用域；不经过 Query/Zustand/XState（ARCH-11）。
 - **多 FAB**：后端默认 FAB-01/02/03（`Fab:FabCount` 1..32），前端按 FAB 装配 Runtime/遥测/状态，Workbench 多 FAB 卡片，Scenario 可提交任意非空子集。
 - **命令可靠性**：Idempotency-Key 幂等、能力目录/前置条件、FAB 授权 seam、终态 TTL/容量保留；命令 SSE 带 epoch/sequence 与 Last-Event-ID，缺口触发 replay-gap + 权威核对。
-- **性能**：`tools/render_perf.mjs` 在 headless Chrome + 真实 WebGPU 上验证 `navigator.gpu`/adapter/canvas、renderer frames/draw calls/gpuErrors；`tests/performance/telemetry-load.test.ts` 覆盖 500/2000/5000 实体负载。命令见根 README。
+- **性能**：`tools/render_perf.mjs` 在 headless Chrome + 真实 WebGPU 上验证 `navigator.gpu`/adapter/canvas、renderer frames/draw calls/gpuErrors；dev 门禁 + 60Hz profile（p95/p99/heap trend/首帧，`scripts/perf-render.ps1 -Profile`）；静态结构构建期打包（`tools/pack_static_structure.mjs`）；`tests/performance/telemetry-load.test.ts` 覆盖 500/2000/5000 实体负载。命令见根 README。
 
 ## 测试与门禁
 
