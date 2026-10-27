@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { isRendererReady, renderGateFailures, resolveRenderGateThresholds } from './render_perf_checks.mjs';
 
 const goodMeasurement = (patch = {}) => ({
-  secure: true, adapter: true, canvas: true, measuredFrames: 180, p95FrameMs: 8.5, p99FrameMs: 12,
+  secure: true, adapter: true, canvas: true, measuredFrames: 180, p95FrameMs: 8.5, p99FrameMs: 12, heapGrowthMb: 6,
   rendererFrames: 181, drawCalls: 903, rendererReady: true, gpuErrors: [], ...patch,
 });
 
@@ -48,14 +48,37 @@ test('60hz requires a finite p99 sample', () => {
   assert.deepEqual(renderGateFailures(goodMeasurement({ p99FrameMs: Number.NaN }), 180), []);
 });
 
-test('heap growth fails only under the 60hz budget unless a threshold is explicit', () => {
+test('heap growth fails only under a configured heap budget', () => {
   const growing = goodMeasurement({ heapGrowthMb: 40 });
   assert.deepEqual(renderGateFailures(growing, 180), []);
   assert.deepEqual(renderGateFailures(growing, 180, { profile: '60hz' }), ['Renderer heap growth exceeds 32 MB']);
   assert.deepEqual(renderGateFailures(goodMeasurement({ heapGrowthMb: 32 }), 180, { profile: '60hz' }), []);
+  assert.deepEqual(renderGateFailures(goodMeasurement({ heapGrowthMb: 6 }), 180, { profile: '60hz' }), []);
   assert.deepEqual(renderGateFailures(goodMeasurement({ heapGrowthMb: 12 }), 180, { heapGrowthMb: 10 }), ['Renderer heap growth exceeds 10 MB']);
-  // Missing heap evidence is not treated as growth.
-  assert.deepEqual(renderGateFailures(goodMeasurement(), 180, { profile: '60hz' }), []);
+  // Dev/default configures no heap budget, so a missing heap metric is ignored (byte-compatible).
+  assert.deepEqual(renderGateFailures(goodMeasurement({ heapGrowthMb: undefined }), 180), []);
+});
+
+test('configured heap budgets fail closed without a finite heap metric', () => {
+  for (const heapGrowthMb of [undefined, null, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+    assert.deepEqual(renderGateFailures(goodMeasurement({ heapGrowthMb }), 180, { profile: '60hz' }), ['Renderer heap growth is not finite']);
+  }
+  // Dev remains byte-compatible: no heap budget, no heap check.
+  assert.deepEqual(renderGateFailures(goodMeasurement({ heapGrowthMb: undefined }), 180), []);
+  // An explicit threshold opts a custom/dev run into the same fail-closed contract.
+  assert.deepEqual(renderGateFailures(goodMeasurement({ heapGrowthMb: undefined }), 180, { profile: 'custom', heapGrowthMb: 10 }), ['Renderer heap growth is not finite']);
+  assert.deepEqual(renderGateFailures(goodMeasurement({ heapGrowthMb: Number.NaN }), 180, { heapGrowthMb: 10 }), ['Renderer heap growth is not finite']);
+});
+
+test('profile failure ordering keeps p99, heap, boot, then GPU errors', () => {
+  const bad = goodMeasurement({ p99FrameMs: Number.NaN, heapGrowthMb: undefined, gpuErrors: ['validation failed'] });
+  assert.deepEqual(renderGateFailures(bad, 180, { profile: '60hz', readyMs: 1000, firstFrameMs: 1000 }), [
+    'Renderer p99 frame time is not finite',
+    'Renderer heap growth is not finite',
+    'Renderer ready time exceeds 1000 ms',
+    'Renderer first-frame time exceeds 1000 ms',
+    'GPU or browser errors',
+  ]);
 });
 
 test('custom profile honors explicit p95/p99 thresholds', () => {

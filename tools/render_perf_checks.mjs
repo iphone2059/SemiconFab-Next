@@ -38,7 +38,8 @@ export function resolveRenderGateThresholds(options = {}) {
  * p95 must be finite and <= 100 ms, and every pre-existing failure keeps its message and order.
  * Additional profile thresholds are appended before the GPU/browser error check:
  * - p99Ms: the p99 sample must be finite and <= the threshold.
- * - heapGrowthMb: measured JS-heap growth must not exceed the threshold (no evidence is not growth).
+ * - heapGrowthMb: a configured heap budget fails closed without a finite measured JS-heap growth,
+ *   and growth must not exceed the threshold.
  * - readyMs / firstFrameMs (opt-in, off by default): boot timings must be finite and within budget.
  * - maxFrames: caps the frame count required by the renderer/measured-frame sufficiency checks.
  */
@@ -60,9 +61,9 @@ export function renderGateFailures(measurement, requestedFrames, options = {}) {
     if (!Number.isFinite(measurement.p99FrameMs)) failures.push('Renderer p99 frame time is not finite');
     else if (measurement.p99FrameMs > thresholds.p99Ms) failures.push(`Renderer p99 frame time exceeds ${thresholds.p99Ms} ms`);
   }
-  if (thresholds.heapGrowthMb !== null && Number.isFinite(measurement.heapGrowthMb) &&
-      measurement.heapGrowthMb > thresholds.heapGrowthMb) {
-    failures.push(`Renderer heap growth exceeds ${thresholds.heapGrowthMb} MB`);
+  if (thresholds.heapGrowthMb !== null) {
+    if (!Number.isFinite(measurement.heapGrowthMb)) failures.push('Renderer heap growth is not finite');
+    else if (measurement.heapGrowthMb > thresholds.heapGrowthMb) failures.push(`Renderer heap growth exceeds ${thresholds.heapGrowthMb} MB`);
   }
   if (thresholds.readyMs !== null &&
       (!Number.isFinite(measurement.readyMs) || measurement.readyMs > thresholds.readyMs)) {
