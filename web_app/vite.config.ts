@@ -1,4 +1,5 @@
-import { defineConfig, loadEnv } from 'vite';
+import { loadEnv } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 
@@ -23,5 +24,9 @@ export default defineConfig(({ mode }) => {
       proxy.on('proxyReq', request => { request.removeHeader('X-Fab-Dev-Key'); if (key) request.setHeader('X-Fab-Dev-Key', key); });
     } } } },
     build: { rolldownOptions: { output: { manualChunks(id) { if (id.includes('@babylonjs')) return 'gpu'; if (id.includes('react')) return 'react'; } } } },
+    // CPU-heavy golden-vector suites (lite-motion, tour HUD) legitimately run past
+    // the 5s default when Vitest spawns 90 isolated workers on Windows. Raise only
+    // the timeout budget; every assertion keeps its original strength.
+    test: { testTimeout: 15000 },
   };
 });

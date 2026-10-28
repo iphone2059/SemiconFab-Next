@@ -1,9 +1,9 @@
 # 状态管理（State Management）
 
 - 版本：V2.1 / 2026-10-27
-- 状态：**M2 已实现：服务端数据归 TanStack Query，客户端 UI 状态归 Zustand；Redux/react-redux 已删除**（M2 implemented）
+- 状态：**M2 已实现：服务端数据归 TanStack Query，客户端 UI 状态归 Zustand；Redux/react-redux 已删除**（M2 implemented）；2026-10-28 P2 清理后 store 由类型安全 `createSliceStore` 工厂生成。
 - 依据：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)、[ADR-0010](adr/0010-command-event-bridge.md)；总览见 [架构基线](architecture.md)；路由/Query 细则见 [路由与查询集成](router-query-integration.md)
-- 当前实现：全部 HTTP 端点由 TanStack Query 拥有；客户端 UI 状态由 `web_app/src/state/` 下的 Zustand stores 承载（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale）；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已删除。ADR-0008 已被取代
+- 当前实现：全部 HTTP 端点由 TanStack Query 拥有；客户端 UI 状态由 `web_app/src/state/` 下的 7 个 Zustand stores 承载（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale），均由类型安全 `createSliceStore` 工厂生成（reducer 参数推导到 action creators，无 `any`/手写 action 接口断言）；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已删除。ADR-0008 已被取代
 - 本文不含任何已完成验证的声明
 
 ## 1. 状态分类与唯一所有权
@@ -75,6 +75,7 @@ Zustand 只保存**不影响服务端事实**的客户端状态，例如：HUD/�
 - 不得作为高频遥测的通道（ARCH-11）。
 - store 按领域拆分（`state/` 下），避免一个全局大 store；持久化只用于明确批准的用户偏好，不持久化服务端数据。
 - 组件局部状态优先：只在确实需要跨组件共享时进 Zustand。
+- 跨 store 协调只经 application/feature 级入口（例如 Twin 的 wafer 会话关闭走 `features/twin/wafer-session.ts`），store 之间不得直接 `setState` 互写。
 
 ### 4.3 从 Redux 迁移的原则（M2）
 
@@ -92,7 +93,7 @@ Zustand 只保存**不影响服务端事实**的客户端状态，例如：HUD/�
 
 ## 5. 工作流状态（XState v6）
 
-- 命令生命周期由 XState v6 actor 拥有（M4 已实现 `runtime/commands/equipmentCommand.machine.ts` + `XStateCommandWorkflowAdapter`），经 `CommandWorkflow` 契约暴露，由 `FabRuntime` 装配；UI 只读投影仍待 M5。
+- 命令生命周期由 XState v6 actor 拥有（M4 已实现 `runtime/commands/equipmentCommand.machine.ts` + `XStateCommandWorkflowAdapter`），经 `CommandWorkflow` 契约暴露，由 `FabRuntime` 装配；UI 只读投影已由 `CommandWorkflowProjection`/`useCommandProjection` 提供（M5a）。
 - 公共契约只有 `CommandWorkflow`（`receive`/`reconcile`/`dispose`）；页面不得直接 import actor/machine。
 - **工作流状态如何只读暴露给 UI**：本基线不虚构额外公共接口。M4 需要决定一种方式（例如 runtime/commands 提供的专用 hook，经 RuntimeProvider 暴露只读快照），并明确它不是第二份权威状态；在此之前页面用“提交态组件局部状态 + Query 权威状态”展示命令结果。该问题登记为 OPEN-V21-13（[架构基线](architecture.md) 第 14 节）。
 - 工作流状态不写入 Zustand/Redux/Query 缓存；如果 UI 需要缓存展示，只能缓存“展示投影”，且不得反写工作流。
@@ -101,6 +102,7 @@ Zustand 只保存**不影响服务端事实**的客户端状态，例如：HUD/�
 
 - 数据路径：`WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU`（[渲染管线](rendering.md)）。
 - 高频数据不进入 Query/Zustand/XState（ARCH-11）；不得以逐帧 `setState`/逐事件 dispatch 驱动 React。
+- 设备槽位与 `FabToolState` 投影是纯函数 `domain/equipment/tool-state-projection.ts`（`telemetrySlotForEntityId`/`flattenTelemetryFrame`/`toolStatesFromValues` 等）；`TelemetryRuntime` 只保留传输、解码、帧与背压，`FabTelemetryRegistry` 按 FAB 引用计数启停。
 - UI 需要的低频聚合（例如 KPI 摘要）必须由明确的数据契约单独提供；其频率上限与字段在 M5 定义，不得把原始帧塞进状态容器。
 - 选择/悬停等交互若频率高，走渲染层或 ref，并以节流/合并方式进入 React；具体阈值在 M5 性能测试中确定，本基线不写死数值。
 
@@ -151,8 +153,8 @@ HTTP 写入:  用户操作 -> mutation -> HTTP API -> 成功 -> invalidateQuerie
 
 ## 11. M2b 实现记录（2026-10-27）
 
-- Store（`web_app/src/state/`）：`twinUiStore`、`twinPageStore`、`twinDemoStore`、`catalogStore`、`workbenchStore`、`runtimeStore`、`localeStore`；公共 helper `createSliceStore` 用纯不可变 reducer（`state + action -> state`，无 Immer），actions 为普通 store 方法。
-- 工具：`state/telemetry-buffer.ts` 保留 100ms 合批（ARCH-11 的过渡实现，M5 迁 Worker/TypedArray）。
+- Store（`web_app/src/state/`）：`twinUiStore`、`twinPageStore`、`twinDemoStore`、`catalogStore`、`workbenchStore`、`runtimeStore`、`localeStore`；**历史记录：** 2026-10-28 清理后 feature store 已归位 `features/twin|/catalog|/workbench/state/`，共享状态保留在 `state/`；公共 helper `createSliceStore` 用纯不可变 reducer（`state + action -> state`，无 Immer），actions 为普通 store 方法；2026-10-28 起改为类型安全工厂，reducer 参数列表推导到 action creators（无 `any`/手写 action 接口断言）。
+- 工具：`realtime/telemetry/telemetry-buffer.ts` 保留 100ms 合批用于低频 UI 展示；高频遥测路径已由 `realtime/telemetry` 的 Worker/FrameRingBuffer 承担（见 §6）。
 - 已删除：`src/store/`（7 slice、hooks、store、api 残留）、`react-redux`、`@reduxjs/toolkit`；`AppProviders` 只保留 QueryClientProvider + ErrorBoundary。
 - 测试：`redux-store.test.ts` 改写为 Zustand 状态/action 测试；需要已挂载状态的组件测试改用 jsdom + Testing Library（Zustand SSR 快照为初始状态）。
 - 证据：`tsc --noEmit` 0；`npx vitest run` 57 文件 / 260 测试 PASS；`vite build` 0；`./scripts/verify.ps1` exit 0。
@@ -165,6 +167,6 @@ HTTP 写入:  用户操作 -> mutation -> HTTP API -> 成功 -> invalidateQuerie
 - 测试：`web_app/tests/integration/router-search.test.ts` 覆盖 catalog/Twin search 解析与 patch；`catalog-page.test.tsx` 更新为 props 化渲染；`tsc --noEmit` 0，Vitest 58 文件 / 262 测试 PASS，`vite build` 0，`./scripts/verify.ps1` exit 0。
 ## 10. 验证与证据状态
 
-- Zustand store 与 action 行为由 `web_app/tests/redux-store.test.ts`（已改写为 state-store 测试）、`remaining-state.test.ts` 等覆盖；ARCH-02/05 的自动化静态检查仍在 M6 计划中（[架构基线](architecture.md) R-09）。
+- Zustand store 与 action 行为由 `web_app/tests/redux-store.test.ts`（已改写为 state-store 测试）、`remaining-state.test.ts` 等覆盖；分层纯度由 `tests/architecture-import-graph.test.ts`（R1–R5 真实 import 图）与 `architecture-boundaries.test.ts` 覆盖；ARCH-02/05 仍以 store 清单/评审为主（[架构基线](architecture.md) R-09）。
 - RQ-03（mutation 失效）与 RQ-04（FAB 隔离）**已运行 PASS**（M2a）。
 - 当前依赖与实现：TanStack Query/Zustand/XState v6 均已接入，未引入 Immer；`src/store` 与 Redux/react-redux 已删除（M2b，见 §11）。

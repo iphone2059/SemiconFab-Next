@@ -3,7 +3,7 @@
 - 版本：V2.1 / 2026-10-27
 - 状态：**M1/M2 已实现；Zustand 接管客户端状态、Router search 接管 URL 状态（M2c）**（M2 implemented）
 - 依据：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)；总览见 [架构基线](architecture.md)；状态所有权见 [状态管理](state-management.md)
-- 当前实现：`main.tsx` 已改为 `AppProviders + RouterProvider`；TanStack Router 接管顶层路由；**全部 HTTP 端点**由 TanStack Query 独占；客户端 UI 状态由 Zustand 承载；Redux/RTK Query 已删除
+- 当前实现：`main.tsx` 已改为 `AppProviders + RouterProvider`；TanStack Router 接管顶层路由；**全部 HTTP 端点**由 TanStack Query 独占；客户端 UI 状态由 Zustand 承载；Redux/RTK Query 已删除。通用 `app/router/search.ts` 只保留 schema 与通用 helper；catalog/Twin 的 search 转换分别在 `features/catalog/search.ts`、`features/twin/twin-search.ts`，router 通用工具不 import feature
 - 门禁状态：RQ-01..RQ-05 **均已真实运行（PASS）**。证据见 [架构基线](architecture.md) §15/§16、`tests/integration/router-query.test.tsx` 与 `tests/integration/query-cache.test.tsx`
 
 ## 1. 职责边界
@@ -139,7 +139,7 @@ export const queryKeys = {
 
 ## 7. 必测门禁 RQ-01..RQ-05 细则
 
-> 位置（计划）：`web_app/tests/integration/router-query.test.tsx`。全部 **SPECIFIED / NOT RUN**。前置：TanStack Router/Query 依赖、jsdom/happy-dom + Testing Library（当前未安装，见 [架构基线](architecture.md) 第 12.3 节）。
+> 位置：`web_app/tests/integration/router-query.test.tsx`（RQ-01/RQ-05）与 `tests/integration/query-cache.test.tsx`（RQ-02..04）。RQ-01..05 均已真实运行 PASS（记录见 §13/§14 与 [架构基线](architecture.md) §12.2）。
 
 ### RQ-01 hover 预加载后立即导航复用 Query 数据
 
@@ -148,7 +148,7 @@ export const queryKeys = {
 - **When**：触发链接 hover/focus（intent 预加载）并等待预加载 loader 完成；随后立即点击导航。
 - **Then**：导航后的 loader 因 `defaultPreloadStaleTime: 0` 确实重新执行；`ensureQueryData` 命中缓存；endpoint 仅被调用 **1** 次；页面无需 loading 状态即显示 v1；不存在第二次相同 key 的请求。
 - **断言点**：endpoint 调用次数 = 1；`queryClient.getQueryData(equipmentQueries.detail(...).queryKey)` 为 v1；导航完成且页面渲染 v1。
-- **状态**：SPECIFIED / NOT RUN。阻塞：依赖与 DOM 测试环境未安装。
+- **状态**：PASS（`tests/integration/router-query.test.tsx`，M1）。
 
 ### RQ-02 预加载后数据过期再导航遵循 Query 新鲜度
 
@@ -157,7 +157,7 @@ export const queryKeys = {
 - **When**：推进假时钟超过 `staleTime`，然后点击导航。
 - **Then**：导航不被网络阻塞（loader `ensureQueryData` 返回缓存，不等待网络）；页面先显示 v1；页面 `useQuery` 订阅触发恰好 1 次后台刷新，最终显示 v2。
 - **断言点**：导航完成时 endpoint 计数仍为 1；随后计数变为 2；最终缓存/页面为 v2；无重复/循环刷新。
-- **状态**：SPECIFIED / NOT RUN。
+- **状态**：PASS（`tests/integration/query-cache.test.tsx`，M2a）。
 
 ### RQ-03 mutation 失效后展示刷新后的权威数据
 
@@ -166,7 +166,7 @@ export const queryKeys = {
 - **When**：mutation resolve。
 - **Then**：活跃 Query 重新取数并写入 v2；页面显示 v2；Zustand/组件不得保留 v1 副本作为展示来源（ARCH-05）。
 - **断言点**：失效后 endpoint 计数 +1；缓存与 DOM 均为 v2；store 中无该查询结果字段。
-- **状态**：SPECIFIED / NOT RUN。
+- **状态**：PASS（`tests/integration/query-cache.test.tsx`，M2a）。
 
 ### RQ-04 FAB-A / FAB-B 相同设备 id 不串缓存
 
@@ -175,7 +175,7 @@ export const queryKeys = {
 - **When**：分别加载 FAB-A 与 FAB-B 的设备查询；再对 FAB-A 执行失效。
 - **Then**：两个缓存条目独立、互不覆盖；FAB-A 的失效不触发 FAB-B 重取；各自页面显示各自数据。
 - **断言点**：`queryClient.getQueryData` 两个 key 数据不同；endpoint 调用次数各 1；失效后只有 A 变化。
-- **状态**：SPECIFIED / NOT RUN。
+- **状态**：PASS（`tests/integration/query-cache.test.tsx`，M2a）。
 
 ### RQ-05 重叠预加载/导航请求复用 in-flight 请求
 
@@ -184,7 +184,7 @@ export const queryKeys = {
 - **When**：在 Promise resolve 前执行导航，导航 loader 再次 `ensureQueryData`。
 - **Then**：两个调用都等待同一个 in-flight 请求；endpoint 仅调用 1 次；两者解析到同一份数据；无重复缓存写入。
 - **断言点**：endpoint 调用次数 = 1；两次 loader promise 解析值相同；导航完成后页面数据正确。
-- **状态**：SPECIFIED / NOT RUN。
+- **状态**：PASS（`tests/integration/query-cache.test.tsx`，M2a）。
 
 ## 8. 文件式路由与 Vite 约束（G-01）
 
@@ -194,7 +194,7 @@ export const queryKeys = {
 | 插件允许范围 | 允许新增该 Vite 插件；**不得**修改 `server`/`build` 参数、产物目录、`manualChunks` 分包结果 |
 | 校验方式 | M1 对比改动前后 `pnpm build` 的产物与分包；若插件引起 build 行为变化，退回 code-based routes |
 | 回退方案 | 手写 `routeTree`/`createRoute`（code-based），功能等价，仅失去文件式生成便利 |
-| 当前现状 | 无路由库、无路由插件；`vite.config.ts` 只有 react 插件、server 代理与 manualChunks（见仓库文件） |
+| 当前现状 | 文件式路由插件已启用：`routesDirectory: './src/app/router/routes'`、`generatedRouteTree: './src/app/router/routeTree.gen.ts'` 并提交生成树；server/build 参数未变（见 `vite.config.ts` 与 [架构基线](architecture.md) G-01） |
 
 ## 9. 迁移映射（RTK Query -> Query Options）
 
@@ -247,7 +247,7 @@ export const queryKeys = {
 | Query 隔离 | 每个测试新建 `QueryClient`（`retry: false`、按需 `gcTime`），避免跨测试缓存污染 | 已实现 |
 | 网络模拟 | 在 `api/endpoints` 层 mock `fetch`；断言调用次数与参数 | 已实现（`vi.stubGlobal('fetch')` + 调用次数断言） |
 | 时钟 | RQ-02 使用假时钟覆盖 `staleTime`，不得用真实 sleep | 已实现（`query-cache.test.tsx` 用 `updatedAt` 老化缓存，无真实 sleep） |
-| 运行命令 | `pnpm test`（Vitest）纳入 CI/verify；浏览器专用测试仍用现有独立配置 | 已纳入：`npx vitest run` = 58 文件 / 262 测试；`./scripts/verify.ps1` PASS |
+| 运行命令 | `pnpm test`（Vitest）纳入 CI/verify；浏览器专用测试仍用现有独立配置 | 已纳入：`npx vitest run` = 90 文件 / 532 测试 PASS；`./scripts/verify.ps1` PASS |
 
 ## 12. 风险与开放问题
 

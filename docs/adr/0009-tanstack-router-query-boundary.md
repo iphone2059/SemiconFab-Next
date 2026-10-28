@@ -1,9 +1,9 @@
 # ADR-0009 — TanStack Router 只做导航与加载协调，TanStack Query 独占服务端数据缓存
 
-- 状态：已采纳（2026-10-27）；实施状态：M1+M2a 已落地 —— TanStack Router 接管顶层路由、全部 HTTP 端点迁 TanStack Query、RTK Query 删除、RQ-01..05 运行通过；Zustand/客户端状态迁移（M2b）未开始（Status: Accepted / M1+M2a implemented / M2b+ pending）
+- 状态：已采纳（2026-10-27）；实施状态：M1+M2b/M2c 已落地 —— TanStack Router 接管顶层路由、全部 HTTP 端点迁 TanStack Query、RTK Query/Redux 删除、Zustand 接管客户端 UI、Router search 接管 URL 状态、RQ-01..05 真实运行通过（Status: Accepted / fully implemented）；2026-10-28 起通用 `app/router/search.ts` 不再包含 catalog/Twin 转换（分别归 `features/catalog/search.ts`、`features/twin/twin-search.ts`）
 - 取代：迁移完成后取代 [ADR-0008](0008-redux-toolkit-rtk-query.md) 中“服务端数据由 RTK Query 缓存”与“页面/交互状态由 Redux slice 承载”的部分；ADR-0008 的渲染循环约束经 [ADR-0010](0010-command-event-bridge.md) 与 [渲染管线](../rendering.md) 重新表述
 - 关联：[ADR-0003](0003-single-web-app.md)（单站点）、[ADR-0006](0006-single-backend-application.md)（唯一后端）、[ADR-0010](0010-command-event-bridge.md)；基线汇总见 [架构基线](../architecture.md)，实施细则见 [路由与查询集成](../router-query-integration.md) 与 [状态管理](../state-management.md)
-- 决策范围：仅前端 `web_app`。M1 已按本决策新增依赖并接入路由生成插件（仅 plugin，`server`/`build` 参数不变）；M2a 已将全部 RTK Query 端点迁至 TanStack Query 并删除 RTK Query；Redux 仅剩客户端 UI slice，M2b 迁 Zustand 前仍以 ADR-0008 与 [实施状态](../IMPLEMENTATION-STATUS.md) 为准
+- 决策范围：仅前端 `web_app`。M1 已按本决策新增依赖并接入路由生成插件（仅 plugin，`server`/`build` 参数不变）；M2a 已将全部 RTK Query 端点迁至 TanStack Query 并删除 RTK Query；M2b 已删除 Redux/react-redux 并由 Zustand 接管客户端 UI；M2c 已把可分享的筛选/Twin 模式等 URL 状态迁到 Router search
 
 ## 背景
 
@@ -119,7 +119,7 @@ const { data } = useQuery(equipmentQueries.detail(fabId, equipmentId));
 
 ### 7. 必测门禁 RQ-01..RQ-05
 
-以下门禁在 [路由与查询集成](../router-query-integration.md) 中有 Given/When/Then 与断言点；当前全部为 **SPECIFIED / NOT RUN**，没有任何通过证据：
+以下门禁在 [路由与查询集成](../router-query-integration.md) 中有 Given/When/Then 与断言点；RQ-01..05 均已真实运行 PASS（`tests/integration/router-query.test.tsx`、`tests/integration/query-cache.test.tsx`）。
 
 | ID | 门禁 |
 |---|---|

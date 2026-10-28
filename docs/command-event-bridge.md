@@ -167,7 +167,7 @@ Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流
 
 ## 9. 必测门禁 CE-01..CE-08 细则
 
-> 位置（计划）：CE-01..05、08 在 `web_app/tests/integration/command-event-bridge.test.ts`；CE-06、07 在 `web_app/tests/contract/command-workflow.test.ts` 与 `command-recovery.test.ts`。全部 **SPECIFIED / NOT RUN**。前置：依赖（RxJS/XState/Router 相关）与测试环境未安装；真实后端 WebSocket 不存在，集成测试用假 `CommandEventSource`。
+> 位置：CE-01..05、08 在 `web_app/tests/integration/command-event-bridge.test.ts`；CE-06 在 `tests/contract/command-recovery.test.ts` 与 `tests/integration/fab-runtime.test.ts`；CE-07 在 `tests/integration/fab-runtime.test.ts`。CE-01..08 均已真实运行 PASS；集成测试使用假 `CommandEventSource`/mock 权威查询，真实后端 WebSocket 仍不存在。
 
 ### CE-01 正常派发
 
@@ -175,7 +175,7 @@ Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流
 - **When**：依次发出 revision 1 `accepted`、revision 2 `executing`、revision 3 `succeeded`。
 - **Then**：`receive` 按序调用 3 次；每次 `fabId/commandId/outcome` 正确；无恢复记录；无重复调用。
 - **断言点**：调用序列 = [accepted, executing, succeeded]；调用次数 = 3。
-- **状态**：SPECIFIED / NOT RUN。
+- **状态**：PASS（假源 + 记录型工作流）。
 
 ### CE-02 重复 revision 被过滤
 
@@ -183,7 +183,7 @@ Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流
 - **When**：Bridge 处理重复事件。
 - **Then**：`receive` 不再被调用；工作流状态与投影不变；重复计数 +1；无错误抛出。
 - **断言点**：调用次数仍为 1；最新 revision = 2。
-- **状态**：SPECIFIED / NOT RUN。
+- **状态**：PASS（假源 + 记录型工作流）。
 
 ### CE-03 乱序事件不导致状态回退
 
@@ -191,7 +191,7 @@ Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流
 - **When**：迟到的 revision 2 `accepted` 到达（乱序）。
 - **Then**：Bridge 拒绝回退；不调用 `receive`；状态保持 revision 3；记录诊断；不把 `occurredAt` 当作排序依据。
 - **断言点**：最新 revision = 3；工作流状态不变；无 `accepted` 回放。
-- **状态**：SPECIFIED / NOT RUN。
+- **状态**：PASS（假源 + 记录型工作流）。
 
 ### CE-04 确认先于 HTTP 响应仍能关联
 
@@ -199,7 +199,7 @@ Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流
 - **When**：随后 HTTP 响应返回 commandId = cmd-1（与幂等键关联）。
 - **Then**：待定记录补全身份；`succeeded` 被正确分发一次；不产生“未知命令”丢弃；无重复终态；恢复记录被清理或标记已关联。
 - **断言点**：工作流收到 `succeeded` 一次；未知命令计数 0；HTTP 与 WS 身份一致。
-- **状态**：SPECIFIED / NOT RUN。
+- **状态**：PASS（假源 + 记录型工作流）。
 
 ### CE-05 actor 缺失时通过核对恢复
 
@@ -207,7 +207,7 @@ Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流
 - **When**：Bridge 记录恢复项并暂存；随后 actor 创建并调用 `reconcile(commandId)`。
 - **Then**：reconcile 更新工作流到权威终态；事件不丢失；pending queue 在容量内；重复恢复幂等。
 - **断言点**：恢复记录状态从 pending -> reconciled；工作流最终状态 = succeeded；无重复终态动作。
-- **状态**：SPECIFIED / NOT RUN。阻塞：后端权威查询端点不存在（OPEN-V21-07），测试需 mock。
+- **状态**：PASS（mock 权威查询；后端权威查询端点已接）。
 
 ### CE-06 重连后通过后端权威查询收敛
 
@@ -215,7 +215,7 @@ Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流
 - **When**：对进行中命令执行 reconcile（后端 mock 返回权威 `failed`）；同时旧流迟到事件被新 stream 身份过滤。
 - **Then**：工作流收敛到 `failed`；旧事件不覆盖；不重复终态；UI 查询权威状态一致。
 - **断言点**：最终状态 = failed；应用旧事件次数 = 0；reconcile 调用 1 次。
-- **状态**：SPECIFIED / NOT RUN。依赖后端权威查询（OPEN-V21-07）。
+- **状态**：PASS（测试源 + 模拟后端权威查询端点）。
 
 ### CE-07 三个 FAB 相同 commandId 按复合身份隔离
 
@@ -223,7 +223,7 @@ Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流
 - **When**：Bridge/Runtime 按 FAB 分别处理。
 - **Then**：每个工作流只收到本 FAB 的事件；A/B/C 状态独立；Query key（若涉及）也包含 `fabId`；销毁 A 不影响 B/C。
 - **断言点**：A=succeeded、B=failed、C=executing；交叉调用 0 次。
-- **状态**：SPECIFIED / NOT RUN。依赖多 Runtime/多 FAB 测试床。
+- **状态**：PASS（多 FAB 测试源 + RuntimeBootstrap）。
 
 ### CE-08 FAB 运行时关闭后取消订阅、停止 actor、不再回调
 
@@ -231,7 +231,7 @@ Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流
 - **When**：调用 runtime `dispose()`；随后假源继续发出事件。
 - **Then**：订阅被取消（源 observer 数量归零）；工作流 `dispose` 被调用；之后再无 `receive` 回调；RuntimeRegistry 移除该实例；pending/关联记录按策略清理且不泄漏。
 - **断言点**：dispose 后源发出的事件不产生任何 receive；subscription.closed = true；registry 无该 FAB。
-- **状态**：SPECIFIED / NOT RUN。
+- **状态**：PASS（假源 + 记录型工作流）。
 
 ## 10. XState v6 实现结构（内部）
 

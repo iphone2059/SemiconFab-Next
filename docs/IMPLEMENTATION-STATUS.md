@@ -5,7 +5,7 @@
   - 契约/架构检查 PASS
   - 8 个 Python 工具测试 + 13 个渲染门禁单元测试 PASS
   - 3 个 .NET 项目 Release 构建 + **170/170 测试 PASS**
-  - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **74 文件 / 381 测试 PASS**、`vite build` 0（1804 modules）
+  - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **90 文件 / 532 测试 PASS**（含真实 import 图架构门禁 8 测试，含 src 根 R6 白名单；默认并发全量 PASS，CPU 密集黄金向量套件统一 `testTimeout: 15s`）、`vite build` 0
   - `./scripts/verify.ps1` exit 0
   - 真实 Chrome/WebGPU dev 门禁：600 帧，p95 8.5ms，114.5fps，1 个按需 Worker，heap growth 6.82MB，rendererFrames 631，drawCalls 903，gpuErrors []（`.local/render-perf-final2.json`）
   - 真实 Chrome/WebGPU 60Hz profile：600 帧，p95 8.5ms，p99 16.6ms，heap growth 11.82MB，failures []
@@ -25,8 +25,9 @@ Babylon Lite 1.36   WebGPU-only 渲染
 ```
 
 - 产品 URL：`/`、`/fabs/{fabId}/3d`、`/equipment`、`/equipment/compare`；旧地址无重定向。
-- 目录：`src/app`、`src/api`、`src/state`、`src/application`、`src/realtime`、`src/runtime`（含 `runtime/commands` XState 实现）、`src/features/{twin,catalog,workbench}`、`src/components`、`src/rendering/lite`。
+- 目录：`src/app`、`src/api`、`src/state`、`src/application`、`src/realtime`、`src/runtime`（含 `runtime/commands` XState 实现）、`src/domain/{fab,amhs,personnel,wafer,simulation,contracts,equipment}`、`src/features/{twin,catalog,workbench}`、`src/components`、`src/rendering/lite`、`src/generated`（生成物统一目录）。
 - 旧 `src/render`、Redux/`src/store`、RTK Query、immer、Babylon 旧代码/旧迁移文档/parity 工具与测试均已删除（Git 历史保留）。
+- P2 架构清理（2026-10-28，行为不变）：18 个纯领域模块移入 `src/domain/**`（`original-twin-data` 不再反向依赖 feature）；`app/router` 通用 search/url-mapping 不再认识 catalog/Twin（转换分别归 `features/catalog/search.ts`、`features/twin/twin-search.ts`）；`state/createSliceStore` 改为类型安全工厂（reducer 参数推导到 action creators，无 `any`/手写 action 接口断言）；遥测传输与设备状态投影分离（投影为 `domain/equipment/tool-state-projection.ts`，`FabTelemetryRegistry` 增加 acquire/release 引用计数）；Twin 页拆为 `features/twin/controllers/*` + `equipment-status-pipeline.tsx`，wafer 关闭经 `features/twin/wafer-session.ts` 协调两个 store；生成物迁入 `src/generated/`。
 
 ## 里程碑
 
@@ -46,15 +47,15 @@ Babylon Lite 1.36   WebGPU-only 渲染
 ## 命令/遥测/渲染链路
 
 - **命令**：Workbench `CommandConsole` → `POST /api/v1/sites/{siteId}/commands` → `FabRuntime.trackCommand` → 后端命令 SSE → `CommandEventBridge` → XState workflow；`GET /api/v1/commands/{id}` 供核对。浏览器实测 accepted → executing → succeeded。
-- **遥测/设备状态**：FAB 级 20Hz 遥测 SSE → 每 FAB `TelemetryRuntime` → MessageDecoder → Worker FrameRingBuffer → 渲染 frame loop；设备状态 REST/SSE 同样按 FAB 作用域；不经过 Query/Zustand/XState（ARCH-11）。
+- **遥测/设备状态**：FAB 级 20Hz 遥测 SSE → 每 FAB `TelemetryRuntime`（传输/解码/帧/背压）→ MessageDecoder → Worker FrameRingBuffer → 渲染 frame loop；设备槽位与 `FabToolState` 投影在纯函数 `domain/equipment/tool-state-projection.ts`；设备状态 REST/SSE 同样按 FAB 作用域；不经过 Query/Zustand/XState（ARCH-11）。
 - **多 FAB**：后端默认 FAB-01/02/03（`Fab:FabCount` 1..32），前端按 FAB 装配 Runtime/遥测/状态，Workbench 多 FAB 卡片，Scenario 可提交任意非空子集。
 - **命令可靠性**：Idempotency-Key 幂等、能力目录/前置条件、FAB 授权 seam、终态 TTL/容量保留；命令 SSE 带 epoch/sequence 与 Last-Event-ID，缺口触发 replay-gap + 权威核对。
-- **性能**：`tools/render_perf.mjs` 在 headless Chrome + 真实 WebGPU 上验证 `navigator.gpu`/adapter/canvas、renderer frames/draw calls/gpuErrors；dev 门禁 + 60Hz profile（p95/p99/heap trend/首帧，`scripts/perf-render.ps1 -Profile`）；静态结构构建期打包（`tools/pack_static_structure.mjs`）；`tests/performance/telemetry-load.test.ts` 覆盖 500/2000/5000 实体负载。命令见根 README。
+- **性能**：`tools/render_perf.mjs` 在 headless Chrome + 真实 WebGPU 上验证 `navigator.gpu`/adapter/canvas、renderer frames/draw calls/gpuErrors；dev 门禁 + 60Hz profile（p95/p99/heap trend/首帧，`scripts/perf-render.ps1 -Profile`）；静态结构构建期打包（`tools/pack_static_structure.mjs` → `src/generated/static-structure-packed.ts`）；`tests/performance/telemetry-load.test.ts` 覆盖 500/2000/5000 实体负载。命令见根 README。
 
 ## 测试与门禁
 
 - RQ-01..RQ-05、CE-01..CE-08：真实运行；CE-06 已有权威状态查询端点与集成测试。
-- ARCH-01..12：Vitest 架构测试 + `tools/check_architecture.py` 可执行检查。
+- ARCH-01..12：Vitest 架构测试（`architecture-boundaries.test.ts` 正则边界 + `architecture-import-graph.test.ts` 真实 import 图 R0–R5）+ `tools/check_architecture.py` 可执行检查（domain 分层、旧根模块缺席、generated 区域）。
 - 高频路径：`realtime-frame-buffer.test.ts`、`performance/telemetry-frame-buffer.test.ts`/`telemetry-load.test.ts`（CPU/负载）+ `tools/render_perf.mjs`（真实 GPU）。
 - 传输：`realtime-transport.test.ts` 覆盖 SSE 游标/replay-gap、HTTP gateway、命令幂等提交、TelemetryRuntime Worker 链路；`fab-runtime-batch23` 覆盖 Runtime 保留/缺口核对。
 

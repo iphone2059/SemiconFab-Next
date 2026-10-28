@@ -78,7 +78,7 @@ dispose():
 | 故障隔离 | 一个 FAB 启动失败/degraded 不影响其他 Runtime 的 running 状态 |
 | 销毁隔离 | `dispose(A)` 只清理 A 的订阅/actor/记录（CE-08 扩展） |
 
-当前产品仍是单 FAB（121 台设备布局，`src/fab-layout.ts`），三 FAB 运行时目前只能在测试床（多个假 FAB 源）验证；不得宣称产品已支持三 FAB。
+当前产品默认 3 个 FAB（后端 FAB-01/02/03，`Fab:FabCount` 可配置）；前端 Runtime/遥测/设备状态/UI 按 FAB 数据驱动，121 台设备布局数据在 `src/domain/fab/fab-layout.ts`。每个 FAB 独立 Runtime/订阅/actor（复合身份隔离），不是共享单例。
 
 ## 5. React 集成
 
@@ -108,28 +108,28 @@ dispose():
 - Router loader **不创建** Runtime，也不直接访问 Bridge/actor；Runtime 通过 Provider 提供给页面。
 - Query 负责所有 HTTP 服务端数据；Runtime 只负责命令/实时链路。命令权威状态由 `command.queries.ts` 读取，恢复由 `CommandReconciler` 通过 `CommandGateway` 查询（见 [命令核对](command-reconciliation.md)）。
 - Runtime 不写 Query 缓存；Busy/进行中状态不进入 Query。
-- 高频遥测不经过 Runtime 的业务链路；Telemetry 走 Worker/缓冲（[渲染管线](rendering.md)）。
+- 高频遥测不经过 Runtime 的业务链路；Telemetry 走 Worker/缓冲（[渲染管线](rendering.md)）；设备槽位/FabToolState 投影在纯函数 `domain/equipment/tool-state-projection.ts`，Runtime 不做投影。
 
 ## 8. 当前实现 vs 目标（差距）
 
 | 方面 | 当前事实 | 目标 | 状态 |
 |---|---|---|---|
-| Runtime | 不存在 | `runtime` 四件套 | 未开始 |
-| FAB 数量 | 产品单 FAB | 三 FAB 隔离（测试床先行） | 未开始 |
-| 实时源 | SSE 页面级 | WebSocket + typed stream（经 Runtime 注入） | 未开始 |
-| 生命周期 | 页面 effect 直接建/拆 SSE | Runtime/Provider 统一管理 | 未开始 |
-| 清理测试 | 无 | CE-08；StrictMode 幂等测试 | 未开始 |
+| Runtime | `FabRuntime`/Factory/Registry/Lifecycle 已实现，RuntimeBootstrap 按 sites 装配 | `runtime` 四件套 | PASS |
+| FAB 数量 | 产品默认 3 FAB，前端按 FAB 数据驱动 | 三 FAB 隔离 | PASS（模拟后端；生产 WebSocket 待接） |
+| 实时源 | 后端命令 SSE（`SseCommandEventSource`）+ 权威 HTTP gateway；测试环境回退空源 seam | WebSocket + typed stream（经 Runtime 注入） | 部分（HTTP/SSE 模拟链路） |
+| 生命周期 | Runtime/Provider 统一管理；页面只解除 UI 订阅 | Runtime/Provider 统一管理 | PASS |
+| 清理测试 | `tests/integration/fab-runtime.test.ts`、`tests/integration/runtime-bootstrap.test.tsx` 覆盖 dispose/缺口核对/StrictMode 幂等 | CE-08；StrictMode 幂等测试 | PASS |
 
 ## 9. 测试计划
 
 | 测试 | 内容 | 位置（计划） | 状态 |
 |---|---|---|---|
-| CE-08 | dispose 取消订阅、停止 actor、无后续回调 | `web_app/tests/integration/command-event-bridge.test.ts` | SPECIFIED / NOT RUN |
-| CE-07 | 三个 FAB 相同 commandId 隔离；dispose(A) 不影响 B/C | `web_app/tests/contract/command-workflow.test.ts` | SPECIFIED / NOT RUN |
-| StrictMode 幂等 | 双重挂载不重复订阅/不双份 actor | M4 新增 | SPECIFIED / NOT RUN |
-| 错误隔离 | 一个 FAB start 失败不影响其他 | M4 新增 | SPECIFIED / NOT RUN |
+| CE-08 | dispose 取消订阅、停止 actor、无后续回调 | `web_app/tests/integration/command-event-bridge.test.ts`、`tests/integration/fab-runtime.test.ts` | PASS |
+| CE-07 | 三个 FAB 相同 commandId 隔离；dispose(A) 不影响 B/C | `web_app/tests/integration/fab-runtime.test.ts` | PASS |
+| StrictMode 幂等 | 双重挂载不重复订阅/不双份 actor | `tests/integration/runtime-bootstrap.test.tsx` | PASS |
+| 错误隔离 | 一个 FAB start 失败不影响其他 | `tests/integration/fab-runtime.test.ts` | PASS |
 
-测试使用假 `CommandEventSource`（RxJS Subject）与记录型工作流；真实后端 WebSocket 不存在，因此这些测试只证明结构正确性，不代表生产实时链路已验收。
+单元/契约测试使用假 `CommandEventSource`（RxJS Subject）与记录型工作流；产品接线由后端模拟 HTTP/SSE 链路 + `RuntimeBootstrap` 集成测试覆盖。生产 WebSocket 传输仍不存在，因此真实生产链路的竞态验收仍需后端实现。
 
 ## 10. 风险与开放问题
 

@@ -3,7 +3,7 @@
 - 状态：已采纳（2026-10-27）；实施状态：契约/类型化流/CommandEventBridge/恢复队列、XState 工作流、FabRuntime、RuntimeBootstrap、Workbench 命令面板、后端模拟 HTTP/SSE 命令与遥测链路均已实现并完成浏览器 e2e；XState 目录强制已取消，实现位于 `runtime/commands`；WebSocket 生产传输仍未接（Status: Accepted / simulated backend wired / WebSocket pending）
 - 取代：迁移完成后取代 [ADR-0008](0008-redux-toolkit-rtk-query.md) 中“SSE 帧直接 dispatch 进 Redux slice”的命令/实时接线方式；ADR-0008 的“Babylon 对象不进入状态容器、遥测合批”原则保留，但在 `ARCH-11` 下进一步收紧
 - 关联：[ADR-0009](0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0003](0003-single-web-app.md)；细则见 [命令事件桥](../command-event-bridge.md)、[命令核对](../command-reconciliation.md)、[实时协议](../realtime-protocol.md)、[FAB 运行时](../fab-runtime.md)；基线见 [架构基线](../architecture.md)
-- 决策范围：仅前端 `web_app` 的实时/命令链路。M3/M4 已按本决策实现 contracts/realtime/application coordination 与 XState v6/FabRuntime；`RuntimeProvider` 未挂到产品树；后端实时服务仍是占位模式（`fab_app -- --realtime` 退出码 2），生产 WebSocket 源尚不存在
+- 决策范围：仅前端 `web_app` 的实时/命令链路。M3/M4 已按本决策实现 contracts/realtime/application coordination 与 XState v6/FabRuntime；M5a/M5c 已把 `RuntimeProvider`/RuntimeBootstrap 挂到产品树，并接入后端模拟 HTTP/SSE 命令/遥测链路；后端实时服务仍是占位模式（`fab_app -- --realtime` 退出码 2），生产 WebSocket 源尚不存在
 
 ## 背景
 
@@ -150,7 +150,7 @@ Bridge 不 import 工作流实现、不 import `xstate`、不操作 React、不�
 
 ### 9. 必测门禁 CE-01..CE-08
 
-细则与断言见 [命令事件桥](../command-event-bridge.md) 与 [命令核对](../command-reconciliation.md)；当前全部为 **SPECIFIED / NOT RUN**，没有通过证据：
+细则与断言见 [命令事件桥](../command-event-bridge.md) 与 [命令核对](../command-reconciliation.md)；CE-01..08 均已在测试源/模拟后端上真实运行 PASS（证据见 [架构基线](../architecture.md) §12.2）：
 
 | ID | 门禁 |
 |---|---|
@@ -165,9 +165,9 @@ Bridge 不 import 工作流实现、不 import `xstate`、不操作 React、不�
 
 ### 10. 迁移与生效条件
 
-- 当前设备状态链路走 SSE -> Zustand/Query 缓存，属于 V2.1 实现；本 ADR 描述命令/实时链路边界。
+- 当前设备状态链路走 SSE → TanStack Query（FAB 级设备状态快照）与 Worker/FrameRingBuffer（高频遥测），没有 Redux/Zustand 副本；本 ADR 描述命令/实时链路边界。
 - 迁移顺序已完成：契约/实时协议 -> Bridge/恢复 -> XState 工作流与 Runtime 装配 -> 真实后端命令流接通后补 CE-06/CE-04 的生产链路验证。
-- 真实命令链路依赖后端 `--realtime` 与命令状态端点（当前占位）；在生产链路完成前不声称 CE-06 生产验收。
+- 真实命令链路依赖后端生产 WebSocket 与权威持久化；当前 HTTP 命令 API + 命令 SSE 模拟链路已接通，在生产链路完成前不声称 CE-06 生产验收。
 
 ## 不改变的事项
 

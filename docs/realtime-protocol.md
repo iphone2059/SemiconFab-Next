@@ -157,25 +157,25 @@ WebSocket -> transport/MessageDecoder -> Worker（解码/批处理） -> TypedAr
 
 ## 10. 当前实现现状（差距表）
 
-| 方面 | 当前（2026-10-27 事实） | V2.1 目标 | 状态 |
+| 方面 | 当前（2026-10-28 事实） | V2.1 目标 | 状态 |
 |---|---|---|---|
-| 传输 | 设备状态 SSE（`EventSource`） | WebSocket + 二进制/协议消息 | 未开始 |
-| 解码 | `createOrderedEquipmentStatusConsumer` 对 SSE 帧排序/校验 | `MessageDecoder` + `SequenceTracker` | 未开始 |
-| 类型化流 | 无 RxJS，无 `EventRouter` | `EventRouter` + 命令/告警/遥测流 | 未开始 |
-| 命令结果 | 无 | `CommandResultStream` -> Bridge | 未开始 |
-| 高频遥测 | `telemetry-buffer.ts` 100ms 合批进 Redux | Worker/TypedArray 旁路 | 未开始 |
-| 后端实时服务 | `fab_app -- --realtime` 退出码 2（占位） | 真实 WebSocket/流协议 | 后端未开始 |
+| 传输 | 设备状态 SSE + 命令 SSE + 20Hz 遥测 SSE（`SseCommandEventSource`/`TelemetryRuntime`） | WebSocket + 二进制/协议消息 | 部分：HTTP/SSE 模拟链路已接；生产 WebSocket 待接 |
+| 解码 | `MessageDecoder` + `SequenceTracker`（`realtime/protocol`） | `MessageDecoder` + `SequenceTracker` | PASS |
+| 类型化流 | RxJS `EventRouter` + 命令/告警/遥测流（`realtime/streams`） | `EventRouter` + 命令/告警/遥测流 | PASS |
+| 命令结果 | `CommandResultStream` -> CommandEventBridge -> XState | `CommandResultStream` -> Bridge | PASS（模拟后端） |
+| 高频遥测 | Worker `FrameRingBuffer` + `domain/equipment/tool-state-projection.ts` 投影 | Worker/TypedArray 旁路 | PASS |
+| 后端实时服务 | `fab_app -- --realtime` 退出码 2（占位）；HTTP/SSE 模拟端点已实现 | 真实 WebSocket/流协议 | 后端未开始 |
 
-> 迁移期间 SSE 链路保留，避免破坏当前 Twin 页面；不得声称 SSE 链路已被新协议替代。
+> 当前产品仍使用 SSE 模拟链路（HTTP 命令 API + 命令/遥测/设备状态 SSE）；生产 WebSocket 未接，不得声称 SSE 链路已被新协议替代。
 
-## 11. 计划测试与门禁映射
+## 11. 测试与门禁映射（已运行）
 
-| 测试 | 内容 | 文件（计划） | 状态 |
+| 测试 | 内容 | 文件 | 状态 |
 |---|---|---|---|
-| 解码契约测试 | 合法/非法 envelope、版本、枚举、精度 | `web_app/tests/contract/…`（M3 决定具体文件） | SPECIFIED / NOT RUN |
-| 序列测试 | 缺口、旧包、重复 stream_sequence、重同步 | 同上 | SPECIFIED / NOT RUN |
-| Bridge 集成 | CE-02/CE-03/CE-04 等基于假源的结果流 | `web_app/tests/integration/command-event-bridge.test.ts` | SPECIFIED / NOT RUN |
-| 渲染路径性能 | Worker -> TypedArray -> Lite 帧预算 | `web_app/tests/performance` | SPECIFIED / NOT RUN |
+| 解码契约测试 | 合法/非法 envelope、版本、枚举、精度 | `web_app/tests/realtime-protocol.test.ts`、`realtime-transport.test.ts` | PASS |
+| 序列测试 | 缺口、旧包、重复 stream_sequence、重同步 | `web_app/tests/realtime-protocol.test.ts` | PASS |
+| Bridge 集成 | CE-02/CE-03/CE-04 等基于假源的结果流 | `web_app/tests/integration/command-event-bridge.test.ts` | PASS |
+| 渲染路径性能 | Worker -> TypedArray -> Lite 帧预算 | `web_app/tests/performance/telemetry-frame-buffer.test.ts`、`telemetry-load.test.ts` | PASS |
 
 ## 12. 开放问题
 

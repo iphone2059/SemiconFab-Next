@@ -1,0 +1,475 @@
+{
+  "dataset": "architecture-cleanup-2026-10-28",
+  "reviewStandard": "docs/standards/SFN-WEB-REVIEW-STD-001.md (byte-identical copy of SemiconFab-Next Web 全面工程评审规范 v1.0)",
+  "scope": "web_app source/tests/tools with related repo docs; no backend source changes",
+  "baseline": {
+    "branch": "main",
+    "head": "a61e565c25591419a94048a7ef88a57c4b359909",
+    "originMain": "a61e565c25591419a94048a7ef88a57c4b359909",
+    "worktree": "uncommitted, staged in the index for review (no commit created yet); src root contains only main.tsx + contracts.ts",
+    "dirty": true,
+    "statusGroups": {
+      "added": 25,
+      "modified": 107,
+      "renamed": 36,
+      "deleted": 3,
+      "untracked": 0
+    }
+  },
+  "environment": {
+    "os": "Windows",
+    "node": "v26.12.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5",
+    "react": "19.3.1",
+    "backend": "ASP.NET Core/.NET 11.0.100-rc.2 (pre-existing dev API on 127.0.0.1:5080, unchanged by this change set)",
+    "browser": "Chrome/155.0.8059.86 (headless=new, --enable-unsafe-webgpu --use-angle=d3d11, localhost secure context)",
+    "gpuAdapter": "Intel Iris Xe (gen-12lp) selected by headless Chrome for both default and high-performance requests during this session; machine also exposes NVIDIA RTX 3050 Laptop. Adapter/power state changed between the 13:38 and 14:05 runs (see browserEvidence.performanceRegressionControl).",
+    "hostNotes": [
+      "pnpm shim on this host exits 0 without doing work; all tooling was invoked through node node_modules/... directly",
+      "the pre-existing dev API/vite pair from an earlier session was left running on 127.0.0.1:5080/5173; a fresh Vite instance on 5174 was used for the browser gates so the measured tree is the current worktree",
+      "first final-tree browser attempt hit Vite 504 Outdated Optimize Dep from a stale node_modules/.vite cache shared with an earlier long-running dev server; cleared the cache and restarted Vite with --force; all subsequent page loads succeeded (environment issue, not a product defect)",
+      "headless Chrome was bound to the integrated Intel GPU for the 14:05 runs; A/B control against HEAD shows identical frame times, so the 60hz-budget miss is adapter/environment-bound and not attributable to this change set"
+    ]
+  },
+  "changeSet": {
+    "stagedDiffStat": "171 files changed, 4305 insertions(+), 1758 deletions(-)",
+    "stagedGroups": {
+      "added": 22,
+      "modified": 97,
+      "renamed": 21
+    },
+    "diffCheck": "git diff --cached --check reports only 5 trailing-whitespace lines in the imported review-standard Markdown (intentional two-space hard breaks, preserved byte-identically); no whitespace issues in code/docs owned by this change",
+    "artifacts": {
+      "fullPatch": ".local/architecture-cleanup-2026-10-28/full-diff.patch",
+      "nameStatus": ".local/architecture-cleanup-2026-10-28/name-status.txt",
+      "stat": ".local/architecture-cleanup-2026-10-28/stat.txt",
+      "stagedStatus": ".local/architecture-cleanup-2026-10-28/git-status.txt"
+    },
+    "finalStagedDiffStat": "171 files changed, 4305 insertions(+), 1758 deletions(-)"
+  },
+  "automatedVerification": {
+    "typecheck": {
+      "command": "node node_modules/typescript/bin/tsc --noEmit",
+      "cwd": "web_app",
+      "exitCode": 0
+    },
+    "vitest": {
+      "command": "node node_modules/vitest/vitest.mjs run",
+      "cwd": "web_app",
+      "exitCode": 0,
+      "files": 90,
+      "tests": 532,
+      "passed": 532,
+      "failed": 0,
+      "durationEvidence": ".local/architecture-cleanup-2026-10-28/vitest-results.json (per-test duration)",
+      "slowestTests": [
+        {
+          "ms": 6651.2,
+          "file": "tests/lite-motion.test.ts",
+          "test": "maps the seeded source traffic clock onto every vehicle without a second simulation clock"
+        },
+        {
+          "ms": 5473.5,
+          "file": "tests/proxy.test.ts",
+          "test": "injects only the server key and replaces a browser-supplied key in a real proxy request"
+        },
+        {
+          "ms": 3868.7,
+          "file": "tests/lite-environment.test.ts",
+          "test": "keeps the original post-move pressure-band colour semantics on every airflow frame"
+        },
+        {
+          "ms": 3378.9,
+          "file": "tests/integration/twin-subscription-isolation.test.tsx",
+          "test": "keeps ~60 Hz tour HUD frames inside the tour card"
+        },
+        {
+          "ms": 2680.3,
+          "file": "tests/integration/twin-subscription-isolation.test.tsx",
+          "test": "updates the AMHS readout from its own subscription without rerendering TwinContent/FabViewport"
+        },
+        {
+          "ms": 2654.3,
+          "file": "tests/integration/equipment-status-pipeline.test.tsx",
+          "test": "A02: SSE frames publish through one throttled projection instead of rendering per frame"
+        },
+        {
+          "ms": 2497.9,
+          "file": "tests/integration/twin-fab-scope.test.tsx",
+          "test": "scopes telemetry/status REST + SSE to the canonical route FAB of a multi-FAB site"
+        },
+        {
+          "ms": 2490.4,
+          "file": "tests/integration/twin-spc-strip.test.tsx",
+          "test": "renders split control/spec SPC judgements in the layout inspector strip"
+        },
+        {
+          "ms": 2315.9,
+          "file": "tests/integration/twin-research-parse-error.test.tsx",
+          "test": "A16: shows a distinct visible research parse error when ResearchReplay.parse throws"
+        },
+        {
+          "ms": 2276.1,
+          "file": "tests/integration/telemetry-render.test.tsx",
+          "test": "does not reapply a preset on GPU recovery but applies it on viewport reload and view change"
+        }
+      ],
+      "note": "default 90-worker parallel run; testTimeout is 15000ms only to absorb CPU-contention spikes, assertions unchanged"
+    },
+    "build": {
+      "command": "node node_modules/vite/bin/vite.js build",
+      "cwd": "web_app",
+      "exitCode": 0,
+      "modules": 1823
+    },
+    "architecturePython": {
+      "command": "python tools/check_architecture.py",
+      "exitCode": 0,
+      "detail": "PASS: assembly-only src root + feature state ownership included"
+    },
+    "generators": {
+      "packedStructureCheck": {
+        "command": "node tools/pack_static_structure.mjs --check",
+        "exitCode": 0,
+        "bytes": 1721881
+      },
+      "twinTranslationsCheck": {
+        "command": "node tools/build_twin_translations.cjs --check",
+        "exitCode": 0,
+        "entries": 281
+      },
+      "contractsGenerate": {
+        "command": "python tools/generate_contracts.py",
+        "exitCode": 0
+      }
+    },
+    "log": ".local/architecture-cleanup-2026-10-28/verify.log"
+  },
+  "browserEvidence": {
+    "note": "All runs: Chrome/155.0.8059.86 headless, localhost secure context, WebGPU adapter available, fresh Vite dev server on 5174 against the unchanged dev API on 5080.",
+    "devProfile": {
+      "measuredAt": "2026-10-28T06:06:43.265Z",
+      "browser": "Chrome/155.0.8059.86",
+      "url": "http://127.0.0.1:5174/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?perf=1",
+      "profile": "dev",
+      "frames": 240,
+      "averageFrameMs": 13.61,
+      "averageFps": 73.5,
+      "p95FrameMs": 20.3,
+      "p99FrameMs": 89.4,
+      "maxFrameMs": 151.4,
+      "rendererFrames": 271,
+      "drawCalls": 905,
+      "workerTargets": 1,
+      "readyMs": 7935.9,
+      "firstFrameMs": 7974.4,
+      "heapGrowthMb": 12.46,
+      "secure": true,
+      "gpu": true,
+      "adapter": true,
+      "canvas": true,
+      "gpuErrors": [],
+      "failures": [],
+      "artifact": ".local/architecture-cleanup-2026-10-28/render-perf-dev.json"
+    },
+    "sixtyHzProfile": {
+      "measuredAt": "2026-10-28T06:06:55.334Z",
+      "browser": "Chrome/155.0.8059.86",
+      "url": "http://127.0.0.1:5174/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?perf=1",
+      "profile": "60hz",
+      "frames": 600,
+      "averageFrameMs": 13.03,
+      "averageFps": 76.8,
+      "p95FrameMs": 20.3,
+      "p99FrameMs": 87.6,
+      "maxFrameMs": 101.4,
+      "rendererFrames": 631,
+      "drawCalls": 905,
+      "workerTargets": 1,
+      "readyMs": 3205.6,
+      "firstFrameMs": 3228.9,
+      "heapGrowthMb": 4.75,
+      "secure": true,
+      "gpu": true,
+      "adapter": true,
+      "canvas": true,
+      "gpuErrors": [],
+      "failures": [
+        "Renderer p95 frame time exceeds 16.7 ms",
+        "Renderer p99 frame time exceeds 33 ms"
+      ],
+      "artifact": ".local/architecture-cleanup-2026-10-28/render-perf-60hz.json"
+    },
+    "secondFabEntry": {
+      "measuredAt": "2026-10-28T06:07:00.996Z",
+      "browser": "Chrome/155.0.8059.86",
+      "url": "http://127.0.0.1:5174/fabs/d84dc4f9-b7fc-c670-e78e-6e90b6b2de48/3d?perf=1",
+      "profile": "dev",
+      "frames": 120,
+      "averageFrameMs": 11.93,
+      "averageFps": 83.8,
+      "p95FrameMs": 20.1,
+      "p99FrameMs": 50.4,
+      "maxFrameMs": 87.2,
+      "rendererFrames": 151,
+      "drawCalls": 905,
+      "workerTargets": 1,
+      "readyMs": 3213.9,
+      "firstFrameMs": 3237.2,
+      "heapGrowthMb": 2.37,
+      "secure": true,
+      "gpu": true,
+      "adapter": true,
+      "canvas": true,
+      "gpuErrors": [],
+      "failures": [],
+      "artifact": ".local/architecture-cleanup-2026-10-28/render-perf-fab02.json"
+    },
+    "performanceRegressionControl": {
+      "hypothesis": "the 60hz budget miss is caused by the change set",
+      "method": "git worktree at HEAD a61e565 (pre-cleanup tree), same Chrome flags, same host, same dev-API, same scene/URL, 600 frames 60hz",
+      "headBaseline": {
+        "measuredAt": "2026-10-28T06:09:00.477Z",
+        "browser": "Chrome/155.0.8059.86",
+        "url": "http://127.0.0.1:5175/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?perf=1",
+        "profile": "60hz",
+        "frames": 600,
+        "averageFrameMs": 12.73,
+        "averageFps": 78.6,
+        "p95FrameMs": 20.3,
+        "p99FrameMs": 79.8,
+        "maxFrameMs": 98.2,
+        "rendererFrames": 631,
+        "drawCalls": 905,
+        "workerTargets": 1,
+        "readyMs": 11375.5,
+        "firstFrameMs": 11402.7,
+        "heapGrowthMb": 8.83,
+        "secure": true,
+        "gpu": true,
+        "adapter": true,
+        "canvas": true,
+        "gpuErrors": [],
+        "failures": [
+          "Renderer p95 frame time exceeds 16.7 ms",
+          "Renderer p99 frame time exceeds 33 ms"
+        ],
+        "artifact": ".local/architecture-cleanup-2026-10-28/render-perf-head-ab-60hz.json"
+      },
+      "conclusion": "HEAD baseline p95 equals the refactored tree p95 (20.3 ms both) -> no measurable regression attributable to the cleanup; both miss the frozen 60hz budget in the current integrated-GPU adapter state"
+    },
+    "earlierSameDayPass": {
+      "measuredAt": "2026-10-28T05:38:04.509Z",
+      "browser": "Chrome/155.0.8059.86",
+      "url": "http://127.0.0.1:5174/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?perf=1",
+      "profile": "60hz",
+      "frames": 600,
+      "averageFrameMs": 8.49,
+      "averageFps": 117.8,
+      "p95FrameMs": 8.5,
+      "p99FrameMs": 8.7,
+      "maxFrameMs": 33.4,
+      "rendererFrames": 631,
+      "drawCalls": 905,
+      "workerTargets": 1,
+      "readyMs": 3230.7,
+      "firstFrameMs": 3243.5,
+      "heapGrowthMb": 4.79,
+      "secure": true,
+      "gpu": true,
+      "adapter": true,
+      "canvas": true,
+      "gpuErrors": [],
+      "failures": [],
+      "artifact": ".local/architecture-cleanup-2026-10-28/render-perf-60hz.json",
+      "note": "same tree state measured earlier on 2026-10-28 with the discrete-GPU adapter state; raw file was later overwritten by the 14:05 re-run, values retained from the evidence captured at that time"
+    }
+  },
+  "riskValidations": {
+    "telemetryRegistryLease": {
+      "tests": "web_app/tests/fab-telemetry-registry.test.ts, web_app/tests/telemetry-runtime.test.ts",
+      "covered": [
+        "two consumers share one runtime; unmounting one does not stop it",
+        "duplicate/idempotent release never stops twice",
+        "release from a replaced runtime generation never stops the replacement",
+        "disposeAll clears consumer counts so stale releases cannot stop a later runtime",
+        "React StrictMode mount/cleanup/remount (acquire -> release -> acquire) leaves exactly one live lease",
+        "runtime.stop() terminates the Worker and detaches pending/in-flight callbacks"
+      ],
+      "evidenceLevel": "E2"
+    },
+    "importGraphGate": {
+      "test": "web_app/tests/architecture-import-graph.test.ts",
+      "rules": "R0 relative imports resolve; R0b tsconfig has no paths/baseUrl aliases; R1 runtime graph acyclic; R2 app/router direct files do not import features; R3 domain purity; R4 features isolated with explicit APPROVED_CROSS_FEATURE_IMPORTS allowlist; R5 generated artifacts registered/headered/data-only",
+      "coverage": "static imports, export-from, dynamic import(), type-only edges separated from runtime edges, extension/index resolution, non-TS assets as leaves",
+      "negativeProof": "temporary scratch fixtures produced precise red failures for R0-R5 during authoring, then were removed (no residue)",
+      "evidenceLevel": "E2"
+    },
+    "sliceStoreTypeContracts": {
+      "test": "web_app/tests/types/store-action-types.ts (tsc-only; not executed by Vitest)",
+      "negativeCases": 6,
+      "covered": [
+        "unknown form field",
+        "missing payload",
+        "wrong value type",
+        "missing required arg",
+        "missing nested required payload field",
+        "invalid union value"
+      ],
+      "positiveCases": 4,
+      "evidenceLevel": "E2 (compile-time)"
+    },
+    "controllerLifecycle": {
+      "audit": "HEAD twin-page.tsx had 26 effects; final split has 20 controller effects + 1 page effect + 5 equipment-status-pipeline effects = 26 (1:1 lifecycle mapping)",
+      "siblingCoupling": "10 controllers import zero sibling controllers (static import audit)",
+      "perFrameState": "no per-frame setState; only one mount-time useState (tour HUD seed); RAF loops write refs/scene handles",
+      "evidenceLevel": "E1"
+    },
+    "fileMoveRuntimeSemantics": {
+      "covered": "tsc + 531 Vitest tests + production build + real Chrome WebGPU gates load the moved domain/generated modules (scene built from generated/static-structure-packed.ts: drawCalls 905, rendererFrames 271/631)",
+      "notCovered": "interactive FAB switch / device-lost / tour / wafer / picking flows were not replayed end-to-end in a real browser this round; device-lost recovery remains covered by existing E2 tests only",
+      "evidenceLevel": "E3 (initial entry + steady state only)"
+    }
+  },
+  "proposedCommits": [
+    "refactor(web): relocate pure domain modules into src/domain",
+    "refactor(web): make slice-store actions type-safe",
+    "refactor(web): split telemetry transport from equipment-state projection",
+    "refactor(web): extract twin page controllers and explicit wafer-session coordination",
+    "chore(web): move generated artifacts into src/generated",
+    "refactor(web): tidy the src root and co-locate feature state with features",
+    "test(web)+docs: real import-graph gate (R0-R6), lifecycle/type regressions, docs and review standard"
+  ],
+  "limitations": [
+    "No commit created: the change set is staged only so it can be independently reviewed first (per review request).",
+    "Backend tests were not re-run this round: the pre-existing dev API process holds the .local build artifacts; no backend source changed.",
+    "The 60hz frozen budget is not met in the current headless-Chrome integrated-GPU adapter state (p95 20.3 ms); an A/B control at HEAD shows identical frame times, so this is an environment/adapter limitation, not a regression. Dev-profile budget (p95 <= 100 ms) passes; FAB-02 entry passes.",
+    "Interactive flows (in-session FAB switch, device-lost, tour, wafer, picking, camera input) were not replayed end-to-end in a real browser this round; device-lost recovery remains covered by E2 tests only.",
+    "GPU adapter identity is not exposed by the project perf bridge; this report used a separate CDP probe and recorded the adapter state.",
+    "Correctness audit is differential/static (E1) plus E2 tests; it does not prove behavior under unrecorded interactive flows.",
+    "git diff --cached --check flags only the imported standard Markdown hard-break lines; code changes are clean.",
+    "During final browser verification the local dev server on 5173 was disrupted by deleting node_modules/.vite under the running process; it was restored (stale Vite stopped, cache cleared, detached restart) and re-verified in Chrome. No product code was affected."
+  ],
+  "correctnessAudit": {
+    "method": "differential comparison of the staged tree against HEAD, not just test execution",
+    "relocatedFiles": {
+      "count": 39,
+      "pureRelocations": 35,
+      "reviewedSemanticMoves": 4,
+      "reviewedSemanticMoveFiles": [
+        "web_app/src/features/twin/state/twinUiStore.ts (waferClose store-only + explicit closeWaferSession coordinator)",
+        "web_app/src/features/twin/state/twinPageStore.ts (typed reducers + waferFrameCleared)",
+        "web_app/src/features/catalog/state/catalogStore.ts (typed reducers)",
+        "web_app/src/features/workbench/state/workbenchStore.ts (typed reducers)"
+      ],
+      "unexpectedDelta": 0,
+      "normalizedComparison": "relative import specifiers normalized; line endings normalized; trimmed"
+    },
+    "modifiedSourceFiles": {
+      "checked": 35,
+      "semanticDeltas": 10,
+      "unexpectedSemanticDeltas": 0,
+      "note": "semantic delta list reviewed in .local/architecture-cleanup-2026-10-28/semantic-delta-audit.json"
+    },
+    "twinPageDomContract": {
+      "headIds": 42,
+      "newIds": 42,
+      "missingIds": 0,
+      "missingClassNames": 0,
+      "missingAriaLabels": 0
+    },
+    "controllerLifecycle": {
+      "headEffects": 26,
+      "splitEffects": {
+        "controllers": 20,
+        "page": 1,
+        "equipmentStatusPipeline": 5
+      },
+      "siblingControllerImports": 0,
+      "perFrameSetState": 0
+    },
+    "staleReferences": {
+      "oldDomainRootImports": 0,
+      "oldGeneratedPaths": 0,
+      "rawAnyInState": 0,
+      "actionPayloadCasts": 0,
+      "directWaferCloseCallSites": [
+        "web_app/src/features/twin/wafer-session.ts (coordinator)",
+        "web_app/tests/remaining-state.test.ts (negative assertion)"
+      ]
+    },
+    "artifacts": [
+      ".local/architecture-cleanup-2026-10-28/rename-equivalence.json",
+      ".local/architecture-cleanup-2026-10-28/semantic-delta-audit.json",
+      ".local/architecture-cleanup-2026-10-28/ui-contract-audit.json",
+      ".local/architecture-cleanup-2026-10-28/correctness-audit.json"
+    ],
+    "evidenceLevel": "E1"
+  },
+  "commitStrategy": {
+    "principle": "correctness over refactoring cost / ideal history",
+    "rule": "every split commit must independently pass tsc --noEmit and the full Vitest suite in a temporary worktree before acceptance",
+    "fallback": "if replaying intermediate file states would risk behavior, use fewer/larger correct commits instead of an ideal single-purpose history",
+    "status": "not started; awaiting independent diff review first"
+  },
+  "directoryTidiness": {
+    "rule": "web_app/src root is assembly-only (main.tsx + contracts.ts); feature state lives with its feature; shared client state stays in state/",
+    "enforcedBy": [
+      "web_app/tests/architecture-import-graph.test.ts R6",
+      "tools/check_architecture.py src-root whitelist + feature-state assertions"
+    ],
+    "rootFiles": [
+      "contracts.ts",
+      "main.tsx"
+    ],
+    "featureState": [
+      "features/twin/state/twinUiStore.ts",
+      "features/twin/state/twinPageStore.ts",
+      "features/twin/state/twinDemoStore.ts",
+      "features/twin/state/twin-state.ts",
+      "features/catalog/state/catalogStore.ts",
+      "features/workbench/state/workbenchStore.ts"
+    ],
+    "sharedState": [
+      "state/runtimeStore.ts",
+      "state/localeStore.ts",
+      "state/preferences.ts"
+    ],
+    "relocatedInThisPass": [
+      "rendering/fab-scene.ts",
+      "rendering/lite-backend.ts",
+      "rendering/lite/airflow-texture.ts",
+      "rendering/lite/geometry/original-tool-parts.ts",
+      "rendering/lite/geometry/original-exploded-link-data.ts",
+      "components/class-names.ts",
+      "components/original-icons.tsx",
+      "realtime/equipment-status.ts",
+      "realtime/telemetry/telemetry-buffer.ts",
+      "application/coordination/ScopeGate.ts",
+      "features/twin/twin-translations.ts",
+      "state/preferences.ts"
+    ],
+    "verification": "tsc 0, 90 files / 532 tests, build 0 (1823 modules), python architecture check PASS, differential audit 0 unexpected deltas, real Chrome page load + WebGPU gates PASS for dev/FAB-02 profiles",
+    "evidenceLevel": "E1+E2"
+  },
+  "operationsIncident": {
+    "severity": "P1 local-dev only (no product/runtime impact, no code change required)",
+    "detectedAt": "2026-10-28T14:22+08:00 (user report: 无法打开网页)",
+    "symptom": "dev site on http://127.0.0.1:5173 rendered a blank page; Chrome network log showed 504 (Outdated Optimize Dep) for /node_modules/.vite/deps/react.js and peers",
+    "rootCause": "while running final browser gates, node_modules/.vite was deleted/re-optimized while the long-running dev server (pid 14748, started 09:28) kept serving pages that referenced the previous dependency hashes",
+    "blastRadius": "only the local Vite dev server on 5173; the .NET dev API (pid 2260) and the DeepSeek Harness GUI (50454) were untouched",
+    "restoration": [
+      "stopped the stale Vite process",
+      "cleared node_modules/.vite",
+      "restarted Vite on 127.0.0.1:5173 with the original env (FAB_API_TARGET=http://127.0.0.1:5080 + .local/development-key) as an independent detached process"
+    ],
+    "verification": {
+      "http": "index 200, main.tsx 200, /node_modules/.vite/deps/react.js 200 with the new hash",
+      "realBrowser": ".local/architecture-cleanup-2026-10-28/restore-3d-final.json: canvas=true, renderer ready, drawCalls=905, failures=[]",
+      "rootPage": ".local/architecture-cleanup-2026-10-28/restore-root.json: workbench body text rendered"
+    },
+    "prevention": "documented in web_app/README.md (do not delete node_modules/.vite while the dev server is running; stop -> clear -> restart, or verify with --force on a separate port)"
+  }
+}

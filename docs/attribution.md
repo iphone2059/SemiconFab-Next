@@ -15,13 +15,21 @@ in the immutable import snapshot and at
 [`web_app/public/licenses/semiconfab-LICENSE.txt`](../web_app/public/licenses/semiconfab-LICENSE.txt).
 Its original noncommercial/commercial-use boundary continues to apply.
 
-`original-tool-geometry.ts` ports the original parametric families and catalog
-boxes; `original-environment.ts` ports floor textures, zone planes, columns,
-amber lights/panels/curtains; `airflow-texture.ts`, `cleanroom-pressure.ts` and
-`original-tour.ts` port their named source functions/constants. The new renderer
-uses Babylon WebGPU and native GPU depth resources; no original renderer or
-glTF asset is embedded in the product. Screenshots contain the original page
-solely as comparison evidence and retain its original notice.
+`web_app/src/rendering/lite/geometry/original-tool-parts.ts` (geometry literals) and
+`web_app/src/rendering/lite/geometry/tool-families.ts` (parametric families) port
+the original tool shapes and catalog boxes; `web_app/src/rendering/lite/environment.ts`
+(plus `environment-roof-data.ts`) ports floor textures, zone planes, columns,
+amber lights/panels/curtains; `web_app/src/rendering/lite/airflow-texture.ts`,
+`web_app/src/domain/fab/cleanroom-pressure.ts` and
+`web_app/src/domain/simulation/original-tour.ts` port their named source
+functions/constants. Generated data derived from the frozen original lives in
+`web_app/src/generated/`: `twin-translations.generated.ts` (from
+`web_app/assets/original-twin-i18n.json`) and `static-structure-packed.ts`
+(from `web_app/assets/lite-static-structure.json`); both carry frozen provenance
+hashes in their do-not-edit headers. The new renderer uses Babylon WebGPU and
+native GPU depth resources; no original renderer or glTF asset is embedded in
+the product. Screenshots contain the original page solely as comparison evidence
+and retain its original notice.
 
 `original-icons.tsx` stores SVG paths observed in the original controls.
 Except for the original wafer/site mark, these are Lucide icons. Lucide's

@@ -135,15 +135,15 @@ reconcile(commandId):
 
 | 场景 | 覆盖门禁 | 证据状态 |
 |---|---|---|
-| actor 缺失恢复 | CE-05 | SPECIFIED / NOT RUN |
-| 断线重连收敛 | CE-06 | SPECIFIED / NOT RUN |
-| 确认先于 HTTP 响应 | CE-04 | SPECIFIED / NOT RUN |
-| 重复 revision | CE-02 | SPECIFIED / NOT RUN |
-| 乱序回退 | CE-03 | SPECIFIED / NOT RUN |
-| 三 FAB 隔离 | CE-07 | SPECIFIED / NOT RUN |
-| 销毁后不再回调 | CE-08 | SPECIFIED / NOT RUN |
+| actor 缺失恢复 | CE-05 | PASS（`tests/contract/command-recovery.test.ts`，mock gateway） |
+| 断线重连收敛 | CE-06 | PASS（测试源 + 后端权威查询端点） |
+| 确认先于 HTTP 响应 | CE-04 | PASS（`tests/integration/command-event-bridge.test.ts`，假源） |
+| 重复 revision | CE-02 | PASS（同上） |
+| 乱序回退 | CE-03 | PASS（同上） |
+| 三 FAB 隔离 | CE-07 | PASS（`tests/integration/fab-runtime.test.ts`） |
+| 销毁后不再回调 | CE-08 | PASS（`tests/integration/fab-runtime.test.ts`） |
 
-测试文件（计划）：`web_app/tests/contract/command-recovery.test.ts`、`web_app/tests/integration/command-event-bridge.test.ts`。当前测试环境/依赖/Runtime 均未实现，因此无运行证据。
+测试文件：`web_app/tests/contract/command-recovery.test.ts`、`web_app/tests/integration/command-event-bridge.test.ts`、`web_app/tests/integration/fab-runtime.test.ts`，均已真实运行 PASS。生产 WebSocket 链路仍未接，CE-06 的生产级依赖仍由后端承担。
 
 ## 11. 风险与开放问题
 
