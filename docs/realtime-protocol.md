@@ -1,15 +1,17 @@
 # 实时协议（Realtime Protocol）
 
-- 版本：V2.1 / 2026-10-27
+- 版本：V2.1 / 2026-10-27（2026-10-28 递归整改 R-08 同步）
 - 状态：**契约/类型化流/HTTP-SSE 产品链路已实现（模拟后端）；真实 WebSocket 未接**（implemented / WebSocket pending）
-- 依据：[ADR-0010](adr/0010-command-event-bridge.md)；总览见 [架构基线](architecture.md)；命令桥见 [命令事件桥](command-event-bridge.md)；恢复见 [命令核对](command-reconciliation.md)；渲染旁路见 [渲染管线](rendering.md)
+- 依据：[ADR-0010](adr/0010-command-event-bridge.md)；总览见 [架构基线](architecture.md) §4/§30；命令桥见 [命令事件桥](command-event-bridge.md)；恢复见 [命令核对](command-reconciliation.md)；渲染旁路见 [渲染管线](rendering.md)
 - 上位规范：[08-API-EVENT-CONTRACTS](SemiconFab-Next-Engineering-v1.1/08-API-EVENT-CONTRACTS.md)、[14-CONTRACTS-AND-EVENT-FLOWS](SemiconFab-Next-Engineering-v1.1/engineering/14-CONTRACTS-AND-EVENT-FLOWS.md)（本前端协议不得另造第二套语义）
-- 当前实现：设备状态 SSE + 后端**模拟**命令 SSE / 20Hz 遥测 SSE 已接入产品；`MessageDecoder` 由 `TelemetryRuntime` 实际使用；`SseCommandEventSource` 与 `TelemetryRuntime` 使用同一 envelope 契约。`realtime/streams` 与 `WebSocketClient`/`SequenceTracker`/`RealtimeGateway` 的 RxJS 骨架在 2026-10-27 审计清理中作为生产不可达死代码删除（M4+ 接入真实 WebSocket 时按 ADR-0010 重建）。后端 `--realtime`（WebSocket）仍为占位。
+- 当前实现（2026-10-28 事实）：设备状态 SSE + 后端**模拟**命令 SSE / 20Hz 遥测 SSE 已接入产品；`MessageDecoder` 由 `SseCommandEventSource` 与 `TelemetryRuntime` 共用；设备状态的 payload/scope、epoch+sequence 顺序门控与 SSE 生命周期分别由 `realtime/equipment-status/{protocol,gate,stream,index}.ts` 唯一拥有；REST/SSE→Query 的唯一投影桥为 `api/cache/equipment-status-bridge.ts`；通用低频合批原语为 `shared/scheduling/coalesced-dispatcher.ts`。`realtime/streams` 与 `WebSocketClient`/`SequenceTracker`/`RealtimeGateway` 的 RxJS 骨架在 2026-10-27 审计清理中作为生产不可达死代码删除（M4+ 接入真实 WebSocket 时按 ADR-0010 重建）。后端 `--realtime`（WebSocket）仍为占位。
 - 门禁：解码/序列/路由、CE-01..08 已在测试源/真实模拟后端上 PASS；浏览器 e2e 命令 accepted→executing→succeeded；真实 WebSocket 生产传输仍缺。
 
 ## 1. 范围与边界
 
 实时层的目标：把后端实时流安全、可诊断地转换成应用可消费的**类型化 Observable**，并把高频数据旁路到 Worker/GPU。
+
+> 当前产品使用的是 HTTP/SSE 模拟链路（见 §2.1/§10）；本文的 WebSocket 描述是待接目标的协议规范，不代表已实现。
 
 | 在范围内 | 不在范围内 |
 |---|---|
@@ -22,12 +24,17 @@
 
 ## 2. 分层与职责
 
-| 层 | 目录 | 组件 | 职责 | 不得做 |
+### 2.1 当前实现模块（2026-10-28 事实，与真实树核对）
+
+| 层 | 目录/文件 | 组件 | 职责 | 不得做 |
 |---|---|---|---|---|
-| transport | `realtime/transport` | `WebSocketClient` | 建连、鉴权握手、心跳、重连退避、连接状态、背压信号 | 业务语义、UI、工作流 |
-| protocol | `realtime/protocol` | `MessageDecoder`、`SequenceTracker` | 解码、版本校验、字段/单位/精度校验、序列缺口检测 | 业务去重、按“看起来重复”丢消息 |
-| streams | `realtime/streams` | `EventRouter`、`CommandResultStream`、`AlarmStream`、`TelemetryStream` | topic 分发、类型化 Observable、stream 身份管理 | import XState/runtime/commands、写 Query/Redux |
-| high-frequency | `realtime/workers`、`realtime/buffers`、`realtime/synchronization` | Worker、环形缓冲、同步 | 高频遥测解码/批处理 -> TypedArray -> 渲染 | 逐帧 React state、逐事件 dispatch |
+| transport（命令） | `realtime/transport/SseCommandEventSource.ts`、`HttpCommandGateway.ts` | SSE 事件源、权威 HTTP 查询 | EventSource 生命周期、journal 游标 `{epoch}:{sequence}`、`replay-gap` → `gaps$`；权威状态查询 | 业务去重、UI、工作流 |
+| protocol | `realtime/protocol/MessageDecoder.ts` | `MessageDecoder` | envelope 版本/字段解码与校验 | 业务去重、按“看起来重复”丢消息 |
+| equipment-status | `realtime/equipment-status/{protocol,gate,stream,index}.ts` | payload/scope、epoch+sequence gate、SSE 生命周期 | FAB 作用域快照的**唯一**解码/顺序/传输权威；REST 与 SSE 共用同一 gate | 写 Query 缓存（由 `api/cache/` 投影桥负责） |
+| telemetry | `realtime/telemetry/{TelemetryRuntime,FabTelemetryRegistry}.ts` | 20Hz SSE 运行时、按 FAB 引用计数 | 传输/解码/帧/背压、Worker 生命周期 | 逐帧 React state |
+| high-frequency | `realtime/workers/`、`realtime/buffers/FrameRingBuffer.ts`；低频合批 `shared/scheduling/coalesced-dispatcher.ts` | Worker、环形缓冲、通用合批 | 高频遥测解码/批处理 -> TypedArray -> 渲染；低频 UI 聚合 | 逐帧 React state、逐事件 dispatch |
+
+`realtime/streams`（`EventRouter`/`CommandResultStream` 等）与 `realtime/synchronization` **当前不存在**；真实 WebSocket 接入时按下面的协议语义重建，不得直接恢复为生产不可达骨架。
 
 ## 3. 消息与信封
 
@@ -73,12 +80,12 @@
 
 ## 5. 序列、缺口、重复与背压
 
-### 5.1 SequenceTracker
+### 5.1 顺序权威（当前实现）
 
-- 每个 `stream_id` 维护已应用的最大 `stream_sequence`，检测缺口/旧包。
-- 缺口：按 Engineering 08 走 `RESYNC_REQUIRED`/补发或新流快照；在缺口闭合前不得把后续批次当作连续状态应用（否则状态错乱）。
-- 旧流/旧包：按 `stream_id` 丢弃（传输层语义），不是业务去重。
-- 允许把缺口/重复的统计暴露为诊断信号给 Bridge/监控；SequenceTracker 不做业务判断。
+- **设备状态**：`realtime/equipment-status/gate.ts` 是 Site/FAB 作用域 `epoch + sequence` 顺序的唯一权威（REST queryFn 与 SSE listener 共用），只接受“在作用域内、字段完整、工具数匹配”的快照；更高 epoch 重置水位，更低 epoch 视为旧世代丢弃。
+- **命令结果**：`SseCommandEventSource` 跟踪后端 journal 游标 `id: {epoch}:{sequence}`；`replay-gap` 控制帧转成显式 `gaps$` 信号，由 Runtime 触发权威核对；命令业务去重（revision）在 CommandEventBridge（ARCH-10）。
+- **旧流/旧包**：按流身份/作用域丢弃（传输层语义），不是业务去重。
+- 历史说明：M3 的 `SequenceTracker`（per-topic stream_sequence）骨架已在 2026-10-27 审计清理中删除；真实 WebSocket 重建时必须恢复同等“缺口只报告、不按业务语义丢弃”的约束。
 
 ### 5.2 重复的两类区分（重要）
 
@@ -108,31 +115,33 @@
 - **产品作用域**：正式渲染路径固定消费 16 个遥测槽位；5000 实体 Worker 压测只验证 Worker 吞吐与内存上限，不代表产品业务链路已支持 5000 台设备。
 - **重连重置**：SSE 重连或 `stop()` 清空 Pending/在途状态并发送 Worker `reset`；旧连接的迟到回包按 generation 丢弃，不恢复旧序列。
 
-## 6. EventRouter 与类型化流
+## 6. 命令结果事件源与类型化流（当前实现）
+
+当前命令结果链路（无通用 EventRouter；生产不可达骨架已删除）：
 
 ```ts
-// realtime/streams/EventRouter.ts（示意）
-export interface RealtimeStreams {
-  readonly commandResults$: Observable<CommandResultEvent>;
-  readonly alarms$: Observable<AlarmEvent>;
-  readonly telemetry$: Observable<TelemetryBatch>; // 通常直接进 Worker，不进 React
-}
-
-// EventRouter 只做 topic -> Observable 的分发与流身份管理
-export function createEventRouter(source: Observable<DecodedMessage>): RealtimeStreams;
+// realtime/transport/SseCommandEventSource.ts（当前实现）
+export function createSseCommandEventSource(url: string, options?): CommandEventSource;
+// CommandEventSource = { commandResult$: Observable<CommandResultEvent>; gaps$: Observable<CommandStreamGap> }
 ```
 
 约束：
 
-- 流的创建/销毁跟随连接与订阅范围；`dispose` 后不得再向消费者推送。
-- 允许按 topic、FAB、run 订阅；FAB 过滤在该层只是“订阅范围”，业务身份过滤在 Bridge。
-- 不暴露 WebSocket/socket 对象给上层；不暴露可写入口。
+- 事件源的创建/销毁跟随 FAB Runtime 生命周期；`dispose` 后不得再向消费者推送（CE-08）。
+- FAB 过滤在传输层只是“订阅范围”（服务端按 `?fabId=` 授权过滤），业务身份过滤/去重在 CommandEventBridge。
+- 不暴露 EventSource/socket 对象给上层；不暴露可写入口。
 - 不 import Query/Zustand/React/XState。
+- 未来真实 WebSocket 若恢复 `EventRouter`/`CommandResultStream`/`AlarmStream`/`TelemetryStream`，必须保持“通用层不得按业务语义丢消息”的 ADR-0010 约束（[ADR-0010](adr/0010-command-event-bridge.md) 第 6 节）。
 
 ## 7. 高频遥测与渲染路径
 
 ```text
-WebSocket -> transport/MessageDecoder -> Worker（解码/批处理） -> TypedArray 缓冲区 -> Babylon Lite -> WebGPU
+当前（HTTP/SSE 模拟链路）:
+FAB 级 20Hz 遥测 SSE -> TelemetryRuntime（解码/帧/背压）-> telemetryWorker（解码/批处理）
+                       -> FrameRingBuffer（TypedArray）-> lite-backend / ScenePort 渲染循环 -> WebGPU
+
+目标（真实 WebSocket 接入后）:
+WebSocket -> transport/MessageDecoder -> Worker -> TypedArray 缓冲区 -> ScenePort 渲染循环 -> WebGPU
 ```
 
 - Telemetry 帧优先在 Worker 内解码/合并；主线程只接收有界摘要或渲染所需缓冲。
@@ -160,21 +169,23 @@ WebSocket -> transport/MessageDecoder -> Worker（解码/批处理） -> TypedAr
 | 方面 | 当前（2026-10-28 事实） | V2.1 目标 | 状态 |
 |---|---|---|---|
 | 传输 | 设备状态 SSE + 命令 SSE + 20Hz 遥测 SSE（`SseCommandEventSource`/`TelemetryRuntime`） | WebSocket + 二进制/协议消息 | 部分：HTTP/SSE 模拟链路已接；生产 WebSocket 待接 |
-| 解码 | `MessageDecoder` + `SequenceTracker`（`realtime/protocol`） | `MessageDecoder` + `SequenceTracker` | PASS |
-| 类型化流 | RxJS `EventRouter` + 命令/告警/遥测流（`realtime/streams`） | `EventRouter` + 命令/告警/遥测流 | PASS |
-| 命令结果 | `CommandResultStream` -> CommandEventBridge -> XState | `CommandResultStream` -> Bridge | PASS（模拟后端） |
-| 高频遥测 | Worker `FrameRingBuffer` + `domain/equipment/tool-state-projection.ts` 投影 | Worker/TypedArray 旁路 | PASS |
+| 设备状态边界 | `realtime/equipment-status/{protocol,gate,stream,index}.ts` + `api/cache/equipment-status-bridge.ts`（Query 唯一缓存） | 同职责单点权威 | PASS（R-08 终态） |
+| 解码 | `realtime/protocol/MessageDecoder.ts`（Zod envelope） | `MessageDecoder` | PASS |
+| 类型化流 | `CommandEventSource`（`commandResult$`/`gaps$`，RxJS Observable） | `EventRouter` + 命令/告警/遥测流 | 部分：命令结果流已接；通用 EventRouter 待真实 WebSocket 重建 |
+| 命令结果 | SSE → `CommandEventSource` → CommandEventBridge → XState | 类型化流 -> Bridge | PASS（模拟后端） |
+| 高频遥测 | Worker `FrameRingBuffer` + `domain/equipment/tool-state-projection.ts` 投影；低频合批 `shared/scheduling/coalesced-dispatcher.ts` | Worker/TypedArray 旁路 | PASS |
 | 后端实时服务 | `fab_app -- --realtime` 退出码 2（占位）；HTTP/SSE 模拟端点已实现 | 真实 WebSocket/流协议 | 后端未开始 |
 
 > 当前产品仍使用 SSE 模拟链路（HTTP 命令 API + 命令/遥测/设备状态 SSE）；生产 WebSocket 未接，不得声称 SSE 链路已被新协议替代。
 
 ## 11. 测试与门禁映射（已运行）
 
-| 测试 | 内容 | 文件 | 状态 |
+| 测试 | 内容 | 文件（2026-10-28 镜像式布局） | 状态 |
 |---|---|---|---|
-| 解码契约测试 | 合法/非法 envelope、版本、枚举、精度 | `web_app/tests/realtime-protocol.test.ts`、`realtime-transport.test.ts` | PASS |
-| 序列测试 | 缺口、旧包、重复 stream_sequence、重同步 | `web_app/tests/realtime-protocol.test.ts` | PASS |
+| 解码契约测试 | 合法/非法 envelope、版本、枚举、精度 | `web_app/tests/realtime/realtime-protocol.test.ts`、`realtime-transport.test.ts` | PASS |
+| 设备状态边界 | payload/scope、epoch+sequence、SSE 生死周期、REST/SSE 同一 gate | `web_app/tests/realtime/equipment-status.test.ts`、`equipment-status-protocol.test.ts`、`equipment-status-epoch.test.ts`、`web_app/tests/api/equipment-status-bridge.test.ts` | PASS |
 | Bridge 集成 | CE-02/CE-03/CE-04 等基于假源的结果流 | `web_app/tests/integration/command-event-bridge.test.ts` | PASS |
+| Runtime/遥测 | Worker terminate/回调解绑、租约、迟到回包 | `web_app/tests/realtime/telemetry-runtime.test.ts`、`fab-telemetry-registry.test.ts`、`realtime-frame-buffer.test.ts` | PASS |
 | 渲染路径性能 | Worker -> TypedArray -> Lite 帧预算 | `web_app/tests/performance/telemetry-frame-buffer.test.ts`、`telemetry-load.test.ts` | PASS |
 
 ## 12. 开放问题

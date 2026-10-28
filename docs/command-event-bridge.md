@@ -63,20 +63,15 @@ export interface CommandWorkflowRegistry {
 2. 契约版本无关：不 import WebSocket 帧类型、不 import XState、不 import Query/React；允许 RxJS 类型（`Observable`）。
 3. 命令身份是复合身份 `(fabId, commandId)`；registry 查询必须同时带两者。
 4. `CommandEventSource` 只读；Bridge 不得反向向实时层写消息。
-5. 其他契约文件：`CommandGateway`（命令提交 HTTP 抽象，实现于 `api/mutations`/`api/endpoints`）、`RealtimeGateway`（连接/订阅抽象，实现于 `realtime`）。它们同样只暴露接口与类型。
+5. 其他契约文件：`CommandGateway`（命令提交/权威查询 HTTP 抽象，当前实现 `realtime/transport/HttpCommandGateway.ts`，提交侧 `api/mutations/commands.mutations.ts` + `api/schemas/command.schema.ts`）；`RealtimeGateway` 已在 2026-10-27 审计清理中删除（真实 WebSocket 接入时再建）。它们只暴露接口与类型。
 
 ## 3. 组件协作
 
 ```text
-realtime/transport (WebSocketClient)
-        |
-        v
-realtime/protocol (MessageDecoder, SequenceTracker)
-        |
-        v
-realtime/streams (EventRouter -> CommandResultStream)   [不知道 XState]
-        |
-        v  Observable<CommandResultEvent>
+当前实现（HTTP/SSE 模拟后端）:
+realtime/transport/SseCommandEventSource
+        |  MessageDecoder envelope; journal cursor {epoch}:{sequence}; gaps$
+        v  Observable<CommandResultEvent>（CommandEventSource）
 application/coordination/CommandEventBridge
         |  filter(fabId) -> correlate((fabId,commandId)) -> dedupe(revision)
         v
@@ -86,9 +81,12 @@ application/contracts/CommandWorkflowRegistry.get(fabId, commandId)
 runtime/commands/XStateCommandWorkflowAdapter -> equipmentCommand.machine.ts (XState v6)
         |
         v
-CommandReconciler（缺失 actor/断线时，按后端权威状态核对）
+CommandReconciler（缺失 actor/断线时，经 HttpCommandGateway 按后端权威状态核对）
 
 runtime/FabRuntime 负责把上面这些按 FAB 装配与销毁
+
+历史/未来（真实 WebSocket 接入时）:
+WebSocket -> MessageDecoder -> EventRouter（通用层只分发，不按业务语义丢消息）-> Bridge -> registry -> XState
 ```
 
 ## 4. Bridge 处理流程
@@ -113,7 +111,7 @@ runtime/FabRuntime 负责把上面这些按 FAB 装配与销毁
 
 ### 4.3 输出
 
-Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流状态由 XState 拥有；页面展示通过 Query 权威状态 + 组件提交态（见 [状态管理](state-management.md) 第 5 节），具体只读暴露方式在 M4 决定（OPEN-V21-13）。
+Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流状态由 XState 拥有；Workbench/页面通过 `useCommandProjection` 只读订阅投影（OPEN-V21-13 已在 M5a 关闭），命令权威状态经 `HttpCommandGateway` 读取（见 [状态管理](state-management.md) 第 5 节）。
 
 ## 5. 命令身份与关联
 
@@ -139,7 +137,7 @@ Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流
 | 未知 outcome/非法字段 | 协议错误；不进入业务 | 否 |
 | fabId 不匹配当前 Runtime | 忽略（其他 FAB/全局流） | 否 |
 
-**注意**：`EventRouter` 不得做上述业务判断；它的职责只是分发（[实时协议](realtime-protocol.md) 第 5.2 节）。
+**注意**：通用分发层（历史设计的 `EventRouter`，当前不存在）不得做上述业务判断；当前这些判断由 `CommandEventBridge` 独家承担（[实时协议](realtime-protocol.md) 第 5.2 节）。
 
 ## 7. 缺失 actor / 断线恢复（摘要）
 
@@ -235,12 +233,12 @@ Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流
 
 ## 10. XState v6 实现结构（内部）
 
-| 文件 | 内容 | 说明 |
+| 文件（`web_app/src/runtime/commands/`） | 内容 | 说明 |
 |---|---|---|
 | `equipmentCommand.machine.ts` | 状态机定义（idle/提交中/accepted/executing/terminal；失败/取消/重试边界） | 不含网络/React；纯状态逻辑 |
 | `equipmentCommand.logic.ts` | actor 输入、提交、核对调用的业务逻辑 | 依赖 `CommandGateway` 等契约 |
-| `CommandReconciler` | 缺口/缺失 actor/断线后的核对 | 通过 `reconcile(commandId)` 暴露 |
-| `XStateCommandWorkflowAdapter` | 实现 `CommandWorkflow`；包住 actor 生命周期 | 唯一对外实现，只有 `runtime` import |
+| `CommandReconciler.ts` | 缺口/缺失 actor/断线后的核对 | 通过 `reconcile(commandId)` 暴露 |
+| `XStateCommandWorkflowAdapter.ts` | 实现 `CommandWorkflow`；包住 actor 生命周期 | 唯一对外实现，只有 `runtime` import |
 
 约束：
 
@@ -267,7 +265,7 @@ const source: CommandEventSource = { commandResult$: subject.asObservable() };
 禁止：
 
 - ❌ Bridge 里直接 import `runtime/commands` 或 `xstate`（应只通过 `CommandWorkflowRegistry` 契约）。
-- ❌ `EventRouter` 按重复/过期丢弃业务消息。
+- ❌ 通用分发层（历史 `EventRouter`/未来 WS 路由层）按重复/过期丢弃业务消息。
 - ❌ 在 Bridge 内写 Query 缓存/Redux/Zustand。
 - ❌ 用 `occurredAt` 排序或去重。
 - ❌ 缺少 actor 时直接 return（静默丢弃）。

@@ -1,7 +1,7 @@
 # 命令核对（Command Reconciliation）
 
-- 版本：V2.1 / 2026-10-27
-- 状态：**M3/M4 已实现（内存有界队列 + 假 gateway 验证）**（M3/M4 implemented / backend reconciliation pending）
+- 版本：V2.1 / 2026-10-27（2026-10-28 递归整改 R-03/R-08 同步）
+- 状态：**M3/M4 已实现（内存有界队列 + 假 gateway 验证）；开发模拟后端已提供按 `(fabId, commandId)` 的权威查询端点，生产持久化恢复仍待后端**（implemented / backend persistence pending）
 - 依据：[ADR-0010](adr/0010-command-event-bridge.md)；桥与契约定见 [命令事件桥](command-event-bridge.md)；协议见 [实时协议](realtime-protocol.md)；装配见 [FAB 运行时](fab-runtime.md)
 - 当前实现：`CommandEventRecovery` 已实现有界 pending 队列、按 (fabId, commandId) 查询与 `CommandGateway` 权威对账；M4 的 `FabRuntime.reconcileCommand` 与 `CommandReconciler` 已在假 gateway 上验证 CE-05/CE-06。持久恢复与真实后端查询仍缺。
 - 边界：**前端只做有界尽力恢复；持久化/权威恢复是后端责任**。本文档不承诺“关闭浏览器也不丢命令结果”
@@ -83,9 +83,9 @@ reconcile(commandId):
 5. **可观测**：pending/reconciling/abandoned 计数与原因进入诊断（不含敏感数据）。
 6. **串行**：同一命令的 reconcile 不得并发；不同命令可有限并发。
 
-## 5. 后端权威查询要求（当前不存在）
+## 5. 后端权威查询要求（开发模拟端点已提供，生产持久化仍缺）
 
-前端需要的后端能力（属于 OPEN-V21-07，不得虚构实现）：
+前端需要的后端能力（OPEN-V21-07 的开发级端点 `GET /api/v1/commands/{id}` 已提供；生产持久化/幂等仍待后端，不得虚构实现）：
 
 | 要求 | 说明 |
 |---|---|
@@ -109,7 +109,7 @@ reconcile(commandId):
 ## 7. 页面卸载与 Runtime 生命周期
 
 - 页面卸载**不**自动销毁 FAB 运行时；否则卸载期间到达的结果会丢失。Runtime 生命周期由应用/FAB 会话管理（见 [FAB 运行时](fab-runtime.md) 第 5 节）。
-- 页面重新挂载后：通过 Query 读取命令权威状态（`command.queries.ts`）恢复展示；不直接读 actor 内部。
+- 页面重新挂载后：通过 `CommandGateway`（`HttpCommandGateway`）读取命令权威状态恢复展示；不直接读 actor 内部。
 - 组件卸载后不得再异步 `setState`（React 警告/泄漏）；用挂载检查或订阅纪律保证。
 - FAB 切换/登出/运行时销毁：停止订阅与 actor；pending 按策略清理；不得把 A FAB 的恢复记录带到 B FAB。
 
@@ -128,7 +128,7 @@ reconcile(commandId):
 | CommandEventBridge | 触发恢复记录、调用 reconcile；不写 Query/UI |
 | runtime/commands/CommandReconciler | 具体核对逻辑：调用权威查询、把结果应用到 actor |
 | XState actor | 持有命令生命周期；通过受控路径接受 reconcile 结果 |
-| TanStack Query | 只读展示权威状态（`command.queries.ts`）；不是恢复队列/权威来源 |
+| TanStack Query / CommandGateway | Query 只负责 HTTP 服务端缓存；命令权威状态经 `HttpCommandGateway` 读取；二者都不是恢复队列/权威来源 |
 | 后端 | 持久化恢复的最终责任方；提供权威查询 |
 
 ## 10. 验证矩阵

@@ -7,7 +7,7 @@
 // Vertex data is stored as little-endian Float32/Uint32 base64 payloads decoded synchronously at
 // module evaluation (no fetch; works in Node/Vitest and the browser). The generator refuses any
 // value that is not exactly representable, so this module decodes to the committed JSON asset
-// value-for-value; tests/static-structure-pack.test.ts enforces that invariant.
+// value-for-value; web_app/tests/architecture/static-structure-pack.test.ts enforces that invariant.
 //
 // Payload types are owned by the hand-written data contract above; this module carries only data
 // and its decoder, so no rendering consumer is part of the generated module graph.

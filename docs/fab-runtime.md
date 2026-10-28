@@ -82,7 +82,7 @@ dispose():
 
 ## 5. React 集成
 
-- `app/providers/RuntimeProvider` 位于 `QueryProvider` 之内、`RouterProvider` 之外（见 [架构基线](architecture.md) 第 3 节/第 5.4 节）；它创建/持有 `FabRuntimeRegistry`，按 FAB 懒加载或预创建（OPEN-V21-11）。
+- `app/providers/RuntimeBootstrap` 在 `AppProviders` 内按 sites 文档为每个 FAB 创建 `FabRuntime`，`RuntimeProvider` 暴露只读 registry（位于 `QueryProvider` 之内、`RouterProvider` 之外；见 [架构基线](architecture.md) §5.4）。
 - 页面通过 `useFabRuntime(fabId)` 获取运行时状态/句柄；**不得**在组件内 `new FabRuntime` 或直接订阅 WebSocket。
 - 页面卸载只解除 UI 订阅/停止展示，不自动 dispose Runtime；Runtime 生命周期由应用/FAB 会话管理（避免卸载期间丢失命令结果）。
 - FAB 切换：按策略停止/保留旧 FAB Runtime；切换页面不得把 A 的 actor/恢复记录带进 B。
@@ -94,7 +94,7 @@ dispose():
 
 | 事件 | Runtime 行为 | 说明 |
 |---|---|---|
-| 应用启动 | Registry 初始化；是否立即创建 3 个 FAB Runtime 由配置决定 | 当前单 FAB 产品只创建 1 个 |
+| 应用启动 | `RuntimeBootstrap` 按 sites 文档为每个 FAB 创建 Runtime | 当前开发后端默认 3 FAB，前端全部按 FAB 数据驱动 |
 | 路由进入 FAB 页面 | `ensure(fabId)` -> start（若未运行） | 页面不直接装配 |
 | 页面卸载 | 仅解除 UI 订阅；Runtime 继续 | 命令结果不丢 |
 | 切换 FAB | 新 FAB ensure；旧 FAB 按策略保留或 stop | 隔离优先 |
@@ -106,7 +106,7 @@ dispose():
 ## 7. 与 Router/Query 的边界
 
 - Router loader **不创建** Runtime，也不直接访问 Bridge/actor；Runtime 通过 Provider 提供给页面。
-- Query 负责所有 HTTP 服务端数据；Runtime 只负责命令/实时链路。命令权威状态由 `command.queries.ts` 读取，恢复由 `CommandReconciler` 通过 `CommandGateway` 查询（见 [命令核对](command-reconciliation.md)）。
+- Query 负责所有 HTTP 服务端数据；Runtime 只负责命令/实时链路。命令权威状态经 `CommandGateway`（`realtime/transport/HttpCommandGateway.ts`，`GET /api/v1/commands/{id}`）读取，恢复由 `CommandReconciler` 调用同一 gateway（见 [命令核对](command-reconciliation.md)）；当前没有也不应新增独立的命令 Query 模块。
 - Runtime 不写 Query 缓存；Busy/进行中状态不进入 Query。
 - 高频遥测不经过 Runtime 的业务链路；Telemetry 走 Worker/缓冲（[渲染管线](rendering.md)）；设备槽位/FabToolState 投影在纯函数 `domain/equipment/tool-state-projection.ts`，Runtime 不做投影。
 

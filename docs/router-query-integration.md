@@ -73,29 +73,30 @@ export const router = createRouter({
 
 ### 4.1 单一 Query Options 定义
 
-- 每个领域一个 `*.queries.ts`：`api/queries/equipment.queries.ts`、`command.queries.ts` 等。
+- 每个领域一个 `*.queries.ts`：`api/queries/{sites,equipment,catalog,runs,research,wafer}.queries.ts`。
 - 使用 `queryOptions(...)` 导出具名对象/工厂；loader 与组件 import 同一份，禁止复制 queryFn 或 key。
-- `queryFn` 只调用 `api/endpoints`；HTTP 响应在 endpoint 层或 queryFn 内用 `schemas`（Zod）校验，失败抛错，不写入缓存。
-- `command.queries.ts` 只用于“读取命令的权威状态”（恢复/核对场景），不得用 Query 建模进行中命令的生命周期；生命周期由 XState 工作流拥有（[ADR-0010](adr/0010-command-event-bridge.md)）。
+- `queryFn` 通过唯一 HTTP transport `api/transport/http.ts`（`createHttpTransport({ fetchImpl })`）取数；响应在 queryFn 内用 `api/schemas/`（Zod）或查询层 schema 校验，失败抛错，不写入缓存。
+- 命令权威状态读取**不经 Query**：由 `realtime/transport/HttpCommandGateway.ts`（`GET /api/v1/commands/{id}`）供恢复/核对；不得用 Query 建模进行中命令的生命周期（生命周期由 XState 工作流拥有，见 [ADR-0010](adr/0010-command-event-bridge.md)）。当前没有独立的命令 Query 模块，也不应新增。
 
 ### 4.2 Query Keys 约定
 
 ```ts
-// api/queries/queryKeys.ts（示意）
+// api/queries/queryKeys.ts（实际结构，节选）
 export const queryKeys = {
-  sites: () => ['sites'] as const,
-  fab: (fabId: string) => ['fab', fabId] as const,
-  fabEquipment: (fabId: string) => ['fab', fabId, 'equipment'] as const,
-  equipment: (fabId: string, equipmentId: string) =>
-    ['fab', fabId, 'equipment', equipmentId] as const,
-  equipmentStatus: (fabId: string) => ['fab', fabId, 'equipment-status'] as const,
-  catalog: (filters: Record<string, string>) => ['catalog', filters] as const,
-  runs: () => ['runs'] as const,
-  run: (runId: string) => ['runs', runId] as const,
-  runResults: (runId: string) => ['runs', runId, 'results'] as const,
-  commandStatus: (fabId: string, commandId: string) =>
-    ['command', fabId, commandId] as const,
-};
+  sites: { all: ['sites'] as const },
+  equipment: {
+    /** FAB 级：相同 equipment id 不得共享状态缓存（RQ-04） */
+    status: (siteId: string, fabId: string) => ['equipment', 'status', siteId, fabId] as const,
+  },
+  catalog: { all: ['catalog'] as const },
+  runs: {
+    all: ['runs'] as const,
+    detail: (runId: string) => ['runs', runId] as const,
+    results: (runId: string) => ['runs', runId, 'results'] as const,
+  },
+  research: { events: ['research', 'events'] as const },
+  wafer: { routes: ['wafer', 'routes'] as const },
+} as const;
 ```
 
 约束：
@@ -196,7 +197,9 @@ export const queryKeys = {
 | 回退方案 | 手写 `routeTree`/`createRoute`（code-based），功能等价，仅失去文件式生成便利 |
 | 当前现状 | 文件式路由插件已启用：`routesDirectory: './src/app/router/routes'`、`generatedRouteTree: './src/app/router/routeTree.gen.ts'` 并提交生成树；server/build 参数未变（见 `vite.config.ts` 与 [架构基线](architecture.md) G-01） |
 
-## 9. 迁移映射（RTK Query -> Query Options）
+## 9. 迁移映射（RTK Query -> Query Options，历史记录）
+
+> 本节记录 M2 迁移当时的映射；RTK Query 与全部端点在 M2a 已删除，下表只作为审计轨迹。
 
 | 当前 RTK Query 端点 | 目标 Query | key 维度 | 迁移批次 |
 |---|---|---|---|
@@ -245,9 +248,9 @@ export const queryKeys = {
 | 依赖 | @tanstack/react-router、@tanstack/react-query、路由插件、jsdom/happy-dom、@testing-library/react | 已安装（Router 1.170.46 / Query 5.105.0 / plugin 1.168.48 / jsdom 30.1.3 / Testing Library 16.3.3） |
 | 测试渲染 | `render(<RouterProvider router={createRouter({ routeTree, context, history: createMemoryHistory() })} />)` | 已实现（`tests/integration/router-query.test.tsx`，合成路由树 + `createMemoryHistory`） |
 | Query 隔离 | 每个测试新建 `QueryClient`（`retry: false`、按需 `gcTime`），避免跨测试缓存污染 | 已实现 |
-| 网络模拟 | 在 `api/endpoints` 层 mock `fetch`；断言调用次数与参数 | 已实现（`vi.stubGlobal('fetch')` + 调用次数断言） |
+| 网络模拟 | 在唯一 HTTP transport（`api/transport/http.ts` 的 `FetchLike` 注入）或 `vi.stubGlobal('fetch')` 层 mock；断言调用次数与参数 | 已实现（`vi.stubGlobal('fetch')` + 调用次数断言） |
 | 时钟 | RQ-02 使用假时钟覆盖 `staleTime`，不得用真实 sleep | 已实现（`query-cache.test.tsx` 用 `updatedAt` 老化缓存，无真实 sleep） |
-| 运行命令 | `pnpm test`（Vitest）纳入 CI/verify；浏览器专用测试仍用现有独立配置 | 已纳入：`npx vitest run` = 90 文件 / 532 测试 PASS；`./scripts/verify.ps1` PASS |
+| 运行命令 | `npm test` / `npx vitest run`（Vitest）纳入 CI/verify；浏览器专用测试仍用现有独立配置 | 已纳入 `./scripts/verify.ps1`；测试数量以当次运行输出为准（历史计数见 `docs/IMPLEMENTATION-STATUS.md`） |
 
 ## 12. 风险与开放问题
 

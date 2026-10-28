@@ -1,12 +1,14 @@
 # SemiconFab Next V2.1 架构基线
 
-- 版本：V2.1（2026-10-27）
-- 状态：**基线已采纳；M1–M6 与 all review batches 已落地：多 FAB 目录/遥测、FAB 级设备状态、命令幂等/鉴权/能力校验、SSE 游标/缺口恢复、命令保留、真实 GPU 门禁与压力测试均已实现；仅 PostgreSQL/Outbox/生产身份因基础设施缺失保留为边界**。
+- 版本：V2.1（2026-10-27；2026-10-28 递归整改 R-01…R-14 同步）
+- 状态：**基线已采纳；M0–M6、all review batches 与 2026-10-28 递归整改（11 个职责提交 + 文档同步提交，`67915c0..546647d`）均已落地：多 FAB 目录/遥测、FAB 级设备状态、命令幂等/鉴权/校验、SSE 游标/缺口恢复、命令保留、真实 GPU 门禁与压力测试、严格 ScenePort 生命周期、确定性领域时钟、独立 GPU Effect Owner、生成物登记/校验、实时/feature 所有权收口与 R0–R14 架构门禁全部实现；仅 PostgreSQL/Outbox/生产身份因基础设施缺失保留为边界**。
 - 适用对象：`web_app` 前端架构。后端 `fab_app`/`fab_shared` 的项目与命名空间边界沿用 ADR-0001…ADR-0007
-- 权威决策：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0010](adr/0010-command-event-bridge.md)（实时/命令/工作流边界）；本文档负责汇总、目录结构与迁移计划
-- 当前实现事实：所有 HTTP 端点由 TanStack Query 独占；客户端 UI 状态由 7 个 Zustand store（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale）独占，均由类型安全的 `createSliceStore` 工厂生成（reducer 参数推导到 action creators，无 `any`/手写 action 接口断言）；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已全部删除；XState 工作流已接入，实现位于 `runtime/commands` 并经 `CommandWorkflow` 契约暴露（位置不构成架构约束）。详细证据见 [实施状态](IMPLEMENTATION-STATUS.md)、§15–§17、§29。
+- 权威决策：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0010](adr/0010-command-event-bridge.md)（实时/命令/工作流边界）；本文档负责汇总、目录结构、规则、数据流、迁移与整改记录
+- 当前实现事实（2026-10-28 终态，详见 §4/§30）：所有 HTTP 端点由 TanStack Query 独占，HTTP 策略集中在唯一 `api/transport/http.ts`；客户端 UI 状态由 7 个 Zustand store 独占（twinUi/twinPage/twinDemo/catalog/workbench 位于 `features/*/state/`，runtime/locale 位于 `state/`），均由类型安全 `createSliceStore` 生成；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已全部删除；XState v6 工作流实现位于 `runtime/commands`，经 `CommandWorkflow` 契约暴露（位置不构成架构约束）；浏览器场景依赖应用侧 `application/ports/scene.ts` 的 `ScenePort`（必需命令 + 强类型 mount options + `ViewerLifecycle`），由 `rendering/lite-backend.ts` 实现，不再存在 `rendering/fab-scene.ts`；纯领域拆分为 `domain/{fab,amhs,personnel,equipment,simulation,wafer,math}`，MES 创建函数要求显式 epoch 毫秒；`TwinLanguage` 位于 `localization/language.ts`；生成物由 `tools/generated-artifacts.json` 登记并由 `node tools/check_generated_artifacts.mjs --check` 校验；架构门禁为 `web_app/tests/architecture/` 的 R0–R14（真实 TypeScript import 图 + 负向 fixtures）。详细证据见 [实施状态](IMPLEMENTATION-STATUS.md)、§29、§30。
 
-> RQ-01..RQ-05、CE-01..CE-08、ARCH 检查与真实 Chrome/WebGPU 性能门禁均已真实运行（见 §12.2/§26）；任何“已通过/已验证”的表述都必须指向真实测试记录。
+> RQ-01..RQ-05、CE-01..CE-08、ARCH 检查与真实 Chrome/WebGPU 性能门禁均已真实运行（见 §12.2/§26/§30）；任何“已通过/已验证”的表述都必须指向真实测试记录。
+>
+> **文档时效约定（2026-10-28）：** §15–§29 是按日期记录的历史落地轨迹，保留当时的路径、测试文件名与数字（审计轨迹，不追改）；目录/契约/门禁的**当前事实**以 §4 与 §30 为准。历史记录中出现的 `tests/*.test.ts` 平铺路径或已迁移模块名，均以 §30 的镜像式测试布局与终态目录为准。
 
 ## 1. 基线与范围
 
@@ -84,82 +86,101 @@ M1（2026-10-27）已在此基线上落地：依赖安装与锁文件、`app/pro
                                             +----------------------------+
 ```
 
-允许的 import 方向（本基线强约束，迁移后由架构检查落实）：
+允许的 import 方向（本基线强约束，由 `tests/architecture/` 的 R0–R14 与 `tools/check_architecture.py` 落实）：
 
 | 层/目录 | 允许依赖 | 禁止依赖 |
 |---|---|---|
-| `app/providers`、`app/router` | `runtime`、`api/queries`、`features`、`components` | 具体工作流实现、`realtime/transport` 细节 |
-| `features`、`components`、`rendering` | `api/queries/mutations`、`domain`、`schemas`、`shared`、`state` | 直接 new WebSocket、直接 import XState actor、绕过 Query 自建 HTTP 缓存 |
-| `api/queries/mutations/endpoints` | TanStack Query、`schemas`（Zod）、`domain`、`application/contracts` | `runtime/commands`、`realtime` 传输实现 |
-| `application/contracts` | 无（可依赖 RxJS 类型与领域类型；不依赖基础设施/工作流实现） | WebSocket、XState、React、Query |
-| `application/coordination` | `application/contracts` | `runtime/commands`、XState、React、Query |
-| `realtime` | `application/contracts`、`shared`、`domain` | `runtime/commands`、XState、React、Query |
-| `runtime/commands` | `application/contracts`、`XState 内部类型`、XState v6、`domain` | `realtime/transport`、`app`、`api` |
+| `app/providers`、`app/router/routes`（装配根，R7 豁免） | 任意下层：`runtime`、`api`、`features`、`components`、`state` | —（装配根只做组合，不新增业务逻辑） |
+| `app/router` 直接文件（`router/search/url-mapping/route-data/routeTree.gen`） | `api/queries`、`contracts`、通用 schema/helper | `features/**`（R2）；feature 专属转换归 `features/*/search.ts` |
+| `features` | `api`、`domain`、`state`、`localization`、`shared`、`components`、`application/ports`、`contracts` | 直接 new WebSocket、直接 import XState actor、绕过 Query 自建 HTTP 缓存；跨 feature 互导（R4，需显式批准表） |
+| `components`（公共设计系统，R12） | `state`、`contracts` 与无 feature 知识的类型 | `features/**`；无跨 feature 使用又无设计系统角色的组件 |
+| `api` | TanStack Query、`transport/http`（FetchLike）、`schemas`（Zod）、`application/contracts` 类型、`domain` 纯类型、`realtime/equipment-status`（仅 cache bridge） | `runtime/commands`、`features`、`components`、`rendering` |
+| `application/ports`（`scene.ts`） | `domain` 纯类型 | Babylon/GPU、React、Query、Zustand、XState |
+| `application/contracts` | 无（可依赖 RxJS 类型与领域类型；不依赖基础设施/工作流实现） | WebSocket/SSE、XState、React、Query |
+| `application/coordination` | `application/contracts`、`application/ports` 类型 | `runtime/commands`、XState、React、Query |
+| `realtime` | `application/contracts`、`domain`、`shared`、`contracts` | `runtime/commands`、XState、React、Query/Zustand（ARCH-06/R7） |
+| `shared`（如 `scheduling/coalesced-dispatcher`） | 无（纯通用原语） | 任何业务层/特征层 |
+| `runtime/commands` | `application/contracts`、XState v6、XState 内部类型、`domain` | `realtime/transport` 实现、`app`、`api` |
 | `runtime` | `application/contracts`、`application/coordination`、`realtime`、`runtime/commands`、`api/queries`（仅装配 QueryClient 引用） | 页面组件、UI 细节 |
-| `domain` | 无外部包；`domain/**`、contracts（`src/generated/contracts.generated.ts`）、`web_app/assets` 数据 | React/Zustand/XState/@tanstack/Babylon，以及 app/features/state/rendering/realtime/runtime/application/components/api 的相对导入 |
-| `state`（Zustand） | `domain`、`generated` 契约类型 | Query 结果副本、XState actor、引擎对象、跨 store 直接 `setState` 互写 |
+| `rendering`（Lite/WebGPU） | `application/ports/scene`（实现方）、`domain` 类型、`generated` 数据、`rendering/contracts` | React、Query、Zustand、XState、`runtime/commands`、`features`（ARCH-11/R7；高频层检查同样覆盖 `realtime/buffers`、`realtime/workers`） |
+| `domain` | 无 npm 包；`domain/**` 与 `web_app/assets` 静态参考数据（R3/R8） | React/Zustand/XState/@tanstack/Babylon；app/features/state/rendering/realtime/runtime/application/components/api；隐式时钟/随机/DOM/timer/网络 |
+| `state`（Zustand） | `domain`、`generated` 契约类型、`application/ports` 类型 | Query 结果副本、XState actor、引擎对象、跨 store 直接 `setState` 互写 |
+| `localization` | 无 | `domain`、`features`（仅被上层消费） |
 
-## 4. 目录结构（`web_app/src`，2026-10-28 清理后）
+## 4. 目录结构（`web_app/src`，2026-10-28 递归整改后终态）
 
-以下为当前真实布局；V2.1 计划中的 `schemas/`、`shared/`、`api/endpoints/`、`realtime/streams/`、`realtime/synchronization/` 等目标子目录尚未创建，不在此虚构。
+以下为当前真实布局（逐项对照真实树，2026-10-28 复核）；§29 是更早一次 P2 清理的历史记录，其目录名可能已被同日递归整改再次迁移，终态以本节与 §30 为准。
 
 ```text
 web_app/
+  index.html
+  package.json / pnpm-lock.yaml / pnpm-workspace.yaml（仅 pnpm 配置载体，不是 workspace）
+  .npmrc / tsconfig.json / vite.config.ts
   src/
+    main.tsx / contracts.ts  # 入口与公共契约 re-export；R6 门禁只允许这两个 root 文件
     app/
-      providers/            AppProviders / QueryProvider / RuntimeProvider / RuntimeBootstrap / TelemetryProvider
+      providers/            AppProviders / QueryProvider / RuntimeProvider / RuntimeBootstrap / TelemetryProvider（装配根）
       router/               router.tsx / search.ts（通用 schema+helper）/ url-mapping.ts / route-data.ts
         routeTree.gen.ts    文件式路由生成并提交
         routes/             装配入口：按 URL 组合 features 页面（唯一允许 import features 的 router 位置）
     api/
+      transport/http.ts     唯一 HTTP 策略（同源相对路径、credentials/no-store、ProblemDetails、FetchLike 注入；R-10）
+      schemas/              Zod 运行时合同（command.schema.ts；R-03）
+      cache/                equipment-status-bridge（REST/SSE → Query 缓存唯一 acceptance 投影桥）
       queries/              queryClient / queryKeys / sites|equipment|catalog|runs|research|wafer.queries
       mutations/            runs|commands.mutations
     application/
       contracts/            CommandEvents / CommandGateway / CommandWorkflow（契约单点）
       coordination/         CommandEventBridge / CommandEventRecovery / CommandCorrelationRegistry / ScopeGate
+      ports/scene.ts        ScenePort：必需 SceneCommands + 强类型 SceneMountOptions + mount/dispose 生命周期（R-04/R9）
     realtime/
-      protocol/             MessageDecoder / SequenceTracker
-      transport/            SseCommandEventSource / HttpCommandGateway
+      equipment-status/     protocol（payload/scope）/ gate（epoch+sequence 唯一权威）/ stream（SSE）/ index
+      protocol/             MessageDecoder（SSE envelope 解码）
       telemetry/            TelemetryRuntime（传输/帧/背压）+ FabTelemetryRegistry（acquire/release）
-                            + telemetry-buffer（低频 UI 合批）
-      equipment-status.ts   SSE 设备状态监听与顺序门控
-      workers/              telemetryWorker / createTelemetryWorker
+      transport/            SseCommandEventSource / HttpCommandGateway
+      workers/              telemetryWorker（入口）/ telemetryWorker.logic（纯 handler）/ createTelemetryWorker
       buffers/              FrameRingBuffer
     runtime/
       commands/             equipmentCommand.machine.ts / equipmentCommand.logic.ts /
                             CommandReconciler / XStateCommandWorkflowAdapter（位置非强制）
       FabRuntime / FabRuntimeFactory / FabRuntimeRegistry / FabLifecycleCoordinator / commandSources
-    state/                 共享客户端状态（类型安全 createSliceStore）：runtimeStore / localeStore / preferences
-    domain/                 纯领域模块（无框架/无包依赖；见 §3）：
-      fab/                  fab-layout / process-control / fab-yield / cleanroom-pressure /
-                            layout-identities / original-twin-data / twin-spatial
-      amhs/ personnel/ wafer/ simulation/
+    state/                  共享客户端状态（类型安全 createSliceStore）：runtimeStore（含 ViewerLifecycle）/ localeStore / preferences
+    localization/language.ts TwinLanguage（UI 语言状态；不进入 domain）
+    shared/scheduling/      coalesced-dispatcher（通用低频合批原语，不绑定遥测）
+    domain/                 纯领域模块（无框架/无包依赖/无隐式时钟；见 §3，R3/R8）：
+      fab/                  fab-layout / process-control（MES 创建函数要求显式 epoch-ms）/ fab-yield /
+                            cleanroom-pressure / layout-identities / original-twin-data / twin-spatial
+      amhs/ personnel/      amhs-timeline / personnel-timeline
       equipment/            tool-state-projection（遥测帧 → FabToolState 纯函数）
-      contracts/            language（领域内共享类型）
-    generated/              生成物（禁止手改；由 tools/* 生成）：contracts.generated.ts /
+      simulation/           tour-timeline / tour-scenario / original-tour / research-replay / scenario / twin-equipment
+      wafer/                wafer-timeline / wafer-scenario / wafer-route / wafer-map
+      math/                 vec3 / round（Tour 与 Wafer 时间线共享的数学原语）
+    generated/              生成物（禁止手改；登记于 tools/generated-artifacts.json）：contracts.generated.ts /
                             twin-translations.generated.ts / static-structure-packed.ts
-    rendering/              scene 契约 + 产品后端 + Lite/WebGPU 实现
-      fab-scene.ts          引擎无关 SceneBackend/SceneFacade 端口与 DTO
-      lite-backend.ts       把 Lite runtime/world 封装为 SceneBackend 的产品后端
-      lite/                 Babylon Lite / WebGPU 实现（geometry / shadows / 动效 / 选择 / airflow-texture）
-      lite/geometry/        original-tool-parts / original-exploded-link-data（原版几何资产）
+    rendering/
+      lite-backend.ts       application/ports/scene 的产品实现（Lite runtime/world、设备丢失恢复；R9）
+      contracts/            static-structure-data.ts：生成物 payload 的手写类型合同（生成物仅 type-only 引用）
+      lite/                 Babylon Lite / WebGPU 实现：runtime / world / camera / environment / lighting /
+                            selection / cut-plane / motion / airflow-texture / source-orbit-input / tool-states …
+        effects/            xray / xray-shaders / cut / wafer / index：独立 create/update/dispose 资源所有者（R-06）
+        geometry/           facility / tool-families / original-tool-parts / original-exploded-link-data / static-structure
+        shadows/            native-lite-shadow
     features/
-      twin/                 页面 + controllers/ + state/（twinUiStore/twinPageStore/twinDemoStore/twin-state）
-                            + twin-search.ts + wafer-session.ts + equipment-status-pipeline.tsx
-      catalog/              catalog-page / catalog-data / search / state/catalogStore
-      workbench/            workbench / command-console / state/workbenchStore
-    components/             共享 UI（ui / widgets / charting / modal / error-boundary /
-                            class-names / original-icons）
-    main.tsx / contracts.ts # 入口与公共契约 re-export；R6 门禁只允许这两个 root 文件
-  tests/
-    integration/            router-query / command-event-bridge / fab-runtime / runtime-bootstrap
-    contract/               command-workflow / command-correlation / command-recovery
-    performance/            telemetry-frame-buffer / telemetry-load
-    architecture-boundaries.test.ts / architecture-import-graph.test.ts（架构门禁）
-  assets/  vite.config.ts  package.json  tsconfig.json
+      twin/                 页面 + controllers/（10 个控制器，零相互 import）+ state/（twinUiStore/twinPageStore/
+                            twinDemoStore/twin-state）+ twin-search.ts + wafer-session.ts + equipment-status-pipeline.tsx
+                            + HUD/侧栏/检查器/对话框子组件
+      catalog/              catalog-page / catalog-data / search / labels / types + components/ + controllers/ +
+                            export/（catalog-export/download-lifecycle/use-catalog-downloads）+ state/catalogStore
+      workbench/            workbench / command-console / error-message / format + components/ + controllers/ + state/workbenchStore
+    components/             共享设计系统：ui / modal / error-boundary / class-names / original-icons（+ original-icons-data，R12）
+  tests/                    镜像式布局：api/ application/ components/ contract/ domain/ features/ integration/
+                            performance/ realtime/ rendering/ state/ architecture/（含 R0–R14 门禁与 fixtures/r7…r14）/
+                            fixtures/ support/ types/；另含真实浏览器压测页 telemetry-stress.html/ts
+  assets/                   Vite 打包的 CSS/i18n/原始参考数据与生成器输入
+  public/                   浏览器 URL 直接请求的数据与许可证副本
 ```
 
-实际与 V2.1 目标计划的差异：`schemas/`（Zod 集中在 api/queries 与 realtime/protocol）、`shared/`（未创建）、`api/endpoints/`（HTTP 统一在 api/queries/http.ts）尚未拆出；目录解释以本节与 §29 为准。
+与 V2.1 目标计划的差异：计划中的 `realtime/synchronization/` 与 `api/endpoints/` 未创建（合批原语归 `shared/scheduling/`，HTTP 归 `api/transport/http.ts`）；`api/schemas/`、`shared/`、`application/ports/` 已在递归整改中真实建立。目录解释以本节与 §30 为准。
 
 ### 4.1 最终产品 URL（2026-10-27 一次性切换，永久不变）
 
@@ -179,9 +200,9 @@ web_app/
 结构说明：
 
 - **公共命令契约只放一次**：`application/contracts/CommandWorkflow.ts` 是权威定义；`XState 内部类型` 只放 XState 内部契约，不复制公共接口（G-03）。
-- **路由文件位置**：`routes/fabs|equipment|amhs|alarms` 是 V2.1 目标分组；最终 URL 已由 M1 定稿，M2 删除旧地址后不存在别名/重定向（OPEN-V21-01 已解决，见 §4.1）。
-- **测试位置**：按 ADR-0003 与 `tools/check_architecture.py`，测试不得放 `src`；V2.1 门禁统一落 `web_app/tests/integration`、`web_app/tests/contract`、`web_app/tests/performance`。
-- **`domain`/`state`/`rendering`/`features`/`components`/`generated`** 已按清理后的真实布局落地：`domain/**` 是纯叶子层（见 §3/§29），生成物统一在 `src/generated/`；V2.1 计划中的 `schemas`/`shared`/`api/endpoints`/`realtime/streams`/`realtime/synchronization` 等目标子目录尚未创建，不把“未创建”描述成“已存在”。
+- **路由文件位置**：当前 `routes/` 只有 `__root`、`index`、`equipment`、`equipment/compare`、`fabs/$fabId/3d`；最终 URL 已由 M1 定稿，M2 删除旧地址后不存在别名/重定向（OPEN-V21-01 已解决，见 §4.1）。
+- **测试位置**：按 ADR-0003 与 `tools/check_architecture.py`，测试不得放 `src`；2026-10-28 起 `web_app/tests/` 按源码所有权镜像（`api/application/components/contract/domain/features/integration/performance/realtime/rendering/state/architecture` + `fixtures/support/types`），历史平铺测试已迁移且 golden fixtures 未改。
+- **`domain`/`state`/`rendering`/`features`/`components`/`generated`** 已按递归整改后的终态落地：`domain/**` 是纯叶子层（见 §3/§30），生成物统一在 `src/generated/` 并由 `tools/generated-artifacts.json` 登记；V2.1 计划中的 `realtime/synchronization` 与 `api/endpoints` 未创建，不把“未创建”描述成“已存在”。
 
 ## 5. 三条数据流与 FabRuntime
 
@@ -195,38 +216,43 @@ Router -> TanStack Query -> HTTP API -> Zod -> Query Cache -> React
 
 1. 导航（或 intent 预加载）触发路由 loader。
 2. loader 只调用 `context.queryClient.ensureQueryData(<queryOptions>)`；Query Options 与组件共用同一份定义（`api/queries/*.queries.ts`）。
-3. Query 命中缓存则直接返回（即使已过 `staleTime`，也不会因此强制网络请求）；未命中才走 `api/endpoints` 的 HTTP 调用。
+3. Query 命中缓存则直接返回（即使已过 `staleTime`，也不会因此强制网络请求）；未命中才走 `api/transport/http.ts` 的 HTTP 调用。
 4. 响应在进入缓存前经 `schemas` 的 Zod 校验（计划依赖），校验失败不得写入缓存。
 5. 页面用 `useQuery`/`useSuspenseQuery` 订阅同一 Query；后台刷新、失效、重连都会自动反映到 UI。
 6. 需要权威新数据时（不能容忍旧缓存）使用 `queryClient.fetchQuery(...)` 显式获取；这是逐路由的显式决策，不是默认 loader 模式。
 
 ### 5.2 命令事件流
 
+当前实现（HTTP/SSE 模拟后端；生产 WebSocket 未接）：
+
 ```text
-WebSocket -> RxJS -> CommandEventBridge -> CommandWorkflow -> XState v6
+后端命令 SSE -> SseCommandEventSource（MessageDecoder envelope）-> RxJS Observable<CommandResultEvent>
+             -> CommandEventBridge（FAB 过滤 / 复合身份关联 / revision 去重）
+             -> CommandWorkflowRegistry.get(fabId, commandId) -> XState v6 workflow
 ```
 
-1. `realtime/transport` 的 `WebSocketClient` 建立连接并处理鉴权/心跳/重连。
-2. `realtime/protocol` 的 `MessageDecoder` 校验并解码为类型化消息，`SequenceTracker` 检测流序列缺口（只报告，不按业务语义丢弃）。
-3. `realtime/streams` 的 `EventRouter` 按 topic 暴露 `CommandResultStream` 等类型化 Observable；它不知道 XState 与工作流。
-4. `application/coordination/CommandEventBridge` 订阅结果流，按 `fabId` 过滤，按复合身份 `(fabId, commandId)` 关联，按 `revision` 去重，再调用 `CommandWorkflowRegistry.get(fabId, commandId)` 返回的工作流接口。
-5. `runtime/commands/XStateCommandWorkflowAdapter` 把 `receive(event)` 映射到 `equipmentCommand.machine.ts` 的 actor 事件；`CommandReconciler` 处理缺口/缺失 actor/断线恢复。
-6. 恢复以“关联恢复记录 + 后端权威状态查询 + 有界 pending queue”闭环；持久化恢复是后端责任（[命令核对](command-reconciliation.md)）。
+1. `realtime/transport/SseCommandEventSource` 建立 EventSource，跟踪后端 journal 游标 `id: {epoch}:{sequence}`，把 `replay-gap` 控制帧暴露为显式 `gaps$` 信号；重连由浏览器 EventSource 负责。
+2. 帧由 `realtime/protocol/MessageDecoder` 以 Zod envelope 校验/解码（不合法帧丢弃并记录诊断，不猜语义）。
+3. `application/coordination/CommandEventBridge` 订阅结果流，按 `fabId` 过滤，按复合身份 `(fabId, commandId)` 关联，按 `revision` 去重，再调用 `CommandWorkflowRegistry.get(fabId, commandId)`。
+4. `runtime/commands/XStateCommandWorkflowAdapter` 把 `receive(event)` 映射到 `equipmentCommand.machine.ts`；`CommandReconciler` 通过 `HttpCommandGateway`（`GET /api/v1/commands/{id}`）处理缺口/缺失 actor/断线恢复。
+5. 恢复以“关联恢复记录 + 后端权威状态查询 + 有界 pending queue”闭环；持久化恢复是后端责任（[命令核对](command-reconciliation.md)）。
+6. 历史说明：2026-10-27 审计清理删除了生产不可达的 `realtime/streams`/`WebSocketClient`/`SequenceTracker`/`RealtimeGateway` 骨架；真实 WebSocket 接入时按 ADR-0010 重建（见 §30）。
 
 ### 5.3 高频渲染数据流
 
 ```text
-WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
+FAB 级 20Hz 遥测 SSE -> TelemetryRuntime -> telemetryWorker（module Worker）
+                     -> FrameRingBuffer（TypedArray）-> 渲染 frame loop（lite-backend/ScenePort）
 ```
 
-1. 高频遥测/变换在 Worker 中解码并写入 `realtime/buffers` 的环形/双缓冲，数据结构为 TypedArray。
-2. Worker 通过有界消息/共享内存把“脏实体/帧”交给渲染循环；UI 只接收低频聚合（如需）。
-3. Babylon Lite 在 `rendering` 中消费缓冲区更新 GPU 实例属性；渲染循环不读 Query/Zustand/XState。
+1. 高频遥测帧经 `realtime/telemetry/TelemetryRuntime` 解码/背压后交给 `realtime/workers/telemetryWorker`，写入 `FrameRingBuffer`。
+2. Worker 通过 `postMessage`（transferable；SharedArrayBuffer 未启用）把最新帧/摘要交给渲染循环；UI 低频聚合经 `shared/scheduling/coalesced-dispatcher`（100ms 合批）单独提供。
+3. `rendering/lite-backend.ts` 的帧循环通过 `getToolStates()` 读取最新槽位状态并更新 GPU 实例属性；渲染循环不读 Query/Zustand/XState。
 4. 该路径完全旁路 ARCH-02/05/11 禁止的容器；不得以逐事件 `setState` 或逐帧 Redux dispatch 实现。
 
 ### 5.4 FabRuntime：唯一生命周期装配点
 
-- 每个 FAB 一个 `FabRuntime`：实时源（实现 `CommandEventSource`/`RealtimeGateway`）、`CommandEventBridge`、`CommandWorkflowRegistry` 与工作流实现都在这里组装。
+- 每个 FAB 一个 `FabRuntime`：实时源（实现 `CommandEventSource`，当前为 `SseCommandEventSource`）、`CommandEventBridge`、`CommandWorkflowRegistry` 与工作流实现都在这里组装；权威查询经 `CommandGateway`（`HttpCommandGateway`）。
 - `FabRuntimeRegistry` 按 `fabId` 管理实例，`FabLifecycleCoordinator` 负责 start/stop/dispose 顺序与错误隔离（一个 FAB 失败不得拖垮其他 FAB）。
 - 三 FAB 隔离：每个 FAB 独立 actor、订阅与关联记录；Query 仍为应用级单例，但 key 必须包含 `fabId`。
 - Runtime **不拥有**服务端缓存；Query 缓存由 `QueryClient` 管理。详见 [FAB 运行时](fab-runtime.md)。
@@ -248,7 +274,24 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | ARCH-11 | 高频遥测不得经过 Query/Zustand/XState | ADR-0010 + Engineering 09/15 | 架构评审 + 性能测试；渲染路径禁止读状态容器 | 性能门禁（计划） |
 | ARCH-12 | Babylon Lite 是唯一 3D 引擎，且只允许 WebGPU | ADR-0003/Engineering 09 + ADR-0010 高频路径 | `tools/check_architecture.py` 禁止 WebGL；渲染评审 | 渲染验收（现有） |
 
-规则的可执行检查在 M1..M6 逐步补齐。M1 已为 ARCH-03（router 配置 + 断言测试）与 ARCH-04（loader 只调用 `queryOptions`）提供可复核代码/测试；ARCH-02 由 RQ-03/RQ-04 与“全部端点只有 Query 一处缓存”的代码事实覆盖；ARCH-05 由 M2b 的 store 清单/评审覆盖（Zustand 只含 UI 字段，无 Query DTO 副本）；ARCH-06/07 已由 `tests/architecture-boundaries.test.ts` 静态检查并通过（M3）；ARCH-08 由契约单点/行为测试覆盖（M6 起不再检查 XState 所在目录）；ARCH-09/10 由 M4 的 FabRuntime 装配与三 FAB 隔离测试覆盖。其余规则在 M3–M6 补齐自动化检查前仍由评审负责。2026-10-28 增加真实 import 图门禁 `tests/architecture-import-graph.test.ts`（用项目自带 TypeScript Compiler API 解析全部源文件，不依赖正则）：R0 相对导入可解析、R1 运行图无环、R2 `app/router` 直接文件不依赖 `features/**`、R3 domain 纯度、R4 catalog/twin/workbench feature 互不依赖、R5 生成物登记/do-not-edit 头/数据化；与 `architecture-boundaries.test.ts` 的正则规则、`tools/check_architecture.py` 互补。
+规则的可执行检查已在 2026-10-28 递归整改中收口为 R0–R14（全部真实运行）：
+
+| 门禁 | 内容 | 位置 |
+|---|---|---|
+| R0 / R0b | 所有相对 import 可解析；tsconfig 不使用路径别名 | `web_app/tests/architecture/architecture-import-graph.test.ts` |
+| R1 / R10 | 运行时模块图无环；R10 进一步要求含 type-only 边的全图无环 | 同上 + `architecture-contract-rules.test.ts` |
+| R2 | `app/router/` 直接文件（通用工具）不得 import `features/**` | `architecture-import-graph.test.ts` |
+| R3 / R8 | `domain/**` 纯度：无 npm 包；无 Date/Math.random/DOM/timer/network 与顶层副作用；静态参考数据只来自 `web_app/assets/**` | `architecture-import-graph.test.ts` + `architecture-contract-rules.test.ts` |
+| R4 | `features/{catalog,twin,workbench}` 互不依赖，跨 feature 需登记 `APPROVED_CROSS_FEATURE_IMPORTS` | `architecture-import-graph.test.ts` |
+| R5 / R11 | 生成物登记/do-not-edit 头/数据化；R11 由 `tools/check_generated_artifacts.mjs --check` 校验登记表与 sha256 | 两个 import 图门禁 + R11 测试 + 根目录 checker |
+| R6 | `src/` 根只允许 `main.tsx`/`contracts.ts` | `architecture-import-graph.test.ts` + `tools/check_architecture.py` |
+| R7 | 通用基础层（api/realtime/rendering/components/state/application/runtime）不得 import `features/**`；装配根 `app/providers`、`app/router/routes` 豁免 | `architecture-contract-rules.test.ts` |
+| R9 | `SceneCommands` 无 optional 成员，`ScenePort` 仅 `acceptance` 可选，且 `rendering/lite-backend.ts` 实现全部必需命令 | 同上 |
+| R12 | `src/components/**` 公共组件必须有跨 feature 使用或显式设计系统角色 | 同上 |
+| R13 | `src/features/**` 的空依赖 effect 不得捕获变化 props/state/callback（`useEffectEvent`/ref 间接为稳定原语） | 同上 |
+| R14 | 禁止未登记 `any`/`as any`/无说明 `as unknown as` 与 `String()/Number()` 伪校验响应数据 | 同上 |
+
+每条规则都有 `web_app/tests/architecture/fixtures/r7…r14/**` 负向/正向样例证明其可失败；`architecture-boundaries.test.ts` 的通用正则规则与 `tools/check_architecture.py` 的终态目录检查与之互补。2026-10-28 之前平铺在 `web_app/tests/` 根的门禁文件已迁入 `web_app/tests/architecture/`。
 
 补充说明：ARCH-03 的 `defaultPreloadStaleTime: 0` 只是让 Router 不再否决 loader 重跑，是**必要但不充分**条件；Query 的 `staleTime`/`gcTime`、同源 Query Options、页面订阅、失效与显式 `fetchQuery` 共同决定数据新鲜度（见 [ADR-0009](adr/0009-tanstack-router-query-boundary.md) 第 3 节）。
 
@@ -269,7 +312,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | ADR | 状态 | 与 V2.1 的关系 |
 |---|---|---|
 | [ADR-0001](adr/0001-flat-project-layout.md)…[ADR-0007](adr/0007-read-only-legacy-catalog.md) | 已采纳 | 保留。项目布局、单后端、只读目录等与前端 V2.1 不冲突 |
-| [ADR-0008](adr/0008-redux-toolkit-rtk-query.md) | **已被取代（M2）** | RTK Query 由 ADR-0009 取代（M2a）；Redux Toolkit/react-redux 由 V2.1 的 Zustand store 取代（M2b）。仅保留“Babylon 对象不入状态容器、遥测合批”等原则（ARCH-11） |
+| [ADR-0008](adr/0008-redux-toolkit-rtk-query.md) | **已被取代（M2）** | RTK Query 由 ADR-0009 取代（M2a）；Redux Toolkit/react-redux 由 V2.1 的 Zustand store 取代（M2b），`src/store/` 已删除。仅保留“Babylon 对象不入状态容器、遥测合批”等原则（ARCH-11）；该 ADR 末尾的 2026-10-28 更新段给出终态映射（`ScenePort`、`shared/scheduling/coalesced-dispatcher.ts`、R7–R14） |
 | [ADR-0009](adr/0009-tanstack-router-query-boundary.md) | 已采纳，M1+M2b/M2c 已落地 | Router/Query 边界、全部 RQ 门禁已运行；Zustand（M2b）与 Router search（M2c）已接管；通用 router search 不含 feature 转换（P2 清理） |
 | [ADR-0010](adr/0010-command-event-bridge.md) | 已采纳，M3+M4+M5c 已落地 | 实时类型化流、CommandEventBridge、恢复队列、XState v6 工作流与 FabRuntime 装配；CE-01..08 已在测试源上运行，后端模拟 HTTP/SSE 链路已接入（生产 WebSocket 仍待） |
 
@@ -290,17 +333,17 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 |---|---|---|---|---|
 | 路由 | TanStack Router 接管顶层路由/URL/search；生成式路由树 + 最终 URL（M1）；旧地址与重定向已删除（M2）；目录筛选、compare、Twin 的 siteId/modal/mode/lang/theme 已由 Router search 拥有（M2c） | TanStack Router + 类型化 URL + intent 预加载 | M1/M2 | **M1/M2 PASS** |
 | HTTP 服务端缓存 | 全部端点已由 TanStack Query 独占（M2a）；RTK Query/api.ts 已删除，无双缓存 | TanStack Query 唯一缓存；loader 复用 Query Options | M1/M2 | **M2a PASS** |
-| 客户端状态 | 7 个 Zustand store（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale）承载 UI 状态；`createSliceStore` 为类型安全工厂（无 `any`/action 接口断言）；跨 store 协调经 feature 入口（如 `features/twin/wafer-session.ts`）；Redux/react-redux 已删除 | Zustand/组件局部；不复制 Query 数据 | M2b | **M2b PASS；P2 类型安全化** |
+| 客户端状态 | 7 个 Zustand store 承载 UI 状态（twinUi/twinPage/twinDemo 在 `features/twin/state/`，catalog/workbench 在各自 feature `state/`，runtime/locale 在 `state/`）；`createSliceStore` 为类型安全工厂（无 `any`/action 接口断言）；跨 store 协调经 feature 入口（如 `features/twin/wafer-session.ts`）；TelemetryRuntime 的槽位投影为纯函数 `domain/equipment/tool-state-projection.ts`；Redux/react-redux 已删除 | Zustand/组件局部；不复制 Query 数据 | M2b/P2/R-15 | **PASS（终态见 §30）** |
 | 实时推送 | 设备状态 SSE + 后端模拟命令/遥测 SSE（20Hz）已接入产品；类型化流解码/序列/桥接 M3 已验证；WebSocket 传输仍可后续替换 | WebSocket/SSE -> Decoder -> RxJS -> 类型化流 | M3/M4/M5c | **PASS（HTTP/SSE 模拟后端）；WebSocket 未接** |
 | 命令链路 | 契约 + Bridge + 恢复 + XState 工作流 + FabRuntime；M5c 接入后端模拟命令 API（POST/GET/SSE）与 Workbench 命令面板；浏览器实测 accepted→executing→succeeded；WebSocket 生产链路可后续替换 | CommandEventBridge + CommandWorkflow + 恢复 | M3/M4/M5c | **PASS（HTTP/SSE 模拟后端 + 浏览器 e2e）；WebSocket 未接** |
 | XState | XState v6 已接入，实现位于 `runtime/commands`，经 `CommandWorkflow` 契约暴露 | XState v6（隐藏在 `CommandWorkflow` 后） | M4/M5a | **PASS** |
 | FabRuntime | `runtime/` 四件套已实现，RuntimeBootstrap 按 sites 为每个 FAB 装配；命令源为后端命令 SSE，gateway 为权威 HTTP 查询 | `FabRuntime` 等四件套，按 FAB 装配/销毁 | M4/M5a | **PASS（模拟后端；WebSocket 未接）** |
 | 多 FAB | 后端默认 FAB-01/02/03（`Fab:FabCount` 1..32）；前端 Runtime/遥测/设备状态/UI 按 FAB 数据驱动；121 台设备布局在 `domain/fab/fab-layout.ts` | 三 FAB 隔离：独立 actor、订阅、复合身份 | M4/M5a | **PASS（模拟后端）** |
 | 高频遥测 | 后端 20Hz 遥测 SSE → TelemetryRuntime（传输/解码/帧/背压）→ Worker FrameRingBuffer → 渲染 frame loop；槽位投影为纯函数 `domain/equipment/tool-state-projection.ts`；`FabTelemetryRegistry` 按 FAB acquire/release；不经 Query/Zustand/XState（ARCH-11） | Worker/TypedArray -> Babylon Lite | M5b/M5c/P2 | **PASS（模拟后端 + Worker + 渲染接线）**；SharedArrayBuffer/COOP-COEP 未启用 |
-| 渲染 | Babylon Lite 1.36 在 `src/rendering/lite`（M5b 目录归位），WebGPU-only；M5c 真实浏览器 WebGPU 性能门禁已运行 | 保留 | M5/M5c | **PASS（目录归位 + Chrome WebGPU 门禁）** |
+| 渲染 | Babylon Lite 1.36 在 `src/rendering/lite`，WebGPU-only；`application/ports/scene.ts` 是应用侧唯一 ScenePort（必需命令 + 强类型 mount options + ViewerLifecycle），`rendering/lite-backend.ts` 实现它，`lite/effects/` 拆为 xray/cut/wafer 独立资源所有者，无 `rendering/fab-scene.ts`；真实浏览器 WebGPU 性能门禁已运行 | 保留 | M5/M5c/R-04/R-06 | **PASS（ScenePort + Effect Owner + Chrome WebGPU 门禁）** |
 | 依赖 | TanStack Router 1.170.46 / Query 5.105.0 / Router plugin 1.168.48、Zustand 5.0.16、RxJS 7.8.2、Zod 4.6.7、XState v6；jsdom 30.1.3 + Testing Library（dev）；Redux/react-redux 已移除 | 按阶段引入并锁版本；XState 实现经契约隔离 | M1..M4 | M2b 已移除 Redux；XState v6 已接入 |
 | 测试基建 | Vitest + jsdom + Testing Library；RQ/CE/架构（含真实 import 图 R0–R5）/传输/Worker 测试真实运行；真实 GPU 性能脚本 | 契约/集成 + CPU/GPU 性能门禁 | M1 起 | **M1–M5 PASS；GPU 门禁已运行** |
-| 架构检查 | Vitest 检查 ARCH-06/07/08 契约边界与 features 归位；`architecture-import-graph.test.ts` 真实 import 图 R0–R5；`tools/check_architecture.py` 检查终态路径/依赖/ARCH-11 + domain 分层/旧根模块缺席/generated 区域 | 可执行检查 | M6/P2 | **PASS（实际运行）** |
+| 架构检查 | `web_app/tests/architecture/` 三层门禁：`architecture-boundaries.test.ts` 正则边界、`architecture-import-graph.test.ts` 真实 TypeScript import 图 R0–R6、`architecture-contract-rules.test.ts` R7–R14（含负向 fixtures）；`tools/check_architecture.py` 检查终态路径/依赖/ARCH-11 + domain 分层/旧根模块缺席/generated 区域/模块档案数量；生成物由 `tools/check_generated_artifacts.mjs --check` 校验 | 可执行检查 | M6/P2/递归整改 | **PASS（R0–R14 实际运行，见 §30）** |
 | 文档 | V2.1 基线 + ADR-0009/0010 + 7 篇专项已合入 main（e18595f）；本文档补充 M1–M6/review/P2 清理记录 | 本基线 + ADR-0009/0010 + 7 篇专项 | M0 | **M0 PASS；后续增量已更新** |
 
 ## 10. 分阶段迁移计划
@@ -365,17 +408,20 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 | CE-08 | Runtime 关闭后取消订阅/停止 actor | `tests/integration/command-event-bridge.test.ts`、`tests/integration/fab-runtime.test.ts` | **PASS（M4 FabRuntime 生命周期）** |
 | 性能 | 渲染/高频路径帧预算与帧率 | `web_app/tests/performance`、`tools/render_perf.mjs` | **PASS（CPU TypedArray 基线 + Chrome WebGPU 门禁：179 frames，p95 8.5ms）** |
 
-### 12.3 当前测试基建事实
+### 12.3 当前测试基建事实（2026-10-28 递归整改后）
 
-- 已安装 jsdom 30.1.3、@testing-library/react 16.3.3、TanStack Router/Query、Zustand、XState v6、RxJS、Zod，并建立 `web_app/tests/integration`。
-- RQ/CE/ARCH 与产品装配测试真实运行：前端 **90 文件 / 532 测试 PASS**（含 `architecture-boundaries.test.ts` 正则规则与 `architecture-import-graph.test.ts` 真实 import 图 R0–R5；默认并发全量 PASS，CPU 密集黄金向量套件统一 `testTimeout: 15s`）；后端 **170/170 PASS**；真实 Chrome WebGPU 性能门禁已运行。
+- 已安装 jsdom 30.1.3、@testing-library/react 16.3.3、TanStack Router/Query、Zustand、XState v6、RxJS、Zod；测试按源码所有权镜像到 `web_app/tests/{api,application,components,contract,domain,features,integration,performance,realtime,rendering,state,architecture}` + `fixtures/support/types`。
+- RQ/CE/ARCH 与产品装配测试真实运行：前端全量 Vitest **103 文件 / 659 测试 PASS**（含 `architecture/architecture-import-graph.test.ts` R0–R6 与 `architecture/architecture-contract-rules.test.ts` R7–R14 及负向 fixtures；默认并发全量 PASS，CPU 密集黄金向量套件统一 `testTimeout: 15s`，断言强度不变）；后端 **170/170 PASS**（递归整改只改前端与文档/工具，后端未变）；真实 Chrome WebGPU 性能门禁证据见 `docs/evidence/`。
+- 生成物门禁：`node tools/check_generated_artifacts.mjs --check` 校验 `tools/generated-artifacts.json`（R11），各生成器 `--check` 已并入 `scripts/verify.ps1`。
 - 剩余边界：WebSocket 生产传输、SharedArrayBuffer/COOP-COEP、后端非模拟实现；见 §24/§26。
 
 ## 13. 文档地图
 
 | 文档 | 内容 | 关联 |
 |---|---|---|
-| [架构基线](architecture.md)（本文） | 汇总、目录、规则、数据流、差距、迁移计划 | ADR-0009/0010 |
+| [架构基线](architecture.md)（本文） | 汇总、终态目录、规则 R0–R14、数据流、差距、M0–M6 记录、R-01…R-14 递归整改记录（§30） | ADR-0009/0010 |
+| [web_app/README](../web_app/README.md) | 前端目录/命令/镜像式测试布局/门禁入口 | 本文 §4/§30 |
+| [scripts/README](../scripts/README.md) | verify.ps1 组成、生成物登记与检查器、R7–R14 门禁、性能脚本 | 本文 §6/§12.3 |
 | [路由与查询集成](router-query-integration.md) | Router/Query 职责、配置、loader 模式、新鲜度矩阵、RQ-01..05 细则 | ADR-0009 |
 | [状态管理](state-management.md) | 状态所有权、Query/Zustand/XState/实时缓冲区边界、Redux 迁移映射 | ADR-0009/0010 |
 | [实时协议](realtime-protocol.md) | WebSocket/解码/序列/EventRouter 类型化流、与 Engineering 08/14 的关系 | ADR-0010 |
@@ -411,6 +457,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ## 15. M1 落地记录（2026-10-27）
 
 > 本节只记录已执行证据；未运行项仍为 SPECIFIED / NOT RUN。
+> 历史记录说明：§15–§29 保留当时的路径、测试文件名与计数（审计轨迹，不追改）；当前终态目录/测试布局/门禁以 §4/§30 为准。
 
 ### 15.1 交付
 
@@ -454,17 +501,17 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ### 16.1 交付
 
 - **全部 7 个 RTK Query 端点迁到 TanStack Query**：equipment status、catalog、runs list/detail/results、research JSONL、wafer routes；模块位于 `web_app/src/api/queries/`，mutation 位于 `web_app/src/api/mutations/runs.mutations.ts`。
-- **RTK Query 退役**：删除 `web_app/src/store/api.ts`、`twinApi` reducer/middleware 与 `tests/rtk-api.test.ts`；Redux 只剩临时客户端 UI slice（M2b）。
+- **RTK Query 退役**：删除 `web_app/src/store/api.ts`、`twinApi` reducer/middleware 与 RTK Query 传输测试（已删除）；Redux 只剩临时客户端 UI slice（M2b）。
 - **SSE 走 Query 缓存**：Twin 的 `watchEquipmentStatus` 快照除有序消费外写入 `equipmentStatusQueryKey(siteId)`，Query 是唯一服务端缓存；轮询仅作回退。
 - **旧地址与重定向彻底删除**：`/twin*`、`/preview*`、`/catalog*`、`/compare*`、`/workbench` 不再有别名/catch-all 重定向（访问返回 not-found）；`/fabs/$fabId` 的 M1 重定向入口也删除，仅保留 `/fabs/$fabId/3d`。
 - **XState**：按用户要求改为 v6；actor/工作流在 M4 接入。
-- 其余 Query 模块：`queryKeys.ts` 增加 equipment/catalog/runs/research/wafer 工厂；transport 统一在 `api/queries/http.ts`（same-origin、no-store、Zod envelope 校验、ProblemDetails）。
+- 其余 Query 模块：`queryKeys.ts` 增加 equipment/catalog/runs/research/wafer 工厂；transport 统一在 `api/queries/http.ts`（same-origin、no-store、Zod envelope 校验、ProblemDetails）。**历史记录：** 递归整改后 transport 迁至 `api/transport/http.ts`、响应校验迁至 `api/schemas/`（见 §30）。
 
 ### 16.2 证据（本次实际运行）
 
 - `npx tsc --noEmit` → 0；`npx vitest run` → **57 文件 / 260 测试 PASS**；`vite build` → 0。
 - RQ-02/RQ-03/RQ-04 新增于 `web_app/tests/integration/query-cache.test.tsx`：过期数据由页面订阅刷新、mutation 失效后读回权威列表、按 siteId 隔离 equipment status 缓存。
-- `web_app/tests/api-queries.test.ts` 覆盖 Query transport（URL/credentials/no-store/Idempotency-Key/ProblemDetails/Zod 拒绝）。
+- `web_app/tests/api/api-queries.test.ts` 覆盖 Query transport（URL/credentials/no-store/Idempotency-Key/ProblemDetails/Zod 拒绝；迁移后路径）。
 - `./scripts/verify.ps1` 见 M2a 提交记录（契约/架构、16 Python、3 .NET + 67、冻结向量、前端全量）。
 
 ### 16.3 过渡与遗留
@@ -480,10 +527,10 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 ### 17.1 交付
 
-- **Zustand 接管客户端状态**：新增 `web_app/src/state/`：`twinUiStore`、`twinPageStore`、`twinDemoStore`、`catalogStore`、`workbenchStore`、`runtimeStore`、`localeStore`，以及 `state/telemetry-buffer.ts`；store 使用纯不可变 reducer（`createSliceStore`，无 Immer），actions 为 store 方法（无 Redux dispatch）。**历史记录：** 2026-10-28 清理后 feature store 已归位 `features/*/state/`，共享状态保留在 `state/`（见 §29.6）。
+- **Zustand 接管客户端状态**：新增 `web_app/src/state/`：`twinUiStore`、`twinPageStore`、`twinDemoStore`、`catalogStore`、`workbenchStore`、`runtimeStore`、`localeStore`，以及当时的 100ms 低频合批工具；store 使用纯不可变 reducer（`createSliceStore`，无 Immer），actions 为 store 方法（无 Redux dispatch）。**历史记录：** 2026-10-28 清理后 feature store 已归位 `features/*/state/`，共享状态保留在 `state/`（见 §29.6）；低频合批原语现为 `shared/scheduling/coalesced-dispatcher.ts`（见 §30）。
 - **Redux 彻底删除**：删除 `web_app/src/store/`（7 个 slice、hooks、store、api 残留）、`react-redux`/`@reduxjs/toolkit` 依赖；`AppProviders` 仅保留 QueryClientProvider + ErrorBoundary。
 - **Twin 保留性能边界**：twin-page 仍用 wafer-excluded shallow 订阅避免逐帧 HUD 更新触发整页渲染；帧循环通过 `getState()` 读取 live 状态，不新增 React 状态。
-- **测试迁移**：Redux slice 测试改写为 Zustand store/action 测试；需要已挂载状态的组件测试改为 jsdom + Testing Library（Zustand SSR 快照为初始状态）；telemetry-buffer 路径迁移。
+- **测试迁移**：Redux slice 测试改写为 Zustand store/action 测试；需要已挂载状态的组件测试改为 jsdom + Testing Library（Zustand SSR 快照为初始状态）；低频合批路径迁移（现 `shared/scheduling/coalesced-dispatcher.ts`）。
 - **依赖**：未新增第三方包（Zustand 原生 + 纯不可变 reducer）；`react-redux`、`@reduxjs/toolkit` 移除。XState 为 v6。
 
 ### 17.2 证据（本次实际运行）
@@ -527,14 +574,14 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 - **Application 契约**（`web_app/src/application/contracts/`）：`CommandEvents`（CommandResultEvent/CommandEventSource/Alarm/Telemetry）、`CommandWorkflow`（公共契约单点）、`CommandGateway`（权威状态查询）、`RealtimeGateway`（类型化流接口）。
 - **Application 协调**（`application/coordination/`）：`CommandCorrelationRegistry`（FAB+command 复合身份与 revision 水位）、`CommandEventRecovery`（有界恢复队列 + 权威对账）、`CommandEventBridge`（订阅/过滤/去重/分发/重试；无 WebSocket/XState 依赖）。
-- **Realtime**：`protocol/MessageDecoder`（手写 Zod envelope + command/alarm/telemetry 校验）、`protocol/SequenceTracker`（per-topic 顺序/重复/缺口/乱序）、`streams/EventRouter`（共享一次解码的 RxJS 类型化流 + 错误/缺口流）、`CommandResultStream`/`AlarmStream`/`TelemetryStream`、`transport/WebSocketClient` 骨架（未装配，保留后续接入能力）。
-- **ARCH 静态检查**：`tests/architecture-boundaries.test.ts` 验证 ARCH-06/07（realtime 不依赖工作流实现/XState/React 状态库；application 只依赖 contracts）与 CommandWorkflow 契约单点定义。
+- **Realtime**：`protocol/MessageDecoder`（手写 Zod envelope + command/alarm/telemetry 校验）、`protocol/SequenceTracker`（per-topic 顺序/重复/缺口/乱序）、`streams/EventRouter`（共享一次解码的 RxJS 类型化流 + 错误/缺口流）、`CommandResultStream`/`AlarmStream`/`TelemetryStream`、`transport/WebSocketClient` 骨架（未装配，保留后续接入能力）。**历史记录：** 其中 `streams/`、`WebSocketClient`、`SequenceTracker`、`RealtimeGateway` 于 2026-10-27 审计清理中作为生产不可达死代码删除；递归整改后的实时终态见 §30。
+- **ARCH 静态检查**：`web_app/tests/architecture/architecture-boundaries.test.ts`（迁移后路径）验证 ARCH-06/07（realtime 不依赖工作流实现/XState/React 状态库；application 只依赖 contracts）与 CommandWorkflow 契约单点定义。
 
 ### 19.2 证据（假源/假 gateway）
 
 - CE-01 正常派发、CE-02 重复 revision 过滤、CE-03 乱序不回退、CE-04 确认先于 HTTP 响应、CE-05 缺失 actor 经恢复/对账、CE-08 bridge 生命周期：`tests/integration/command-event-bridge.test.ts` PASS。
 - 恢复队列边界/去重/权威对账：`tests/contract/command-recovery.test.ts` PASS。
-- 解码/序列/EventRouter 类型化流：`tests/realtime-protocol.test.ts` PASS。
+- 解码/序列/EventRouter 类型化流：`web_app/tests/realtime/realtime-protocol.test.ts`（迁移后路径）PASS。
 - 实际运行：`tsc --noEmit` 0；`npx vitest run` **62 文件 / 280 测试 PASS**；`vite build` 0；`./scripts/verify.ps1` exit 0（契约/架构、16 Python、3 .NET + 67、冻结向量、前端全量）。
 
 ### 19.3 遗留与边界
@@ -557,7 +604,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ### 20.2 证据（测试源/假 gateway）
 
 - CE-06：stream 停止后经 `CommandGateway` 权威查询收敛到 succeeded；CE-07：三个 FAB 使用相同 commandId 时各自 runtime/workflow 状态互不污染；CE-08：lifecycle stop 后不再投递、dispose 清理 workflow/registry。
-- `tests/integration/fab-runtime.test.ts`（5）、`tests/contract/command-workflow.test.ts`（3）、`tests/architecture-boundaries.test.ts`（契约/边界检查）PASS。
+- `web_app/tests/integration/fab-runtime.test.ts`（5）、`web_app/tests/contract/command-workflow.test.ts`（3）、`web_app/tests/architecture/architecture-boundaries.test.ts`（契约/边界检查）PASS。
 - 实际运行：`tsc --noEmit` 0；`npx vitest run` **64 文件 / 290 测试 PASS**；`vite build` 0；`./scripts/verify.ps1` exit 0。
 
 ### 20.3 遗留与边界
@@ -618,7 +665,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ### 23.1 删除
 
 - `docs/migration/`（283 文件，约 51 MB：twin-parity/babylon-lite 证据与计划）、`docs/repair/`、`docs/superpowers/plans/`、根目录旧 parity spec（.md/.docx）、Babylon Lite 迁移指南。
-- 旧 parity/frozen/browser 测试与配置：`tests/*.browser.ts`、`tests/frozen-visual.test.ts`、`tests/frozen-preview.vite.config.ts`、`tests/lite-*-runtime/effects-color` 浏览器夹具、`tests/renderer-acceptance.test.ts`、`tests/original-*.test.ts`。
+- 旧 parity/frozen/browser 测试与配置（browser/frozen-visual/frozen-preview/lite-runtime/effects-color/renderer-acceptance/original-* 等，全部已删除，仅保留在 Git 历史）。
 - 旧 parity 工具：`frozen_visual_compare.mjs`、`compare_twin_goldens.py`、`serve_twin_reference.py`、`run_twin_browser.mjs`、`audit_twin_i18n_coverage.mjs`、旧 vector builders 等。
 - `scripts/verify.ps1` 的 frozen-original 向量门禁与其 coverage 资产；`web_app/assets/twin-i18n-coverage.json`。
 
@@ -655,7 +702,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 - 实现文件从 `workflows/equipment/` 移到 `runtime/commands/`：`equipmentCommand.machine.ts`、`equipmentCommand.logic.ts`、`CommandReconciler.ts`、`XStateCommandWorkflowAdapter.ts`；删除空的 `src/workflows/`。
 - `FabRuntime` 改为从 `./commands` 装配；`CommandWorkflow` 契约、Bridge、恢复队列、FabRuntime 的契约边界不变。
-- 移除 ARCH-08 的目录强制：`tests/architecture-boundaries.test.ts` 删除“XState 只能在 `workflows/`”“工作流实现只能被 runtime 导入”两条断言；`tools/check_architecture.py` 删除 xstate/workflow 路径检查。
+- 移除 ARCH-08 的目录强制：`web_app/tests/architecture/architecture-boundaries.test.ts`（迁移后路径）删除“XState 只能在 `workflows/`”“工作流实现只能被 runtime 导入”两条断言；`tools/check_architecture.py` 删除 xstate/workflow 路径检查。
 - 保留的边界：`realtime`/`application` 不 import 工作流实现或 XState；`CommandWorkflow` 契约单点定义；`rendering`/`buffers`/`workers` 不 import 状态容器。
 
 ### 25.2 理由
@@ -673,7 +720,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ### 26.1 features/components 归位
 
 - 页面模块迁入 `features/twin/`（twin-page、sidebar、dialogs、elevation、inspector、i18n、fab-viewer）、`features/catalog/`（catalog-page/data）、`features/workbench/`（workbench + command-console）；共享 UI 迁入 `components/`（ui/widgets/charting/error-boundary）。
-- 旧顶层页面文件删除；所有相对 import（含 asset URL 由脚本解析）重算；`tests/architecture-boundaries.test.ts` 增加 M5c 归位断言。
+- 旧顶层页面文件删除；所有相对 import（含 asset URL 由脚本解析）重算；`web_app/tests/architecture/architecture-boundaries.test.ts`（迁移后路径）增加 M5c 归位断言。
 
 ### 26.2 后端模拟命令/遥测链路
 
@@ -769,10 +816,12 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ## 29. P2 架构清理落地记录（2026-10-28）
 
 > 目标：消除 V2.1 遗留的反向依赖与类型逃逸，把领域层、生成物与遥测投影整理成可执行门禁；产品行为不变。
+>
+> **历史记录说明：** 本节记录的是同日稍早的 P2 清理批次；其中的 `domain/contracts/language.ts`、`domain/wafer/tour-wafer-timeline.ts`、`rendering/fab-scene.ts`、`realtime/equipment-status.ts`、`realtime/telemetry/telemetry-buffer.ts` 等路径已被其后的递归整改再次迁移，当前终态见 §30。
 
 ### 29.1 纯领域模块归位
 
-- 18 个纯领域模块移入 `web_app/src/domain/{fab,amhs,personnel,wafer,simulation}/`：`fab-layout`、`process-control`、`fab-yield`、`cleanroom-pressure`、`layout-identities`、`original-twin-data`、`twin-spatial`、`amhs-timeline`、`personnel-timeline`、`wafer-route`、`wafer-map`、`wafer-scenario`、`tour-wafer-timeline`、`research-replay`、`original-tour`、`tour-scenario`、`twin-equipment`、`scenario`；新增 `domain/contracts/language.ts` 供共享类型，`original-twin-data` 不再反向依赖 `features/twin`。
+- 18 个纯领域模块移入 `web_app/src/domain/{fab,amhs,personnel,wafer,simulation}/`：`fab-layout`、`process-control`、`fab-yield`、`cleanroom-pressure`、`layout-identities`、`original-twin-data`、`twin-spatial`、`amhs-timeline`、`personnel-timeline`、`wafer-route`、`wafer-map`、`wafer-scenario`、`tour-wafer-timeline`、`research-replay`、`original-tour`、`tour-scenario`、`twin-equipment`、`scenario`；新增 `domain/contracts/language.ts` 供共享类型，`original-twin-data` 不再反向依赖 `features/twin`。**递归整改后：** `TwinLanguage` 迁至 `localization/language.ts`；`tour-wafer-timeline.ts` 拆为 `domain/simulation/tour-timeline.ts` + `domain/wafer/wafer-timeline.ts`，共享数学原语在 `domain/math/`（见 §30）。
 - 遥测帧→设备状态投影从 `realtime/telemetry/TelemetryRuntime.ts` 拆到纯函数 `domain/equipment/tool-state-projection.ts`；transport 只保留解码/帧/缓冲/背压，`FabTelemetryRegistry` 增加 acquire/release 引用计数（首个消费者启动、最后一个释放停止）。
 - 生成物统一到 `web_app/src/generated/`：`contracts.generated.ts`、`twin-translations.generated.ts`、`static-structure-packed.ts`；`tools/generate_contracts.py`、`tools/build_twin_translations.cjs`、`tools/pack_static_structure.mjs` 输出路径同步。
 
@@ -784,7 +833,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 ### 29.3 可执行门禁
 
-- 新增 `web_app/tests/architecture-import-graph.test.ts`：用项目自带 TypeScript Compiler API（TS 7 原生编译器 API `typescript/unstable/sync` + `typescript/unstable/ast`，不新增依赖）解析 `src/**/*.{ts,tsx}` 的静态 import、`export ... from` 与动态 `import()`，自行解析相对说明符（含 `.ts/.tsx/index.ts`），执行：
+- 新增 `web_app/tests/architecture/architecture-import-graph.test.ts`（迁移后路径；当时平铺于 `web_app/tests/`）：用项目自带 TypeScript Compiler API（TS 7 原生编译器 API `typescript/unstable/sync` + `typescript/unstable/ast`，不新增依赖）解析 `src/**/*.{ts,tsx}` 的静态 import、`export ... from` 与动态 `import()`，自行解析相对说明符（含 `.ts/.tsx/index.ts`），执行：
   - **R0** 所有相对 import 可解析（否则解析失败会静默绕过后续规则）；**R0b** tsconfig 不得使用 `paths`/`baseUrl` 别名（若引入，门禁必须先扩展解析，防止别名边静默漏检）；
   - **R1** 运行时模块图无环（type-only 边在 emit 时擦除，生成物的消费契约由 R5 单独固定）；
   - **R2** `app/router/` 直接文件（通用 router 工具）不得 import `features/**`；
@@ -792,7 +841,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
   - **R4** `features/{catalog,twin,workbench}` 互不依赖；确需跨 Feature 时必须登记到 `APPROVED_CROSS_FEATURE_IMPORTS` 显式批准表（当前为空）；
   - **R5** 生成物登记表 + do-not-edit 头 + 数据化（`static-structure-packed.ts` 只允许一条 type-only 消费者契约 import）；
   - **R6** `src/` 根目录仅允许 `main.tsx`（入口）与 `contracts.ts`（公共契约 re-export），其余模块必须归属具体分层目录。
-  失败信息固定包含 rule id、相对文件路径与 specifier/解析目标。`tests/architecture-boundaries.test.ts` 的正则规则保留，二者互补。
+  失败信息固定包含 rule id、相对文件路径与 specifier/解析目标。`web_app/tests/architecture/architecture-boundaries.test.ts` 的正则规则保留，二者互补。**递归整改后：** 两个门禁文件迁至 `web_app/tests/architecture/`，并新增 R7–R14（`architecture-contract-rules.test.ts` + `fixtures/r7…r14`），见 §30。
 - `tools/check_architecture.py` 同步新布局：`web_app/src/domain/{fab,amhs,personnel,wafer,simulation,contracts}` 必须存在、18 个旧根模块必须不存在、`web_app/src/generated/` 三件生成物存在且带 do-not-edit 头、旧生成路径不存在。
 
 ### 29.4 验证
@@ -802,7 +851,7 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 ### 29.5 独立验证与生命周期审计（2026-10-28）
 
 - **类型负向契约：** `web_app/tests/types/store-action-types.ts` 由 `tsc --noEmit` 校验：未知字段、缺参、错误 value 类型、缺必填嵌套字段必须编译失败；`@ts-expect-error` 未命中即触发 TS2578，证明类型系统同时拒绝非法调用。
-- **资源租约语义：** `tests/fab-telemetry-registry.test.ts` 覆盖双消费者共享、重复释放幂等、Runtime 替换后的旧租约隔离、`disposeAll` 后迟到的释放、以及 StrictMode 的 acquire→release→acquire 循环；`tests/telemetry-runtime.test.ts` 覆盖 `stop()` 后 Worker terminate、回调解绑与在途工作清理。
+- **资源租约语义：** `web_app/tests/realtime/fab-telemetry-registry.test.ts`（迁移后路径）覆盖双消费者共享、重复释放幂等、Runtime 替换后的旧租约隔离、`disposeAll` 后迟到的释放、以及 StrictMode 的 acquire→release→acquire 循环；`web_app/tests/realtime/telemetry-runtime.test.ts` 覆盖 `stop()` 后 Worker terminate、回调解绑与在途工作清理。
 - **控制器生命周期审计：** 原 `twin-page.tsx` 的 26 个 effect 拆为 controllers 20 + page 1 + equipment-status-pipeline 5（总数不变，1:1 迁移）；10 个 controller 之间零相互 import；仅 `use-tour-controller` 保留 1 个挂载期 HUD seed state，RAF 只写 ref 与场景句柄，无每帧 `setState`。
 - **差分正确性审计：** 39 个移动项相对 HEAD 审计：35 个纯迁移仅相对 import 路径变化、0 内容差异；4 个 store 文件为“迁移 + 已复核的类型安全/协调语义变更”（twinUiStore/twinPageStore/catalogStore/workbenchStore）；35 个修改源文件中 10 个属于已知语义变更、0 个意外语义漂移；Twin 页面 DOM 契约 42/42 个 id、class/aria 无缺失；`twinUiActions.waferClose` 的调用点仅剩协调入口与一个断言测试。
 - **真实浏览器回归（E3，条件性）：** Chrome/155.0.8059.86 headless + localhost secure context；dev profile 240 帧 p95 **16.8–20.3ms**（冻结预算 ≤100ms，通过）、rendererFrames 271、drawCalls **905**、gpuErrors `[]`；FAB-02 直接进入 120 帧通过。60hz profile 在本机 headless 绑定 Intel Iris Xe 适配器状态下 600 帧 p95 **20.3ms** / p99 **≈90ms**，未达冻结预算；以 `HEAD a61e565` 为对照的同环境 A/B 同为 p95 **20.3ms**，证明不是本次清理引入的回退（同日更早的离散 GPU 状态实测为 p95 8.5ms / p99 8.7ms / 117.8fps）。证据与 A/B 原始数据见 `docs/evidence/architecture-cleanup-2026-10-28.json`。
@@ -813,8 +862,64 @@ WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU
 
 - **根目录只留装配入口**：`src/main.tsx`（入口）与 `src/contracts.ts`（公共契约 re-export）；新增 **R6** 门禁（真实 import 图测试 + `tools/check_architecture.py` 双重断言），防止 root 再次堆积模块。
 - **功能状态归位**：`features/twin/state/{twinUiStore,twinPageStore,twinDemoStore,twin-state}.ts`、`features/catalog/state/catalogStore.ts`、`features/workbench/state/workbenchStore.ts`；共享状态保留 `state/{localeStore,runtimeStore,preferences}.ts`。
-- **其余根模块归位**：`rendering/fab-scene.ts`、`rendering/lite-backend.ts`、`rendering/lite/{airflow-texture.ts,geometry/original-tool-parts.ts,geometry/original-exploded-link-data.ts}`、`components/{class-names.ts,original-icons.tsx}`、`realtime/equipment-status.ts`、`realtime/telemetry/telemetry-buffer.ts`、`application/coordination/ScopeGate.ts`、`features/twin/twin-translations.ts`。
+- **其余根模块归位**：`rendering/fab-scene.ts`、`rendering/lite-backend.ts`、`rendering/lite/{airflow-texture.ts,geometry/original-tool-parts.ts,geometry/original-exploded-link-data.ts}`、`components/{class-names.ts,original-icons.tsx}`、`realtime/equipment-status.ts`、`realtime/telemetry/telemetry-buffer.ts`、`application/coordination/ScopeGate.ts`、`features/twin/twin-translations.ts`。**递归整改后：** `fab-scene.ts` 由 `application/ports/scene.ts`（ScenePort）+ `rendering/lite-backend.ts` 取代；`realtime/equipment-status.ts` 拆为 `realtime/equipment-status/{protocol,gate,stream,index}.ts`；`telemetry-buffer.ts` 迁为 `shared/scheduling/coalesced-dispatcher.ts`；`original-icons.tsx` 拆出 `original-icons-data.ts`（见 §30）。
 - **验证**：相对 import 由脚本按新位置整体重写；39 个移动项迁移审计为 35 个纯迁移内容等价 + 4 个“迁移 + 已复核语义变更”，0 异常；`tsc --noEmit` 0、全量 Vitest **90 文件 / 532 测试**、`vite build` 0、`python tools/check_architecture.py` PASS、真实 Chrome dev/FAB-02 门禁通过（60hz 受当前 iGPU 适配器状态限制，A/B 与 HEAD 一致）。
+## 30. 递归整改落地记录（R-01…R-14，2026-10-28）
+
+> 基线 `67915c0`；`git rev-list --count 67915c0..546647d = 11` 个职责提交（本仓库的文档同步提交为第 12 个提交）。每项行为修复先写失败测试再实现；测试迁移同步更新相对 import 且不改 golden fixture/断言强度；未新增依赖，未保留旧路径兼容层。
+
+### 30.1 提交清单（R-01…R-14 落地顺序）
+
+| 提交 | 内容 |
+|---|---|
+| `7950b20` | **R-01** 键盘最新回调所有权：`useEffectEvent` 读取最新 `onEscape/setCamera`；INPUT/SELECT/TEXTAREA/contenteditable、IME、`defaultPrevented`、Modal Escape 所有权；StrictMode 单监听、卸载清理 |
+| `7cdadef` | **R-02** Tour 单一时间线/RAF：IDLE/RUNNING/STOPPING 生命周期、generation token + owned timeline、可注入 RAF/clock、统一 `stop()`（含 FAB/viewer scope 切换） |
+| `0370bef` | **R-06** GPU Effect 独立资源所有者：`rendering/lite/effects/{xray,xray-shaders,cut,wafer,index}.ts`，各自 create/update/dispose |
+| `573f6c1` | **R-07** 生成物契约 DAG 与 provenance：`rendering/contracts/static-structure-data.ts`、`tools/generated-artifacts.json`、`tools/check_generated_artifacts.mjs`，generator `--check` |
+| `6ce9b4a` | **R-10** 唯一 HTTP transport：`api/transport/http.ts`（FetchLike/AbortSignal/ProblemDetails/同源与身份头约束）+ `api/schemas/` |
+| `1a664ba` | **R-03** 命令结果严格校验：`api/schemas/command.schema.ts` 全字段/身份/时间戳校验，拒绝跨 FAB 响应 |
+| `cdb9633` | **R-04/R-05** 显式 ScenePort 与确定性领域所有权：`application/ports/scene.ts`（必需命令 + 强类型 mount options + `ViewerLifecycle`）、`rendering/lite-backend.ts` 实现；domain 拆分 `simulation/tour-timeline.ts`、`wafer/wafer-timeline.ts`、`math/`；MES 创建函数要求显式 epoch-ms；`TwinLanguage` → `localization/language.ts` |
+| `412bea4` | **R-08** 实时边界拆分：`realtime/equipment-status/{protocol,gate,stream,index}.ts`、`api/cache/equipment-status-bridge.ts`、`shared/scheduling/coalesced-dispatcher.ts` |
+| `34189a0` | **R-09** feature 所有权清理：catalog `components/controllers/export`、workbench `components/controllers`；删除全局 `components/widgets.tsx`/`charting.tsx` |
+| `5c4c774` | **R-11（测试布局）** 镜像式 `web_app/tests/**`；更新相对 import，断言与 golden fixtures 不变 |
+| `546647d` | **R-12** 递归依赖契约门禁：`architecture-contract-rules.test.ts` R7–R14 + `fixtures/r7…r14` 负向证明 |
+
+### 30.2 终态事实（与真实树逐项核对）
+
+- **场景端口**：应用侧唯一 `application/ports/scene.ts`（`ScenePort`/`SceneCommands` 全部必需命令、`SceneMountOptions{viewerId,canvas,fabs,signal,callbacks}`、判别式 `SceneMountOutcome`、只读 `SceneLifecycleEvent`）；`rendering/lite-backend.ts` 实现它，`state/runtimeStore.ts` 拥有 `ViewerLifecycle = idle|initializing|ready|recovering|failed|disposed`，控制流不再解析 `status` 文案；`rendering/fab-scene.ts` 与 `SceneFacade` 已不存在。
+- **领域**：`domain/simulation/tour-timeline.ts`（Tour）+ `domain/wafer/wafer-timeline.ts`（Wafer）+ `domain/math/{vec3,round}.ts`（共享原语）；`domain/fab/process-control.ts` 的 `createMesJob/createProcessMesJob` 必须收到显式非负安全整数 epoch-ms（NaN/小数/负数/Infinity 抛 RangeError，无隐式 `Date.now()`）；`TwinLanguage` 在 `localization/language.ts`，`domain/` 无框架/隐式时钟/DOM/随机（R3/R8）。
+- **渲染**：`rendering/lite/effects/{xray,xray-shaders,cut,wafer,index}.ts` 为独立资源所有者；静态结构生成物的手写类型合同在 `rendering/contracts/static-structure-data.ts`，生成物仅 type-only 引用它（无类型反向依赖）。
+- **生成物**：`src/generated/` 三件产物由 `tools/generated-artifacts.json` 登记（generator command/check、输入与输出 sha256）；`node tools/check_generated_artifacts.mjs --check` 校验 registry/输入/输出并保证 `src/generated` 全覆盖（R11）；生成器各自 `--check` 已并入 `scripts/verify.ps1`。
+- **实时**：`realtime/equipment-status/{protocol,gate,stream,index}.ts`（payload/scope、epoch+sequence 唯一顺序权威、SSE 生命周期）；`realtime/protocol/MessageDecoder.ts`；`realtime/telemetry/{TelemetryRuntime,FabTelemetryRegistry}.ts`；`realtime/transport/{SseCommandEventSource,HttpCommandGateway}.ts`；`realtime/workers/` + `realtime/buffers/FrameRingBuffer.ts`；REST/SSE→Query 的唯一投影桥在 `api/cache/equipment-status-bridge.ts`；通用合批原语在 `shared/scheduling/coalesced-dispatcher.ts`。生产 WebSocket/`realtime/streams`/`RealtimeGateway` 仍未来实现。
+- **API**：`api/transport/http.ts` 是唯一 HTTP 策略；`api/schemas/command.schema.ts` 做运行时校验；`api/queries/` 为 TanStack Query options/keys；命令权威状态读取经 `HttpCommandGateway`（`GET /api/v1/commands/{id}`），不用 Query 建模进行中生命周期。
+- **Features/组件**：`features/catalog/{components,controllers,export,state}/`、`features/workbench/{components,controllers,state}/`、`features/twin/controllers/`（10 个控制器，零相互 import）；全局 `components/widgets.tsx`/`charting.tsx` 已删除，Metric/CompletionBar 等归 feature 本地；`components/original-icons.tsx` 拆出纯数据 `original-icons-data.ts`。
+- **测试**：`web_app/tests/` 按所有权镜像（`api/application/components/contract/domain/features/integration/performance/realtime/rendering/state/architecture` + `fixtures/support/types`）；R7–R14 门禁位于 `tests/architecture/architecture-contract-rules.test.ts`，R0–R6 位于同目录 `architecture-import-graph.test.ts`。
+
+### 30.3 验证（递归整改完成时复跑）
+
+| 命令 | 结果 |
+|---|---|
+| `cd web_app; npm run typecheck` | 0 错 |
+| `npm test`（Vitest 全量） | **103 文件 / 659 测试 PASS** |
+| `npm run build` | 通过 |
+| `python tools/check_architecture.py`（仓库根） | PASS |
+| `node tools/check_generated_artifacts.mjs --check` | PASS（3 个生成物，registry/输入/输出 sha256 一致） |
+| `node tools/pack_static_structure.mjs --check` 等生成器 `--check` | PASS（已并入 `scripts/verify.ps1`） |
+| `scripts/verify.ps1` | 覆盖上述门禁 + Python/Node 工具单测 + 导入快照 + 3 个 .NET 项目 + 前端全量 |
+
+浏览器/GPU 与历史基线证据见 `docs/evidence/`（`architecture-cleanup-2026-10-28.json` 等）；本次递归整改未新增独立证据文件，证据以提交历史与上述命令输出为准。
+
+### 30.4 文档同步（本次提交）
+
+按终态更新：`web_app/README.md`（目录树/命令/镜像式测试布局）、根 `README.md`、本文件（§4/§5/§6/§8/§9/§12/§13/§29 注记/§30）、`docs/state-management.md`、`docs/realtime-protocol.md`、`docs/rendering.md`、`docs/IMPLEMENTATION-STATUS.md`、`docs/command-event-bridge.md`、`docs/command-reconciliation.md`、`docs/fab-runtime.md`、`docs/router-query-integration.md`、`docs/adr/0003*`、`docs/adr/0008*`、`docs/adr/0010*`、`docs/modules/M11.md`/`M12.md`、`docs/evidence/README.md`、`docs/standards/SFN-WEB-REVIEW-STD-001.md`、`scripts/README.md`；工具侧只做注释级修正（`tools/pack_static_structure.mjs`、`tools/check_generated_artifacts.mjs`）并重新生成/登记 `static-structure-packed.ts`，`scripts/verify.ps1` 增加生成器 `--check` 与登记表检查。
+
+### 30.5 保留边界
+
+- 生产 WebSocket 传输、`realtime/streams`/`RealtimeGateway` 重建、SharedArrayBuffer/COOP-COEP 未实现；当前为 HTTP/SSE 模拟链路。
+- PostgreSQL/Outbox/正式 IdP 未实现（仓库无数据库/身份基础设施）。
+- GPU 门禁是单机 headless Chrome 基线，不是生产设备矩阵/长时压测。
+- 历史记录段（§15–§29）保留当时路径与计数，不追改；当前事实以 §4 与本节为准。
+
 ## 附录 A. 关键术语
 
 | 术语 | 含义 |

@@ -11,7 +11,7 @@
  *
  * The generator refuses to emit a lossy payload: every source float must be exactly
  * representable as float32 (the renderer already feeds these arrays through Float32Array) and
- * every index must be a uint32. tests/static-structure-pack.test.ts deep-compares the decoded
+ * every index must be a uint32. web_app/tests/architecture/static-structure-pack.test.ts deep-compares the decoded
  * module against the committed JSON asset so drift cannot land unnoticed.
  *
  * The emitted module carries data only: it imports the hand-written payload contract from
@@ -191,7 +191,7 @@ function renderModule(sourceText, payloads) {
     '// Vertex data is stored as little-endian Float32/Uint32 base64 payloads decoded synchronously at',
     '// module evaluation (no fetch; works in Node/Vitest and the browser). The generator refuses any',
     '// value that is not exactly representable, so this module decodes to the committed JSON asset',
-    '// value-for-value; tests/static-structure-pack.test.ts enforces that invariant.',
+    '// value-for-value; web_app/tests/architecture/static-structure-pack.test.ts enforces that invariant.',
     '//',
     '// Payload types are owned by the hand-written data contract above; this module carries only data',
     '// and its decoder, so no rendering consumer is part of the generated module graph.',

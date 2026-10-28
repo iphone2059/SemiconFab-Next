@@ -1,9 +1,9 @@
 # 状态管理（State Management）
 
-- 版本：V2.1 / 2026-10-27
-- 状态：**M2 已实现：服务端数据归 TanStack Query，客户端 UI 状态归 Zustand；Redux/react-redux 已删除**（M2 implemented）；2026-10-28 P2 清理后 store 由类型安全 `createSliceStore` 工厂生成。
-- 依据：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)、[ADR-0010](adr/0010-command-event-bridge.md)；总览见 [架构基线](architecture.md)；路由/Query 细则见 [路由与查询集成](router-query-integration.md)
-- 当前实现：全部 HTTP 端点由 TanStack Query 拥有；客户端 UI 状态由 `web_app/src/state/` 下的 7 个 Zustand stores 承载（twinUi/twinPage/twinDemo/catalog/workbench/runtime/locale），均由类型安全 `createSliceStore` 工厂生成（reducer 参数推导到 action creators，无 `any`/手写 action 接口断言）；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已删除。ADR-0008 已被取代
+- 版本：V2.1 / 2026-10-27（2026-10-28 递归整改 R-01…R-14 同步）
+- 状态：**服务端数据归 TanStack Query，客户端 UI 状态归 Zustand；Redux/react-redux 已删除**（M2 implemented）；2026-10-28 P2 清理后 store 由类型安全 `createSliceStore` 工厂生成；递归整改后 feature store 归位 `features/*/state/`、通用合批原语迁入 `shared/scheduling/`。
+- 依据：[ADR-0009](adr/0009-tanstack-router-query-boundary.md)、[ADR-0010](adr/0010-command-event-bridge.md)；总览见 [架构基线](architecture.md) §4/§30；路由/Query 细则见 [路由与查询集成](router-query-integration.md)
+- 当前实现：全部 HTTP 端点由 TanStack Query 拥有（HTTP 策略集中 `api/transport/http.ts`，运行时校验在 `api/schemas/`）；客户端 UI 状态由 7 个 Zustand store 承载——twinUi/twinPage/twinDemo 位于 `features/twin/state/`，catalog/workbench 位于各自 feature `state/`，runtime/locale 位于 `web_app/src/state/`；均由类型安全 `createSliceStore` 工厂生成（reducer 参数推导到 action creators，无 `any`/手写 action 接口断言）；RTK Query、Redux Toolkit、react-redux 与 `src/store/` 已删除。ADR-0008 已被取代
 - 本文不含任何已完成验证的声明
 
 ## 1. 状态分类与唯一所有权
@@ -12,9 +12,9 @@
 |---|---|---|---|---|---|
 | 服务端数据 | 设备列表/详情、目录、Run、命令权威状态 | TanStack Query | `api/queries` | Query `staleTime`/`gcTime`/失效/后台刷新 | Zustand、Redux、组件 state 副本、Router |
 | URL/导航状态 | 路径参数、筛选条件、选中 id、视图模式（可分享部分） | TanStack Router | URL/search params | 导航即变化；可前进/后退 | Query 缓存、Zustand 副本 |
-| 客户端 UI 状态 | 面板开合、临时 Tab、对话框、视图偏好 | Zustand 或组件局部 state | `state` 或组件内 | 会话内；偏好可持久化 | Query 结果副本、XState actor、引擎对象 |
+| 客户端 UI 状态 | 面板开合、临时 Tab、对话框、视图偏好 | Zustand 或组件局部 state | feature `state/`（twin/catalog/workbench）或共享 `state/`；组件内 | 会话内；偏好可持久化 | Query 结果副本、XState actor、引擎对象 |
 | 命令/工作流状态 | 命令进行中/成功/失败/取消、核对状态 | XState v6（经 `CommandWorkflow` 契约） | `runtime/commands` | actor 生命周期；FAB 运行时管理 | Query 缓存、Zustand、Redux |
-| 高频遥测/渲染数据 | 设备状态流、AMHS 统计、变换矩阵、帧数据 | Worker + TypedArray 缓冲 | `realtime/workers`、`realtime/buffers` | 帧/批次；渲染循环消费 | Query、Zustand、XState、React state（逐帧） |
+| 高频遥测/渲染数据 | 设备状态流、AMHS 统计、变换矩阵、帧数据 | Worker + TypedArray 缓冲 | `realtime/workers`、`realtime/buffers`；低频聚合经 `shared/scheduling/coalesced-dispatcher` | 帧/批次；渲染循环消费 | Query、Zustand、XState、React state（逐帧） |
 | 3D 引擎对象 | Babylon 场景、mesh、材质、GPU buffer | Babylon Lite 封装 | `rendering` | 引擎生命周期；设备丢失重建 | 所有状态容器（ARCH-12/ADR-0008 原则） |
 | 派生/格式化值 | 排序后的列表、格式化文本 | 计算方（组件/selector） | 使用处 | 随源数据计算 | 长驻 store 副本 |
 
@@ -28,7 +28,7 @@
 2. Query 缓存是 HTTP 服务端数据的唯一缓存（ARCH-02）；Zustand/Redux/组件不得保存其副本（ARCH-05）。
 3. 所有与 FAB 相关的 key 必须包含 `fabId`（跨 FAB 隔离，RQ-04）。
 4. 写入只通过：`queryFn` 拉取、`fetchQuery`/`ensureQueryData`、mutation 失效/更新。组件不得直接 `setQueryData` 伪造服务端结果；确需乐观更新时必须显式评审并定义回滚（命令链路默认不做乐观更新，见 [命令事件桥](command-event-bridge.md)）。
-5. 命令的“权威状态”读取放在 `command.queries.ts`，供恢复/核对使用；进行中生命周期不得用 Query 建模（状态归属 XState）。
+5. 命令的“权威状态”读取经 `realtime/transport/HttpCommandGateway`（`GET /api/v1/commands/{id}`）供恢复/核对使用；进行中生命周期不得用 Query 建模（状态归属 XState），当前没有也不应新增独立的命令 Query 模块。
 
 ### 2.2 新鲜度与失效
 
@@ -43,7 +43,7 @@
 ### 2.3 与命令链路的边界
 
 - 命令提交的 HTTP 部分（`CommandGateway`）属于命令链路，不属于普通 Query mutation；它不应把“进行中命令”写进 Query 缓存。
-- 命令终态/权威状态可以通过 `command.queries.ts` 读取，用于页面展示与恢复核对；缓存的新鲜度按恢复语义配置（例如短 `staleTime`），但不得成为命令状态机的替代品。
+- 命令终态/权威状态通过 `CommandGateway`（`HttpCommandGateway`）读取，用于页面展示与恢复核对；Workbench 的进行中展示经 `useCommandProjection` 只读订阅 XState 投影，二者都不得成为命令状态机的第二份权威。
 
 ## 3. URL 状态（TanStack Router）
 
@@ -73,7 +73,7 @@ Zustand 只保存**不影响服务端事实**的客户端状态，例如：HUD/�
 - 不得保存 Query 结果副本（ARCH-05）；需要服务端值时从 Query 读取。
 - 不得保存 XState actor/引擎对象/GPU 资源。
 - 不得作为高频遥测的通道（ARCH-11）。
-- store 按领域拆分（`state/` 下），避免一个全局大 store；持久化只用于明确批准的用户偏好，不持久化服务端数据。
+- store 按领域拆分（feature store 在 `features/*/state/`，共享状态在 `state/`），避免一个全局大 store；持久化只用于明确批准的用户偏好，不持久化服务端数据。
 - 组件局部状态优先：只在确实需要跨组件共享时进 Zustand。
 - 跨 store 协调只经 application/feature 级入口（例如 Twin 的 wafer 会话关闭走 `features/twin/wafer-session.ts`），store 之间不得直接 `setState` 互写。
 
@@ -95,12 +95,12 @@ Zustand 只保存**不影响服务端事实**的客户端状态，例如：HUD/�
 
 - 命令生命周期由 XState v6 actor 拥有（M4 已实现 `runtime/commands/equipmentCommand.machine.ts` + `XStateCommandWorkflowAdapter`），经 `CommandWorkflow` 契约暴露，由 `FabRuntime` 装配；UI 只读投影已由 `CommandWorkflowProjection`/`useCommandProjection` 提供（M5a）。
 - 公共契约只有 `CommandWorkflow`（`receive`/`reconcile`/`dispose`）；页面不得直接 import actor/machine。
-- **工作流状态如何只读暴露给 UI**：本基线不虚构额外公共接口。M4 需要决定一种方式（例如 runtime/commands 提供的专用 hook，经 RuntimeProvider 暴露只读快照），并明确它不是第二份权威状态；在此之前页面用“提交态组件局部状态 + Query 权威状态”展示命令结果。该问题登记为 OPEN-V21-13（[架构基线](architecture.md) 第 14 节）。
+- **工作流状态如何只读暴露给 UI（已解决，M5a）**：`CommandWorkflowProjection` 契约 + `useCommandProjection(fabId, commandId)` 只读订阅 XState 投影；它不是第二份权威状态，不得反写 actor。OPEN-V21-13 已关闭。
 - 工作流状态不写入 Zustand/Redux/Query 缓存；如果 UI 需要缓存展示，只能缓存“展示投影”，且不得反写工作流。
 
 ## 6. 高频遥测与渲染状态
 
-- 数据路径：`WebSocket -> Worker -> TypedArray -> Babylon Lite -> WebGPU`（[渲染管线](rendering.md)）。
+- 数据路径（当前 HTTP/SSE 模拟链路）：`FAB 级遥测 SSE -> TelemetryRuntime -> Worker -> FrameRingBuffer（TypedArray）-> lite-backend/ScenePort 渲染循环`（[渲染管线](rendering.md)）；生产 WebSocket 未接。
 - 高频数据不进入 Query/Zustand/XState（ARCH-11）；不得以逐帧 `setState`/逐事件 dispatch 驱动 React。
 - 设备槽位与 `FabToolState` 投影是纯函数 `domain/equipment/tool-state-projection.ts`（`telemetrySlotForEntityId`/`flattenTelemetryFrame`/`toolStatesFromValues` 等）；`TelemetryRuntime` 只保留传输、解码、帧与背压，`FabTelemetryRegistry` 按 FAB 引用计数启停。
 - UI 需要的低频聚合（例如 KPI 摘要）必须由明确的数据契约单独提供；其频率上限与字段在 M5 定义，不得把原始帧塞进状态容器。
@@ -112,7 +112,7 @@ Zustand 只保存**不影响服务端事实**的客户端状态，例如：HUD/�
 HTTP 写入:  用户操作 -> mutation -> HTTP API -> 成功 -> invalidateQueries(受影响的 key)
 查询读取:  导航 -> loader ensureQueryData -> Query 缓存/网络 -> 页面 useQuery 订阅
 命令写入:  用户操作 -> CommandGateway(HTTP 提交) -> 命令事件流 -> CommandEventBridge -> XState -> 权威状态查询/展示
-高频更新:  WebSocket -> Worker/缓冲 -> Babylon Lite（旁路所有状态容器）
+高频更新:  遥测 SSE -> TelemetryRuntime -> Worker/缓冲 -> lite-backend（旁路所有状态容器）
 ```
 
 规则：
@@ -148,15 +148,15 @@ HTTP 写入:  用户操作 -> mutation -> HTTP API -> 成功 -> invalidateQuerie
 |---|---|
 | Redux Toolkit 拥有全部可序列化应用状态 | **已完成（M2b）**：服务端归 Query、UI 归 Zustand、工作流归 XState；Redux 已删除 |
 | RTK Query 拥有服务端缓存 | **已由 TanStack Query 取代（M2a，2026-10-27）**；RTK Query 模块删除，无双缓存 |
-| “Babylon 对象不进入 Redux、遥测合批、帧状态与渲染循环分离” | 原则保留；ARCH-11 进一步要求高频遥测不经过 Query/Zustand/XState，落地形态为 Worker/TypedArray 旁路。当前 `telemetry-buffer.ts` 的 100ms 合批是过渡实现，不等于满足目标 |
+| “Babylon 对象不进入 Redux、遥测合批、帧状态与渲染循环分离” | 原则保留；ARCH-11 进一步要求高频遥测不经过 Query/Zustand/XState，落地形态为 Worker/FrameRingBuffer 旁路；通用合批原语为 `shared/scheduling/coalesced-dispatcher.ts`（100ms，仅低频 UI 展示），不承担高频遥测 |
 | 页面选择/表单/幂等键在 Redux | 选择/表单可进 URL/组件；命令提交与幂等键归命令链路/`CommandGateway` 管理 |
 
 ## 11. M2b 实现记录（2026-10-27）
 
-- Store（`web_app/src/state/`）：`twinUiStore`、`twinPageStore`、`twinDemoStore`、`catalogStore`、`workbenchStore`、`runtimeStore`、`localeStore`；**历史记录：** 2026-10-28 清理后 feature store 已归位 `features/twin|/catalog|/workbench/state/`，共享状态保留在 `state/`；公共 helper `createSliceStore` 用纯不可变 reducer（`state + action -> state`，无 Immer），actions 为普通 store 方法；2026-10-28 起改为类型安全工厂，reducer 参数列表推导到 action creators（无 `any`/手写 action 接口断言）。
-- 工具：`realtime/telemetry/telemetry-buffer.ts` 保留 100ms 合批用于低频 UI 展示；高频遥测路径已由 `realtime/telemetry` 的 Worker/FrameRingBuffer 承担（见 §6）。
+- Store：M2b 时集中在 `web_app/src/state/`。**历史记录：** 2026-10-28 清理后 feature store 归位 `features/twin/state/{twinUiStore,twinPageStore,twinDemoStore,twin-state}.ts`、`features/catalog/state/catalogStore.ts`、`features/workbench/state/workbenchStore.ts`，共享状态保留 `state/{runtimeStore,localeStore,preferences}.ts`；公共 helper `createSliceStore` 用纯不可变 reducer（`state + action -> state`，无 Immer），actions 为普通 store 方法；2026-10-28 起改为类型安全工厂，reducer 参数列表推导到 action creators（无 `any`/手写 action 接口断言）。
+- 工具：100ms 低频合批原语现为 `web_app/src/shared/scheduling/coalesced-dispatcher.ts`（设备状态投影、hover picking、AMHS 统计共用）；高频遥测路径已由 `realtime/telemetry` 的 Worker/FrameRingBuffer 承担（见 §6）。
 - 已删除：`src/store/`（7 slice、hooks、store、api 残留）、`react-redux`、`@reduxjs/toolkit`；`AppProviders` 只保留 QueryClientProvider + ErrorBoundary。
-- 测试：`redux-store.test.ts` 改写为 Zustand 状态/action 测试；需要已挂载状态的组件测试改用 jsdom + Testing Library（Zustand SSR 快照为初始状态）。
+- 测试：Zustand 状态/action 测试现位于 `web_app/tests/architecture/zustand-stores.test.ts`（原 `redux-store.test.ts` 改写）；需要已挂载状态的组件测试改用 jsdom + Testing Library（Zustand SSR 快照为初始状态）。
 - 证据：`tsc --noEmit` 0；`npx vitest run` 57 文件 / 260 测试 PASS；`vite build` 0；`./scripts/verify.ps1` exit 0。
 - 后续 M2c 已完成：目录筛选/对比选择与 Twin 的 `siteId/modal/mode`/`lang`/`theme` 已全部改由 TanStack Router search 拥有，页面不再直接读写 `location`/`history`（仅渲染内部调试开关仍读 `location.search`）。
 ## 12. M2c 实现记录：URL/search 状态（2026-10-27）
@@ -167,6 +167,14 @@ HTTP 写入:  用户操作 -> mutation -> HTTP API -> 成功 -> invalidateQuerie
 - 测试：`web_app/tests/integration/router-search.test.ts` 覆盖 catalog/Twin search 解析与 patch；`catalog-page.test.tsx` 更新为 props 化渲染；`tsc --noEmit` 0，Vitest 58 文件 / 262 测试 PASS，`vite build` 0，`./scripts/verify.ps1` exit 0。
 ## 10. 验证与证据状态
 
-- Zustand store 与 action 行为由 `web_app/tests/redux-store.test.ts`（已改写为 state-store 测试）、`remaining-state.test.ts` 等覆盖；分层纯度由 `tests/architecture-import-graph.test.ts`（R1–R5 真实 import 图）与 `architecture-boundaries.test.ts` 覆盖；ARCH-02/05 仍以 store 清单/评审为主（[架构基线](architecture.md) R-09）。
+- Zustand store 与 action 行为由 `web_app/tests/architecture/zustand-stores.test.ts`、`web_app/tests/architecture/remaining-state.test.ts` 等覆盖；分层纯度由 `web_app/tests/architecture/architecture-import-graph.test.ts`（R0–R6 真实 import 图）、`architecture-contract-rules.test.ts`（R7–R14）与 `architecture-boundaries.test.ts` 覆盖；ARCH-02/05 仍以 store 清单/评审为主（[架构基线](architecture.md) R-09）。
 - RQ-03（mutation 失效）与 RQ-04（FAB 隔离）**已运行 PASS**（M2a）。
 - 当前依赖与实现：TanStack Query/Zustand/XState v6 均已接入，未引入 Immer；`src/store` 与 Redux/react-redux 已删除（M2b，见 §11）。
+
+## 13. 递归整改后的状态事实（2026-10-28）
+
+- Store 位置：`features/twin/state/`（twinUi/twinPage/twinDemo/twin-state）、`features/catalog/state/catalogStore.ts`、`features/workbench/state/workbenchStore.ts`、共享 `state/{runtimeStore,localeStore,preferences}.ts`；`createSliceStore` 仍是唯一 store 工厂。
+- R13：`features/**` 的空依赖 effect 不得捕获变化 props/state/callback，稳定原语为 `useEffectEvent` 或 ref 间接（`tests/architecture/architecture-contract-rules.test.ts` 有负向 fixture）。
+- R14：禁止未登记 `any`/`as any`/无说明 `as unknown as` 与 `String()/Number()` 伪校验响应数据（同上）。
+- 视图生命周期：`state/runtimeStore.ts` 持有 `ViewerLifecycle`（idle/initializing/ready/recovering/failed/disposed），控制逻辑不再解析 `status` 文案；场景命令通过 `application/ports/scene.ts` 的 `ScenePort`，不进入 Zustand。
+- 场景端口与领域确定性见 [架构基线](architecture.md) §30；实时高频路径 `TelemetryRuntime` → Worker → `FrameRingBuffer` → 渲染 frame loop，UI 低频聚合经 `shared/scheduling/coalesced-dispatcher.ts`。

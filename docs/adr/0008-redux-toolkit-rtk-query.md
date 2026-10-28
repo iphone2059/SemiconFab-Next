@@ -3,7 +3,7 @@
 - Status: Superseded (2026-10-27)
 - Date: 2026-10-25
 - Supersedes: the page-local `useReducer`/`useState` state model used by the first Twin implementation
-- Superseded by: [ADR-0009](0009-tanstack-router-query-boundary.md) for server data (RTK Query removed in M2a, 2026-10-27) and by the V2.1 Zustand decision for client UI state (Redux Toolkit/react-redux/`src/store` removed in M2b, 2026-10-27). Retained principles: Babylon objects never enter state containers; telemetry is coalesced outside React
+- Superseded by: [ADR-0009](0009-tanstack-router-query-boundary.md) for server data (RTK Query removed in M2a, 2026-10-27) and by the V2.1 Zustand decision for client UI state (Redux Toolkit/react-redux/`src/store` removed in M2b, 2026-10-27). Retained principles: Babylon objects never enter state containers; telemetry is coalesced outside React. Final-state mapping after the 2026-10-28 recursive remediation is recorded in [Update (2026-10-28)](#update-2026-10-28) at the end of this ADR.
 
 ## Context
 
@@ -61,10 +61,12 @@ validated by `createOrderedEquipmentStatusConsumer` and dispatched into
 
 1. **Escape hatch:** Babylon objects never enter Redux. The store contains only
    serializable IDs, states, filters and small DTOs; engine/scene/mesh/materials
-   live in `useRef` and the `SceneFacade`/backend singletons.
+   live in `useRef` and the scene backend singletons. *(Historical: the browser contract is now the application-owned
+   `ScenePort` in `web_app/src/application/ports/scene.ts`, implemented by `rendering/lite-backend.ts`; `SceneFacade` no
+   longer exists. See the update section.)*
 2. **Telemetry batching:** SSE snapshots and AMHS stats are written to a
-   non-Redux buffer (`store/telemetry-buffer.ts`) and coalesced to one 100 ms
-   dispatch. A 10 Hz source cannot produce 10 Redux renders per second.
+   non-Redux buffer and coalesced to one 100 ms dispatch. A 10 Hz source cannot produce 10 Redux renders per second.
+   *(Historical path: `store/telemetry-buffer.ts`; the final generic primitive is `web_app/src/shared/scheduling/coalesced-dispatcher.ts`.)*
 3. **Frame-loop read:** `FabViewport` receives a stable `getToolStates` callback
    that calls `store.getState()` inside the Babylon `onBeforeRenderObservable`
    loop. Demo/live transitions therefore reach meshes without a React prop pass;
@@ -81,7 +83,7 @@ validated by `createOrderedEquipmentStatusConsumer` and dispatched into
 ## Consequences
 
 - Redux DevTools can capture every durable transition without attaching to Babylon.
-- Tests assert the store shape and typed actions directly (`tests/redux-store.test.ts`).
+- Tests assert the store shape and typed actions directly. *(Historical: the Redux store test suite has been deleted; the final Zustand store/action suite is `web_app/tests/architecture/zustand-stores.test.ts`.)*
 - WebGPU objects remain outside Redux. Viewer lifecycle/hover DTOs are store-owned;
   epoch checks reject callbacks from replaced scenes, and hover is coalesced.
 - Catalog hydration reads the Provider's current store during effect execution,
@@ -89,5 +91,21 @@ validated by `createOrderedEquipmentStatusConsumer` and dispatched into
 - Imports and submissions retain request identity in Redux; late results cannot
   restore a cleared import or select a run belonging to a former site.
 - The obsolete `api-client.ts` was removed in the 2026-10-25 cleanup. Transport
-  guarantees are tested against actual RTK endpoints in `tests/rtk-api.test.ts`.
+  guarantees are tested against actual RTK endpoints. *(Historical: the RTK transport test suite has been deleted; final transport
+  suite: `web_app/tests/api/api-transport.test.ts` against `web_app/src/api/transport/http.ts`.)*
   There is no second application HTTP client or custom polling loop.
+
+## Update (2026-10-28)
+
+This ADR remains **Superseded**; the decision text above is the historical record of the 2026-10-25 choice. After the
+V2.1 migration and the 2026-10-28 recursive remediation (R-01…R-14) the retained principles have these final forms:
+
+| Historical statement | Final fact (2026-10-28) |
+|---|---|
+| All serializable application state in Redux Toolkit | Server data in TanStack Query; client UI in 7 Zustand stores under `web_app/src/features/*/state/` + `web_app/src/state/`; command lifecycle in XState v6 behind `CommandWorkflow`. Redux/react-redux/`src/store` are gone. |
+| RTK Query owns the server cache | The single HTTP transport is `web_app/src/api/transport/http.ts`; TanStack Query owns the cache; response validation lives in `web_app/src/api/schemas/`. |
+| Babylon objects never enter state containers | Preserved and enforced by ARCH-11/R7; the browser contract is `web_app/src/application/ports/scene.ts` (`ScenePort`) plus the `ViewerLifecycle` state in `web_app/src/state/runtimeStore.ts`. |
+| Telemetry is coalesced outside React | Preserved; the generic 100 ms coalescer is `web_app/src/shared/scheduling/coalesced-dispatcher.ts`, and the high-frequency path uses the telemetry Worker + `FrameRingBuffer`. |
+| Store/action tests and RTK transport tests | `web_app/tests/architecture/zustand-stores.test.ts`, `web_app/tests/api/api-transport.test.ts`; R13/R14 gates enforce the stable-effect and no-unchecked-`any` rules. |
+
+See [architecture.md](../architecture.md) §30 for the R-01…R-14 remediation record and the final directory tree.

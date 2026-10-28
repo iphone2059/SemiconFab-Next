@@ -28,25 +28,26 @@ SemiconFab-Next 是 SemiconFab 的下一代实现：后端保持扁平、独立�
 fab_shared/   共享内核：StableId、Generated/Contracts.g.cs、确定性 DES 引擎
 fab_app/      唯一后端应用：API + Worker + Realtime/OT 占位模式（Sdk.Web）
 fab_tests/    唯一测试项目：仿真 / 编排 / API 集成测试
-web_app/      唯一前端站点
+web_app/      唯一前端站点（2026-10-28 递归整改后的所有权布局，详见 web_app/README.md 与 docs/architecture.md §30）
   src/
-    app/          providers、Router（routeTree.gen、通用 search/url-mapping/route-data、routes/ 装配入口）
-    api/          TanStack Query 查询/变更
-    application/  命令契约 + CommandEventBridge/恢复协调层
-    realtime/     协议解码/序列、类型化流、SSE 传输、遥测 Worker/帧缓冲
-    runtime/      FabRuntime/Factory/Registry/Lifecycle、SSE/gateway 装配
-    runtime/commands/  XState 命令工作流实现（位置非强制，经 CommandWorkflow 契约暴露）
-    state/        Zustand UI stores（类型安全 createSliceStore）、遥测合批
-    domain/       纯领域模块（fab/amhs/personnel/wafer/simulation/contracts/equipment）
-    generated/    生成物（contracts/twin-translations/static-structure-packed，禁止手改）
-    features/     twin（含 controllers/、twin-search、wafer-session）/ catalog / workbench 页面模块
-    components/   共享 UI（ui/widgets/charting/modal/error-boundary）
-    rendering/    Babylon Lite/WebGPU 渲染实现
-  tests/          单元/契约/集成/性能/架构测试（Vitest）
-  assets/         CSS、i18n/许可与静态数据
+    app/          providers（装配根）、Router（routeTree.gen、通用 search/url-mapping/route-data、routes/ 装配入口）
+    api/          transport/http（唯一 HTTP 策略）、schemas（Zod 运行时合同）、cache（equipment-status 投影桥）、queries/mutations（TanStack Query）
+    application/  contracts（CommandEvents/Gateway/Workflow）、coordination（Bridge/恢复/关联/ScopeGate）、ports/scene.ts（ScenePort）
+    realtime/     equipment-status/{protocol,gate,stream}/、protocol/MessageDecoder、telemetry、transport（SSE/gateway）、workers、buffers
+    runtime/      FabRuntime/Factory/Registry/Lifecycle、commandSources、commands/（XState v6，经 CommandWorkflow 契约）
+    state/        共享客户端状态：runtimeStore / localeStore / preferences（类型安全 createSliceStore）
+    localization/  TwinLanguage 等 UI 语言类型（不进入 domain）
+    shared/       scheduling/coalesced-dispatcher 等通用原语
+    domain/       纯领域模块（fab/amhs/personnel/equipment/simulation/wafer/math）
+    generated/    生成物（contracts/twin-translations/static-structure-packed；登记于 tools/generated-artifacts.json，禁止手改）
+    features/     twin（页面 + controllers/ + state/ + HUD 子组件）/ catalog（components/controllers/export/state）/ workbench（components/controllers/state）
+    components/   共享设计系统（ui/modal/error-boundary/class-names/original-icons + original-icons-data）
+    rendering/    application/ports/scene 的产品实现（lite-backend.ts）+ lite/（effects/geometry/shadows/…）+ contracts/（生成物类型合同）
+  tests/          镜像式 Vitest 布局（api/application/components/contract/domain/features/integration/performance/realtime/rendering/state/architecture/fixtures/support/types）
+  assets/ public/ Vite 打包资产 / 浏览器 URL 直接请求的数据与许可证副本
 contracts/        JSON Schema（契约单一来源）、OpenAPI、protobuf
 assets/legacy/    版本化迁移数据与校验清单（后端读取）
-docs/             架构基线、ADR、实施状态、模块档案
+docs/             架构基线、ADR、实施状态、模块档案、验证证据
 infrastructure/ scripts/ tools/ .github/
 ```
 
@@ -72,7 +73,7 @@ npx --yes pnpm@12.15.0 test
 npx --yes pnpm@12.15.0 build
 ```
 
-当前验证基线：`tsc --noEmit` 0、Vitest **90 文件 / 532 测试 PASS**（含 `architecture-import-graph.test.ts` 的真实 import 图 R0–R6 门禁；默认并发全量 PASS，CPU 密集黄金向量套件统一放宽 `testTimeout: 15s`，断言不变）、`vite build` 0、后端 **170/170**、真实 Chrome WebGPU dev 门禁 **600 帧 / p95 8.5ms / 114.5fps / 1 个按需 Worker**、60Hz profile **p95 8.5ms / p99 16.6ms / heap growth 11.8MB**、Worker 压测 500/2000/5000 实体 p95 ≤1.2ms、静态结构构建期打包（`lite-backend` chunk 2.36MB→1.79MB，gzip 192.7→176.4kB）、RunStore 10k 历史 Run 下 Submit steady p50 **6.2ms（原 40.4ms，分片索引）**、RunStore 提交通知**合并唤醒**（批量提交后不积压空转）、相机输入与 Three.js r128 `OrbitControls` 行为对齐（独立 source-orbit-input 控制器，真实浏览器 12 项交互探针通过）、`./scripts/verify.ps1` exit 0（8 个 Python 工具测试、13 个渲染门禁单测、3 个 .NET 项目、契约/架构检查、前端全量）。
+当前验证以 `./scripts/verify.ps1` 的一次真实运行为准（本文件不硬编码会腐化的测试数量）：它依次执行生成物一致性（含 `node tools/check_generated_artifacts.mjs --check` 与各生成器 `--check`）、`python tools/check_architecture.py`、Python/Node 工具单测、导入快照校验、3 个 .NET 项目构建与测试，以及 `web_app` 的 typecheck/test/build。前端架构门禁为 `web_app/tests/architecture/` 下的 R0–R14（真实 TypeScript import 图 + 负向 fixtures），测试按所有权镜像布局；历史基线与性能/浏览器证据见 `docs/IMPLEMENTATION-STATUS.md` 与 `docs/evidence/`。
 
 ## 产品 URL（仅 canonical，无重定向）
 
@@ -95,7 +96,7 @@ npx --yes pnpm@12.15.0 build
 
 ## 文档
 
-- [架构基线](docs/architecture.md)（ADR-0009 Router/Query、ADR-0010 Realtime/Workflow、ARCH-01..12、M0–M6 记录）
+- [架构基线](docs/architecture.md)（ADR-0009 Router/Query、ADR-0010 Realtime/Workflow、ARCH-01..12、M0–M6 记录、R-01…R-14 递归整改记录 §30）
 - [实施状态](docs/IMPLEMENTATION-STATUS.md)
 - [ADR 目录](docs/adr/)
 - [模块档案](docs/modules/M01.md)（M01–M18）

@@ -1,13 +1,13 @@
 # ADR-0010 — 实时基础设施只提供类型化流，Application 层 CommandEventBridge 协调，XState 工作流隐藏在契约之后
 
-- 状态：已采纳（2026-10-27）；实施状态：契约/类型化流/CommandEventBridge/恢复队列、XState 工作流、FabRuntime、RuntimeBootstrap、Workbench 命令面板、后端模拟 HTTP/SSE 命令与遥测链路均已实现并完成浏览器 e2e；XState 目录强制已取消，实现位于 `runtime/commands`；WebSocket 生产传输仍未接（Status: Accepted / simulated backend wired / WebSocket pending）
+- 状态：已采纳（2026-10-27）；实施状态：契约/类型化流/CommandEventBridge/恢复队列、XState 工作流、FabRuntime、RuntimeBootstrap、Workbench 命令面板、后端模拟 HTTP/SSE 命令与遥测链路均已实现并完成浏览器 e2e；XState 目录强制已取消，实现位于 `runtime/commands`；WebSocket 生产传输仍未接（Status: Accepted / simulated backend wired / WebSocket pending）。2026-10-28 递归整改后的终态模块映射见文末 [Update（2026-10-28）](#update2026-10-28)。
 - 取代：迁移完成后取代 [ADR-0008](0008-redux-toolkit-rtk-query.md) 中“SSE 帧直接 dispatch 进 Redux slice”的命令/实时接线方式；ADR-0008 的“Babylon 对象不进入状态容器、遥测合批”原则保留，但在 `ARCH-11` 下进一步收紧
 - 关联：[ADR-0009](0009-tanstack-router-query-boundary.md)（Router/Query 边界）、[ADR-0003](0003-single-web-app.md)；细则见 [命令事件桥](../command-event-bridge.md)、[命令核对](../command-reconciliation.md)、[实时协议](../realtime-protocol.md)、[FAB 运行时](../fab-runtime.md)；基线见 [架构基线](../architecture.md)
 - 决策范围：仅前端 `web_app` 的实时/命令链路。M3/M4 已按本决策实现 contracts/realtime/application coordination 与 XState v6/FabRuntime；M5a/M5c 已把 `RuntimeProvider`/RuntimeBootstrap 挂到产品树，并接入后端模拟 HTTP/SSE 命令/遥测链路；后端实时服务仍是占位模式（`fab_app -- --realtime` 退出码 2），生产 WebSocket 源尚不存在
 
 ## 背景
 
-2026-10-27 的当前实现中，唯一的推送链路是设备状态 SSE：`twin-page.tsx` 用 `EventSource` 连接 `/api/v1/sites/{siteId}/equipment-status/stream`，帧经 `createOrderedEquipmentStatusConsumer`（`equipment-status.ts`）校验顺序后 dispatch 进 Redux 的 `twinPage` slice。没有 WebSocket 客户端、没有消息解码器、没有命令提交/回执/核对链路，也没有 XState actor。
+2026-10-27 当时的实现中，唯一的推送链路是设备状态 SSE：`twin-page.tsx` 用 `EventSource` 连接 `/api/v1/sites/{siteId}/equipment-status/stream`，帧经 `createOrderedEquipmentStatusConsumer`（`equipment-status.ts`）校验顺序后 dispatch 进 Redux 的 `twinPage` slice。没有 WebSocket 客户端、没有消息解码器、没有命令提交/回执/核对链路，也没有 XState actor。（历史记录：该 Redux 链路与 `equipment-status.ts` 均已被 M2/SQL 边界的后续整改取代，见文末 Update。）
 
 V2.1 要引入设备命令工作流（提交、执行、成功/失败/取消、断线恢复），并保持三 FAB 隔离。如果按“基础设施直接驱动业务 actor”的方式实现，会出现三个结构性问题：
 
@@ -23,10 +23,12 @@ V2.1 要引入设备命令工作流（提交、执行、成功/失败/取消、�
 
 | 层 | 目录 | 允许知道 | 禁止 |
 |---|---|---|---|
-| transport | `realtime/transport`（`WebSocketClient`） | 连接、鉴权、心跳、重连、背压信号 | 业务事件语义、actor、React |
-| protocol | `realtime/protocol`（`MessageDecoder`、`SequenceTracker`） | 线上消息格式、版本、序列/缺口检测 | 业务去重、工作流调用 |
-| streams | `realtime/streams`（`EventRouter`、`CommandResultStream`、`AlarmStream`、`TelemetryStream`） | topic 分发、类型化 Observable | import 工作流实现/XState；按业务判断丢弃消息 |
+| transport | `realtime/transport`（当时设计 `WebSocketClient`；当前实现 `SseCommandEventSource`/`HttpCommandGateway`） | 连接、鉴权、心跳、重连、背压信号 | 业务事件语义、actor、React |
+| protocol | `realtime/protocol`（`MessageDecoder`；当时设计含 `SequenceTracker`） | 线上消息格式、版本、序列/缺口检测 | 业务去重、工作流调用 |
+| streams | 当时设计 `realtime/streams`（`EventRouter`、`CommandResultStream`、`AlarmStream`、`TelemetryStream`）；**当前不存在** | topic 分发、类型化 Observable | import 工作流实现/XState；按业务判断丢弃消息 |
 | consumers | `application/coordination`、`realtime/workers` | 类型化事件、命令契约 | 反向依赖具体工作流实现 |
+
+> 上表是 M3 当时的设计基线；当前终态（SSE 事件源、`equipment-status/{protocol,gate,stream,index}`、`api/cache/equipment-status-bridge.ts`、`shared/scheduling/`）见文末 Update 与 [实时协议](../realtime-protocol.md) §2.1。
 
 ### 2. 版本无关契约只放在 `application/contracts`
 
@@ -78,7 +80,7 @@ export interface CommandWorkflowRegistry {
 - `CommandEventSource` 的 `commandResult$` 是只读 Observable；消费方不得要求实时层暴露“可写的 actor 入口”。
 - 命令身份是复合身份 `(fabId, commandId)`；同一 `commandId` 在不同 FAB 中不是同一命令（CE-07）。
 - `queued`/`submitted` 等“尚未被后端确认”的状态属于应用/工作流状态，不属于 `CommandResultEvent` 的 outcome 枚举；outcome 表达后端确认后的结果。
-- 契约文件还包含 `CommandGateway`（提交命令的 HTTP 抽象）与 `RealtimeGateway`（实时连接/订阅抽象），均只暴露类型与接口，实现分别位于 `api/mutations`、`api/endpoints`、`realtime`。
+- 契约文件还包含 `CommandGateway`（命令提交/权威查询的 HTTP 抽象，当前实现 `realtime/transport/HttpCommandGateway.ts`）；当时设计的 `RealtimeGateway`（实时连接/订阅抽象）已在 2026-10-27 审计清理中删除，真实 WebSocket 接入时按本 ADR 重建。
 
 ### 3. CommandEventBridge 在 Application 协调层
 
@@ -199,6 +201,23 @@ Bridge 不 import 工作流实现、不 import `xstate`、不操作 React、不�
 | 在 Redux middleware 中做命令桥 | 不采纳 | 与 V2.1 客户端状态目标冲突；middleware 仍属状态容器，且无法表达 per-FAB 运行时生命周期 |
 | 页面直接订阅实时流并自己调 actor | 不采纳 | 无统一关联/去重/恢复；页面卸载即丢结果；CE 门禁不可满足 |
 | 后端推送完整状态，前端不建模命令生命周期 | 不采纳 | 与“命令结果必须可关联/去重/恢复”的交互要求不符；后端仍可作为权威恢复来源，但前端仍需管理进行中命令 |
+
+## Update（2026-10-28 终态）
+
+本 ADR 的决策不变；以下是 R-08 整改后的真实模块映射（以 [architecture.md](../architecture.md) §30 为准）：
+
+| 关注点 | 终态实现 |
+|---|---|
+| 命令结果事件源 | `web_app/src/realtime/transport/SseCommandEventSource.ts`（`commandResult$` + `gaps$`；后端 journal 游标 `{epoch}:{sequence}` 与 `replay-gap`） |
+| 权威查询 | `web_app/src/realtime/transport/HttpCommandGateway.ts`（`GET /api/v1/commands/{id}`） |
+| 解码 | `web_app/src/realtime/protocol/MessageDecoder.ts`（Zod envelope） |
+| 设备状态边界 | `web_app/src/realtime/equipment-status/{protocol,gate,stream,index}.ts`；REST/SSE→Query 唯一投影桥 `web_app/src/api/cache/equipment-status-bridge.ts` |
+| 通用低频合批 | `web_app/src/shared/scheduling/coalesced-dispatcher.ts`（`realtime/telemetry/telemetry-buffer.ts` 已不存在） |
+| 桥/恢复/Runtime | `application/coordination/{CommandEventBridge,CommandEventRecovery,CommandCorrelationRegistry}.ts`、`runtime/{FabRuntime,FabRuntimeFactory,FabRuntimeRegistry,FabLifecycleCoordinator}.ts`、`runtime/commands/*` |
+| 门禁位置 | `web_app/tests/integration/command-event-bridge.test.ts`、`web_app/tests/contract/command-{recovery,workflow,correlation}.test.ts`、`web_app/tests/integration/fab-runtime*.test.ts`（镜像式布局后路径） |
+| 架构门禁 | R0–R14 位于 `web_app/tests/architecture/`；R7 保证 `realtime/` 等通用层不 import `features/**`，R10 保证含 type-only 边的全图无环 |
+
+`realtime/streams`/`EventRouter`/`RealtimeGateway`/`WebSocketClient`/`SequenceTracker` 当前均不存在；生产 WebSocket 接入时按本 ADR 的“通用层不得按业务语义丢弃消息”约束重建，不得恢复为不可达骨架。
 
 ## 开放问题
 

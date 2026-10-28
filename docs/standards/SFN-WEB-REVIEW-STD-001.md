@@ -180,7 +180,7 @@
 
 ## 3.2 WebGPU / Babylon Lite / 场景架构
 
-- **渲染链路：** `SceneFacade → Lite Backend → Scene/Engine → GPU`；React 不直接持有 Mesh/Material/GPUBuffer。
+- **渲染链路：** `ScenePort（application/ports/scene.ts）→ Lite Backend（rendering/lite-backend.ts）→ Scene/Engine → GPU`；React 不直接持有 Mesh/Material/GPUBuffer。
 - **资源所有权：** GPUBuffer、Texture、Pipelines、材质、Picker、定时器、回调、设备丢失后旧代际引用必须释放或失效。
 - **性能：** Draw Calls、实际 triangles、Thin Instance 上传、GPU 时间、CPU/GPU 同步、Shader 编译、阴影 Cascades、Transparent/PBR/IBL 成本。
 - **Picking：** Hover/Click 并发顺序、GPU readback、移动节流、Drag-vs-Click、失效结果覆盖；要测实际输入到响应延迟。
@@ -226,7 +226,7 @@
 UI/Features ─┬──> Application/Use Cases ──> Domain Contracts
              ├──> Router / Query (HTTP server-cache owner)
              ├──> Zustand (UI state owner)
-             └──> SceneFacade (rendering port)
+             └──> ScenePort (application/ports/scene.ts; rendering port)
 App/Composition Root ──> Runtime + Realtime + Concrete Lite Backend
 Runtime ──> CommandWorkflow contracts + Coordination + XState adapter
 Realtime Transport ──> Message/Command contracts + Worker/Buffer
@@ -495,7 +495,7 @@ acceptance: "可观察、可复现的通过标准"
 
 **建议参照：** ISO/IEC 25010（质量特性分类）；OWASP ASVS 与 OWASP Top 10（Web 安全）；W3C WCAG（无障碍）；浏览器 Web Vitals/Performance API（体验）；TypeScript 官方类型设计；WebGPU 规范及浏览器实现限制；适用的 SEMI 规范与后端工业安全边界。
 
-**项目内部资料（审计前先确认与 HEAD 一致）：** `web_app/README.md`、`web_app/tests/architecture-boundaries.test.ts`、`tools/check_architecture.py`、`docs/architecture.md`、`docs/state-management.md`、`docs/rendering.md`、`docs/adr/0009-tanstack-router-query-boundary.md`、`docs/adr/0010-command-event-bridge.md`。
+**项目内部资料（审计前先确认与 HEAD 一致）：** `web_app/README.md`、`scripts/README.md`、`web_app/tests/architecture/architecture-import-graph.test.ts`（R0–R6）、`web_app/tests/architecture/architecture-contract-rules.test.ts`（R7–R14）、`tools/check_architecture.py`、`tools/generated-artifacts.json`、`docs/architecture.md`（§30 为递归整改终态）、`docs/state-management.md`、`docs/rendering.md`、`docs/realtime-protocol.md`、`docs/adr/0009-tanstack-router-query-boundary.md`、`docs/adr/0010-command-event-bridge.md`。
 
 ---
 

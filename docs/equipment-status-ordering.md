@@ -47,6 +47,10 @@ preset instructions also cancel them. The page applies presets on a fresh viewer
 epoch or a view change; a recovered world in the same viewer epoch keeps its user
 pose rather than reapplying the page preset.
 
-Regression coverage lives in equipment-status-epoch, equipment-status-pipeline,
-lite-backend-recovery, telemetry-runtime, telemetry-render and fab-runtime-batch23
-tests, plus backend EquipmentStatusTests and the REST/SSE API integration test.
+Regression coverage lives in `web_app/tests/realtime/equipment-status-epoch.test.ts`,
+`web_app/tests/integration/equipment-status-pipeline.test.tsx`,
+`web_app/tests/rendering/lite-backend-recovery.test.ts`,
+`web_app/tests/realtime/telemetry-runtime.test.ts`,
+`web_app/tests/integration/telemetry-render.test.tsx` and
+`web_app/tests/integration/fab-runtime-batch23.test.ts` (mirrored layout), plus backend
+EquipmentStatusTests and the REST/SSE API integration test.

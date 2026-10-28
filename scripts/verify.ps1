@@ -2,6 +2,12 @@ $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')))
 python tools/generate_contracts.py --check
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
+node tools/build_twin_translations.cjs --check
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
+node tools/pack_static_structure.mjs --check
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
+node tools/check_generated_artifacts.mjs --check
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
 python tools/check_architecture.py
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 python -m unittest discover -s tools -p 'test_*.py'

@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DEFAULT_REGISTRY = join(ROOT, 'tools', 'generated-artifacts.json');
 const GENERATED_DIR = join(ROOT, 'web_app', 'src', 'generated');
-/** Same discovery rule as R5 in tests/architecture-import-graph.test.ts. */
+/** Same discovery rule as R5 in web_app/tests/architecture/architecture-import-graph.test.ts. */
 const GENERATED_FILE_PATTERN = /(?:\.generated\.tsx?|-packed\.tsx?)$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const USAGE = 'usage: node tools/check_generated_artifacts.mjs [--check|--update] [--registry <path>]';
