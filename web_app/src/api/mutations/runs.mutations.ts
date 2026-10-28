@@ -1,7 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { RunSummary } from '../../contracts';
-import { fetchJson } from '../queries/http';
+import { httpTransport } from '../transport/http';
 import { queryKeys } from '../queries/queryKeys';
 
 const runSchema = z.looseObject({
@@ -20,7 +20,7 @@ export interface CreateRunInput {
 
 /** POST the run and invalidate the runs prefix so list/detail/result refresh. */
 export async function createRun(input: CreateRunInput): Promise<RunSummary> {
-  const payload = await fetchJson('/api/v1/runs', {
+  const payload = await httpTransport.fetchJson('/api/v1/runs', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { RunResult, RunSummary } from '../../contracts';
-import { fetchJson } from './http';
+import { httpTransport } from '../transport/http';
 import { queryKeys } from './queryKeys';
 
 const runSchema = z.looseObject({
@@ -23,7 +23,7 @@ export const runsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.runs.all,
     queryFn: async ({ signal }) => {
-      const payload = await fetchJson('/api/v1/runs', { signal });
+      const payload = await httpTransport.fetchJson('/api/v1/runs', { signal });
       return runListSchema.parse(payload) as RunSummary[];
     },
     staleTime: 0,
@@ -34,7 +34,7 @@ export const runQueryOptions = (runId: string) =>
   queryOptions({
     queryKey: queryKeys.runs.detail(runId),
     queryFn: async ({ signal }) => {
-      const payload = await fetchJson(`/api/v1/runs/${encodeURIComponent(runId)}`, { signal });
+      const payload = await httpTransport.fetchJson(`/api/v1/runs/${encodeURIComponent(runId)}`, { signal });
       return runSchema.parse(payload) as RunSummary;
     },
     staleTime: 0,
@@ -45,7 +45,7 @@ export const runResultsQueryOptions = (runId: string) =>
   queryOptions({
     queryKey: queryKeys.runs.results(runId),
     queryFn: async ({ signal }) => {
-      const payload = await fetchJson(
+      const payload = await httpTransport.fetchJson(
         `/api/v1/runs/${encodeURIComponent(runId)}/results`,
         { signal },
       );

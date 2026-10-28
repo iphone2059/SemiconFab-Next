@@ -2,7 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { EquipmentStatusSnapshot } from '../../realtime/equipment-status';
 import { acceptEquipmentStatusSnapshot } from './equipment-status-bridge';
-import { fetchJson } from './http';
+import { httpTransport } from '../transport/http';
 import { queryKeys } from './queryKeys';
 
 const equipmentStatusSchema = z.object({
@@ -26,7 +26,7 @@ export const equipmentStatusQueryOptions = (siteId: string, fabId: string) =>
   queryOptions({
     queryKey: queryKeys.equipment.status(siteId, fabId),
     queryFn: async ({ client, signal }) => {
-      const payload = await fetchJson(
+      const payload = await httpTransport.fetchJson(
         `/api/v1/sites/${encodeURIComponent(siteId)}/fabs/${encodeURIComponent(fabId)}/equipment-status`,
         { signal },
       );

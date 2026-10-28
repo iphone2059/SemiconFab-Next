@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { SiteDto } from '../../contracts';
+import { createHttpTransport, type FetchLike } from '../transport/http';
 import { queryKeys } from './queryKeys';
 
 const fabSchema = z.object({
@@ -17,43 +18,18 @@ const siteSchema = z.object({
 
 const sitesSchema = z.array(siteSchema);
 
-function problemDetail(raw: string): string {
-  try {
-    const body: unknown = JSON.parse(raw);
-    if (body && typeof body === 'object') {
-      const value = body as { detail?: unknown; title?: unknown };
-      if (typeof value.detail === 'string' && value.detail) return value.detail;
-      if (typeof value.title === 'string' && value.title) return value.title;
-    }
-  } catch {
-    /* Non-JSON gateway bodies fall back to their raw text. */
-  }
-  return raw.trim().slice(0, 180);
-}
-
 /**
- * Fetch and validate the sites document exactly like the RTK transport it
- * replaces: same-origin credentials, no-store cache semantics and a relative URL
- * (the dev proxy injects X-Fab-Dev-Key server-side; the browser never holds the
- * client secret).
+ * Fetch and validate the sites document through the shared HTTP transport: same-origin
+ * credentials, no-store cache semantics and a relative URL (the dev proxy injects
+ * X-Fab-Dev-Key server-side; the browser never holds the client secret).
  */
-export async function fetchSites(fetcher: typeof fetch = globalThis.fetch): Promise<SiteDto[]> {
-  const response = await fetcher('/api/v1/sites', { credentials: 'same-origin', cache: 'no-store' });
-  const raw = await response.text();
-  if (!response.ok) {
-    const detail = problemDetail(raw);
-    throw new Error(`站点 API 请求失败（HTTP ${response.status}）${detail ? `：${detail}` : ''}`);
-  }
-  let payload: unknown;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    throw new Error('站点 API 返回了非 JSON 响应 / sites response was not JSON');
-  }
+export async function fetchSites(fetcher: FetchLike = globalThis.fetch): Promise<SiteDto[]> {
+  const payload = await createHttpTransport({ fetchImpl: fetcher }).fetchJson('/api/v1/sites');
   const parsed = sitesSchema.safeParse(payload);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
-    throw new Error(`站点响应格式无效 / invalid sites response: ${issue ? `${issue.path.join('.') || 'root'}: ${issue.message}` : 'unknown'}`);
+    const problem = issue ? (issue.path.join('.') || 'root') + ': ' + issue.message : 'unknown';
+    throw new Error('站点响应格式无效 / invalid sites response: ' + problem);
   }
   return parsed.data;
 }
