@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CutAxis, XRayFilter } from '../../../rendering/fab-scene';
+import type { CutAxis, XRayFilter } from '../../../application/ports/scene';
 import {
   createTwinUiState,
   twinUiReducer,

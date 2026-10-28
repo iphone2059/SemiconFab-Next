@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { TwinLanguage } from '../domain/contracts/language';
+import type { TwinLanguage } from '../localization/language';
 import { readPreferences, readTwinLanguage, type Preferences } from './preferences';
 
 function initialLocale(): Preferences {

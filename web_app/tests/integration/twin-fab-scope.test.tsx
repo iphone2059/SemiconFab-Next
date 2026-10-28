@@ -17,15 +17,15 @@ import { resetRuntimeStore } from '../../src/state/runtimeStore';
 import { resetTwinDemoStore } from '../../src/features/twin/state/twinDemoStore';
 
 const backend = vi.hoisted(() => ({ mounts: 0 }));
-vi.mock('../../src/rendering/lite-backend', () => ({
-  createLiteBackend: () => ({
-    async mount(_canvas: unknown, _fabs: unknown, _signal: unknown, status: (value: string) => void) {
+vi.mock('../../src/rendering/lite-backend', async () => {
+  const { createScenePortStub } = await import('../support/scene-port-stub');
+  return {
+    createLiteBackend: () => {
       backend.mounts += 1;
-      status('WebGPU · ready');
+      return createScenePortStub();
     },
-    dispose() {},
-  }),
-}));
+  };
+});
 
 const sites = [{
   siteId: 'site-1',
@@ -153,8 +153,8 @@ it('A01: an in-place A→B switch clears FAB-scoped projections before B has a f
 
   // Seed MES demo state owned by A; it must not survive into B.
   act(() => {
-    twinPageActions.mesJobSet({ index: 3, job: createMesJob(FAB_LAYOUT[3], 3) });
-    twinPageActions.inspectorMesSet({ id: 'ref-tool', job: createMesJob(FAB_LAYOUT[4], 4) });
+    twinPageActions.mesJobSet({ index: 3, job: createMesJob(FAB_LAYOUT[3], 3, 1000) });
+    twinPageActions.inspectorMesSet({ id: 'ref-tool', job: createMesJob(FAB_LAYOUT[4], 4, 1000) });
   });
 
   send(sourceA, frame({ sequence: 5, generatedAt: '2026-10-27T00:00:05Z', tools: tools({ 0: 'down' }) }));

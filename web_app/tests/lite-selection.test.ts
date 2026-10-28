@@ -13,7 +13,7 @@ import {
   createLiteSelection, createSelectionPickResolver,
   type LiteSelection, type LiteSelectionCallbacks, type SelectionPickSeam,
 } from '../src/rendering/lite/selection';
-import type { HoveredTool, PickedTool } from '../src/rendering/fab-scene';
+import type { HoveredTool, PickedTool } from '../src/application/ports/scene';
 
 type Triple = [number, number, number];
 interface PickCall { x: number; y: number; resolve(value: { toolIndex: number; x: number; y: number } | null): void }

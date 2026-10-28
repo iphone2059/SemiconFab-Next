@@ -1,5 +1,6 @@
 import type { OriginalTourStop } from './original-tour';
-import type { TourScenario, TourWaypoint, Vec3 } from '../wafer/tour-wafer-timeline';
+import type { Vec3 } from '../math/vec3';
+import type { TourScenario, TourWaypoint } from './tour-timeline';
 
 /** Frozen startCinematicTour baseline camera (source switchFabLevel('L1')/ISO view). */
 export const TOUR_INITIAL_CAMERA: Vec3 = { x: 38, y: 48, z: 58 };

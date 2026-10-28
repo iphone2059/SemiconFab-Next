@@ -58,7 +58,7 @@ it('routes all Twin mode changes through typed store actions', () => {
 
 it('keeps page, demo and workbench state serializable and action-owned', () => {
   runtimeActions.viewerMounted('test');
-  runtimeActions.viewerStatusReceived({ epoch: 'test', status: 'WebGPU · test' });
+  runtimeActions.viewerLifecycleReceived({ epoch: 'test', event: { type: 'ready', message: 'WebGPU · test' } });
   twinPageActions.siteIdSet('site-test');
   twinPageActions.layerToggled('roof');
   twinDemoActions.playingSet(false);

@@ -10,7 +10,7 @@ import {
 import { advanceAmhsState, AMHS_TRAFFIC_SEED, createAmhsRandom, createAmhsState,
   type AmhsStation } from '../../domain/amhs/amhs-timeline';
 import { PERSONNEL, createPersonnelTimeline } from '../../domain/personnel/personnel-timeline';
-import type { AmhsStats } from '../fab-scene';
+import type { AmhsStats } from '../../application/ports/scene';
 
 type Triple = readonly [number, number, number];
 type Point = { x: number; y: number; z: number };

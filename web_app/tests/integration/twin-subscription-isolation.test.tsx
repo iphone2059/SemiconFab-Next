@@ -18,7 +18,7 @@ import { resetTwinPageStore, twinPageActions } from '../../src/features/twin/sta
 import { resetTwinDemoStore, twinDemoActions } from '../../src/features/twin/state/twinDemoStore';
 import { resetRuntimeStore } from '../../src/state/runtimeStore';
 import { useLocaleStore } from '../../src/state/localeStore';
-import type { AmhsStats } from '../../src/rendering/fab-scene';
+import type { AmhsStats } from '../../src/application/ports/scene';
 
 // The hardware boundary stays out of these subscription tests: a render counter
 // stands in for FabViewport so "did TwinContent rerender?" becomes measurable.
@@ -165,7 +165,7 @@ it('keeps sidebar, OEM dialog, archive query and inspector-MES branches out of T
     twinPageActions.oemDialogSegmentSet('Lithography');
     twinPageActions.oemDialogVendorSet('ASML');
     twinPageActions.archQuerySet('xray');
-    twinPageActions.inspectorMesSet({ id: FAB_LAYOUT[0].recordId, job: createMesJob(FAB_LAYOUT[0], 0) });
+    twinPageActions.inspectorMesSet({ id: FAB_LAYOUT[0].recordId, job: createMesJob(FAB_LAYOUT[0], 0, 1000) });
   });
   expect(viewport.renders, 'OEM/archive/inspector-MES branches must not rerender TwinContent/FabViewport').toBe(settled);
 });

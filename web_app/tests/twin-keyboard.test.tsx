@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, renderHook, waitFor } from '@testing-librar
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Modal } from '../src/components/modal';
 import type { FabToolState } from '../src/domain/fab/fab-layout';
-import type { SceneLayer } from '../src/rendering/fab-scene';
+import type { SceneLayer } from '../src/application/ports/scene';
 import { useTwinActions } from '../src/features/twin/controllers/use-twin-actions';
 import { useTwinKeyboard } from '../src/features/twin/controllers/use-twin-keyboard';
 import type { FabViewportHandle } from '../src/features/twin/fab-viewer';

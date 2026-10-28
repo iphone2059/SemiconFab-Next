@@ -1,5 +1,5 @@
 import { getCameraPosition, runFrameInterpolation, type ArcRotateCamera, type SceneContext } from '@babylonjs/lite';
-import type { SceneViewPreset } from '../fab-scene';
+import type { SceneViewPreset } from '../../application/ports/scene';
 import { bindSourceOrbitInput, createSourceOrbitMotion } from './source-orbit-input';
 
 type Point = readonly [number, number, number];

@@ -1,7 +1,15 @@
 import reference from '../../../assets/original-twin-ui.json';
 import { FAB_LAYOUT, type FabToolState } from './fab-layout';
 import { originalLayoutRenderOrder, TWIN_LAYOUT_IDENTITIES } from './layout-identities';
-import type { TwinLanguage } from '../contracts/language';
+
+/**
+ * Key of the frozen reference dataset's localized columns ("zh"/"en").
+ *
+ * This is a pure data vocabulary of the raw reference rows, deliberately not the
+ * UI TwinLanguage: domain reference data must not depend on browser locale state.
+ * Features pass their UI language value, which is structurally the same union.
+ */
+export type ReferenceLanguage = 'zh' | 'en';
 
 export interface OriginalEquipment {
   id: string; name: string; brand: string; model: string; category: string; categoryName: string;
@@ -27,11 +35,11 @@ interface OriginalTwinUi {
 export const ORIGINAL_TWIN_UI = reference as unknown as OriginalTwinUi;
 export type TwinSelection = { kind: 'layout'; index: number } | { kind: 'reference'; id: string } | { kind: 'oem'; id: string };
 
-export function localizedEquipment(id: string, language: TwinLanguage): OriginalEquipment | undefined {
+export function localizedEquipment(id: string, language: ReferenceLanguage): OriginalEquipment | undefined {
   return ORIGINAL_TWIN_UI.localized.find(row => row.id === id)?.[language];
 }
 export function filterReferenceEquipment(filter: {
-  query: string; category: string; state: string; language: TwinLanguage; states: Readonly<Record<string, FabToolState>>;
+  query: string; category: string; state: string; language: ReferenceLanguage; states: Readonly<Record<string, FabToolState>>;
 }): OriginalEquipment[] {
   const query = filter.query.trim().toLowerCase();
   return ORIGINAL_TWIN_UI.equipment.filter(row => {

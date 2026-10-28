@@ -39,6 +39,7 @@ vi.mock('../src/rendering/lite/world', () => ({
 }));
 
 import { createLiteBackend } from '../src/rendering/lite-backend';
+import type { SceneMountOptions } from '../src/application/ports/scene';
 
 type Point = readonly [number, number, number];
 function fakeWorld(pose: { position: Point; target: Point } | null, selection: number | null) {
@@ -64,11 +65,26 @@ function queueWorld(pose: { position: Point; target: Point } | null, selection: 
 }
 let canvas: HTMLCanvasElement;
 const flush = async (steps = 80) => { for (let index = 0; index < steps; index++) await Promise.resolve(); };
+function mountOptions(controller: AbortController): SceneMountOptions {
+  return {
+    viewerId: 'viewer-1',
+    canvas,
+    fabs: [],
+    signal: controller.signal,
+    callbacks: {
+      onLifecycle: () => {},
+      onToolPick: () => {},
+      onToolHover: () => {},
+      onAmhsStats: () => {},
+      getToolStates: () => [],
+    },
+  };
+}
 async function mountBackend(pose: { position: Point; target: Point } | null, selection: number | null) {
   const firstWorld = queueWorld(pose, selection);
   const controller = new AbortController();
   const backend = createLiteBackend();
-  await backend.mount(canvas, [], controller.signal, () => {});
+  await backend.mount(mountOptions(controller));
   return { backend, controller, firstWorld };
 }
 const activeTimers = () => mocks.timers.filter(timer => !timer.cleared);
@@ -130,7 +146,7 @@ it('a user preset cancels recovery replay', async () => {
   try {
     queueWorld(null, null);
     await loseDevice();
-    backend.setView!('top');
+    backend.setView('top');
     runReplays();
     expect(mocks.created[1].setCameraPose).not.toHaveBeenCalled();
     expect(activeTimers()).toHaveLength(0);
@@ -148,7 +164,7 @@ it('restores the preserved camera pose and selection after a normal GPU recovery
     runReplays();
     expect(replacement.pose).toEqual({ position: [1, 2, 3], target: [4, 5, 6] });
     expect(replacement.selected).toBe(42);
-    expect(backend.getCameraPose!()).toEqual({ position: [1, 2, 3], target: [4, 5, 6] });
+    expect(backend.getCameraPose()).toEqual({ position: [1, 2, 3], target: [4, 5, 6] });
   } finally { backend.dispose(); }
 });
 
@@ -163,7 +179,7 @@ it('does not replay the recovered pose over a newer user camera move', async () 
     // pending 300 ms replay must not put the recovered pose back.
     initialReplay.run();
     expect(replacement.pose).toEqual({ position: [1, 2, 3], target: [4, 5, 6] });
-    backend.setCameraPose!([9, 9, 9], [0, 0, 0], 0);
+    backend.setCameraPose([9, 9, 9], [0, 0, 0], 0);
     expect(replacement.pose).toEqual({ position: [9, 9, 9], target: [0, 0, 0] });
     expect(delayedReplay.cleared).toBe(true);
     delayedReplay.run();
@@ -171,7 +187,7 @@ it('does not replay the recovered pose over a newer user camera move', async () 
     // The preserved pose was applied once by the first replay, then the newer user pose won.
     expect(replacement.setCameraPose.mock.calls.map((call: unknown[]) => call[0]))
       .toEqual([[1, 2, 3], [9, 9, 9]]);
-    expect(backend.getCameraPose!()).toEqual({ position: [9, 9, 9], target: [0, 0, 0] });
+    expect(backend.getCameraPose()).toEqual({ position: [9, 9, 9], target: [0, 0, 0] });
   } finally { backend.dispose(); }
 });
 
@@ -181,7 +197,7 @@ it('does not replay the recovered selection over a newer user selection', async 
     queueWorld(null, null);
     await loseDevice();
     const replacement = mocks.created[1];
-    backend.selectTool!(7);
+    backend.selectTool(7);
     runReplays();
     expect(replacement.selected).toBe(7);
     expect(replacement.selectTool.mock.calls.every((call: unknown[]) => call[0] === 7)).toBe(true);
@@ -194,7 +210,7 @@ it('does not replay the recovered selection over a newer clear', async () => {
     queueWorld(null, null);
     await loseDevice();
     const replacement = mocks.created[1];
-    backend.clearSelection!();
+    backend.clearSelection();
     expect(replacement.selected).toBeNull();
     runReplays();
     expect(replacement.selected).toBeNull();
@@ -214,7 +230,7 @@ it('clears pending replay timers on dispose and never restores into a disposed b
     runReplays();
     expect(replacement.pose).toBeNull();
     expect(replacement.setCameraPose).not.toHaveBeenCalled();
-    expect(backend.getCameraPose!()).toBeNull();
+    expect(backend.getCameraPose()).toBeNull();
   } finally { backend.dispose(); }
 });
 
@@ -252,17 +268,17 @@ it('keeps the recovered state when the page re-applies its ambient mode sequence
     // twin-page.tsx status effect (~lines 409-418) runs on every viewer status update, including
     // the post-recovery 'ready' report, and re-applies the same ambient mode values. That must
     // stay idempotent or a normal recovery would cancel its own replay.
-    backend.setXRayFilter!(null);
-    backend.setLayer!('xray', false);
-    backend.setBasement!(false);
-    backend.setDual!(false);
-    backend.setExplodeFactor!(0);
-    backend.setCutPlane!(false, 'Y', 0, false);
+    backend.setXRayFilter(null);
+    backend.setLayer('xray', false);
+    backend.setBasement(false);
+    backend.setDual(false);
+    backend.setExplodeFactor(0);
+    backend.setCutPlane(false, 'Y', 0, false);
     expect(activeTimers()).toHaveLength(2);
     runReplays();
     expect(replacement.pose).toEqual({ position: [1, 2, 3], target: [4, 5, 6] });
     expect(replacement.selected).toBe(42);
-    expect(backend.getCameraPose!()).toEqual({ position: [1, 2, 3], target: [4, 5, 6] });
+    expect(backend.getCameraPose()).toEqual({ position: [1, 2, 3], target: [4, 5, 6] });
   } finally { backend.dispose(); }
 });
 
@@ -271,12 +287,12 @@ it('keeps the recovered state when a non-default ambient mode is re-applied afte
   try {
     // The user is in basement mode when the device is lost; the page re-applies basement=true
     // and dual=false (mutually exclusive world state) once the replacement world is ready.
-    backend.setBasement!(true);
+    backend.setBasement(true);
     queueWorld(null, null);
     await loseDevice();
     const replacement = mocks.created[1];
-    backend.setBasement!(true);
-    backend.setDual!(false);
+    backend.setBasement(true);
+    backend.setDual(false);
     expect(activeTimers()).toHaveLength(2);
     runReplays();
     expect(replacement.pose).toEqual({ position: [1, 2, 3], target: [4, 5, 6] });
@@ -291,7 +307,7 @@ it('still cancels the delayed replay for a genuine mode change after recovery', 
     const replacement = mocks.created[1];
     const pending = [...mocks.timers];
     // Basement was off before the loss, so this is a genuine false -> true user mode change.
-    backend.setBasement!(true);
+    backend.setBasement(true);
     expect(pending.every(timer => timer.cleared)).toBe(true);
     expect(activeTimers()).toHaveLength(0);
     runReplays();

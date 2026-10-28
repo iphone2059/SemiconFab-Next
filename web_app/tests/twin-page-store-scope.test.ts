@@ -48,8 +48,8 @@ it('clears tool states, status feed and MES demo state when the FAB scope is act
   twinPageActions.liveScopeActivated(scopeA);
   twinPageActions.liveSnapshotReceived({ scope: scopeA, states: statesWith('down'), updatedAt: '2026-10-27T00:00:00Z' });
   twinPageActions.statusFeedStale({ scope: scopeA });
-  twinPageActions.mesJobSet({ index: 3, job: createMesJob(createJobTool(3), 3) });
-  twinPageActions.inspectorMesSet({ id: 'ref-tool', job: createMesJob(createJobTool(4), 4) });
+  twinPageActions.mesJobSet({ index: 3, job: createMesJob(createJobTool(3), 3, 1000) });
+  twinPageActions.inspectorMesSet({ id: 'ref-tool', job: createMesJob(createJobTool(4), 4, 1000) });
 
   twinPageActions.liveScopeActivated(scopeB);
   const state = useTwinPageStore.getState();
@@ -63,7 +63,7 @@ it('clears tool states, status feed and MES demo state when the FAB scope is act
 it('fully resets the FAB-scoped state through resetTwinPageStore()', () => {
   twinPageActions.liveScopeActivated(scopeA);
   twinPageActions.liveSnapshotReceived({ scope: scopeA, states: statesWith('down'), updatedAt: '2026-10-27T00:00:00Z' });
-  twinPageActions.mesJobSet({ index: 0, job: createMesJob(createJobTool(0), 0) });
+  twinPageActions.mesJobSet({ index: 0, job: createMesJob(createJobTool(0), 0, 1000) });
   resetTwinPageStore();
   const state = useTwinPageStore.getState();
   expect(state.liveStatusScope).toBeUndefined();

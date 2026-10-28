@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '../../../domain/simulation/original-tour';
 import { buildTourScenario, TOUR_INITIAL_CAMERA, TOUR_INITIAL_TARGET } from '../../../domain/simulation/tour-scenario';
-import { createTourTimeline, type TourFrame, type TourTimeline } from '../../../domain/wafer/tour-wafer-timeline';
+import { createTourTimeline, type TourFrame, type TourTimeline } from '../../../domain/simulation/tour-timeline';
 import { twinUiActions } from '../state/twinUiStore';
 import type { FabViewportHandle } from '../fab-viewer';
 import type { TourHudSnapshot, TwinTourHudHandle } from '../twin-tour-hud';

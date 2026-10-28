@@ -147,7 +147,7 @@ assert (web / 'src' / 'state' / 'localeStore.ts').exists(), 'Shared locale/theme
 
 # P2 domain extraction: pure domain modules live under web_app/src/domain/<area>/ and
 # must not leak back into the flat web_app/src root.
-DOMAIN_LAYERS = ('fab', 'amhs', 'personnel', 'wafer', 'simulation', 'contracts')
+DOMAIN_LAYERS = ('fab', 'amhs', 'personnel', 'wafer', 'simulation', 'math')
 for layer in DOMAIN_LAYERS:
     layer_path = web / 'src' / 'domain' / layer
     assert layer_path.is_dir(), f'web_app/src/domain/{layer}/ must exist'
@@ -155,7 +155,7 @@ for layer in DOMAIN_LAYERS:
 RELOCATED_ROOT_MODULES = (
     'fab-layout', 'process-control', 'fab-yield', 'cleanroom-pressure', 'layout-identities',
     'original-twin-data', 'twin-spatial', 'amhs-timeline', 'personnel-timeline', 'wafer-route',
-    'wafer-map', 'wafer-scenario', 'tour-wafer-timeline', 'research-replay', 'original-tour',
+    'wafer-map', 'wafer-scenario', 'tour-timeline', 'wafer-timeline', 'research-replay', 'original-tour',
     'tour-scenario', 'twin-equipment', 'scenario',
 )
 for module in RELOCATED_ROOT_MODULES:

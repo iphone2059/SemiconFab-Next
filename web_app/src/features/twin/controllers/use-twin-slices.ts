@@ -60,6 +60,7 @@ export function useTwinSlices() {
     ymsOpen: state.yms.open,
   })));
   const status = useRuntimeStore(state => state.viewer.status);
+  const lifecycle = useRuntimeStore(state => state.viewer.lifecycle);
   const viewerEpoch = useRuntimeStore(state => state.viewer.epoch);
-  return { t, language, toggleLanguage, theme, ui, demo, page, status, viewerEpoch };
+  return { t, language, toggleLanguage, theme, ui, demo, page, status, lifecycle, viewerEpoch };
 }

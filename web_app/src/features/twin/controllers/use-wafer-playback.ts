@@ -3,7 +3,7 @@ import type { RefObject } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { waferRoutesQueryOptions } from '../../../api/queries/wafer.queries';
 import type { WaferProduct } from '../../../domain/wafer/wafer-route';
-import { createWaferTimeline, type WaferHud, type WaferTimeline } from '../../../domain/wafer/tour-wafer-timeline';
+import { createWaferTimeline, type WaferHud, type WaferTimeline } from '../../../domain/wafer/wafer-timeline';
 import { buildWaferScenario } from '../../../domain/wafer/wafer-scenario';
 import { useLocaleStore } from '../../../state/localeStore';
 import { useTwinPageStore, twinPageActions } from '../state/twinPageStore';

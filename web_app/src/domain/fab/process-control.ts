@@ -25,11 +25,38 @@ function stableNumber(value: string): number {
   return hash;
 }
 
-export function createMesJob(tool: FabLayoutTool, index: number, now = Date.now()): MesJob {
-  return createProcessMesJob({ id: tool.recordId || String(index), category: tool.category, name: tool.model, position: { x: tool.x } }, now);
+/**
+ * MES bookkeeping time owned by the caller.
+ *
+ * Unit/source: integer epoch milliseconds in UTC, the same time base as
+ * `Date.now()`. Domain code never reads a clock itself: the UI passes its wall
+ * clock, tests pass a fixed timestamp and simulations pass their virtual clock.
+ *
+ * Rounding: none. The value is stored verbatim in `MesJob.updatedAt`; the old
+ * implicit `now = Date.now()` fallback is gone, so a missing argument can never
+ * fabricate a timestamp.
+ *
+ * Invalid values: anything that is not a non-negative safe integer (NaN,
+ * ±Infinity, fractional milliseconds, negatives, unsafe integers) is rejected
+ * with a RangeError instead of being silently rounded or replaced by wall time.
+ */
+function requireMesEpochMs(nowMs: number): number {
+  if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
+    throw new RangeError(
+      'MES job time must be an explicit non-negative safe-integer epoch-milliseconds value; received ' + String(nowMs),
+    );
+  }
+  return nowMs;
 }
 
-export function createProcessMesJob(equipment: ProcessEquipment, now = Date.now()): MesJob {
+/** Creates a MES job at the caller's authoritative epoch-ms time (see the time contract above). */
+export function createMesJob(tool: FabLayoutTool, index: number, nowMs: number): MesJob {
+  return createProcessMesJob({ id: tool.recordId || String(index), category: tool.category, name: tool.model, position: { x: tool.x } }, nowMs);
+}
+
+/** Creates a MES job for an equipment projection; time follows the same caller-owned contract. */
+export function createProcessMesJob(equipment: ProcessEquipment, nowMs: number): MesJob {
+  const updatedAt = requireMesEpochMs(nowMs);
   const lotNum = ((equipment.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0) * 17) % 8000) + 1000;
   const foupNum = (lotNum % 24) + 1;
   const category = (equipment.category || 'PROC').toUpperCase().slice(0, 4);
@@ -40,7 +67,7 @@ export function createProcessMesJob(equipment: ProcessEquipment, now = Date.now(
     state: 'TRACKED_IN',
     stepName: equipment.name,
     waferSlot: 14,
-    updatedAt: now,
+    updatedAt,
   };
 }
 

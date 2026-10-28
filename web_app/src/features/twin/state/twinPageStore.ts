@@ -1,4 +1,4 @@
-import type { AmhsStats, PickedTool, SceneLayer } from '../../../rendering/fab-scene';
+import type { AmhsStats, PickedTool, SceneLayer } from '../../../application/ports/scene';
 import { FAB_TOOL_STATES, type FabToolState } from '../../../domain/fab/fab-layout';
 import type { EquipmentStatusScope } from '../../../realtime/equipment-status';
 import type { TwinSelection } from '../../../domain/fab/original-twin-data';
@@ -6,7 +6,7 @@ import type { MesJob } from '../../../domain/fab/process-control';
 import { DEFAULT_YIELD_INPUT, type YieldInput } from '../../../domain/fab/fab-yield';
 import type { DefectPattern } from '../../../domain/wafer/wafer-map';
 import type { WaferProduct } from '../../../domain/wafer/wafer-route';
-import type { WaferHud } from '../../../domain/wafer/tour-wafer-timeline';
+import type { WaferHud } from '../../../domain/wafer/wafer-timeline';
 import { createSliceStore } from '../../../state/createSliceStore';
 
 export type WaferUiState = {

@@ -28,7 +28,7 @@ export function OriginalInspector({selection,states,onClose,onManualKey,onSelect
   const telemetry = useTwinDemoStore(state=>processEquipment ? state.telemetry[processEquipment.id] : undefined);
   const spc = useMemo(()=>telemetry?computeSpc(telemetry.history,telemetry.sensors[0],(states[equipment?.id??'']??'running')==='down'):undefined,[telemetry,states,equipment?.id]);
   const storedMes=useTwinPageStore(state=>equipment ? state.inspectorMes[equipment.id] : undefined);
-  const initialMes=useMemo(()=>processEquipment?createProcessMesJob(processEquipment):undefined,[processEquipment]);
+  const initialMes=useMemo(()=>processEquipment?createProcessMesJob(processEquipment, Date.now()):undefined,[processEquipment]);
   const mes=storedMes??initialMes;
   useEffect(()=>{if(processEquipment&&initialMes&&!storedMes)twinPageActions.inspectorMesSet({id:processEquipment.id,job:initialMes});},[processEquipment,initialMes,storedMes]);
   const setMes=(update:(current:MesJob|undefined)=>MesJob|undefined)=>{const job=update(mes)??mes;if(equipment&&job)twinPageActions.inspectorMesSet({id:equipment.id,job});};

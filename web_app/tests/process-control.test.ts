@@ -1,19 +1,68 @@
 import { describe, expect, it } from 'vitest';
-import { applyMesAction, buildTelemetry, computeSpc, createMesJob } from '../src/domain/fab/process-control';
+import { applyMesAction, buildTelemetry, computeSpc, createMesJob, createProcessMesJob } from '../src/domain/fab/process-control';
 import { FAB_LAYOUT } from '../src/domain/fab/fab-layout';
 
 describe('MES job execution', () => {
+  /** Caller-owned authoritative epoch-ms time: the domain never reads Date.now(). */
+  const FIXED_MES_TIME = 1_700_000_000_000;
+  const jobTool = FAB_LAYOUT[0];
+  const equipment = { id: jobTool.recordId || '0', category: jobTool.category, name: jobTool.model, position: { x: jobTool.x } };
+
   it('creates a deterministic SEMI E40/E87/E94 job and applies all three actions', () => {
-    const job = createMesJob(FAB_LAYOUT[0], 0, 100);
-    expect(job).toMatchObject({ state: 'TRACKED_IN', waferSlot: 14, updatedAt: 100 });
+    const job = createMesJob(jobTool, 0, FIXED_MES_TIME);
+    expect(job).toMatchObject({ state: 'TRACKED_IN', waferSlot: 14, updatedAt: FIXED_MES_TIME });
     expect(job.carrierId).toMatch(/^FOUP-AMHS-\d{2}$/);
     expect(job.recipeId).toMatch(/^RCP-LITH-2NM-V[1-5]\.0$/);
-    const again = createMesJob(FAB_LAYOUT[0], 0, 999);
-    expect({ ...again, updatedAt: 100 }).toEqual(job);
+    const again = createMesJob(jobTool, 0, FIXED_MES_TIME + 999);
+    expect({ ...again, updatedAt: FIXED_MES_TIME }).toEqual(job);
     const out = applyMesAction(job, 'track-out');
     expect(out.state).toBe('TRACKED_OUT');
     expect(out.waferSlot).toBe(15);
     expect(applyMesAction(out, 'hold').state).toBe('HOLD_MRB');
+    // Source actions retain the initialization timestamp; they never advance the clock.
+    for (const action of ['track-in', 'track-out', 'hold'] as const) {
+      expect(applyMesAction(job, action).updatedAt).toBe(FIXED_MES_TIME);
+    }
+  });
+
+  it.each([
+    ['simulated clock origin', 0],
+    ['small integer milliseconds', 100],
+    ['epoch milliseconds (2023-11-14T22:13:20Z)', 1_700_000_000_000],
+    ['maximum safe integer milliseconds', Number.MAX_SAFE_INTEGER],
+  ])('stores a valid caller time verbatim in updatedAt: %s', (_label, nowMs) => {
+    expect(createMesJob(jobTool, 0, nowMs).updatedAt).toBe(nowMs);
+  });
+
+  it('keeps identity fields independent of the caller timestamp', () => {
+    const early = createMesJob(jobTool, 0, 0);
+    const late = createMesJob(jobTool, 0, FIXED_MES_TIME);
+    expect(late.updatedAt).toBe(FIXED_MES_TIME);
+    expect(early.updatedAt).toBe(0);
+    expect({ ...late, updatedAt: early.updatedAt }).toEqual(early);
+  });
+
+  it('derives the same job identity from a layout tool and its process-equipment projection', () => {
+    expect(createProcessMesJob(equipment, FIXED_MES_TIME)).toEqual(createMesJob(jobTool, 0, FIXED_MES_TIME));
+  });
+
+  it.each([
+    ['NaN', Number.NaN],
+    ['positive infinity', Number.POSITIVE_INFINITY],
+    ['negative infinity', Number.NEGATIVE_INFINITY],
+    ['negative epoch milliseconds', -1],
+    ['fractional milliseconds (no rounding)', 1.5],
+    ['unsafe integer', Number.MAX_SAFE_INTEGER + 1],
+  ])('rejects invalid caller time: %s', (_label, invalid) => {
+    expect(() => createMesJob(jobTool, 0, invalid)).toThrow(RangeError);
+    expect(() => createProcessMesJob(equipment, invalid)).toThrow(RangeError);
+  });
+
+  it('requires an explicit timestamp instead of falling back to Date.now()', () => {
+    // @ts-expect-error -- the implicit `now = Date.now()` default was removed: time is mandatory.
+    expect(() => createMesJob(jobTool, 0)).toThrow(RangeError);
+    // @ts-expect-error -- same required caller-owned time on the process-equipment overload.
+    expect(() => createProcessMesJob(equipment)).toThrow(RangeError);
   });
 });
 

@@ -1,4 +1,4 @@
-import type { CutAxis, SceneViewPreset, XRayFilter } from '../../../rendering/fab-scene';
+import type { CutAxis, SceneViewPreset, XRayFilter } from '../../../application/ports/scene';
 
 export type EntryMode = 'visitor' | 'engineer' | 'research';
 export type FabLevel = 'L1' | 'B1' | 'DUAL' | 'EXPLODED';

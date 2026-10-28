@@ -1,4 +1,4 @@
-import type { SceneLayer, XRayFilter } from '../../rendering/fab-scene';
+import type { SceneLayer, XRayFilter } from '../../application/ports/scene';
 
 /** localStorage key of the "don't show again" onboarding preference. */
 export const ONBOARDING_KEY = 'semicon_twin_onboarding_dismissed';

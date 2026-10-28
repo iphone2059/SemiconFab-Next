@@ -1,5 +1,5 @@
 import { buildWaferWaypoints, type WaferProduct, type WaferRouteStep } from './wafer-route';
-import type { WaferBay, WaferScenario } from './tour-wafer-timeline';
+import type { WaferBay, WaferScenario } from './wafer-timeline';
 
 // Frozen CATEGORY_BAYS names used by updateWaferFollowHUD (b3666132).
 export const WAFER_BAYS: Readonly<Record<string, WaferBay>> = {

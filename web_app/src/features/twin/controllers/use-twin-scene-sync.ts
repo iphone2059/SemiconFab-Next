@@ -1,13 +1,15 @@
 import { useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
-import type { CutAxis, XRayFilter } from '../../../rendering/fab-scene';
+import type { CutAxis, XRayFilter } from '../../../application/ports/scene';
+import type { ViewerLifecycle } from '../../../state/runtimeStore';
 import type { FabLevel, TwinView } from '../state/twin-state';
 import type { FabViewportHandle } from '../fab-viewer';
 import type { TwinLanguage } from '../twin-i18n';
 
 export interface TwinSceneSyncParams {
   scene: RefObject<FabViewportHandle | null>;
-  status: string;
+  /** Discrete viewer lifecycle; display copy is never used to decide scene commands. */
+  lifecycle: ViewerLifecycle;
   viewerEpoch: string | undefined;
   view: TwinView;
   language: TwinLanguage;
@@ -33,7 +35,7 @@ export interface TwinSceneSyncParams {
  */
 export function useTwinSceneSync({
   scene,
-  status,
+  lifecycle,
   viewerEpoch,
   view,
   language,
@@ -53,10 +55,10 @@ export function useTwinSceneSync({
   // pose, so only a fresh epoch/reload or a requested view change re-applies it.
   const appliedCameraView = useRef<{ epoch: string | undefined; view: TwinView } | undefined>(undefined);
 
-  useEffect(() => { scene.current?.setLanguage(language); }, [language, status]);
+  useEffect(() => { scene.current?.setLanguage(language); }, [language, lifecycle]);
 
   useEffect(() => {
-    if (!status.startsWith('WebGPU')) return;
+    if (lifecycle !== 'ready') return;
     // Restore material state before changing levels, then apply the single active mode.
     scene.current?.setXRayFilter(null);
     scene.current?.setBasement(basement);
@@ -64,21 +66,21 @@ export function useTwinSceneSync({
     scene.current?.setExplodeFactor(exploded ? explodePercent / 100 : 0, exploded);
     scene.current?.setCutPlane(cutActive, cutAxis, cutPosition, cutInvert);
     scene.current?.setXRayFilter(xrayFilter);
-  }, [status, basement, level, exploded, explodePercent, cutActive, cutAxis, cutPosition, cutInvert, xrayFilter]);
+  }, [lifecycle, basement, level, exploded, explodePercent, cutActive, cutAxis, cutPosition, cutInvert, xrayFilter]);
 
   useEffect(() => {
-    if (!status.startsWith('WebGPU')) return;
+    if (lifecycle !== 'ready') return;
     // GPU recovery belongs to the same viewport lifetime and restores its user
     // pose. Only a fresh mount/reload or a requested view change applies a preset.
     if (appliedCameraView.current?.epoch !== viewerEpoch || appliedCameraView.current?.view !== view) scene.current?.setView(view);
     appliedCameraView.current = { epoch: viewerEpoch, view };
-  }, [status, view, viewerEpoch]);
+  }, [lifecycle, view, viewerEpoch]);
 
   useEffect(() => {
-    if (!status.startsWith('WebGPU')) return;
+    if (lifecycle !== 'ready') return;
     scene.current?.setTour(tourActive);
     // Escape/mode/level actions can stop Tour through the store without clicking
     // its Stop button. Cancel the controller too, or its next waypoint revives UI.
     if (!tourActive) cancelTourIfRunning();
-  }, [status, tourActive]);
+  }, [lifecycle, tourActive]);
 }

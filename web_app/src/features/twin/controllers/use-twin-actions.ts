@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import type { CutAxis, PickedTool, SceneLayer, XRayFilter } from '../../../rendering/fab-scene';
+import type { CutAxis, PickedTool, SceneLayer, XRayFilter } from '../../../application/ports/scene';
 import { FAB_LAYOUT, type FabToolState } from '../../../domain/fab/fab-layout';
 import { ORIGINAL_TWIN_UI, type TwinSelection } from '../../../domain/fab/original-twin-data';
 import { applyMesAction, createMesJob, type MesAction, type MesJob } from '../../../domain/fab/process-control';
@@ -187,7 +187,7 @@ export function useTwinActions({
     const index = selected.index;
     setMesJobs((current) => ({
       ...current,
-      [index]: applyMesAction(current[index] ?? createMesJob(FAB_LAYOUT[index], index), action),
+      [index]: applyMesAction(current[index] ?? createMesJob(FAB_LAYOUT[index], index, Date.now()), action),
     }));
   }
 

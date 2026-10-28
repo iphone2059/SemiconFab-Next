@@ -1,7 +1,7 @@
 import { OriginalIcon } from '../../components/original-icons';
 import { TwinLocaleProvider } from './twin-i18n';
 import { useEffect, useMemo, useRef } from 'react';
-import type { AmhsStats, CutAxis } from '../../rendering/fab-scene';
+import type { AmhsStats, CutAxis } from '../../application/ports/scene';
 import { FAB_TOOL_STATE_META, type FabToolState } from '../../domain/fab/fab-layout';
 import { YIELD_SCENARIOS } from '../../domain/fab/fab-yield';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '../../domain/simulation/original-tour';
@@ -14,7 +14,7 @@ import type { RouterSearch } from '../../app/router/search';
 import { useTwinPageStore, twinPageActions } from './state/twinPageStore';
 import { useTwinDemoStore, twinDemoActions } from './state/twinDemoStore';
 import { useTwinUiStore, twinUiActions } from './state/twinUiStore';
-import { createCoalescedDispatcher } from '../../realtime/telemetry/telemetry-buffer';
+import { createCoalescedDispatcher } from '../../shared/scheduling/coalesced-dispatcher';
 import { useFabTelemetry } from '../../app/providers/TelemetryProvider';
 import { FabViewport, type FabViewportHandle } from './fab-viewer';
 import { EquipmentStatusPipeline } from './equipment-status-pipeline';
@@ -55,7 +55,7 @@ interface TwinContentProps {
  */
 function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const scene = useRef<FabViewportHandle>(null);
-  const { t, language, toggleLanguage, theme, ui, demo, page, status, viewerEpoch } = useTwinSlices();
+  const { t, language, toggleLanguage, theme, ui, demo, page, status, lifecycle, viewerEpoch } = useTwinSlices();
   const mode = ui.entryMode;
   const view = ui.view;
   const level = ui.level;
@@ -111,7 +111,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     onboardingDontShow, startTour: tour.startTour,
   });
   useTwinSceneSync({
-    scene, status, viewerEpoch, view, language, level, basement, exploded, explodePercent,
+    scene, lifecycle, viewerEpoch, view, language, level, basement, exploded, explodePercent,
     cutActive, cutAxis, cutPosition, cutInvert, xrayFilter,
     tourActive: ui.tour.active, cancelTourIfRunning: tour.cancelTourIfRunning,
   });
@@ -417,7 +417,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
         <div id="hud-grid-badge" className="twin-grid-badge"><OriginalIcon name="ruler" />{t("网格: 6m × 6m · Subfab: -7.0m")}</div>
 
         <footer id="bottom-hud-footer" className="twin-bottom">
-          <span className="twin-status" title={status}><i className={status.startsWith('WebGPU') ? 'ok' : ''} />{status.startsWith('WebGPU') ? 'WebGPU' : status}</span>
+          <span className="twin-status" title={status}><i className={lifecycle === 'ready' ? 'ok' : ''} />{lifecycle === 'ready' ? 'WebGPU' : status}</span>
           <span>{fab ? `${fab.code} · ${t("单 FAB")}` : t("FAB-01 · 单 FAB")}</span>
           <span className="twin-footer-legend" aria-label={t("工艺分区图例")}>{[['光刻','#d99e3d'],['刻蚀','#c26b6b'],['薄膜','#d68a4a'],['Cu','#a98467'],['注入','#8b7bb5'],['扩散','#5c9b78'],['CMP/清洗','#4f9b9b'],['量测','#5b82b5'],['封装','#b06c96'],['Subfab','#4f6fa8']].map(([name,color])=><i key={name} title={name} style={{background:color}} />)}</span>
           <AmhsOhtReadout />

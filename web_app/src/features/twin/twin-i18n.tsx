@@ -4,8 +4,8 @@ import { TWIN_EN } from './twin-translations';
 import { GENERATED_TWIN_EN } from '../../generated/twin-translations.generated';
 import { languageTag } from '../../state/preferences';
 
-import type { TwinLanguage } from '../../domain/contracts/language';
-export type { TwinLanguage } from '../../domain/contracts/language';
+import type { TwinLanguage } from '../../localization/language';
+export type { TwinLanguage } from '../../localization/language';
 export function persistTwinLanguage(storage: Pick<Storage, 'setItem'>, language: TwinLanguage): void {
   try {
     storage.setItem('semiconfab_lang', languageTag(language));

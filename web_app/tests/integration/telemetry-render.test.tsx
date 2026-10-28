@@ -18,17 +18,23 @@ import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '../../src/st
 import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '../../src/features/twin/state/twinDemoStore';
 import { twinUiActions } from '../../src/features/twin/state/twinUiStore';
 import type { FabToolState } from '../../src/domain/fab/fab-layout';
+import type { ScenePortStub } from '../support/scene-port-stub';
 
-const backend = vi.hoisted(() => ({ getters: [] as Array<() => readonly FabToolState[]>, views: [] as string[] }));
-vi.mock('../../src/rendering/lite-backend', () => ({ createLiteBackend: () => ({
-  async mount(_canvas: unknown, _fabs: unknown, _signal: unknown, status: (value: string) => void, _pick: unknown, _stats: unknown, _hover: unknown, getter: () => readonly FabToolState[]) {
-    backend.getters.push(getter); status('WebGPU · ready');
-  },
-  dispose() {},
-  setView(view: string) { backend.views.push(view); },
-}) }));
+const backend = vi.hoisted(() => ({ instances: [] as ScenePortStub[] }));
+vi.mock('../../src/rendering/lite-backend', async () => {
+  const { createScenePortStub } = await import('../support/scene-port-stub');
+  return {
+    createLiteBackend: () => {
+      const stub = createScenePortStub();
+      backend.instances.push(stub);
+      return stub;
+    },
+  };
+});
 const site = { siteId: 'site-1', code: 'SITE-1', templateHash: 'test', fabs: [{ fabId: 'fab-1', code: 'FAB-01' }] };
-afterEach(() => { cleanup(); backend.getters.length = 0; backend.views.length = 0; vi.unstubAllGlobals(); resetTwinUiStore(); resetTwinPageStore(); resetTwinDemoStore(); resetRuntimeStore(); });
+const sceneViews = (): string[] => backend.instances.flatMap(instance => [...instance.views]);
+const frameSource = (index = 0) => backend.instances[index].mounts[0].callbacks.getToolStates;
+afterEach(() => { cleanup(); backend.instances.length = 0; vi.unstubAllGlobals(); resetTwinUiStore(); resetTwinPageStore(); resetTwinDemoStore(); resetRuntimeStore(); });
 
 it('does not reapply a preset on GPU recovery but applies it on viewport reload and view change', async () => {
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
@@ -38,26 +44,28 @@ it('does not reapply a preset on GPU recovery but applies it on viewport reload 
   twinDemoActions.playingSet(false);
   const view = render(<QueryClientProvider client={client}><TwinPage fabId="fab-1" /></QueryClientProvider>);
   try {
-    await waitFor(() => expect(backend.views).toHaveLength(1));
+    await waitFor(() => expect(sceneViews()).toHaveLength(1));
     const epoch = useRuntimeStore.getState().viewer.epoch!;
-    act(() => runtimeActions.viewerStatusReceived({ epoch, status: 'GPU 设备已丢失' }));
-    act(() => runtimeActions.viewerStatusReceived({ epoch, status: 'WebGPU · ready' }));
-    expect(backend.views).toHaveLength(1);
+    act(() => runtimeActions.viewerLifecycleReceived({ epoch, event: { type: 'recovering', message: 'GPU 设备已丢失', cause: 'device-lost' } }));
+    act(() => runtimeActions.viewerLifecycleReceived({ epoch, event: { type: 'ready', message: 'WebGPU · ready' } }));
+    expect(sceneViews()).toHaveLength(1);
     act(() => runtimeActions.viewerReloadRequested());
-    await waitFor(() => expect(backend.getters).toHaveLength(2));
-    await waitFor(() => expect(backend.views).toHaveLength(2));
+    await waitFor(() => expect(backend.instances).toHaveLength(2));
+    await waitFor(() => expect(sceneViews()).toHaveLength(2));
     act(() => twinUiActions.viewSet('top'));
-    expect(backend.views).toEqual(['iso', 'iso', 'top']);
+    expect(sceneViews()).toEqual(['iso', 'iso', 'top']);
   } finally { view.unmount(); client.clear(); }
 });
 
 it('uses a changed frame source without remounting the scene', async () => {
   const props = { site, fab: site.fabs[0], toolStates: ['running'] as FabToolState[], layers: { amhs: true, ceiling: false, roof: false, subfab: false, heatmap: false, airflow: false, xray: false }, explodeFactor: 0, basement: false, dual: false };
   const view = render(<FabViewport {...props} getToolStates={() => ['running']} />);
-  await waitFor(() => expect(backend.getters.length).toBe(1));
+  await waitFor(() => expect(backend.instances).toHaveLength(1));
+  const source = frameSource();
+  expect(source()).toEqual(['running']);
   view.rerender(<FabViewport {...props} getToolStates={() => ['down']} />);
-  expect(backend.getters[0]()).toEqual(['down']);
-  expect(backend.getters).toHaveLength(1);
+  expect(source()).toEqual(['down']);
+  expect(backend.instances).toHaveLength(1);
 });
 
 it('keeps paused DEMO states isolated while consuming telemetry in live mode', async () => {
@@ -74,11 +82,12 @@ it('keeps paused DEMO states isolated while consuming telemetry in live mode', a
   client.setQueryData(sitesQueryOptions().queryKey, [site]);
   twinDemoActions.playingSet(false);
   const view = render(<QueryClientProvider client={client}><TelemetryProvider registry={registry}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></TelemetryProvider></QueryClientProvider>);
-  await waitFor(() => expect(backend.getters.length).toBe(1));
-  expect(backend.getters[0]()).toEqual(useTwinDemoStore.getState().states);
+  await waitFor(() => expect(backend.instances).toHaveLength(1));
+  const toolStateSource = frameSource();
+  expect(toolStateSource()).toEqual(useTwinDemoStore.getState().states);
   twinUiActions.sourceSet('sse-live');
-  expect(backend.getters[0]()[0]).toBe('down');
+  expect(toolStateSource()[0]).toBe('down');
   twinUiActions.sourceSet('demo');
-  expect(backend.getters[0]()).toEqual(useTwinDemoStore.getState().states);
+  expect(toolStateSource()).toEqual(useTwinDemoStore.getState().states);
   view.unmount(); client.clear(); registry.disposeAll();
 });

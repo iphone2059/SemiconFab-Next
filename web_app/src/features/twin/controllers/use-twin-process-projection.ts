@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { PickedTool } from '../../../rendering/fab-scene';
+import type { PickedTool } from '../../../application/ports/scene';
 import { FAB_LAYOUT, type FabToolState } from '../../../domain/fab/fab-layout';
 import { buildTelemetry, computeSpc, createMesJob, type MesJob, type SpcResult, type Telemetry } from '../../../domain/fab/process-control';
 
@@ -39,7 +39,7 @@ export function useTwinProcessProjection({ selected, toolStates, mesJobs }: Twin
       : undefined,
     [selectedTelemetry, toolStates, selected?.index],
   );
-  const selectedMes = selected ? mesJobs[selected.index] ?? createMesJob(FAB_LAYOUT[selected.index], selected.index) : undefined;
+  const selectedMes = selected ? mesJobs[selected.index] ?? createMesJob(FAB_LAYOUT[selected.index], selected.index, Date.now()) : undefined;
   const spcPlot = useMemo<SpcPlot | undefined>(() => {
     if (!selectedTelemetry) return undefined;
     const values = selectedTelemetry.history;

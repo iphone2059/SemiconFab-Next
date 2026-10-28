@@ -17,10 +17,10 @@ import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
 import type { RouterSearch } from '../../src/app/router/search';
 
 // Only replace the hardware boundary; pages, stores and effects remain real.
-vi.mock('../../src/rendering/lite-backend', () => ({ createLiteBackend: () => ({
-  async mount(_canvas: unknown, _fabs: unknown, _signal: unknown, status: (value: string) => void) { status('WebGPU · ready'); },
-  dispose() {},
-}) }));
+vi.mock('../../src/rendering/lite-backend', async () => {
+  const { createScenePortStub } = await import('../support/scene-port-stub');
+  return { createLiteBackend: () => createScenePortStub() };
+});
 
 let client: QueryClient;
 beforeEach(() => {
