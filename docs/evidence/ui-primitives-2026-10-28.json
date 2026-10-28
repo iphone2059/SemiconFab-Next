@@ -1,5 +1,6 @@
 {
   "review": "Local clsx-compatible classNames helper and one shared Radix Dialog modal surface (plan: ui-primitives-plan-2026-10-28.md)",
+  "supersededBy": "native-dialog-2026-10-28.json",
   "branch": "refactor/ui-primitives-20261028",
   "baseCommit": "62ad5af05df77a8233287fcb5142f9bbd65ce55f",
   "branchHead": "2c3dd1e194b34405d6a93866eccfbe5a8cd6fceb",

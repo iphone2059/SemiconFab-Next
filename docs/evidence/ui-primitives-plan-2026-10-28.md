@@ -38,3 +38,10 @@ still scrolls. Do not add another state store, UI theme system or 3D dependency.
   grouped into the existing `react` chunk by `manualChunks(id.includes('react'))`.
 
 See `ui-primitives-2026-10-28.json`.
+
+## Update (2026-10-28): native <dialog>
+
+产品决定不保留 Radix：同一 `Modal` seam 已改为原生 `<dialog>` 实现，删除
+`@radix-ui/react-dialog` 及 24 个传递依赖，并用 `::backdrop`、自身 Tab
+循环、滚动锁与焦点恢复补齐交互。验证与包体数据见
+`native-dialog-2026-10-28.json`；本文件此前记录的 Radix 方案已被取代。

@@ -1,0 +1,131 @@
+{
+  "review": "Replace the Radix Dialog experiment with one shared native <dialog> modal wrapper (supersedes ui-primitives-2026-10-28.json)",
+  "branch": "main",
+  "baseCommit": "166a71804d9b1281c36060282edd2f70822c50c1",
+  "branchHead": "74eb243015dcbecdd70f1cf6fd8d5ce800b99f22",
+  "verifiedAt": "2026-10-28T10:13:00+08:00",
+  "environment": {
+    "os": "Windows",
+    "node": "26.12.1",
+    "dotnet": "11.0.100-rc.2.26504.105",
+    "python": "3.14.7",
+    "frontend": "React 19.3.1 / Vite 8.3.5 / TypeScript 7.0.2 / @babylonjs/lite 1.36.0 (no Radix dependency)",
+    "browser": "Chrome 155.0.8059.86 headless via CDP; WebGPU probe uses --enable-unsafe-webgpu --use-angle=d3d11"
+  },
+  "dependencyDelta": {
+    "removed": [
+      "@radix-ui/react-dialog@1.3.1"
+    ],
+    "transitivePackagesRemoved": 24,
+    "resolvedPackages": {
+      "before": 243,
+      "after": 219
+    },
+    "lockfileLines": -414,
+    "modalDependency": "none: native HTMLDialogElement showModal/close, with an attribute fallback only for environments such as jsdom that do not implement the element"
+  },
+  "automatedVerification": {
+    "command": "./scripts/verify.ps1",
+    "exitCode": 0,
+    "gates": {
+      "contracts": "PASS (C# / TypeScript match JSON Schema)",
+      "architecture": "PASS (flat layout, DAG, module records, legacy paths absent)",
+      "pythonToolTests": "8/8",
+      "renderPerfUnitTests": "13/13",
+      "legacyMigrationCheck": "PASS",
+      "dotnetBuilds": "3/3 projects, 0 errors",
+      "backendTests": "177/177",
+      "pnpmInstall": "frozen lockfile, lockfile up to date",
+      "typecheck": "tsc --noEmit exit 0",
+      "frontendTests": {
+        "files": 88,
+        "passed": 506,
+        "failed": 0
+      },
+      "build": "vite build exit 0 (1807 modules)"
+    }
+  },
+  "bundleDelta": {
+    "measurement": "Same Vite 8.3.5 production build per revision; gzip level 9; artifacts under .local/ui-primitives-20261028 (not committed)",
+    "revisions": {
+      "base62ad5af": {
+        "raw": 3325225,
+        "gzip": 609785
+      },
+      "radix166a718": {
+        "raw": 3363561,
+        "gzip": 620244
+      },
+      "native74eb243": {
+        "raw": 3326931,
+        "gzip": 608409
+      }
+    },
+    "nativeVsRadix": {
+      "raw": -36630,
+      "gzip": -11835
+    },
+    "nativeVsBase": {
+      "raw": 1706,
+      "gzip": -1376
+    },
+    "chunkNotes": [
+      "react.js returns to the base 62ad5af size (raw -42,294 / gzip -13,743 against the Radix build) because the 24 dependency packages are gone.",
+      "index.js grows by 3,036 raw / 1,054 gzip against base: the shared native wrapper, scroll lock, Tab loop and classNames helper replace two ad-hoc dialog implementations.",
+      "twin-page.js, gpu.js, lite-backend.js and index.css are at or below the base sizes; total gzip is 1.4 kB below base and 11.8 kB below the Radix build."
+    ]
+  },
+  "browserEvidence": {
+    "catalogProbe": {
+      "script": ".local/ui-primitives-20261028/native-catalog-probe.mjs",
+      "result": ".local/ui-primitives-20261028/browser-native/catalog-native-probe.json",
+      "checks": "16/16",
+      "screenshots": [
+        "browser-native/catalog-native-light.png",
+        "browser-native/catalog-native-dark.png"
+      ],
+      "verified": [
+        "detail dialog is a real <dialog> opened through showModal (tag DIALOG, open, matches(':modal')); StrictMode dev double-invokes the layout effect so the probe records 2 calls",
+        "role=dialog, aria-modal=true, accessible name from the ModalTitle id",
+        "dialog stays inside .catalog-shell, so light/dark theme variables reach the panel without a portal (light rgb(255,255,255), dark rgb(25,42,48))",
+        "backdrop is styled via ::backdrop (rgba(32,57,86,0.5), blur(4px))",
+        "dialog is centered within the viewport and holds focus",
+        "document scroll is locked and wheel over the backdrop does not scroll the page",
+        "Tab/Shift+Tab loop at the dialog edges",
+        "Escape closes, restores the Inspect trigger and leaves the window-level Escape counter at 0",
+        "backdrop pointer press dismisses; pointer press inside the dialog keeps it open",
+        "no page exceptions or console errors"
+      ]
+    },
+    "twinProbe": {
+      "script": ".local/ui-primitives-20261028/native-twin-probe.mjs",
+      "result": ".local/ui-primitives-20261028/browser-native/twin-native-probe.json",
+      "checks": "16/16",
+      "screenshots": [
+        "browser-native/twin-native-dialog.png",
+        "browser-native/twin-native-after-dialog.png"
+      ],
+      "verified": [
+        "architecture dialog is a native top-layer <dialog> inside .twin-page (matches(':modal'), centered in the viewport) with ::backdrop styling",
+        "WebGPU canvas stays mounted and keeps rendering behind the dialog (frames 34 -> 91, gpuErrors 0)",
+        "Escape closes only the dialog, restores the sidebar opener, keeps the selected tool inspector and leaves the background Escape counter at 0",
+        "backdrop pointer press closes without clearing the 3D selection",
+        "camera pose is unchanged by keyboard or backdrop dismissal",
+        "no page exceptions or console errors"
+      ]
+    }
+  },
+  "behaviorNotes": [
+    "The browser owns the top layer, ::backdrop, Escape ordering and background inertness; the app wrapper only adds controlled close, focus loop/restore, backdrop pointer dismissal and scroll locking.",
+    "Escape is handled in the dialog keydown with stopPropagation + preventDefault, so native cancel is suppressed and Twin window shortcuts never see the event; the cancel listener only handles browser/AT-initiated close requests and keeps them controlled.",
+    "Scroll locking is reference-counted across nested dialogs with root-overflow restore and scrollbar-width compensation.",
+    "Focus restore keeps the pre-showModal activeElement fallback for URL/store-driven dialogs and detached openers that native close() cannot restore.",
+    "ModalTitle remains the accessible-name seam through context + aria-labelledby, including asChild titles.",
+    "The portalContainer seam and both page-level container states were deleted: DOM ancestry now carries theme variables, and the Twin page keeps GPU rendering while the dialog is in the top layer."
+  ],
+  "residualRisks": [
+    "jsdom 30 does not implement HTMLDialogElement.showModal/close, so unit tests exercise the wrapper plus an attribute fallback; native top-layer behavior is covered only by the Chrome 155 probes.",
+    "Cross-browser modal behavior (Safari/Firefox) was not re-run in this round.",
+    "The WebGPU Twin probe is headless Chrome with d3d11; the YMS tabs share the same Modal wrapper but were not separately browser-probed."
+  ]
+}
