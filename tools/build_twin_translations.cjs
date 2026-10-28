@@ -1,6 +1,6 @@
 // Generates the frozen en/zh translation map consumed by the Twin UI.
 // Input is the C1 inventory web_app/assets/original-twin-i18n.json (only en + zh-CN bytes).
-// Output web_app/src/twin-translations.generated.ts is deterministic; use --check for CI.
+// Output web_app/src/generated/twin-translations.generated.ts is deterministic; use --check for CI.
 //
 // Determinism and collision policy:
 //   1. source entries are fixture.keys in document order, then fixture.dynamic in source-line order;
@@ -15,7 +15,7 @@ const crypto = require('node:crypto');
 
 const root = path.resolve(__dirname, '..');
 const fixturePath = path.join(root, 'web_app/assets/original-twin-i18n.json');
-const destinationPath = path.join(root, 'web_app/src/twin-translations.generated.ts');
+const destinationPath = path.join(root, 'web_app/src/generated/twin-translations.generated.ts');
 
 const sha256 = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
 const compareText = (left, right) => (left < right ? -1 : left > right ? 1 : 0);

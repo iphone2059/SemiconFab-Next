@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SOURCE_JSON = join(ROOT, 'web_app', 'assets', 'lite-static-structure.json');
-const OUTPUT_TS = join(ROOT, 'web_app', 'src', 'rendering', 'lite', 'geometry', 'static-structure-packed.ts');
+const OUTPUT_TS = join(ROOT, 'web_app', 'src', 'generated', 'static-structure-packed.ts');
 const USAGE = 'usage: node tools/pack_static_structure.mjs [--check|--measure]';
 
 function fail(message) {
@@ -167,7 +167,7 @@ function renderModule(sourceText, payloads) {
     '// value that is not exactly representable, so this module decodes to the committed JSON asset',
     '// value-for-value; tests/static-structure-pack.test.ts enforces that invariant.',
     '',
-    "import type { StaticLayer, StaticSurfaceDefinition } from './static-structure';",
+    "import type { StaticLayer, StaticSurfaceDefinition } from '../rendering/lite/geometry/static-structure';",
     '',
     'export interface PackedGeometry {',
     '  readonly positions: Float32Array;',
