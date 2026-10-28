@@ -99,7 +99,7 @@ const WaferDieMap = memo(function WaferDieMap({ dies }: { dies: readonly WaferDi
  * cross-die hover rerenders only the readout instead of TwinContent and
  * FabViewport.
  */
-export function TwinYmsPanel({ toolStates, portalContainer }: YmsProjectionProps & { portalContainer?: HTMLElement | null }) {
+export function TwinYmsPanel({ toolStates }: YmsProjectionProps) {
   const { t } = useTwinLocale();
   const { tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, stdfCopied } = useTwinPageStore(useShallow((state) => ({
     tab: state.yms.tab,
@@ -133,8 +133,8 @@ export function TwinYmsPanel({ toolStates, portalContainer }: YmsProjectionProps
   }
 
   return (
-    <Modal overlayClassName="twin-yms-backdrop" className="twin-yms" label="YMS yield management"
-      onClose={() => twinPageActions.ymsOpenSet(false)} portalContainer={portalContainer}>
+    <Modal backdropClassName="twin-yms-backdrop" className="twin-yms" label="YMS yield management"
+      onClose={() => twinPageActions.ymsOpenSet(false)}>
         <header className="twin-yms-head">
           <div><ModalTitle asChild><strong>YMS · YIELD MANAGEMENT</strong></ModalTitle><span>WM-811K SPATIAL CLASSIFIER · 8-STAGE CASCADING YIELD</span></div>
           <nav>

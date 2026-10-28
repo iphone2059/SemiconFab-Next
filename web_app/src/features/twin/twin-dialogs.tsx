@@ -42,7 +42,7 @@ const DATA_ROWS = [
   ['Visualization & Dashboards', 'Siemens Opcenter Intelligence', 'Grafana / Apache Superset', 'Live fab OEE, chamber SOH, Shewhart SPC control charts and yield waterfall monitoring'],
 ];
 
-export function TwinInfoDialog({ mode, onClose, onSelectOem, portalContainer }: { mode: 'architecture' | 'database'; onClose: () => void; onSelectOem: (id: string) => void; portalContainer?: HTMLElement | null }) {
+export function TwinInfoDialog({ mode, onClose, onSelectOem }: { mode: 'architecture' | 'database'; onClose: () => void; onSelectOem: (id: string) => void }) {
   const { t, language } = useTwinLocale();
   const zh = language === 'zh';
   const oemDialog = useTwinPageStore((state) => state.oemDialog);
@@ -59,9 +59,9 @@ export function TwinInfoDialog({ mode, onClose, onSelectOem, portalContainer }: 
     try { await navigator.clipboard?.writeText(JSON.stringify(row, null, 2)); } catch { /* clipboard may be blocked */ }
   }
   return (
-    <Modal id={mode === 'database' ? 'oem-database-modal' : 'open-architecture-modal'} overlayClassName="twin-yms-backdrop"
+    <Modal id={mode === 'database' ? 'oem-database-modal' : 'open-architecture-modal'} backdropClassName="twin-yms-backdrop"
       className="twin-yms twin-dialog-wide" label={mode === 'database' ? t('OEM 数据库') : t('开放软件架构')}
-      onClose={onClose} portalContainer={portalContainer}>
+      onClose={onClose}>
         <header className="twin-yms-head">
           <div>
             <ModalTitle asChild><strong>{mode === 'database' ? 'GLOBAL SEMICONDUCTOR EQUIPMENT DATABASE (BETA)' : 'OPEN SEMICONDUCTOR SOFTWARE ARCHITECTURE & STANDARDS'}</strong></ModalTitle>

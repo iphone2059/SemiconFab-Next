@@ -304,6 +304,7 @@
 }
 .catalog-dialog {
   width: min(1000px, 94vw);
+  max-width: 94vw;
   max-height: 90vh;
   padding: 0;
   color: var(--catalog-ink);
@@ -312,14 +313,7 @@
   border-radius: 10px;
   overflow: auto;
 }
-.catalog-dialog-overlay {
-  position: fixed;
-  z-index: 200;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3vh 3vw;
+.catalog-dialog-backdrop::backdrop {
   background: #20395680;
   backdrop-filter: blur(4px);
 }

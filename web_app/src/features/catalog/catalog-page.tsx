@@ -2,7 +2,6 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
-  useState,
   type ChangeEvent,
   type MouseEvent,
 } from 'react';
@@ -244,19 +243,16 @@ function EquipmentDetails({
   entry,
   language,
   onClose,
-  portalContainer,
 }: {
   entry: CatalogEntryDto;
   language: Language;
   onClose: () => void;
-  portalContainer: HTMLElement | null;
 }) {
   return (
     <Modal
       className="catalog-dialog"
-      overlayClassName="catalog-dialog-overlay"
+      backdropClassName="catalog-dialog-backdrop"
       onClose={onClose}
-      portalContainer={portalContainer}
     >
       <div className="catalog-dialog-head">
         <div>
@@ -326,7 +322,6 @@ export interface CatalogPageProps {
 }
 
 export function CatalogPage({ view: initialView, search, onSearchChange, onViewChange }: CatalogPageProps) {
-  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
   const catalogState = useCatalogStore();
   const {
     view, domain, category, query, hideDrafts, selected,
@@ -465,7 +460,7 @@ export function CatalogPage({ view: initialView, search, onSearchChange, onViewC
   }
 
   return (
-    <div className="catalog-shell" data-theme={preferences.theme} ref={setPortalContainer}>
+    <div className="catalog-shell" data-theme={preferences.theme}>
       <header className="catalog-header">
         <a className="catalog-brand" href="/">
           SEMICON<span>FAB</span>
@@ -764,7 +759,7 @@ export function CatalogPage({ view: initialView, search, onSearchChange, onViewC
         </footer>
       </main>
       {detail && (
-        <EquipmentDetails entry={detail} language={language} onClose={() => catalogActions.detailIdSet(undefined)} portalContainer={portalContainer} />
+        <EquipmentDetails entry={detail} language={language} onClose={() => catalogActions.detailIdSet(undefined)} />
       )}
     </div>
   );

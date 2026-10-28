@@ -1,37 +1,69 @@
 // @vitest-environment jsdom
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { Modal, ModalTitle } from '../src/components/modal';
 
 afterEach(cleanup);
 
-function Fixture() {
+function Fixture({ title }: { title?: ReactNode } = {}) {
   const [open, setOpen] = useState(false);
   const [nested, setNested] = useState(false);
   return <>
     <button onClick={() => setOpen(true)}>Open parent</button>
-    {open && <Modal className="content" overlayClassName="overlay" onClose={() => setOpen(false)}>
-      <ModalTitle>Parent title</ModalTitle>
+    {open && <Modal className="content" backdropClassName="backdrop" onClose={() => setOpen(false)}>
+      {title ?? <ModalTitle>Parent title</ModalTitle>}
       <button onClick={() => setNested(true)}>Open child</button>
       <button onClick={() => setOpen(false)}>Close parent</button>
-      {nested && <Modal className="content" overlayClassName="overlay" onClose={() => setNested(false)}>
+      {nested && <Modal className="content" backdropClassName="backdrop" onClose={() => setNested(false)}>
         <ModalTitle>Child title</ModalTitle><button>Child action</button>
       </Modal>}
     </Modal>}
   </>;
 }
 
-it('names the dialog and restores the focused opener after Escape', async () => {
-  render(<Fixture />);
+async function openParent() {
   const opener = screen.getByRole('button', { name: 'Open parent' });
-  opener.focus(); fireEvent.click(opener);
-  const dialog = await screen.findByRole('dialog', { name: 'Parent title' });
+  opener.focus();
+  fireEvent.click(opener);
+  return { opener, dialog: await screen.findByRole('dialog') };
+}
+
+it('names the native dialog and restores the focused opener after Escape', async () => {
+  render(<Fixture />);
+  const { opener, dialog } = await openParent();
+  expect(await screen.findByRole('dialog', { name: 'Parent title' })).toBe(dialog);
   expect(dialog.getAttribute('aria-modal')).toBe('true');
+  expect(dialog.getAttribute('aria-labelledby')).toBeTruthy();
+  expect(document.getElementById(dialog.getAttribute('aria-labelledby')!)?.textContent).toBe('Parent title');
+  expect(dialog.className).toBe('content backdrop');
   await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
   fireEvent.keyDown(document.activeElement!, { key: 'Escape', code: 'Escape' });
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   await waitFor(() => expect(document.activeElement).toBe(opener));
+});
+
+it('opens through HTMLDialogElement.showModal when the browser provides it', async () => {
+  const showModal = vi.fn(function (this: HTMLDialogElement) { this.setAttribute('open', ''); });
+  const prototype = HTMLDialogElement.prototype as unknown as { showModal?: () => void };
+  const previous = prototype.showModal;
+  prototype.showModal = showModal as unknown as () => void;
+  try {
+    render(<Fixture />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open parent' }));
+    await screen.findByRole('dialog');
+    expect(showModal).toHaveBeenCalledTimes(1);
+  } finally {
+    if (previous) prototype.showModal = previous;
+    else delete prototype.showModal;
+  }
+});
+
+it('keeps an asChild title element and assigns the dialog label id', async () => {
+  render(<Fixture title={<ModalTitle asChild><h2>Custom title</h2></ModalTitle>} />);
+  const { dialog } = await openParent();
+  expect(await screen.findByRole('dialog', { name: 'Custom title' })).toBe(dialog);
+  expect(within(dialog).getByRole('heading', { name: 'Custom title' }).tagName).toBe('H2');
 });
 
 it('Escape closes only the nested modal and returns focus to its parent', async () => {
@@ -73,26 +105,42 @@ it('loops Tab and Shift+Tab inside the modal', async () => {
   expect(document.activeElement).toBe(last);
 });
 
-it('dismisses from the overlay pointer and restores focus', async () => {
+it('dismisses from a backdrop pointer press and restores focus', async () => {
   render(<Fixture />);
-  const opener = screen.getByRole('button', { name: 'Open parent' });
-  opener.focus(); fireEvent.click(opener);
-  const dialog = await screen.findByRole('dialog');
-  // The outside-pointer listener is installed after opening, so the opening
-  // gesture itself cannot immediately dismiss the dialog.
-  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
-  fireEvent.pointerDown(dialog.parentElement!, { button: 0, pointerType: 'mouse' });
-  fireEvent.pointerUp(dialog.parentElement!, { button: 0, pointerType: 'mouse' });
-  fireEvent.click(dialog.parentElement!);
+  const { opener, dialog } = await openParent();
+  await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+  fireEvent.pointerDown(dialog, { button: 0, pointerType: 'mouse' });
+  fireEvent.click(dialog);
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   await waitFor(() => expect(document.activeElement).toBe(opener));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Open parent' }));
+  const reopened = await screen.findByRole('dialog');
+  const inside = within(reopened).getByRole('heading', { name: 'Parent title' });
+  fireEvent.pointerDown(inside, { button: 0, pointerType: 'mouse' });
+  fireEvent.click(inside);
+  expect(screen.getByRole('dialog')).toBe(reopened);
+});
+
+it('locks document scrolling until the last modal closes', async () => {
+  render(<Fixture />);
+  fireEvent.click(screen.getByRole('button', { name: 'Open parent' }));
+  const parent = await screen.findByRole('dialog', { name: 'Parent title' });
+  expect(document.documentElement.style.overflow).toBe('hidden');
+  fireEvent.click(within(parent).getByRole('button', { name: 'Open child' }));
+  await screen.findByRole('dialog', { name: 'Child title' });
+  fireEvent.keyDown(document.activeElement!, { key: 'Escape', code: 'Escape' });
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Child title' })).toBeNull());
+  expect(document.documentElement.style.overflow).toBe('hidden');
+  fireEvent.keyDown(document.activeElement!, { key: 'Escape', code: 'Escape' });
+  await waitFor(() => expect(document.documentElement.style.overflow).toBe(''));
 });
 
 it('closes safely when the opener was removed while the dialog was open', async () => {
   function RemovedTrigger() {
     const [stage, setStage] = useState<'closed' | 'open' | 'done'>('closed');
     return <>{stage === 'closed' && <button onClick={() => setStage('open')}>Open</button>}
-      {stage === 'open' && <Modal className="content" overlayClassName="overlay" onClose={() => setStage('done')}>
+      {stage === 'open' && <Modal className="content" backdropClassName="backdrop" onClose={() => setStage('done')}>
         <ModalTitle>Detached opener</ModalTitle><button>Only action</button>
       </Modal>}
       {stage === 'done' && <p>Closed safely</p>}

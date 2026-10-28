@@ -296,7 +296,6 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const tourHudRef = useRef<TwinTourHudHandle>(null);
   // Mount-time seed for the tour HUD; later frames are pushed through tourHudRef.
   const [tourHudSeed, setTourHudSeed] = useState<TourHudSnapshot | null>(null);
-  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
   const amhsBatcher = useMemo(() => createCoalescedDispatcher<AmhsStats>((stats) => twinPageActions.amhsSet(stats), 100), []);
   useEffect(() => () => amhsBatcher.cancel(), [amhsBatcher]);
 
@@ -796,7 +795,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   }
 
   return (
-    <main className="twin-page" data-spatial-mode={ui.spatialMode ?? 'none'} ref={setPortalContainer}>
+    <main className="twin-page" data-spatial-mode={ui.spatialMode ?? 'none'}>
       {statusSiteId && selectedFabId && <EquipmentStatusPipeline siteId={statusSiteId} fabId={selectedFabId} />}
       <header className="twin-topbar">
         <a className="twin-brand" href="/" aria-label={t("首页")}>
@@ -1060,7 +1059,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
         )}
 
         {ymsOpen && (
-          <TwinYmsPanel toolStates={toolStates} portalContainer={portalContainer} />
+          <TwinYmsPanel toolStates={toolStates} />
         )}
         <div id="hud-grid-badge" className="twin-grid-badge"><OriginalIcon name="ruler" />{t("网格: 6m × 6m · Subfab: -7.0m")}</div>
 
@@ -1101,7 +1100,6 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
         {infoDialog && (
           <TwinInfoDialog
             mode={infoDialog}
-            portalContainer={portalContainer}
             onClose={() => setInfoDialog(null)}
             onSelectOem={(id) => handleTwinSelection({ kind: 'oem', id })}
           />
