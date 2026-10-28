@@ -12,15 +12,15 @@ import { FabTelemetryRegistry } from '../../src/realtime/telemetry/FabTelemetryR
 import { TelemetryRuntime } from '../../src/realtime/telemetry/TelemetryRuntime';
 import { createTelemetryWorkerHandler } from '../../src/realtime/workers/telemetryWorker.logic';
 import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import { resetTwinUiStore } from '../../src/state/twinUiStore';
-import { resetTwinPageStore } from '../../src/state/twinPageStore';
+import { resetTwinUiStore } from '../../src/features/twin/state/twinUiStore';
+import { resetTwinPageStore } from '../../src/features/twin/state/twinPageStore';
 import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '../../src/state/runtimeStore';
-import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '../../src/state/twinDemoStore';
-import { twinUiActions } from '../../src/state/twinUiStore';
-import type { FabToolState } from '../../src/fab-layout';
+import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '../../src/features/twin/state/twinDemoStore';
+import { twinUiActions } from '../../src/features/twin/state/twinUiStore';
+import type { FabToolState } from '../../src/domain/fab/fab-layout';
 
 const backend = vi.hoisted(() => ({ getters: [] as Array<() => readonly FabToolState[]>, views: [] as string[] }));
-vi.mock('../../src/lite-backend', () => ({ createLiteBackend: () => ({
+vi.mock('../../src/rendering/lite-backend', () => ({ createLiteBackend: () => ({
   async mount(_canvas: unknown, _fabs: unknown, _signal: unknown, status: (value: string) => void, _pick: unknown, _stats: unknown, _hover: unknown, getter: () => readonly FabToolState[]) {
     backend.getters.push(getter); status('WebGPU · ready');
   },

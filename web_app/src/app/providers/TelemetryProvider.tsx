@@ -17,16 +17,20 @@ export function TelemetryProvider({ registry, version = 0, children }: { registr
 /**
  * Returns the telemetry runtime for a FAB and starts it only while a consumer
  * is mounted. Idle FABs therefore do not hold SSE/Worker connections.
+ *
+ * Acquisition is reference counted by the registry: concurrent consumers of
+ * the same FAB share one runtime and only the last unmount stops it. The
+ * runtime identity is part of the effect dependency list so a registry
+ * replacement (sites reload) acquires the new generation.
  */
 export function useFabTelemetry(fabId: string | undefined): TelemetryRuntime | undefined {
   const registry = useContext(TelemetryContext)?.registry;
   const runtime = fabId ? registry?.get(fabId) : undefined;
 
   useEffect(() => {
-    if (!runtime) return;
-    runtime.start();
-    return () => runtime.stop();
-  }, [runtime]);
+    if (!registry || !fabId) return;
+    return registry.acquire(fabId);
+  }, [registry, fabId, runtime]);
 
   return runtime;
 }

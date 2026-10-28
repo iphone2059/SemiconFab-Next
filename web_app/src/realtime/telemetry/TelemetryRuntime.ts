@@ -1,7 +1,22 @@
-import type { TelemetryFrame, TelemetrySample } from '../../application/contracts/CommandEvents';
-import type { FabToolState } from '../../fab-layout';
+import type { TelemetryFrame } from '../../application/contracts/CommandEvents';
+import {
+  boundTelemetryFrame,
+  flattenTelemetryFrame,
+  mergeTelemetryFrames,
+  toolStatesFromValues,
+} from '../../domain/equipment/tool-state-projection';
+import type { FabToolState } from '../../domain/fab/fab-layout';
 import { MessageDecoder } from '../protocol/MessageDecoder';
 import { createTelemetryWorker } from '../workers/createTelemetryWorker';
+
+// The pure slot/FabToolState projection lives in domain/equipment; the runtime
+// re-exports the helpers it exposed before the split so callers stay unchanged.
+export {
+  flattenTelemetryFrame,
+  mergeTelemetryFrames,
+  telemetrySlotForEntityId,
+  toolStatesFromValues,
+} from '../../domain/equipment/tool-state-projection';
 
 interface EventSourceLike {
   onopen: (() => void) | null;
@@ -38,10 +53,6 @@ export interface TelemetrySnapshot {
   readonly toolStates: readonly FabToolState[];
 }
 
-const TOOL_STATES: readonly FabToolState[] = ['running', 'idle', 'down', 'maint'];
-const SAMPLE_LIMIT = 16;
-const FRAME_SIZE = SAMPLE_LIMIT * 2;
-const ENTITY_SLOT_PATTERN = /^equipment-(\d+)$/;
 /** Default in-flight ceiling: a healthy Worker replies in microseconds; 2s only catches a wedged one. */
 const DEFAULT_WORKER_TIMEOUT_MS = 2_000;
 
@@ -56,116 +67,6 @@ function workerFrameValues(payload: unknown): Float32Array | undefined {
   if (ArrayBuffer.isView(payload)) return Float32Array.from(payload as unknown as ArrayLike<number>);
   if (Array.isArray(payload)) return Float32Array.from(payload as number[]);
   return undefined;
-}
-
-/**
- * Parse a telemetry entity id into its stable render slot. Sample array
- * position is NOT identity: the backend may reorder samples between frames.
- * Unknown entity ids (not `equipment-<index>` inside the 16-slot frame) have no
- * slot and are ignored.
- */
-export function telemetrySlotForEntityId(entityId: string): number | undefined {
-  const match = ENTITY_SLOT_PATTERN.exec(entityId);
-  if (!match) return undefined;
-  const slot = Number(match[1]);
-  return Number.isSafeInteger(slot) && slot >= 0 && slot < SAMPLE_LIMIT ? slot : undefined;
-}
-
-/**
- * Flatten wire samples into the fixed Float32 frame consumed by the Worker.
- *
- * Slots are keyed by the stable entity index (`equipment-<index>`), so shuffled
- * sample arrays still update the same tool. Slots absent from this frame keep
- * their previous values instead of resetting to zero (= `running`); on the first
- * frame of a connection missing slots use the zero/running default. Duplicate
- * entity ids are ignored after their first occurrence.
- *
- * The returned values are a Float32Array so the Worker round trip is a binary
- * structured clone instead of a 32-entry number[] allocation + serialization.
- */
-export function flattenTelemetryFrame(
-  frame: TelemetryFrame,
-  previous?: ArrayLike<number>,
-): { sequence: number; values: Float32Array; toolStates: FabToolState[] } {
-  const values = new Float32Array(FRAME_SIZE);
-  if (previous) {
-    const inherited = Math.min(FRAME_SIZE, previous.length);
-    for (let index = 0; index < inherited; index += 1) values[index] = Number(previous[index] ?? 0);
-  }
-  const touched = new Set<number>();
-  for (const sample of frame.samples) {
-    const slot = telemetrySlotForEntityId(sample.entityId);
-    if (slot === undefined || touched.has(slot)) continue;
-    touched.add(slot);
-    const state = Math.max(0, Math.min(TOOL_STATES.length - 1, Math.round(sample.values.state ?? 0)));
-    const utilization = Math.max(0, Math.min(1, sample.values.utilization ?? 0));
-    values[slot * 2] = state;
-    values[slot * 2 + 1] = utilization;
-  }
-  return { sequence: frame.sequence, values, toolStates: toolStatesFromValues(values) };
-}
-
-/** Bound one raw frame to at most one sample per registered render slot. */
-function boundTelemetryFrame(frame: TelemetryFrame): TelemetryFrame {
-  const seen = new Set<number>();
-  const samples: TelemetrySample[] = [];
-  for (const sample of frame.samples) {
-    const slot = telemetrySlotForEntityId(sample.entityId);
-    if (slot === undefined || seen.has(slot)) continue;
-    seen.add(slot);
-    samples.push(sample);
-  }
-  return { fabId: frame.fabId, sequence: frame.sequence, capturedAt: frame.capturedAt, samples };
-}
-
-/**
- * Merge a later telemetry frame into an earlier one by render-slot identity.
- *
- * The protocol sends full snapshots today, but a sparse/delta frame only
- * carries the entities that changed. During Worker backpressure the runtime
- * keeps exactly one pending frame; merging rather than replacing it preserves
- * every registered entity's update while keeping the bounded latest-wins slot:
- * - only entity ids with a registered render slot (`equipment-0..15`) are kept:
- *   unknown ids cannot be rendered and must not grow the pending object;
- * - samples keep the base frame order; one sample per slot remains;
- * - a sample for the same slot is overridden by the incoming one;
- * - slots that only appear in the incoming frame are appended in arrival order
- *   (duplicates after the first occurrence are ignored);
- * - `fabId`/`sequence`/`capturedAt` describe the newest (incoming) frame.
- *
- * Pure: neither input frame nor its samples are mutated.
- */
-export function mergeTelemetryFrames(base: TelemetryFrame, incoming: TelemetryFrame): TelemetryFrame {
-  const incomingBySlot = new Map<number, TelemetrySample>();
-  for (const sample of incoming.samples) {
-    const slot = telemetrySlotForEntityId(sample.entityId);
-    if (slot === undefined || incomingBySlot.has(slot)) continue;
-    incomingBySlot.set(slot, sample);
-  }
-  const merged: TelemetrySample[] = [];
-  const seen = new Set<number>();
-  for (const sample of base.samples) {
-    const slot = telemetrySlotForEntityId(sample.entityId);
-    if (slot === undefined || seen.has(slot)) continue;
-    seen.add(slot);
-    merged.push(incomingBySlot.get(slot) ?? sample);
-  }
-  for (const [slot, sample] of incomingBySlot) {
-    if (seen.has(slot)) continue;
-    seen.add(slot);
-    merged.push(sample);
-  }
-  return { fabId: incoming.fabId, sequence: incoming.sequence, capturedAt: incoming.capturedAt, samples: merged };
-}
-
-/** Map worker-returned Float32 values back to renderer tool states. */
-export function toolStatesFromValues(values: ArrayLike<number>): FabToolState[] {
-  const states: FabToolState[] = [];
-  for (let index = 0; index < SAMPLE_LIMIT; index += 1) {
-    const state = Math.max(0, Math.min(TOOL_STATES.length - 1, Math.round(values[index * 2] ?? 0)));
-    states.push(TOOL_STATES[state]);
-  }
-  return states;
 }
 
 /**

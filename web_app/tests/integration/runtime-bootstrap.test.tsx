@@ -110,6 +110,60 @@ it('starts only the consumed FAB telemetry runtime and exposes useFabTelemetry(f
   await waitFor(() => expect(allUrls.every((url) => closed.includes(url))).toBe(true));
 });
 
+function TelemetryConsumer({ fabId, testId }: { fabId: string; testId: string }) {
+  const runtime = useFabTelemetry(fabId);
+  return <div data-testid={testId}>{runtime ? runtime.fabId : 'none'}</div>;
+}
+
+it('keeps one FAB telemetry stream alive until the last useFabTelemetry consumer unmounts', async () => {
+  const telemetryUrls: string[] = [];
+  const closed: string[] = [];
+  class FakeEventSource {
+    onopen: (() => void) | null = null;
+    onmessage: ((event: { data: string }) => void) | null = null;
+    onerror: ((event: unknown) => void) | null = null;
+    constructor(readonly url: string) {
+      if (url.includes('/telemetry/stream')) telemetryUrls.push(url);
+    }
+    addEventListener() {}
+    removeEventListener() {}
+    close() { closed.push(this.url); }
+  }
+  class FakeWorker {
+    onmessage: ((event: { data: unknown }) => void) | null = null;
+    postMessage() {}
+    terminate() {}
+  }
+  vi.stubGlobal('EventSource', FakeEventSource);
+  vi.stubGlobal('Worker', FakeWorker);
+
+  const client = clientWithSites();
+  const view = render(
+    <AppProviders client={client}>
+      <TelemetryConsumer fabId="fab-b" testId="consumer-a" />
+      <TelemetryConsumer fabId="fab-b" testId="consumer-b" />
+    </AppProviders>,
+  );
+  await waitFor(() => expect(telemetryUrls.length).toBe(1));
+  await waitFor(() => expect(screen.getByTestId('consumer-a').textContent).toBe('fab-b'));
+  expect(screen.getByTestId('consumer-b').textContent).toBe('fab-b');
+  expect(closed).toEqual([]);
+
+  // Unmounting one of two consumers keeps the shared runtime and stream open.
+  view.rerender(
+    <AppProviders client={client}>
+      <TelemetryConsumer fabId="fab-b" testId="consumer-a" />
+    </AppProviders>,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(closed).toEqual([]);
+  expect(telemetryUrls).toHaveLength(1);
+
+  // The last consumer unmounts: the runtime stops and its stream closes.
+  view.unmount();
+  await waitFor(() => expect(closed).toEqual([telemetryUrls[0]]));
+});
+
 function ProjectionProbe({ fabId, commandId }: { fabId: string; commandId: string }) {
   const projection = useCommandProjection(fabId, commandId);
   return <div data-testid="projection">{projection ? `${projection.state}:${projection.revision}` : 'none'}</div>;
