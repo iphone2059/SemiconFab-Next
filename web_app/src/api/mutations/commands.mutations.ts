@@ -1,49 +1,47 @@
-export interface SubmitEquipmentCommandInput {
-  readonly siteId: string;
-  readonly fabId: string;
-  readonly equipmentId: string;
-  readonly action: string;
-  /** Stable key for one logical command; retries must reuse it. */
-  readonly idempotencyKey: string;
-}
+import { createHttpTransport, type FetchLike } from '../transport/http';
+import {
+  commandIdentityMismatches,
+  submitEquipmentCommandInputSchema,
+  submittedEquipmentCommandSchema,
+  type SubmitEquipmentCommandInput,
+  type SubmittedEquipmentCommand,
+} from '../schemas/command.schema';
 
-export interface SubmittedEquipmentCommand {
-  readonly commandId: string;
-  readonly siteId: string;
-  readonly fabId: string;
-  readonly equipmentId: string;
-  readonly action: string;
-  readonly revision: number;
-  readonly outcome: string;
-  readonly occurredAt: string;
-}
+export type { SubmitEquipmentCommandInput, SubmittedEquipmentCommand } from '../schemas/command.schema';
 
-type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-
-/** HTTP command submission; the SSE stream/CommandGateway provide later states. */
+/**
+ * HTTP command submission; the SSE stream/CommandGateway provide later states.
+ *
+ * The shared transport owns the HTTP policy (same-origin relative URL, ProblemDetails
+ * errors, non-JSON rejection), while this module owns the command schema: the response
+ * must match SubmittedEquipmentCommand and echo the submitted site/FAB/equipment/action
+ * identity (a response for another FAB is rejected, never tracked).
+ */
 export async function submitEquipmentCommand(
   input: SubmitEquipmentCommandInput,
-  fetchImpl: FetchLike = (target, init) => fetch(target, init),
+  fetchImpl?: FetchLike,
 ): Promise<SubmittedEquipmentCommand> {
-  const response = await fetchImpl(`/api/v1/sites/${encodeURIComponent(input.siteId)}/commands`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Idempotency-Key': input.idempotencyKey,
+  const command = submitEquipmentCommandInputSchema.parse(input);
+  const payload = await createHttpTransport({ fetchImpl }).fetchJson(
+    '/api/v1/sites/' + encodeURIComponent(command.siteId) + '/commands',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': command.idempotencyKey,
+      },
+      body: JSON.stringify({ fabId: command.fabId, equipmentId: command.equipmentId, action: command.action }),
     },
-    body: JSON.stringify({ fabId: input.fabId, equipmentId: input.equipmentId, action: input.action }),
-  });
-  if (!response.ok) throw new Error(`command submission failed: ${response.status}`);
-  const body = await response.json() as Record<string, unknown>;
-  if (typeof body.commandId !== 'string' || typeof body.fabId !== 'string') throw new Error('invalid command submission response');
-  return {
-    commandId: body.commandId,
-    siteId: String(body.siteId),
-    fabId: body.fabId,
-    equipmentId: String(body.equipmentId),
-    action: String(body.action),
-    revision: Number(body.revision),
-    outcome: String(body.outcome),
-    occurredAt: String(body.occurredAt),
-  };
+  );
+  const parsed = submittedEquipmentCommandSchema.safeParse(payload);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const issuePath = issue ? issue.path.join('.') || 'root' : 'root';
+    throw new Error('命令提交响应格式无效 / invalid command response: ' + issuePath + ': ' + (issue?.message ?? 'unknown'));
+  }
+  const mismatches = commandIdentityMismatches(command, parsed.data);
+  if (mismatches.length > 0) {
+    throw new Error('命令提交响应与提交上下文不一致 / command response identity mismatch: ' + mismatches.join(', '));
+  }
+  return parsed.data;
 }

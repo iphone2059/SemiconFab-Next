@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { submitEquipmentCommand } from '../../api/mutations/commands.mutations';
+import { createEquipmentCommandIdempotencyKey } from '../../api/schemas/command.schema';
 import { useCommandProjection, useFabRuntimeRegistry } from '../../app/providers/RuntimeProvider';
 import { Panel } from '../../components/ui';
 
@@ -89,12 +90,13 @@ export function CommandConsole({ siteId, fabId }: { siteId: string; fabId: strin
       return;
     }
     const submittedScope = scope;
-    const submittedFabId = fabId;
     const isCurrentScope = () => aliveRef.current && scopeRef.current === submittedScope;
     // Reuse the key only while retrying the exact same logical command; any
     // other component change resets it (the select handlers below do too).
     const identity = JSON.stringify([siteId, fabId, equipmentId, action]);
-    const idempotencyKey = state.pendingKey?.identity === identity ? state.pendingKey.key : crypto.randomUUID();
+    const idempotencyKey = state.pendingKey?.identity === identity
+      ? state.pendingKey.key
+      : createEquipmentCommandIdempotencyKey();
     update((previous) => ({ ...previous, busy: true, error: '', pendingKey: { identity, key: idempotencyKey } }));
     try {
       const submitted = await submitEquipmentCommand({ siteId, fabId, equipmentId, action, idempotencyKey });
@@ -104,7 +106,8 @@ export function CommandConsole({ siteId, fabId }: { siteId: string; fabId: strin
       runtime.trackCommand(submitted.commandId);
       update((previous) => ({
         ...previous,
-        tracked: [{ commandId: submitted.commandId, fabId: submitted.fabId || submittedFabId }, ...previous.tracked].slice(0, 8),
+        // The validated response echoes the submitted FAB identity (cross-FAB responses throw).
+        tracked: [{ commandId: submitted.commandId, fabId: submitted.fabId }, ...previous.tracked].slice(0, 8),
         pendingKey: null,
       }));
     } catch (cause) {
