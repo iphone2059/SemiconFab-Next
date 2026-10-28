@@ -11,7 +11,10 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "predev": "node ../tools/check_frozen_assets.mjs",
+    "prebuild": "node ../tools/check_frozen_assets.mjs",
+    "pretest": "node ../tools/check_frozen_assets.mjs"
   },
   "dependencies": {
     "@babylonjs/lite": "1.36.0",

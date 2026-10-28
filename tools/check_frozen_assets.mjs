@@ -20,8 +20,10 @@ export function validateOriginalTwinUi(data) {
   check(object(data), 'original-twin-ui');
   check(Array.isArray(data.equipment) && Array.isArray(data.oem) &&
     Array.isArray(data.localized) && Array.isArray(data.signalKeys), 'original-twin-ui collections');
-  check(Number.isSafeInteger(data.bootstrapEquipmentCount) &&
-    Number.isSafeInteger(data.layoutCount) && data.layoutCount > 0, 'original-twin-ui counts');
+  check(data.bootstrapEquipmentCount === 67 && data.layoutCount === 121 &&
+    data.equipment.length === 18 && data.oem.length === 116 &&
+    data.localized.length === 18 && data.signalKeys.length === 220,
+    'original-twin-ui frozen dataset cardinality');
   const equipmentIds = new Set();
   const validateEquipment = (row, where) => {
     check(object(row), where);
@@ -77,7 +79,7 @@ const tags = new Set(['svg','rect','line','circle','text','path','ellipse','poly
 const attrs = new Set(['class','viewBox','fill','height','rx','stroke','stroke-width','width','x','y',
   'stroke-dasharray','x1','x2','y1','y2','cx','cy','r','font-size','text-anchor','font-weight','d','ry']);
 export function validateElevationData(graphics) {
-  check(object(graphics) && object(graphics.generic_chamber), 'original-elevations root');
+  check(object(graphics) && object(graphics.generic_chamber) && Object.keys(graphics).length === 20, 'original-elevations frozen catalog');
   const visit = (node, path) => {
     if (str(node)) return;
     check(object(node) && tags.has(node.tag) && object(node.attrs) && Array.isArray(node.children), path);
