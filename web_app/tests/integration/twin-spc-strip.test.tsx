@@ -7,11 +7,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 installNativeDialogPolyfill();
 import { TwinPage } from '../../src/features/twin/twin-page';
 import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import { FAB_LAYOUT } from '../../src/fab-layout';
-import { buildTelemetry, computeSpc } from '../../src/process-control';
-import { resetTwinUiStore } from '../../src/state/twinUiStore';
-import { resetTwinPageStore, twinPageActions } from '../../src/state/twinPageStore';
-import { resetTwinDemoStore, twinDemoActions } from '../../src/state/twinDemoStore';
+import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
+import { buildTelemetry, computeSpc } from '../../src/domain/fab/process-control';
+import { resetTwinUiStore } from '../../src/features/twin/state/twinUiStore';
+import { resetTwinPageStore, twinPageActions } from '../../src/features/twin/state/twinPageStore';
+import { resetTwinDemoStore, twinDemoActions } from '../../src/features/twin/state/twinDemoStore';
 import { resetRuntimeStore } from '../../src/state/runtimeStore';
 import { useLocaleStore } from '../../src/state/localeStore';
 

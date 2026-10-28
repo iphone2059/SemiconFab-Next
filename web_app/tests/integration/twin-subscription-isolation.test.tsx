@@ -9,16 +9,16 @@ import { TwinPage } from '../../src/features/twin/twin-page';
 import { AmhsOhtReadout, AmhsResearchBadge } from '../../src/features/twin/twin-amhs-hud';
 import { TwinWaferHud } from '../../src/features/twin/twin-wafer-hud';
 import { TwinYmsPanel } from '../../src/features/twin/twin-yms';
-import { FAB_LAYOUT } from '../../src/fab-layout';
-import { createMesJob } from '../../src/process-control';
+import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
+import { createMesJob } from '../../src/domain/fab/process-control';
 import { TwinLocaleProvider } from '../../src/features/twin/twin-i18n';
 import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import { resetTwinUiStore, twinUiActions } from '../../src/state/twinUiStore';
-import { resetTwinPageStore, twinPageActions } from '../../src/state/twinPageStore';
-import { resetTwinDemoStore, twinDemoActions } from '../../src/state/twinDemoStore';
+import { resetTwinUiStore, twinUiActions } from '../../src/features/twin/state/twinUiStore';
+import { resetTwinPageStore, twinPageActions } from '../../src/features/twin/state/twinPageStore';
+import { resetTwinDemoStore, twinDemoActions } from '../../src/features/twin/state/twinDemoStore';
 import { resetRuntimeStore } from '../../src/state/runtimeStore';
 import { useLocaleStore } from '../../src/state/localeStore';
-import type { AmhsStats } from '../../src/fab-scene';
+import type { AmhsStats } from '../../src/rendering/fab-scene';
 
 // The hardware boundary stays out of these subscription tests: a render counter
 // stands in for FabViewport so "did TwinContent rerender?" becomes measurable.

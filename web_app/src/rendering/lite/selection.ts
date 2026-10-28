@@ -2,8 +2,8 @@ import {
   addToScene, createGpuPicker, createLineSystem, disposePicker, getMeshGeometry, pickAsync, removeFromScene,
   type EngineContext, type GpuPicker, type Mesh, type PickOptions, type SceneContext, type SceneNode,
 } from '@babylonjs/lite';
-import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from '../../fab-layout';
-import type { HoveredTool, PickedTool } from '../../fab-scene';
+import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from '../../domain/fab/fab-layout';
+import type { HoveredTool, PickedTool } from '../fab-scene';
 import type { EquipmentTool, LiteEquipment } from './geometry/tool-families';
 
 type Triple = [number, number, number];

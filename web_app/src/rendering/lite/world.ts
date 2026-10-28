@@ -5,9 +5,9 @@ import {
   resizeEngine,
   type ArcRotateCamera, type EngineContext, type Mesh, type SceneContext, type SceneNode,
 } from '@babylonjs/lite';
-import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from '../../fab-layout';
-import { advanceExplodeFactor, explodedPlacement } from '../../twin-spatial';
-import type { AmhsStats, CutAxis, HoveredTool, PickedTool, SceneLayer, SceneViewPreset, XRayFilter } from '../../fab-scene';
+import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from '../../domain/fab/fab-layout';
+import { advanceExplodeFactor, explodedPlacement } from '../../domain/fab/twin-spatial';
+import type { AmhsStats, CutAxis, HoveredTool, PickedTool, SceneLayer, SceneViewPreset, XRayFilter } from '../fab-scene';
 import { createAmhsStatsGate } from './amhs-stats';
 import { createLiteCamera } from './camera';
 import { createLiteCutPlane } from './cut-plane';

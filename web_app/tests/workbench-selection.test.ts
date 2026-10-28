@@ -10,7 +10,7 @@ import {
   resetWorkbenchStore,
   useWorkbenchStore,
   workbenchActions,
-} from '../src/state/workbenchStore';
+} from '../src/features/workbench/state/workbenchStore';
 
 // Server state for sites/runs/run/results is owned by TanStack Query (ARCH G-02);
 // every test that renders gets its own isolated Query cache. Client UI state lives

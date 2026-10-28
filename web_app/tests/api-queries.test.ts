@@ -1,7 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from '../src/api/queries/equipment.queries';
-import { FAB_LAYOUT } from '../src/fab-layout';
+import { FAB_LAYOUT } from '../src/domain/fab/fab-layout';
 import { runsQueryOptions, runQueryOptions, runResultsQueryOptions } from '../src/api/queries/runs.queries';
 import { createRun } from '../src/api/mutations/runs.mutations';
 

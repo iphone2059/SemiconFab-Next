@@ -6,8 +6,8 @@ import {
   enableMaterialUvTransform, loadHdrEnvironment, decomposeMat4, rebuildMaterial, markMaterialUboDirty, enableThinInstanceWorldBounds,
   type DynamicTexture2D, type EngineContext, type Mat4, type Material, type Mesh, type PbrMaterialProps, type PointLight, type SceneContext, type TransformNode,
 } from '@babylonjs/lite';
-import { staticStructure as source, type PackedSourceEntity } from './static-structure-packed';
-import { originalFloorOpacity } from '../../../twin-spatial';
+import { staticStructure as source, type PackedSourceEntity } from '../../../generated/static-structure-packed';
+import { originalFloorOpacity } from '../../../domain/fab/twin-spatial';
 import { liteXraySystemClass } from '../effects-xray-state';
 
 export type StaticLayer = 'shell' | 'ffu' | 'b1';

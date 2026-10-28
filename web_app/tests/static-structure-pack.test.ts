@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
-import { staticStructure } from '../src/rendering/lite/geometry/static-structure-packed';
+import { staticStructure } from '../src/generated/static-structure-packed';
 
 interface CommittedGeometry {
   positions: number[];

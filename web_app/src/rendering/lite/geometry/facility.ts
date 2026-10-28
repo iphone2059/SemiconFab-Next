@@ -8,7 +8,7 @@ import {
   type DynamicTexture2D, type BillboardSpriteHandle, type ShaderMaterial, type SceneContext,
 } from '@babylonjs/lite';
 import { createOverlayBillboards, type OverlayBillboardSystem } from '../overlay-billboards';
-import { createPersonnelTimeline, type AirShowerFrame } from '../../../personnel-timeline';
+import { createPersonnelTimeline, type AirShowerFrame } from '../../../domain/personnel/personnel-timeline';
 import { ORIGINAL_AIR_SHOWERS, ORIGINAL_AIR_SHOWER as air, ORIGINAL_STICKY_MATS, ORIGINAL_STICKY_MAT as mat,
   ORIGINAL_CEILING_FFU as ffu, ORIGINAL_FFU_GRID, drawOriginalAirShowerBillboard, AIR_SHOWER_SPRITE_CANVAS } from './facility-layout';
 

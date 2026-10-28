@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { buildWaferWaypoints, parseWaferRoutes, waferTransitPoint } from '../src/wafer-route';
+import { buildWaferWaypoints, parseWaferRoutes, waferTransitPoint } from '../src/domain/wafer/wafer-route';
 
 it('parses the three original product routes and projects steps onto the layout', () => {
   const routes = parseWaferRoutes(JSON.parse(readFileSync(new URL('../public/twin/routes.json', import.meta.url), 'utf8')));

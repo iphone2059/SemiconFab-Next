@@ -1,5 +1,5 @@
 import type { AriaRole, PropsWithChildren, ReactNode, Ref } from 'react';
-import { classNames } from '../class-names';
+import { classNames } from './class-names';
 
 type PanelProps = PropsWithChildren<{
   title: string;

@@ -18,7 +18,7 @@ import { createSceneContext, disposeScene, getMeshGeometry, getPbrEmissiveColor,
   type EngineContext, type Mesh, type PbrMaterialProps, type StandardMaterialProps } from '@babylonjs/lite';
 import reference from './fixtures/lite-static-structure-reference.json';
 import { createLiteStaticStructure, type StaticSurfaceDefinition } from '../src/rendering/lite/geometry/static-structure';
-import { staticStructure as packed } from '../src/rendering/lite/geometry/static-structure-packed';
+import { staticStructure as packed } from '../src/generated/static-structure-packed';
 import { liteXraySystemClass, liteXraySystemMatches, type LiteXrayFilter } from '../src/rendering/lite/effects-xray-state';
 const surfaces = reference.materials as Record<string, StaticSurfaceDefinition>;
 

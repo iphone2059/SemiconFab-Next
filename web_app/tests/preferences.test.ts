@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { readPreferences } from '../src/preferences';
+import { readPreferences } from '../src/state/preferences';
 
 const storage = (values: Record<string, string>) => ({
   getItem: (key: string) => values[key] ?? null,

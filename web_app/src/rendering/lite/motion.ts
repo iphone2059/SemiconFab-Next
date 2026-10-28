@@ -8,9 +8,9 @@ import {
   type StandardMaterialProps, type TransformNode,
 } from '@babylonjs/lite';
 import { advanceAmhsState, AMHS_TRAFFIC_SEED, createAmhsRandom, createAmhsState,
-  type AmhsStation } from '../../amhs-timeline';
-import { PERSONNEL, createPersonnelTimeline } from '../../personnel-timeline';
-import type { AmhsStats } from '../../fab-scene';
+  type AmhsStation } from '../../domain/amhs/amhs-timeline';
+import { PERSONNEL, createPersonnelTimeline } from '../../domain/personnel/personnel-timeline';
+import type { AmhsStats } from '../fab-scene';
 
 type Triple = readonly [number, number, number];
 type Point = { x: number; y: number; z: number };

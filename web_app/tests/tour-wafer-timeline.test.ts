@@ -14,7 +14,7 @@ import {
   type WaferFrame,
   type WaferScenario,
   type WaferTimeline,
-} from '../src/tour-wafer-timeline';
+} from '../src/domain/wafer/tour-wafer-timeline';
 
 const fixture = JSON.parse(
   readFileSync(new URL('./fixtures/original-tour-wafer-vectors.json', import.meta.url), 'utf8'),

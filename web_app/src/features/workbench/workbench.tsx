@@ -4,13 +4,13 @@ import type { CreateRunRequest, SiteDto } from '../../contracts';
 import { Panel, StatusPill } from '../../components/ui';
 import { Metric } from '../../components/widgets';
 import { CompletionBar } from '../../components/charting';
-import { ScopeGate } from '../../state-sync';
-import { validateScenario } from '../../scenario';
+import { ScopeGate } from '../../application/coordination/ScopeGate';
+import { validateScenario } from '../../domain/simulation/scenario';
 import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from '../../api/queries/runs.queries';
 import { createRun, invalidateRuns } from '../../api/mutations/runs.mutations';
 import { sitesQueryOptions } from '../../api/queries/sites.queries';
 import { fab3dPath } from '../../app/router/url-mapping';
-import { useWorkbenchStore, workbenchActions } from '../../state/workbenchStore';
+import { useWorkbenchStore, workbenchActions } from './state/workbenchStore';
 import { useFabRuntimeRegistry } from '../../app/providers/RuntimeProvider';
 import { CommandConsole } from './command-console';
 const message = (error: unknown): string => {

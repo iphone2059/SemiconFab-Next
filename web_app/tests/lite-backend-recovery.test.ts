@@ -38,7 +38,7 @@ vi.mock('../src/rendering/lite/world', () => ({
   }),
 }));
 
-import { createLiteBackend } from '../src/lite-backend';
+import { createLiteBackend } from '../src/rendering/lite-backend';
 
 type Point = readonly [number, number, number];
 function fakeWorld(pose: { position: Point; target: Point } | null, selection: number | null) {

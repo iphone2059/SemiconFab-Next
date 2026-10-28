@@ -8,16 +8,16 @@ installNativeDialogPolyfill();
 import { TwinPage } from '../../src/features/twin/twin-page';
 import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
 import { equipmentStatusQueryKey } from '../../src/api/queries/equipment.queries';
-import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from '../../src/fab-layout';
-import { createMesJob } from '../../src/process-control';
-import type { EquipmentStatusSnapshot } from '../../src/equipment-status';
-import { resetTwinUiStore, twinUiActions } from '../../src/state/twinUiStore';
-import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '../../src/state/twinPageStore';
+import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from '../../src/domain/fab/fab-layout';
+import { createMesJob } from '../../src/domain/fab/process-control';
+import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-status';
+import { resetTwinUiStore, twinUiActions } from '../../src/features/twin/state/twinUiStore';
+import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '../../src/features/twin/state/twinPageStore';
 import { resetRuntimeStore } from '../../src/state/runtimeStore';
-import { resetTwinDemoStore } from '../../src/state/twinDemoStore';
+import { resetTwinDemoStore } from '../../src/features/twin/state/twinDemoStore';
 
 const backend = vi.hoisted(() => ({ mounts: 0 }));
-vi.mock('../../src/lite-backend', () => ({
+vi.mock('../../src/rendering/lite-backend', () => ({
   createLiteBackend: () => ({
     async mount(_canvas: unknown, _fabs: unknown, _signal: unknown, status: (value: string) => void) {
       backend.mounts += 1;

@@ -7,7 +7,7 @@ import {
   createSceneContext, disposeScene, getPbrEmissiveColor,
   type EngineContext, type Mesh, type PbrMaterialProps,
 } from '@babylonjs/lite';
-import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from '../src/fab-layout';
+import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from '../src/domain/fab/fab-layout';
 import { createLiteEquipment, type LiteEquipment } from '../src/rendering/lite/geometry/tool-families';
 import { createLiteToolStates } from '../src/rendering/lite/tool-states';
 

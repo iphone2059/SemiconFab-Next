@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
-import type { EquipmentStatusSnapshot } from '../../equipment-status';
+import type { EquipmentStatusSnapshot } from '../../realtime/equipment-status';
 import { acceptEquipmentStatusSnapshot } from './equipment-status-bridge';
 import { fetchJson } from './http';
 import { queryKeys } from './queryKeys';

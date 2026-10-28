@@ -1,1 +1,1 @@
-export type * from './contracts.generated.ts';
+export type * from './generated/contracts.generated.ts';

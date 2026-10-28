@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { applyMesAction, buildTelemetry, computeSpc, createMesJob } from '../src/process-control';
-import { FAB_LAYOUT } from '../src/fab-layout';
+import { applyMesAction, buildTelemetry, computeSpc, createMesJob } from '../src/domain/fab/process-control';
+import { FAB_LAYOUT } from '../src/domain/fab/fab-layout';
 
 describe('MES job execution', () => {
   it('creates a deterministic SEMI E40/E87/E94 job and applies all three actions', () => {

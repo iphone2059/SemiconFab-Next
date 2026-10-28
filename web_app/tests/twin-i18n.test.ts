@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { twinTranslator, persistTwinLanguage } from '../src/features/twin/twin-i18n';
-import { readTwinLanguage } from '../src/preferences';
-import { GENERATED_TWIN_EN } from '../src/twin-translations.generated';
+import { readTwinLanguage } from '../src/state/preferences';
+import { GENERATED_TWIN_EN } from '../src/generated/twin-translations.generated';
 
 it('honors URL, both original preference keys and browser language in order', () => {
   const storage = { getItem: (key: string) => key === 'semiconfab_lang' ? 'zh-CN' : null };

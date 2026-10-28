@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { CatalogEntryDto } from '../src/contracts';
 import { CatalogComparison, CatalogPage, RecordFields } from '../src/features/catalog/catalog-page';
 import { catalogQueryOptions } from '../src/api/queries/catalog.queries';
-import { resetCatalogStore } from '../src/state/catalogStore';
+import { resetCatalogStore } from '../src/features/catalog/state/catalogStore';
 import { resetLocaleStore } from '../src/state/localeStore';
 
 beforeEach(() => {

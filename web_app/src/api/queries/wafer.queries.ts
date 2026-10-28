@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query';
-import { parseWaferRoutes } from '../../wafer-route';
+import { parseWaferRoutes } from '../../domain/wafer/wafer-route';
 import { fetchJson } from './http';
 import { queryKeys } from './queryKeys';
 

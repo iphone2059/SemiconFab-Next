@@ -1,11 +1,11 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { FAB_LAYOUT } from '../../fab-layout';
+import { FAB_LAYOUT } from '../../domain/fab/fab-layout';
 import {
   createEquipmentStatusGate,
   type EquipmentStatusGate,
   type EquipmentStatusScope,
   type EquipmentStatusSnapshot,
-} from '../../equipment-status';
+} from '../../realtime/equipment-status';
 import { queryKeys } from './queryKeys';
 
 /**

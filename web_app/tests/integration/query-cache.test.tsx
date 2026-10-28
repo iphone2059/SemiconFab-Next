@@ -8,8 +8,8 @@ import { equipmentStatusQueryOptions, equipmentStatusQueryKey } from '../../src/
 import { acceptEquipmentStatusSnapshot } from '../../src/api/queries/equipment-status-bridge';
 import { runsQueryOptions } from '../../src/api/queries/runs.queries';
 import { createRun, invalidateRuns } from '../../src/api/mutations/runs.mutations';
-import { FAB_LAYOUT } from '../../src/fab-layout';
-import type { EquipmentStatusSnapshot } from '../../src/equipment-status';
+import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
+import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-status';
 
 /**
  * RQ-02/RQ-03/RQ-04 on the real TanStack Query modules (no RTK Query involved).

@@ -2,11 +2,11 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
 import { OriginalInspector } from '../src/features/twin/twin-inspector';
-import { ORIGINAL_TWIN_UI } from '../src/original-twin-data';
+import { ORIGINAL_TWIN_UI } from '../src/domain/fab/original-twin-data';
 import { TwinLocaleProvider } from '../src/features/twin/twin-i18n';
 import { localeActions, resetLocaleStore } from '../src/state/localeStore';
-import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '../src/state/twinDemoStore';
-import { createProcessMesJob } from '../src/process-control';
+import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '../src/features/twin/state/twinDemoStore';
+import { createProcessMesJob } from '../src/domain/fab/process-control';
 
 beforeEach(() => {
   resetTwinDemoStore();

@@ -7,17 +7,17 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 installNativeDialogPolyfill();
 import { CatalogPage } from '../../src/features/catalog/catalog-page';
 import { TwinPage } from '../../src/features/twin/twin-page';
-import { resetCatalogStore } from '../../src/state/catalogStore';
+import { resetCatalogStore } from '../../src/features/catalog/state/catalogStore';
 import { useLocaleStore } from '../../src/state/localeStore';
-import { resetTwinUiStore, useTwinUiStore } from '../../src/state/twinUiStore';
-import { resetTwinPageStore } from '../../src/state/twinPageStore';
+import { resetTwinUiStore, useTwinUiStore } from '../../src/features/twin/state/twinUiStore';
+import { resetTwinPageStore } from '../../src/features/twin/state/twinPageStore';
 import { resetRuntimeStore } from '../../src/state/runtimeStore';
 import { catalogQueryOptions } from '../../src/api/queries/catalog.queries';
 import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
 import type { RouterSearch } from '../../src/app/router/search';
 
 // Only replace the hardware boundary; pages, stores and effects remain real.
-vi.mock('../../src/lite-backend', () => ({ createLiteBackend: () => ({
+vi.mock('../../src/rendering/lite-backend', () => ({ createLiteBackend: () => ({
   async mount(_canvas: unknown, _fabs: unknown, _signal: unknown, status: (value: string) => void) { status('WebGPU · ready'); },
   dispose() {},
 }) }));

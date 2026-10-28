@@ -7,10 +7,10 @@ import {
   type DynamicTexture2D, type BillboardSpriteInit,
 } from '@babylonjs/lite';
 import { createOverlayBillboards } from './overlay-billboards';
-import { FAB_LAYOUT } from '../../fab-layout';
-import { advanceLaminarParticle, classifyCleanroomPressure, cleanroomPressureField } from '../../cleanroom-pressure';
-import { renderAirflowHeatmapCanvas } from '../../airflow-texture';
-import { ORIGINAL_EXPLODED_LINKS, explodedLinkFrame } from '../../original-exploded-link-data';
+import { FAB_LAYOUT } from '../../domain/fab/fab-layout';
+import { advanceLaminarParticle, classifyCleanroomPressure, cleanroomPressureField } from '../../domain/fab/cleanroom-pressure';
+import { renderAirflowHeatmapCanvas } from './airflow-texture';
+import { ORIGINAL_EXPLODED_LINKS, explodedLinkFrame } from './geometry/original-exploded-link-data';
 import {
   ORIGINAL_ROOF_SLAB as slab, ORIGINAL_ROOF_PARAPETS as parapets, ORIGINAL_ROOF_MAUS as maus,
   ORIGINAL_ROOF_MAU as mau, ORIGINAL_ROOF_SUPPLY_MAINS as mains, ORIGINAL_ROOF_SUPPLY_FEEDER as feeder,

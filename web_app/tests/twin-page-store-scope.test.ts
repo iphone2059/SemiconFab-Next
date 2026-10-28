@@ -1,7 +1,7 @@
 import { afterEach, expect, it } from 'vitest';
-import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState, type FabLayoutTool } from '../src/fab-layout';
-import { createMesJob } from '../src/process-control';
-import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '../src/state/twinPageStore';
+import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState, type FabLayoutTool } from '../src/domain/fab/fab-layout';
+import { createMesJob } from '../src/domain/fab/process-control';
+import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '../src/features/twin/state/twinPageStore';
 
 /**
  * A01: the Twin page store may only hold a FAB-scoped projection that carries an

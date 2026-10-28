@@ -3,7 +3,7 @@ import {
   createEquipmentStatusGate,
   createOrderedEquipmentStatusConsumer,
   type EquipmentStatusSnapshot,
-} from '../src/equipment-status';
+} from '../src/realtime/equipment-status';
 
 /**
  * A03: sequence + timestamp cannot distinguish server epochs. The additive

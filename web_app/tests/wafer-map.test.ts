@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateWaferMap, stdfSummary, theoreticalYieldModels, waferMetrics } from '../src/wafer-map';
+import { generateWaferMap, stdfSummary, theoreticalYieldModels, waferMetrics } from '../src/domain/wafer/wafer-map';
 
 describe('WM-811K wafer map', () => {
   it('generates the original 26x26 circular projection and keeps bin totals exact', () => {

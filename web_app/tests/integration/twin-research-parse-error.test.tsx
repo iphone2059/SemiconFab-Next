@@ -7,12 +7,12 @@ import { afterEach, expect, it, vi } from 'vitest';
 installNativeDialogPolyfill();
 import { TwinPage } from '../../src/features/twin/twin-page';
 import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import { ResearchReplay } from '../../src/research-replay';
+import { ResearchReplay } from '../../src/domain/simulation/research-replay';
 import { useLocaleStore } from '../../src/state/localeStore';
-import { resetTwinUiStore } from '../../src/state/twinUiStore';
-import { resetTwinPageStore } from '../../src/state/twinPageStore';
+import { resetTwinUiStore } from '../../src/features/twin/state/twinUiStore';
+import { resetTwinPageStore } from '../../src/features/twin/state/twinPageStore';
 import { resetRuntimeStore } from '../../src/state/runtimeStore';
-import { resetTwinDemoStore } from '../../src/state/twinDemoStore';
+import { resetTwinDemoStore } from '../../src/features/twin/state/twinDemoStore';
 
 /**
  * A16 (twin-page portion): a ResearchReplay.parse exception must surface a

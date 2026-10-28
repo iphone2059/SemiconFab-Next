@@ -5,8 +5,8 @@ import { createElement } from 'react';
 import { FabViewport } from '../src/features/twin/fab-viewer';
 import { resetRuntimeStore } from '../src/state/runtimeStore';
 import type { SiteDto, FabDto } from '../src/contracts';
-import type { FabToolState } from '../src/fab-layout';
-import type { AmhsStats, PickedTool } from '../src/fab-scene';
+import type { FabToolState } from '../src/domain/fab/fab-layout';
+import type { AmhsStats, PickedTool } from '../src/rendering/fab-scene';
 
 // Only the GPU backend boundary is doubled: mount() captures the callbacks the
 // long-lived scene keeps, so a test can invoke them after later renders.
@@ -17,7 +17,7 @@ const backend = vi.hoisted(() => ({
     stats: (stats: AmhsStats) => void;
   }>,
 }));
-vi.mock('../src/lite-backend', () => ({
+vi.mock('../src/rendering/lite-backend', () => ({
   createLiteBackend: () => ({
     mount(
       _canvas: unknown,

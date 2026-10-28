@@ -2,7 +2,7 @@ import {
   getPbrEmissiveColor, setPbrEmissive, setThinInstanceColor, setThinInstanceColors,
   type EngineContext, type MaterialPlugin, type Mesh, type PbrMaterialProps, type SceneContext,
 } from '@babylonjs/lite';
-import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from '../../fab-layout';
+import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from '../../domain/fab/fab-layout';
 import type { LiteEquipment } from './geometry/tool-families';
 
 type Triple = [number, number, number];

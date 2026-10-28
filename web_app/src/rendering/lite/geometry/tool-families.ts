@@ -3,9 +3,9 @@ import {
   createTransformNode, setParent, setPbrEmissive, setThinInstances, enableThinInstanceWorldBounds,
   type EngineContext, type Mesh, type PbrMaterialProps, type SceneContext,
 } from '@babylonjs/lite';
-import { FAB_LAYOUT } from '../../../fab-layout';
-import { TWIN_LAYOUT_IDENTITIES, type LayoutIdentity } from '../../../layout-identities';
-import { originalEquipmentParts, type OriginalToolPart } from '../../../original-tool-parts';
+import { FAB_LAYOUT } from '../../../domain/fab/fab-layout';
+import { TWIN_LAYOUT_IDENTITIES, type LayoutIdentity } from '../../../domain/fab/layout-identities';
+import { originalEquipmentParts, type OriginalToolPart } from './original-tool-parts';
 
 export interface EquipmentPartRef {
   readonly batchIndex: number;

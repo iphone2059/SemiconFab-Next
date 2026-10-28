@@ -4,7 +4,7 @@ import { cleanup, render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import WorkbenchApp from '../src/features/workbench/workbench';
 import { sitesQueryOptions } from '../src/api/queries/sites.queries';
-import { resetWorkbenchStore, workbenchActions } from '../src/state/workbenchStore';
+import { resetWorkbenchStore, workbenchActions } from '../src/features/workbench/state/workbenchStore';
 
 const site = { siteId: 'site-1', code: 'SITE-1', templateHash: 'hash', fabs: [{ fabId: 'fab-1', code: 'FAB-1' }] };
 
