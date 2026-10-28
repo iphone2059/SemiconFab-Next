@@ -45,3 +45,8 @@ See `ui-primitives-2026-10-28.json`.
 `@radix-ui/react-dialog` 及 24 个传递依赖，并用 `::backdrop`、自身 Tab
 循环、滚动锁与焦点恢复补齐交互。验证与包体数据见
 `native-dialog-2026-10-28.json`；本文件此前记录的 Radix 方案已被取代。
+后续清理（`dc37794`）：生产代码移除 showModal/属性兜底与手写焦点恢复，只调用原生
+`showModal()/close()`；jsdom 缺少的 dialog 契约改由测试专用
+`tests/support/native-dialog.ts` 提供，不进入构建产物。
+
+See `native-dialog-2026-10-28.json`.
