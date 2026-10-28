@@ -1,134 +1,59 @@
 import { expect, it, vi } from 'vitest';
-import {
-  createEquipmentStatusGate,
-  createOrderedEquipmentStatusConsumer,
-} from '../../src/realtime/equipment-status/gate';
+import { createEquipmentStatusGate, createOrderedEquipmentStatusConsumer } from '../../src/realtime/equipment-status/gate';
 import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-status/protocol';
 
-/**
- * A03: sequence + timestamp cannot distinguish server epochs. The additive
- * `epoch` field orders server generations; frames without it keep the legacy
- * (sequence, timestamp) behaviour exactly.
- */
-
 const scope = { siteId: 'site-1', fabId: 'fab-a' };
-const base = (patch: Partial<EquipmentStatusSnapshot>): EquipmentStatusSnapshot => ({
-  siteId: 'site-1',
-  fabId: 'fab-a',
+const base = (patch: Partial<EquipmentStatusSnapshot> = {}): EquipmentStatusSnapshot => ({
+  siteId: 'site-1', fabId: 'fab-a',
   generatedAt: '2026-10-24T01:00:00Z',
-  sequence: 100,
+  epoch: 1, sequence: 100,
   tools: [{ state: 'running' }, { state: 'running' }],
   ...patch,
 });
 
-it('rejects a lower sequence within an explicit epoch even with a newer display time', () => {
+it('requires an epoch, a sequence and a composite FAB identity', () => {
+  const onInvalid = vi.fn();
+  const gate = createEquipmentStatusGate(scope, 2, onInvalid);
+  for (const invalid of [
+    { ...base(), epoch: undefined },
+    { ...base(), sequence: undefined },
+    { ...base(), fabId: undefined },
+    { ...base(), epoch: -1 },
+    { ...base(), epoch: 1.5 },
+    { ...base(), sequence: Number.MAX_SAFE_INTEGER + 1 },
+  ]) expect(gate.accept(invalid)).toBeUndefined();
+  expect(onInvalid).toHaveBeenCalledTimes(6);
+});
+
+it('rejects duplicate or lower sequence within an epoch, regardless of display time', () => {
   const gate = createEquipmentStatusGate(scope, 2);
   expect(gate.accept(base({ epoch: 2, sequence: 100 }))).toBeDefined();
+  expect(gate.accept(base({ epoch: 2, sequence: 100, generatedAt: '2026-10-24T01:00:10Z' }))).toBeUndefined();
   expect(gate.accept(base({ epoch: 2, sequence: 1, generatedAt: '2026-10-24T01:00:10Z' }))).toBeUndefined();
+  expect(gate.accept(base({ epoch: 2, sequence: 101 }))).toBeDefined();
 });
 
-it('rejects missing epoch or sequence after explicit generation ordering is established', () => {
+it('accepts a higher epoch even if sequence and display timestamp go backwards', () => {
   const gate = createEquipmentStatusGate(scope, 2);
-  expect(gate.accept(base({ epoch: 2, sequence: 1 }))).toBeDefined();
-  expect(gate.accept(base({ sequence: 101 }))).toBeUndefined();
-  expect(gate.accept(base({ epoch: 2, sequence: undefined, generatedAt: '2026-10-24T02:00:00Z' }))).toBeUndefined();
-  expect(gate.accept(base({ epoch: 2, sequence: 2 }))).toBeDefined();
+  expect(gate.accept(base({ epoch: 5, sequence: 100, generatedAt: '2026-10-24T02:00:00Z' }))).toBeDefined();
+  const restarted = base({ epoch: 6, sequence: 0, generatedAt: '2026-10-24T01:00:00Z' });
+  expect(gate.accept(restarted)).toBe(restarted);
 });
 
-it('the first explicit epoch replaces legacy high-water marks even when display time goes backwards', () => {
-  const gate = createEquipmentStatusGate(scope, 2);
-  expect(gate.accept(base({ sequence: 100, generatedAt: '2026-10-24T02:00:00Z' }))).toBeDefined();
-  expect(gate.accept(base({ epoch: 1, sequence: 0, generatedAt: '2026-10-24T01:00:00Z' }))).toBeDefined();
-});
-
-it('requires a sequence on the first explicit epoch without advancing its high-water', () => {
-  const gate = createEquipmentStatusGate(scope, 2);
-  expect(gate.accept(base({ epoch: 9, sequence: undefined }))).toBeUndefined();
-  expect(gate.accept(base({ epoch: 8, sequence: 1 }))).toBeDefined();
-});
-
-it('A03: a restarted server (higher epoch) is not rolled back by a delayed old-server frame', () => {
+it('does not let a delayed earlier epoch override the restarted server', () => {
   const onSnapshot = vi.fn();
   const apply = createOrderedEquipmentStatusConsumer(scope, 2, onSnapshot);
-  // 1) Running at 01:00:00 from server generation 1.
-  expect(apply(base({ epoch: 1, sequence: 100, generatedAt: '2026-10-24T01:00:00Z' }))).toBe(true);
-  // 2) Server restart: new epoch, sequence restarts at 1, newer display time, down.
-  expect(apply(base({
-    epoch: 2, sequence: 1, generatedAt: '2026-10-24T01:00:10Z',
-    tools: [{ state: 'down' }, { state: 'down' }],
-  }))).toBe(true);
-  // 3) Delayed frame from the old server generation: higher sequence but lower epoch.
-  expect(apply(base({
-    epoch: 1, sequence: 101, generatedAt: '2026-10-24T01:00:05Z',
-    tools: [{ state: 'running' }, { state: 'running' }],
-  }))).toBe(false);
+  expect(apply(base({ epoch: 1, sequence: 100 }))).toBe(true);
+  expect(apply(base({ epoch: 2, sequence: 1, tools: [{ state: 'down' }, { state: 'down' }] }))).toBe(true);
+  expect(apply(base({ epoch: 1, sequence: 101, generatedAt: '2026-10-24T03:00:00Z' }))).toBe(false);
   expect(onSnapshot).toHaveBeenCalledTimes(2);
   expect(onSnapshot.mock.calls[1][0].tools[0].state).toBe('down');
 });
 
-it('A03: a higher epoch is accepted even with a lower sequence and older display time', () => {
-  const gate = createEquipmentStatusGate(scope, 2);
-  expect(gate.accept(base({ epoch: 5, sequence: 50, generatedAt: '2026-10-24T02:00:00Z' }))).toBeDefined();
-  const restarted = base({ epoch: 6, sequence: 0, generatedAt: '2026-10-24T01:00:00Z', tools: [{ state: 'idle' }, { state: 'idle' }] });
-  expect(gate.accept(restarted)).toBe(restarted);
-});
-
-it('A03: a lower-epoch frame is stale even when its sequence and timestamp are newer', () => {
-  const gate = createEquipmentStatusGate(scope, 2);
-  expect(gate.accept(base({ epoch: 3, sequence: 10, generatedAt: '2026-10-24T01:00:00Z' }))).toBeDefined();
-  expect(gate.accept(base({ epoch: 2, sequence: 999, generatedAt: '2026-10-24T03:00:00Z' }))).toBeUndefined();
-  expect(gate.accept(base({ epoch: 3, sequence: 11, generatedAt: '2026-10-24T01:00:01Z' }))).toBeDefined();
-});
-
-it('A03: epoch is validated like sequence (safe non-negative integer)', () => {
+it('treats a correctly scoped but late frame as ordering rejection, not malformed data', () => {
   const onInvalid = vi.fn();
   const gate = createEquipmentStatusGate(scope, 2, onInvalid);
-  expect(gate.accept(base({ epoch: -1 }))).toBeUndefined();
-  expect(gate.accept(base({ epoch: 1.5 }))).toBeUndefined();
-  expect(gate.accept(base({ epoch: Number.MAX_SAFE_INTEGER + 1 }))).toBeUndefined();
-  expect(onInvalid).toHaveBeenCalledTimes(3);
-});
-
-it('A03: legacy frames without an epoch keep the current sequence/timestamp behaviour', () => {
-  const sequenceSnapshots = vi.fn();
-  const sequenceApply = createOrderedEquipmentStatusConsumer(scope, 2, sequenceSnapshots);
-  const frame = (sequence: number, generatedAt: string) => base({ sequence, generatedAt });
-  expect(sequenceApply(frame(1, '2026-10-24T02:00:00Z'))).toBe(true);
-  expect(sequenceApply(frame(2, '2026-10-24T02:00:00Z'))).toBe(true);
-  expect(sequenceApply(frame(1, '2026-10-24T02:00:00Z'))).toBe(false);
-  // Same rules the pre-epoch consumer encoded: a lower sequence with a newer
-  // timestamp is the legacy server-restart heuristic, not a stale frame.
-  expect(sequenceApply(frame(3, '2026-10-24T01:59:59Z'))).toBe(true);
-  expect(sequenceApply(frame(1, '2026-10-24T02:00:00Z'))).toBe(true);
-  expect(sequenceSnapshots).toHaveBeenCalledTimes(4);
-
-  const timestampSnapshots = vi.fn();
-  const timestampApply = createOrderedEquipmentStatusConsumer(scope, 2, timestampSnapshots);
-  expect(timestampApply(base({ sequence: undefined, generatedAt: '2026-10-24T02:00:00Z' }))).toBe(true);
-  expect(timestampApply(base({ sequence: undefined, generatedAt: '2026-10-24T01:59:59Z' }))).toBe(false);
-  expect(timestampApply(base({ sequence: undefined, generatedAt: '2026-10-24T02:00:00Z' }))).toBe(true);
-  expect(timestampSnapshots).toHaveBeenCalledTimes(2);
-});
-
-it('A03: reconnect replays the same epoch/sequence as a duplicate and resets only on a higher epoch', () => {
-  const onInvalid = vi.fn();
-  const gate = createEquipmentStatusGate(scope, 2, onInvalid);
-  const accepted = base({ epoch: 1, sequence: 10, generatedAt: '2026-10-24T02:00:10Z' });
-  expect(gate.accept(accepted)).toBeDefined();
-
-  // The browser reconnects and the backend replays its last frame: an exact
-  // duplicate must not be re-published to the cache.
-  expect(gate.accept({ ...accepted })).toBeUndefined();
-  // Any earlier sequence of the same generation is equally a late duplicate.
-  expect(gate.accept(base({ epoch: 1, sequence: 9, generatedAt: '2026-10-24T02:00:09Z' }))).toBeUndefined();
-  // A duplicate is an ordering rejection, not invalid data: no stale signal.
-  expect(onInvalid).not.toHaveBeenCalled();
-
-  // The restarted backend bumps the epoch and restarts the sequence: accepted.
-  expect(gate.accept(base({ epoch: 2, sequence: 1, generatedAt: '2026-10-24T02:00:20Z' }))).toBeDefined();
-  // A delayed frame from the pre-restart generation must never roll the feed back.
-  expect(gate.accept(base({ epoch: 1, sequence: 11, generatedAt: '2026-10-24T02:00:21Z' }))).toBeUndefined();
-  // The new generation's ordering high-water is independent of the old one.
-  expect(gate.accept(base({ epoch: 2, sequence: 2, generatedAt: '2026-10-24T02:00:22Z' }))).toBeDefined();
+  expect(gate.accept(base({ epoch: 1, sequence: 10 }))).toBeDefined();
+  expect(gate.accept(base({ epoch: 1, sequence: 9 }))).toBeUndefined();
   expect(onInvalid).not.toHaveBeenCalled();
 });

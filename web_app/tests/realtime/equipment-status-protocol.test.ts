@@ -28,11 +28,9 @@ const frame = (patch: Partial<EquipmentStatusSnapshot> = {}): EquipmentStatusSna
 });
 const decode = (value: unknown): EquipmentStatusSnapshot => decodeEquipmentStatusFrame(JSON.stringify(value), scope);
 
-it('decodes in-scope frames, including the legacy site-level identity without fabId', () => {
+it('decodes only complete FAB-scoped frames', () => {
   expect(decode(frame())).toEqual(frame());
-  const legacy = { siteId: 'site-1', generatedAt: '2026-10-27T00:00:00Z', tools: [{ state: 'down' }] };
-  // An older backend does not send fabId; the frame stays readable for this scope.
-  expect(decode(legacy)).toEqual(legacy);
+  expect(() => decode({ ...frame(), fabId: undefined })).toThrow(/scope or payload/);
 });
 
 it('decodes a large frame without truncating its tool list', () => {
@@ -90,14 +88,17 @@ it('rejects missing or malformed fields', () => {
     { ...valid, epoch: -1 },
     { ...valid, epoch: Number.MAX_SAFE_INTEGER + 1 },
     { ...valid, epoch: null },
+    { ...valid, epoch: undefined },
+    { ...valid, sequence: undefined },
+    { ...valid, fabId: undefined },
   ];
   for (const value of invalid) {
     expect(() => decode(value), JSON.stringify(value)).toThrow(/scope or payload/);
   }
 });
 
-it('isInScope is the single Site/FAB identity rule (legacy site frames stay in scope)', () => {
-  expect(isInScope({ siteId: 'site-1' }, scope)).toBe(true);
+it('isInScope requires both Site and FAB identities', () => {
+  expect(isInScope({ siteId: 'site-1' }, scope)).toBe(false);
   expect(isInScope({ siteId: 'site-1', fabId: 'fab-a' }, scope)).toBe(true);
   expect(isInScope({ siteId: 'site-1', fabId: 'fab-b' }, scope)).toBe(false);
   expect(isInScope({ siteId: 'other-site', fabId: 'fab-a' }, scope)).toBe(false);

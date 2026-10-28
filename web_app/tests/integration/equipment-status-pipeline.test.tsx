@@ -62,13 +62,14 @@ const frame = (sequence: number, state: string, generatedAt: string): EquipmentS
 const send = (source: CapturingEventSource, value: unknown) => {
   act(() => { source.onmessage?.({ data: JSON.stringify(value) }); });
 };
-const flushProjection = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 140)); });
+const flushProjection = () => act(async () => { await vi.advanceTimersByTimeAsync(101); });
 
 afterEach(() => {
   cleanup();
   viewport.renders = 0;
   CapturingEventSource.instances = [];
   vi.unstubAllGlobals();
+  vi.useRealTimers();
   resetTwinUiStore(); resetTwinPageStore(); resetRuntimeStore(); resetTwinDemoStore();
 });
 
@@ -94,6 +95,8 @@ it('A02: SSE frames publish through one throttled projection instead of renderin
   await act(async () => { twinUiActions.sourceSet('sse-live'); });
   const source = CapturingEventSource.instances.find((value) => value.url.includes('/equipment-status/stream'));
   if (!source) throw new Error('missing equipment-status stream');
+  // Deterministically drive the 100 ms coalescer; wall-clock sleeps are flaky under parallel Vitest workers.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   const before = viewport.renders;
 
   send(source, frame(1, 'down', '2026-10-27T00:00:01Z'));

@@ -31,7 +31,7 @@ function captureFetch(response: () => Response) {
 
 it('uses FAB-scoped relative URLs, same-origin credentials, no-store and no browser dev key', async () => {
   const calls = captureFetch(() => jsonResponse({
-    siteId: 'site/1', fabId: 'fab/1', generatedAt: '2026-10-27T00:00:00Z', sequence: 1, tools: fullTools(),
+    siteId: 'site/1', fabId: 'fab/1', generatedAt: '2026-10-27T00:00:00Z', sequence: 1, epoch: 1, tools: fullTools(),
   }));
   await client().fetchQuery(equipmentStatusQueryOptions('site/1', 'fab/1'));
   expect(calls).toHaveLength(1);

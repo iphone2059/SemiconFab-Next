@@ -20,24 +20,18 @@ export interface EquipmentStatusItem {
 
 export interface EquipmentStatusSnapshot {
   readonly siteId: string;
-  /** FAB identity of a FAB-scoped snapshot (additive; absent on legacy site frames). */
-  readonly fabId?: string;
+  /** Required FAB identity: every current backend status frame is FAB-scoped. */
+  readonly fabId: string;
   /**
    * Display time only. Ordering uses (epoch, sequence); a newer server
    * generation may legitimately report an older `generatedAt` first.
    */
   readonly generatedAt: string;
-  /** Monotonic per-FAB tick. Optional for backward compatibility with older servers. */
-  readonly sequence?: number;
-  /**
-   * Server generation, bumped whenever the backend restarts its status feed.
-   * Ordering is (epoch, sequence): a higher epoch resets the ordering high-water
-   * mark, a lower epoch is a stale frame from an older server generation.
-   *
-   * The backend must emit this field for restart-safe ordering. When it is
-   * absent the legacy (sequence, timestamp) rules apply unchanged.
-   */
-  readonly epoch?: number;
+  /** Monotonic per-FAB sequence, required on the wire. */
+  readonly sequence: number;
+  /** Required generation counter; a restart must advance it. */
+
+  readonly epoch: number;
   readonly tools: EquipmentStatusItem[];
 }
 
@@ -47,14 +41,9 @@ export interface EquipmentStatusScope {
   readonly fabId: string;
 }
 
-/**
- * The only Site/FAB scope rule of the status boundary.
- *
- * FAB identity is validated whenever the server sends it; legacy site-level
- * frames without fabId stay readable so an older backend does not blank the page.
- */
+/** Scope identity is exact; no site-only legacy fallback. */
 export function isInScope(value: Partial<EquipmentStatusSnapshot>, scope: EquipmentStatusScope): boolean {
-  return value.siteId === scope.siteId && (value.fabId === undefined || value.fabId === scope.fabId);
+  return value.siteId === scope.siteId && value.fabId === scope.fabId;
 }
 
 export function isEquipmentStateCode(value: unknown): value is EquipmentStateCode {
@@ -85,8 +74,7 @@ export function isValidEquipmentStatusSnapshot(
   const snapshot = value as Partial<EquipmentStatusSnapshot>;
   if (!isInScope(snapshot, scope) || typeof snapshot.generatedAt !== 'string' ||
       !Number.isFinite(Date.parse(snapshot.generatedAt))) return false;
-  if (snapshot.sequence !== undefined && !isSafeCount(snapshot.sequence)) return false;
-  if (snapshot.epoch !== undefined && !isSafeCount(snapshot.epoch)) return false;
+  if (!isSafeCount(snapshot.sequence) || !isSafeCount(snapshot.epoch)) return false;
   const tools = snapshot.tools;
   if (!Array.isArray(tools)) return false;
   if (expectedToolCount === undefined ? tools.length === 0 : tools.length !== expectedToolCount) return false;

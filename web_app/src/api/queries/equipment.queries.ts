@@ -9,7 +9,7 @@ const equipmentStatusSchema = z.object({
   siteId: z.string().min(1),
   fabId: z.string().min(1),
   generatedAt: z.string().min(1),
-  sequence: z.number().optional(),
+  sequence: z.number().int().nonnegative(),
   // A03: zod strips unknown keys, so the additive server generation must be part
   // of the schema or REST frames would silently lose the ordering epoch.
   epoch: z.number().optional(),
@@ -30,7 +30,7 @@ export const equipmentStatusQueryOptions = (siteId: string, fabId: string) =>
         `/api/v1/sites/${encodeURIComponent(siteId)}/fabs/${encodeURIComponent(fabId)}/equipment-status`,
         { signal },
       );
-      const snapshot = equipmentStatusSchema.parse(payload) as EquipmentStatusSnapshot;
+      const snapshot: EquipmentStatusSnapshot = equipmentStatusSchema.parse(payload);
       const scope = { siteId, fabId };
       // One acceptance boundary shared with SSE: the bridge performs the ordered
       // check and is the only place that writes the FAB-scoped cache entry.
