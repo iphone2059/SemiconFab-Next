@@ -63,7 +63,7 @@ export interface CommandWorkflowRegistry {
 2. 契约版本无关：不 import WebSocket 帧类型、不 import XState、不 import Query/React；允许 RxJS 类型（`Observable`）。
 3. 命令身份是复合身份 `(fabId, commandId)`；registry 查询必须同时带两者。
 4. `CommandEventSource` 只读；Bridge 不得反向向实时层写消息。
-5. 其他契约文件：`CommandGateway`（命令提交/权威查询 HTTP 抽象，当前实现 `realtime/transport/HttpCommandGateway.ts`，提交侧 `api/mutations/commands.mutations.ts` + `api/schemas/command.schema.ts`）；`RealtimeGateway` 已在 2026-10-27 审计清理中删除（真实 WebSocket 接入时再建）。它们只暴露接口与类型。
+5. 其他契约文件：`CommandGateway`（命令提交/权威查询 HTTP 抽象，当前实现 `api/transport/HttpCommandGateway.ts`，提交侧 `api/mutations/commands.mutations.ts` + `api/schemas/command.schema.ts`）；`RealtimeGateway` 已在 2026-10-27 审计清理中删除（真实 WebSocket 接入时再建）。它们只暴露接口与类型。
 
 ## 3. 组件协作
 

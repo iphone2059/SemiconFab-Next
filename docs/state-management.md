@@ -28,7 +28,7 @@
 2. Query 缓存是 HTTP 服务端数据的唯一缓存（ARCH-02）；Zustand/Redux/组件不得保存其副本（ARCH-05）。
 3. 所有与 FAB 相关的 key 必须包含 `fabId`（跨 FAB 隔离，RQ-04）。
 4. 写入只通过：`queryFn` 拉取、`fetchQuery`/`ensureQueryData`、mutation 失效/更新。组件不得直接 `setQueryData` 伪造服务端结果；确需乐观更新时必须显式评审并定义回滚（命令链路默认不做乐观更新，见 [命令事件桥](command-event-bridge.md)）。
-5. 命令的“权威状态”读取经 `realtime/transport/HttpCommandGateway`（`GET /api/v1/commands/{id}`）供恢复/核对使用；进行中生命周期不得用 Query 建模（状态归属 XState），当前没有也不应新增独立的命令 Query 模块。
+5. 命令的“权威状态”读取经 `api/transport/HttpCommandGateway`（`GET /api/v1/commands/{id}`）供恢复/核对使用；进行中生命周期不得用 Query 建模（状态归属 XState），当前没有也不应新增独立的命令 Query 模块。
 
 ### 2.2 新鲜度与失效
 

@@ -80,7 +80,7 @@ export interface CommandWorkflowRegistry {
 - `CommandEventSource` 的 `commandResult$` 是只读 Observable；消费方不得要求实时层暴露“可写的 actor 入口”。
 - 命令身份是复合身份 `(fabId, commandId)`；同一 `commandId` 在不同 FAB 中不是同一命令（CE-07）。
 - `queued`/`submitted` 等“尚未被后端确认”的状态属于应用/工作流状态，不属于 `CommandResultEvent` 的 outcome 枚举；outcome 表达后端确认后的结果。
-- 契约文件还包含 `CommandGateway`（命令提交/权威查询的 HTTP 抽象，当前实现 `realtime/transport/HttpCommandGateway.ts`）；当时设计的 `RealtimeGateway`（实时连接/订阅抽象）已在 2026-10-27 审计清理中删除，真实 WebSocket 接入时按本 ADR 重建。
+- 契约文件还包含 `CommandGateway`（命令提交/权威查询的 HTTP 抽象，当前实现 `api/transport/HttpCommandGateway.ts`）；当时设计的 `RealtimeGateway`（实时连接/订阅抽象）已在 2026-10-27 审计清理中删除，真实 WebSocket 接入时按本 ADR 重建。
 
 ### 3. CommandEventBridge 在 Application 协调层
 
@@ -209,7 +209,7 @@ Bridge 不 import 工作流实现、不 import `xstate`、不操作 React、不�
 | 关注点 | 终态实现 |
 |---|---|
 | 命令结果事件源 | `web_app/src/realtime/transport/SseCommandEventSource.ts`（`commandResult$` + `gaps$`；后端 journal 游标 `{epoch}:{sequence}` 与 `replay-gap`） |
-| 权威查询 | `web_app/src/realtime/transport/HttpCommandGateway.ts`（`GET /api/v1/commands/{id}`） |
+| 权威查询 | `web_app/src/api/transport/HttpCommandGateway.ts`（`GET /api/v1/commands/{id}`） |
 | 解码 | `web_app/src/realtime/protocol/MessageDecoder.ts`（Zod envelope） |
 | 设备状态边界 | `web_app/src/realtime/equipment-status/{protocol,gate,stream,index}.ts`；REST/SSE→Query 唯一投影桥 `web_app/src/api/cache/equipment-status-bridge.ts` |
 | 通用低频合批 | `web_app/src/shared/scheduling/coalesced-dispatcher.ts`（`realtime/telemetry/telemetry-buffer.ts` 已不存在） |
