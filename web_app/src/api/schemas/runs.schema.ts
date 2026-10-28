@@ -50,22 +50,49 @@ export const runResultSchema: z.ZodType<RunResult> = z.object({
   fabs: z.array(fabResultSchema),
 });
 
-/** Validate run submissions before they leave the browser, using generated contracts. */
+/** Follow FabSimulation.Validate in fab_shared; no legacy/coerced wire values. */
+const uuidD = z.string().regex(/^[a-fA-F0-9]{8}-(?:[a-fA-F0-9]{4}-){3}[a-fA-F0-9]{12}$/)
+  .refine((value) => value.replaceAll('-', '') !== '00000000000000000000000000000000', 'UUID must be nonzero');
+const uint64Max = 18446744073709551615n;
+const int64Max = 9223372036854775807n;
+const decimal = (limit: bigint, positive: boolean) => z.string()
+  .regex(/^(0|[1-9][0-9]*)$/)
+  .max(20)
+  .refine((value) =>
+    /^(0|[1-9][0-9]*)$/.test(value) &&
+    BigInt(value) <= limit &&
+    (!positive || BigInt(value) > 0n), 'Decimal exceeds its wire range');
+
 const fabScenarioSchema: z.ZodType<FabScenario> = z.object({
-  fabId: z.string().min(1),
-  code: z.string().min(1),
-  lotCount: z.number().int().positive(),
-  processTimeUs: z.string().regex(/^\d+$/),
+  fabId: uuidD,
+  code: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+  lotCount: z.number().int().min(1).max(10000),
+  processTimeUs: decimal(int64Max, true),
 });
 
 const scenarioDefinitionSchema: z.ZodType<ScenarioDefinition> = z.object({
   contractVersion: z.literal(1),
-  siteId: z.string().min(1),
-  mode: z.string().min(1),
-  masterSeed: z.string().min(1),
-  durationUs: z.string().regex(/^\d+$/),
-  warmupUs: z.string().regex(/^\d+$/),
-  fabs: z.array(fabScenarioSchema).min(1),
+  siteId: uuidD,
+  mode: z.literal('INDEPENDENT'),
+  masterSeed: decimal(uint64Max, false),
+  durationUs: decimal(int64Max, true),
+  warmupUs: decimal(int64Max, false),
+  fabs: z.array(fabScenarioSchema).min(1).max(32),
+}).superRefine((scenario, ctx) => {
+  if (BigInt(scenario.warmupUs) >= BigInt(scenario.durationUs))
+    ctx.addIssue({ code: 'custom', path: ['warmupUs'], message: 'Warmup must precede duration' });
+  const ids = new Set<string>();
+  const codes = new Set<string>();
+  scenario.fabs.forEach((fab, index) => {
+    const id = fab.fabId.toLowerCase(), code = fab.code.toLowerCase();
+    if (ids.has(id)) ctx.addIssue({ code: 'custom', path: ['fabs', index, 'fabId'], message: 'Duplicate FAB ID' });
+    if (codes.has(code)) ctx.addIssue({ code: 'custom', path: ['fabs', index, 'code'], message: 'Duplicate FAB code' });
+    ids.add(id);
+    codes.add(code);
+    const work = BigInt(fab.processTimeUs), count = BigInt(fab.lotCount);
+    if ((work + work / 10n) * count > int64Max)
+      ctx.addIssue({ code: 'custom', path: ['fabs', index, 'processTimeUs'], message: 'Worst-case completion exceeds Int64' });
+  });
 });
 
 export const createRunRequestSchema: z.ZodType<CreateRunRequest> = z.object({
