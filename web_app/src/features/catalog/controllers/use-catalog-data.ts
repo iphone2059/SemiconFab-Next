@@ -2,7 +2,7 @@ import { useDeferredValue, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { CatalogEntryDto } from '../../../contracts';
 import { catalogQueryOptions } from '../../../api/queries/catalog.queries';
-import { filterCatalog, parseCatalogEntries, type CatalogDomain } from '../catalog-data';
+import { filterCatalog, type CatalogDomain } from '../catalog-data';
 import { catalogActions, useCatalogStore } from '../state/catalogStore';
 
 const PAGE_SIZE = 40;
@@ -42,12 +42,9 @@ export function useCatalogData(): CatalogDataSelection {
     detailId, page, localEntries, localImportId, importError,
   } = catalogState;
   const catalogQuery = useQuery(catalogQueryOptions());
-  const entries = useMemo(
-    () =>
-      localEntries ??
-      (catalogQuery.data ? parseCatalogEntries({ entries: catalogQuery.data.items }) : []),
-    [localEntries, catalogQuery.data],
-  );
+  // Network entries were validated by the catalog Query schema before caching.
+  // Only local uploads require parseCatalogEntries at their import boundary.
+  const entries = localEntries ?? catalogQuery.data?.items ?? [];
   const importId = localEntries ? localImportId : (catalogQuery.data?.importId ?? '');
   const localPreview = localEntries !== null;
   const error = importError || (catalogQuery.error instanceof Error ? 'Catalog request failed' : '');

@@ -22,8 +22,8 @@ web_app/
 │  │  ├─ coordination/         # CommandEventBridge / CommandEventRecovery / CommandCorrelationRegistry / ScopeGate
 │  │  └─ ports/scene.ts        # ScenePort：必需 SceneCommands + 强类型 SceneMountOptions + mount/dispose 生命周期（R-04/R9）
 │  ├─ api/
-│  │  ├─ transport/http.ts     # 唯一 HTTP transport（同源相对路径、no-store、ProblemDetails、FetchLike 注入）
-│  │  ├─ schemas/              # 运行时 Zod 合同（command.schema.ts，R-03）
+│  │  ├─ transport/            # http.ts + HttpCommandGateway.ts（统一身份、状态与错误策略）
+│  │  ├─ schemas/              # command/catalog/runs 完整运行时契约
 │  │  ├─ cache/                # equipment-status-bridge：REST/SSE 经唯一 acceptance gate 写入 Query 缓存
 │  │  ├─ queries/              # queryClient / queryKeys / sites|equipment|catalog|runs|research|wafer.queries
 │  │  └─ mutations/            # runs / commands.mutations
@@ -31,7 +31,7 @@ web_app/
 │  │  ├─ equipment-status/     # protocol / gate / stream / index（FAB 作用域、epoch/sequence 唯一权威）
 │  │  ├─ protocol/             # MessageDecoder（SSE envelope 解码）
 │  │  ├─ telemetry/            # TelemetryRuntime / FabTelemetryRegistry（acquire/release）
-│  │  ├─ transport/            # SseCommandEventSource / HttpCommandGateway
+│  │  ├─ transport/            # SseCommandEventSource（命令权威 HTTP 查询归 api/transport）
 │  │  ├─ workers/              # createTelemetryWorker / telemetryWorker(.logic)
 │  │  └─ buffers/              # FrameRingBuffer
 │  ├─ runtime/                 # FabRuntime / Factory / Registry / LifecycleCoordinator / commandSources
@@ -120,3 +120,10 @@ npm run build
 - 类型负向用例由 `tests/types/{store-action-types.ts,scene-port-types.ts}` 提供（仅 `tsc --noEmit` 校验，Vitest 不执行）。
 - 真实浏览器/GPU 门禁见 `scripts/perf-render.ps1` 与 `scripts/perf-telemetry.ps1`；最近一次架构清理证据见 `docs/evidence/architecture-cleanup-2026-10-28.json`。
 - 路由生成物 `src/app/router/routeTree.gen.ts` 不进入 `tools/generated-artifacts.json`（位置由 @tanstack/router-plugin 工具链约定）；`tests/architecture/route-tree-generation.test.ts` 在隔离干净 worktree 执行官方 Vite 构建重生成并逐字节比对，同时固定 plugin/generator 版本并保证 `@ts-nocheck` 只出现在该文件。
+
+## 严格信任边界
+
+- Catalog/Run 响应先通过 `api/schemas/` 校验全部必需字段和嵌套项，才进入 TanStack Query 缓存；Catalog 本地 JSON 上传单独验证，不能在 React 渲染时补做网络数据校验。
+- 创建 Run 时严格校验生成的 `CreateRunRequest` 和后端 Idempotency-Key 规则；设备状态必须提供精确 FAB 身份及 epoch/sequence，不接受旧站点级宽松协议。
+- 冻结 `original-twin-ui.json`/`original-elevations.json` 由 `tools/check_frozen_assets.mjs` 和负向 Node 测试在 `scripts/verify.ps1` 中校验，领域层不加载运行时验证框架。
+- `api/transport/http.ts` 始终强制同源凭据和 no-store 缓存，调用方不能覆盖。

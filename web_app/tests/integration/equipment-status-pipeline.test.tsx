@@ -62,13 +62,14 @@ const frame = (sequence: number, state: string, generatedAt: string): EquipmentS
 const send = (source: CapturingEventSource, value: unknown) => {
   act(() => { source.onmessage?.({ data: JSON.stringify(value) }); });
 };
-const flushProjection = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 140)); });
+const flushProjection = () => act(async () => { await vi.advanceTimersByTimeAsync(101); });
 
 afterEach(() => {
   cleanup();
   viewport.renders = 0;
   CapturingEventSource.instances = [];
   vi.unstubAllGlobals();
+  vi.useRealTimers();
   resetTwinUiStore(); resetTwinPageStore(); resetRuntimeStore(); resetTwinDemoStore();
 });
 
@@ -94,6 +95,13 @@ it('A02: SSE frames publish through one throttled projection instead of renderin
   await act(async () => { twinUiActions.sourceSet('sse-live'); });
   const source = CapturingEventSource.instances.find((value) => value.url.includes('/equipment-status/stream'));
   if (!source) throw new Error('missing equipment-status stream');
+  // Deterministically drive the 100 ms coalescer; wall-clock sleeps are flaky under parallel Vitest workers.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  const projectedTimes: string[] = [];
+  const unsubscribe = useTwinPageStore.subscribe((next, previous) => {
+    const current = next.statusFeed?.updatedAt;
+    if (current !== undefined && current !== previous.statusFeed?.updatedAt) projectedTimes.push(current);
+  });
   const before = viewport.renders;
 
   send(source, frame(1, 'down', '2026-10-27T00:00:01Z'));
@@ -101,9 +109,10 @@ it('A02: SSE frames publish through one throttled projection instead of renderin
   expect(client.getQueryData<EquipmentStatusSnapshot>(equipmentStatusQueryKey('site-1', 'fab-1'))?.sequence).toBe(1);
   // ...but TwinContent/FabViewport has not rendered for it yet.
   expect(viewport.renders, 'a raw SSE cache write must not rerender TwinContent').toBe(before);
+  expect(projectedTimes).toEqual([]);
 
   await flushProjection();
-  expect(viewport.renders).toBe(before + 1);
+  expect(projectedTimes).toEqual(['2026-10-27T00:00:01Z']);
   expect(useTwinPageStore.getState().liveToolStates[0]).toBe('down');
   expect(useTwinPageStore.getState().statusFeed).toEqual({ updatedAt: '2026-10-27T00:00:01Z', stale: false });
 
@@ -111,8 +120,11 @@ it('A02: SSE frames publish through one throttled projection instead of renderin
   send(source, frame(2, 'idle', '2026-10-27T00:00:02Z'));
   send(source, frame(3, 'maint', '2026-10-27T00:00:03Z'));
   await flushProjection();
-  expect(viewport.renders).toBe(before + 2);
+  // Count authoritative coalesced projection commits, not implementation-specific
+  // React renders that may be batched differently across concurrent workers.
+  expect(projectedTimes).toEqual(['2026-10-27T00:00:01Z', '2026-10-27T00:00:03Z']);
   expect(useTwinPageStore.getState().liveToolStates[0]).toBe('maint');
   expect(useTwinPageStore.getState().statusFeed?.updatedAt).toBe('2026-10-27T00:00:03Z');
+  unsubscribe();
   client.clear();
 });

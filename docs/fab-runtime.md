@@ -106,7 +106,7 @@ dispose():
 ## 7. 与 Router/Query 的边界
 
 - Router loader **不创建** Runtime，也不直接访问 Bridge/actor；Runtime 通过 Provider 提供给页面。
-- Query 负责所有 HTTP 服务端数据；Runtime 只负责命令/实时链路。命令权威状态经 `CommandGateway`（`realtime/transport/HttpCommandGateway.ts`，`GET /api/v1/commands/{id}`）读取，恢复由 `CommandReconciler` 调用同一 gateway（见 [命令核对](command-reconciliation.md)）；当前没有也不应新增独立的命令 Query 模块。
+- Query 负责所有 HTTP 服务端数据；Runtime 只负责命令/实时链路。命令权威状态经 `CommandGateway`（`api/transport/HttpCommandGateway.ts`，`GET /api/v1/commands/{id}`）读取，恢复由 `CommandReconciler` 调用同一 gateway（见 [命令核对](command-reconciliation.md)）；当前没有也不应新增独立的命令 Query 模块。
 - Runtime 不写 Query 缓存；Busy/进行中状态不进入 Query。
 - 高频遥测不经过 Runtime 的业务链路；Telemetry 走 Worker/缓冲（[渲染管线](rendering.md)）；设备槽位/FabToolState 投影在纯函数 `domain/equipment/tool-state-projection.ts`，Runtime 不做投影。
 

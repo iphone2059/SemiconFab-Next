@@ -1,34 +1,27 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { z } from 'zod';
-import type { RunSummary } from '../../contracts';
+import type { CreateRunRequest, RunSummary } from '../../contracts';
+import { createRunRequestSchema, runSummarySchema } from '../schemas/runs.schema';
 import { httpTransport } from '../transport/http';
 import { queryKeys } from '../queries/queryKeys';
 
-const runSchema = z.looseObject({
-  runId: z.string().min(1),
-  siteId: z.string().min(1),
-  status: z.string().min(1),
-  version: z.string(),
-  createdAtUtc: z.string(),
-  executions: z.array(z.unknown()),
-});
-
 export interface CreateRunInput {
-  readonly request: unknown;
+  readonly request: CreateRunRequest;
   readonly idempotencyKey: string;
 }
 
 /** POST the run and invalidate the runs prefix so list/detail/result refresh. */
 export async function createRun(input: CreateRunInput): Promise<RunSummary> {
+  const request = createRunRequestSchema.parse(input.request);
+  if (!/^[A-Za-z0-9._-]{1,128}$/.test(input.idempotencyKey)) throw new Error('Invalid run idempotency key');
   const payload = await httpTransport.fetchJson('/api/v1/runs', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Idempotency-Key': input.idempotencyKey,
     },
-    body: JSON.stringify(input.request),
+    body: JSON.stringify(request),
   });
-  return runSchema.parse(payload) as RunSummary;
+  return runSummarySchema.parse(payload);
 }
 
 export async function invalidateRuns(queryClient: QueryClient): Promise<void> {

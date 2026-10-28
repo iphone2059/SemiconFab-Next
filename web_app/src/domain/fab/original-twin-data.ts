@@ -25,13 +25,16 @@ export interface OriginalOem {
   id: string; vendor: string; model: string; segment: string; country: string;
   process_node: string; wafer_size: string; dimensions: string; weight: string;
   key_specs: string; notes: string; source_url: string; source_tier: string;
-  inFabId?: string; substitute_brand?: string; substitute_model?: string; isCustomApproved?: boolean;
+  /** Frozen reference data explicitly uses null when there is no linked FAB id. */
+  inFabId?: string | null; substitute_brand?: string; substitute_model?: string; isCustomApproved?: boolean;
 }
 interface OriginalTwinUi {
   equipment: readonly OriginalEquipment[]; oem: readonly OriginalOem[];
   localized: readonly { id: string; zh: OriginalEquipment; en: OriginalEquipment }[];
   signalKeys: readonly string[]; bootstrapEquipmentCount: number; layoutCount: number;
 }
+// The committed JSON is validated by tools/check_frozen_assets.mjs on every verify.ps1 run.
+// A reference to the full FAB layout may remain an opaque ID, not a foreign key into equipment[].
 export const ORIGINAL_TWIN_UI = reference as unknown as OriginalTwinUi;
 export type TwinSelection = { kind: 'layout'; index: number } | { kind: 'reference'; id: string } | { kind: 'oem'; id: string };
 

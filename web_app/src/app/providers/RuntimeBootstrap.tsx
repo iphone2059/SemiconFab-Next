@@ -6,7 +6,7 @@ import { FabLifecycleCoordinator } from '../../runtime/FabLifecycleCoordinator';
 import { FabRuntimeFactory } from '../../runtime/FabRuntimeFactory';
 import { FabRuntimeRegistry } from '../../runtime/FabRuntimeRegistry';
 import { createPendingCommandEventSource } from '../../runtime/commandSources';
-import { createHttpCommandGateway } from '../../realtime/transport/HttpCommandGateway';
+import { createHttpCommandGateway } from '../../api/transport/HttpCommandGateway';
 import { createSseCommandEventSource } from '../../realtime/transport/SseCommandEventSource';
 import { TelemetryRuntime } from '../../realtime/telemetry/TelemetryRuntime';
 import { FabTelemetryRegistry } from '../../realtime/telemetry/FabTelemetryRegistry';

@@ -10,6 +10,10 @@
 
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
+export class HttpStatusError extends Error {
+  constructor(readonly status: number, message: string) { super(message); this.name = 'HttpStatusError'; }
+}
+
 export interface HttpTransportOptions {
   /** Test seam; production defaults to the current global fetch. */
   readonly fetchImpl?: FetchLike;
@@ -81,11 +85,11 @@ export function createHttpTransport(options: HttpTransportOptions = {}): HttpTra
   const fetchText = async (path: string, init: RequestInit = {}): Promise<string> => {
     assertSameOriginPath(path);
     assertNoIdentitySecret(init.headers);
-    const response = await fetchImpl(path, { credentials: 'same-origin', cache: 'no-store', ...init });
+    const response = await fetchImpl(path, { ...init, credentials: 'same-origin', cache: 'no-store' });
     const raw = await response.text();
     if (!response.ok) {
       const detail = problemDetail(raw);
-      throw new Error('请求失败（HTTP ' + response.status + '）' + (detail ? '：' + detail : ''));
+      throw new HttpStatusError(response.status, '请求失败（HTTP ' + response.status + '）' + (detail ? '：' + detail : ''));
     }
     return raw;
   };

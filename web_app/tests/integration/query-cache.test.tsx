@@ -34,6 +34,7 @@ const statusFrame = (siteId: string, fabId: string, sequence: number, generatedA
   fabId,
   generatedAt,
   sequence,
+  epoch: 1,
   tools: FAB_LAYOUT.map(() => ({ state })),
 });
 const STATUS_A = statusFrame('site-a', 'fab-1', 1, '2026-10-27T00:00:00Z');
@@ -94,7 +95,11 @@ it('RQ-03: createRun invalidation refreshes the authoritative runs list', async 
   const queryClient = freshClient();
 
   expect(await queryClient.ensureQueryData(runsQueryOptions())).toEqual([RUN_1]);
-  const created = await createRun({ request: { scenario: 'm2' }, idempotencyKey: 'idem-1' });
+  const created = await createRun({ request: { scenario: {
+    contractVersion: 1, siteId: '3acd7b05-e6e8-5312-bb5b-045e7dd3074b', mode: 'INDEPENDENT',
+    masterSeed: '7', durationUs: '1000', warmupUs: '0',
+    fabs: [{ fabId: 'e3021724-ec73-534e-be7c-ba3374f4ddb8', code: 'FAB-1', lotCount: 1, processTimeUs: '1' }],
+  } }, idempotencyKey: 'idem-1' });
   expect(created).toEqual(RUN_2);
   await invalidateRuns(queryClient);
   // The next read (component refetch or explicit fetch) is authoritative.

@@ -8,6 +8,10 @@ node tools/pack_static_structure.mjs --check
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 node tools/check_generated_artifacts.mjs --check
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
+node tools/check_frozen_assets.mjs
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
+node --test tools/test_check_frozen_assets.mjs
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
 python tools/check_architecture.py
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 python -m unittest discover -s tools -p 'test_*.py'

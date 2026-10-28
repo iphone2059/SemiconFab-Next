@@ -76,7 +76,7 @@ export const router = createRouter({
 - 每个领域一个 `*.queries.ts`：`api/queries/{sites,equipment,catalog,runs,research,wafer}.queries.ts`。
 - 使用 `queryOptions(...)` 导出具名对象/工厂；loader 与组件 import 同一份，禁止复制 queryFn 或 key。
 - `queryFn` 通过唯一 HTTP transport `api/transport/http.ts`（`createHttpTransport({ fetchImpl })`）取数；响应在 queryFn 内用 `api/schemas/`（Zod）或查询层 schema 校验，失败抛错，不写入缓存。
-- 命令权威状态读取**不经 Query**：由 `realtime/transport/HttpCommandGateway.ts`（`GET /api/v1/commands/{id}`）供恢复/核对；不得用 Query 建模进行中命令的生命周期（生命周期由 XState 工作流拥有，见 [ADR-0010](adr/0010-command-event-bridge.md)）。当前没有独立的命令 Query 模块，也不应新增。
+- 命令权威状态读取**不经 Query**：由 `api/transport/HttpCommandGateway.ts`（`GET /api/v1/commands/{id}`）供恢复/核对；不得用 Query 建模进行中命令的生命周期（生命周期由 XState 工作流拥有，见 [ADR-0010](adr/0010-command-event-bridge.md)）。当前没有独立的命令 Query 模块，也不应新增。
 
 ### 4.2 Query Keys 约定
 
