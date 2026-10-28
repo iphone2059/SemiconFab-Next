@@ -60,6 +60,14 @@ it('merges call-site init over the defaults and passes the AbortSignal through',
   expect(headers.get('Idempotency-Key')).toBe('idem-1');
 });
 
+it('cannot override same-origin credentials or no-store policy', async () => {
+  const { fetchImpl, calls } = capture();
+  const transport = createHttpTransport({ fetchImpl });
+  await transport.fetchText('/api/v1/sites', { credentials: 'include', cache: 'force-cache' });
+  expect(calls[0].init?.credentials).toBe('same-origin');
+  expect(calls[0].init?.cache).toBe('no-store');
+});
+
 it('rejects when the caller aborts the request', async () => {
   const controller = new AbortController();
   const fetchImpl: FetchLike = (_input, init) => new Promise<Response>((_resolve, reject) => {

@@ -81,7 +81,7 @@ export function createHttpTransport(options: HttpTransportOptions = {}): HttpTra
   const fetchText = async (path: string, init: RequestInit = {}): Promise<string> => {
     assertSameOriginPath(path);
     assertNoIdentitySecret(init.headers);
-    const response = await fetchImpl(path, { credentials: 'same-origin', cache: 'no-store', ...init });
+    const response = await fetchImpl(path, { ...init, credentials: 'same-origin', cache: 'no-store' });
     const raw = await response.text();
     if (!response.ok) {
       const detail = problemDetail(raw);
