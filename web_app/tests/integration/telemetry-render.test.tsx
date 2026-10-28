@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
+import { installNativeDialogPolyfill } from '../support/native-dialog';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+
+installNativeDialogPolyfill();
 import { FabViewport } from '../../src/features/twin/fab-viewer';
 import { TwinPage } from '../../src/features/twin/twin-page';
 import { TelemetryProvider } from '../../src/app/providers/TelemetryProvider';

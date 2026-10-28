@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
+import { installNativeDialogPolyfill } from '../support/native-dialog';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
+installNativeDialogPolyfill();
 import { CatalogPage } from '../../src/features/catalog/catalog-page';
 import { TwinPage } from '../../src/features/twin/twin-page';
 import { resetCatalogStore } from '../../src/state/catalogStore';

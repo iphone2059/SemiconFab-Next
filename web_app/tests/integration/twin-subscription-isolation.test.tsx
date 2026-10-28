@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
+import { installNativeDialogPolyfill } from '../support/native-dialog';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
+installNativeDialogPolyfill();
 import { TwinPage } from '../../src/features/twin/twin-page';
 import { AmhsOhtReadout, AmhsResearchBadge } from '../../src/features/twin/twin-amhs-hud';
 import { TwinWaferHud } from '../../src/features/twin/twin-wafer-hud';

@@ -76,20 +76,15 @@ type ModalProps = PropsWithChildren<{
 }>;
 
 /**
- * One controlled native modal dialog: the browser owns the top layer, Escape
- * ordering and background inertness; this wrapper owns controlled close, Tab
- * looping, backdrop pointer dismissal, focus restore and scroll locking.
+ * One controlled native modal dialog. showModal()/close(), the top layer,
+ * ::backdrop, Escape ordering, background inertness and focus restoration are
+ * the browser's; the wrapper only adds controlled close, Tab looping, backdrop
+ * pointer dismissal and the shared scroll lock.
  */
 export function Modal({ children, onClose, className, backdropClassName, id, label }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const [titleCount, setTitleCount] = useState(0);
-  // URL/store-driven dialogs can open without a meaningful click target, so
-  // remember the focused element before showModal moves focus.
-  const opener = useRef<HTMLElement | null>(null);
-  if (opener.current === null && typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
-    opener.current = document.activeElement;
-  }
   const titleContext = useMemo<ModalTitleContextValue>(() => ({
     id: titleId,
     register: (delta) => setTitleCount((count) => Math.max(0, count + delta)),
@@ -98,18 +93,9 @@ export function Modal({ children, onClose, className, backdropClassName, id, lab
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (typeof dialog.showModal === 'function') {
-      if (!dialog.open) dialog.showModal();
-    } else {
-      dialog.setAttribute('open', '');
-    }
-    if (!dialog.contains(document.activeElement)) {
-      (dialog.querySelector<HTMLElement>('[autofocus]') ?? focusableItems(dialog)[0])?.focus();
-    }
+    dialog.showModal();
     return () => {
-      if (!dialog.open) return;
-      if (typeof dialog.close === 'function') dialog.close();
-      else dialog.removeAttribute('open');
+      if (dialog.open) dialog.close();
     };
   }, []);
 
@@ -118,17 +104,8 @@ export function Modal({ children, onClose, className, backdropClassName, id, lab
     return unlockDocumentScroll;
   }, []);
 
-  // Native close() restores the opener in browsers; keep an explicit fallback
-  // for URL-driven dialogs and environments without dialog focus handling.
-  useEffect(() => {
-    const previous = opener.current;
-    return () => {
-      if (previous?.isConnected) previous.focus();
-    };
-  }, []);
-
-  // Browser-initiated close requests (assistive technology, platform shortcuts)
-  // still stay controlled.
+  // A browser-initiated close request (assistive technology, platform
+  // shortcuts) must still flow through the controlled close state.
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -180,8 +157,6 @@ export function Modal({ children, onClose, className, backdropClassName, id, lab
     <dialog
       ref={dialogRef}
       id={id}
-      role="dialog"
-      aria-modal="true"
       aria-labelledby={titleCount > 0 ? titleId : undefined}
       aria-label={label}
       className={className + ' ' + backdropClassName}

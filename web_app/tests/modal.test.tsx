@@ -3,6 +3,9 @@ import { useState, type ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Modal, ModalTitle } from '../src/components/modal';
+import { installNativeDialogPolyfill } from './support/native-dialog';
+
+installNativeDialogPolyfill();
 
 afterEach(cleanup);
 
@@ -33,7 +36,8 @@ it('names the native dialog and restores the focused opener after Escape', async
   render(<Fixture />);
   const { opener, dialog } = await openParent();
   expect(await screen.findByRole('dialog', { name: 'Parent title' })).toBe(dialog);
-  expect(dialog.getAttribute('aria-modal')).toBe('true');
+  expect(dialog.tagName).toBe('DIALOG');
+  expect(dialog.hasAttribute('open')).toBe(true);
   expect(dialog.getAttribute('aria-labelledby')).toBeTruthy();
   expect(document.getElementById(dialog.getAttribute('aria-labelledby')!)?.textContent).toBe('Parent title');
   expect(dialog.className).toBe('content backdrop');
@@ -43,19 +47,15 @@ it('names the native dialog and restores the focused opener after Escape', async
   await waitFor(() => expect(document.activeElement).toBe(opener));
 });
 
-it('opens through HTMLDialogElement.showModal when the browser provides it', async () => {
-  const showModal = vi.fn(function (this: HTMLDialogElement) { this.setAttribute('open', ''); });
-  const prototype = HTMLDialogElement.prototype as unknown as { showModal?: () => void };
-  const previous = prototype.showModal;
-  prototype.showModal = showModal as unknown as () => void;
+it('opens through the native HTMLDialogElement.showModal path', async () => {
+  const showModal = vi.spyOn(HTMLDialogElement.prototype, 'showModal');
   try {
     render(<Fixture />);
     fireEvent.click(screen.getByRole('button', { name: 'Open parent' }));
     await screen.findByRole('dialog');
     expect(showModal).toHaveBeenCalledTimes(1);
   } finally {
-    if (previous) prototype.showModal = previous;
-    else delete prototype.showModal;
+    showModal.mockRestore();
   }
 });
 

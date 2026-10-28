@@ -553,7 +553,6 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
       const target = event.target as HTMLElement | null;
       if (event.key === 'Escape') {
         twinUiActions.escape();
