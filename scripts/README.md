@@ -39,11 +39,12 @@
 在仓库根目录按顺序执行，任一步失败立即退出：
 
 1. **生成物一致性**：`python tools/generate_contracts.py --check`、`node tools/build_twin_translations.cjs --check`、`node tools/pack_static_structure.mjs --check`、`node tools/check_generated_artifacts.mjs --check`（登记表 `tools/generated-artifacts.json`）。
-2. **架构检查**：`python tools/check_architecture.py`（扁平项目布局、前端终态目录/旧路径缺席、domain 分层、src 根白名单、feature 状态归属、生成物区域、禁用依赖、ARCH-11 高频边界、模块档案数量）。
-3. 工具单测：`python -m unittest discover -s tools -p 'test_*.py'` 与 `node --test tools/test_render_perf_checks.mjs`。
-4. 导入快照：`python tools/migrate_legacy_data.py --check`。
-5. 3 个独立 .NET 项目 Release 构建，并对 `fab_tests` 执行 `dotnet test --no-build`。
-6. `web_app` 内用 `package.json` 锁定的 pnpm 版本执行 `install --frozen-lockfile`、`typecheck`、`test`、`build`。
+2. **冻结 JSON 校验**：`node tools/check_frozen_assets.mjs` 检查原始 Twin 设备/OEM/本地化数据与 SVG 标签/属性白名单；`node --test tools/test_check_frozen_assets.mjs` 用损坏样例证明校验器会拒绝错误资产。
+3. **架构检查**：`python tools/check_architecture.py`（扁平项目布局、前端终态目录/旧路径缺席、domain 分层、src 根白名单、feature 状态归属、生成物区域、禁用依赖、ARCH-11 高频边界、模块档案数量）。
+4. 工具单测：`python -m unittest discover -s tools -p 'test_*.py'` 与 `node --test tools/test_render_perf_checks.mjs`。
+5. 导入快照：`python tools/migrate_legacy_data.py --check`。
+6. 3 个独立 .NET 项目 Release 构建，并对 `fab_tests` 执行 `dotnet test --no-build`。
+7. `web_app` 内用 `package.json` 锁定的 pnpm 版本执行 `install --frozen-lockfile`、`typecheck`、`test`、`build`。
 
 ## 前端架构门禁
 

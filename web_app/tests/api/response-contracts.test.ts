@@ -1,6 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
-import { runSummarySchema, runResultSchema } from '../../src/api/schemas/runs.schema';
+import { createRunRequestSchema, runSummarySchema, runResultSchema } from '../../src/api/schemas/runs.schema';
 import { catalogPageSchema } from '../../src/api/schemas/catalog.schema';
 import { catalogQueryOptions } from '../../src/api/queries/catalog.queries';
 
@@ -62,4 +62,15 @@ it('never caches a malformed catalog payload from the server', async () => {
   await expect(client.fetchQuery(catalogQueryOptions())).rejects.toThrow();
   expect(client.getQueryData(catalogQueryOptions().queryKey)).toBeUndefined();
   client.clear();
+});
+
+it('validates run submissions before sending HTTP', () => {
+  const valid = { scenario: { contractVersion: 1, siteId: 'site-1', mode: 'INDEPENDENT',
+    masterSeed: '42', durationUs: '1000', warmupUs: '0',
+    fabs: [{ fabId: 'fab-1', code: 'FAB-1', lotCount: 1, processTimeUs: '100' }] } };
+  expect(createRunRequestSchema.parse(valid)).toEqual(valid);
+  expect(() => createRunRequestSchema.parse({ ...valid, scenario: { ...valid.scenario,
+    fabs: [{ ...valid.scenario.fabs[0], lotCount: -1 }] } })).toThrow();
+  expect(() => createRunRequestSchema.parse({ ...valid, scenario: { ...valid.scenario,
+    fabs: [{ ...valid.scenario.fabs[0], processTimeUs: 'invalid' }] } })).toThrow();
 });
