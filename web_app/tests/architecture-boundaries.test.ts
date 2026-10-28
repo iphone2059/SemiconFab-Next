@@ -69,8 +69,16 @@ it('M5c: page modules live under features/ and shared UI under components/', () 
   for (const directory of ['features/twin', 'features/catalog', 'features/workbench']) {
     expect(statSync(join(sourceRoot, directory)).isDirectory()).toBe(true);
   }
-  for (const file of ['ui.tsx', 'widgets.tsx', 'charting.tsx', 'error-boundary.tsx']) {
+  for (const file of ['ui.tsx', 'modal.tsx', 'error-boundary.tsx', 'class-names.ts', 'original-icons.tsx']) {
     expect(statSync(join(sourceRoot, 'components', file)).isFile()).toBe(true);
+  }
+  // R12: Workbench-only widgets belong to the feature. The global files and any
+  // forwarding re-export are gone; the feature-local owners are the only copy.
+  for (const file of ['widgets.tsx', 'charting.tsx']) {
+    expect(() => statSync(join(sourceRoot, 'components', file)), file).toThrow();
+  }
+  for (const file of ['metric.tsx', 'completion-bar.tsx']) {
+    expect(statSync(join(sourceRoot, 'features', 'workbench', 'components', file)).isFile()).toBe(true);
   }
   for (const legacy of ['twin-page.tsx', 'catalog-page.tsx', 'workbench.tsx', 'ui.tsx']) {
     expect(() => statSync(join(sourceRoot, legacy))).toThrow();

@@ -2,7 +2,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, expect, it } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { CatalogEntryDto } from '../src/contracts';
-import { CatalogComparison, CatalogPage, RecordFields } from '../src/features/catalog/catalog-page';
+import { CatalogPage } from '../src/features/catalog/catalog-page';
+import { CatalogComparison } from '../src/features/catalog/components/catalog-comparison';
+import { FieldValue, RecordFields } from '../src/features/catalog/components/catalog-fields';
+import { ExternalLink } from '../src/features/catalog/components/external-link';
 import { catalogQueryOptions } from '../src/api/queries/catalog.queries';
 import { resetCatalogStore } from '../src/features/catalog/state/catalogStore';
 import { resetLocaleStore } from '../src/state/localeStore';
@@ -83,6 +86,45 @@ it('compares unioned fields without hiding missing fields or inventing a zero pr
   expect(html).toContain('physical.depth_mm');
   expect(html).toContain('Not available');
   expect(html).not.toContain('$0');
+});
+
+it('validates provenance URL schemes and renders non-http(s) sources as inert text', () => {
+  const field = (source: string) => ({
+    path: 'physical.width_mm',
+    value: 2300,
+    unit: 'mm',
+    tier: 'inferred',
+    source,
+  });
+
+  const safe = renderToStaticMarkup(<FieldValue field={field('https://example.test/spec')} />);
+  expect(safe).toContain('href="https://example.test/spec"');
+  expect(safe).toContain('target="_blank"');
+  expect(safe).toContain('rel="noopener noreferrer"');
+
+  // Every scheme outside the strict http(s) allowlist must stay inert text: it
+  // may never become a clickable anchor that executes or navigates.
+  for (const source of [
+    'javascript:alert(1)',
+    'data:text/html,test',
+    'file:///etc/passwd',
+    'ftp://example.test/spec',
+    'mailto:ops@example.test',
+    'https://user:pass@example.test/spec',
+    '//example.test/spec',
+  ]) {
+    const html = renderToStaticMarkup(<FieldValue field={field(source)} />);
+    expect(html, source).not.toContain('<a');
+    expect(html, source).toContain(source);
+  }
+
+  expect(
+    renderToStaticMarkup(
+      <ExternalLink href="javascript:alert(1)" fallback="inert source">
+        linked source
+      </ExternalLink>,
+    ),
+  ).toBe('inert source');
 });
 
 it('renders the migrated catalog page from the shared Query cache', () => {

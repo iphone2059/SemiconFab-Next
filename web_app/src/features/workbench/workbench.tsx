@@ -1,302 +1,77 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateRunRequest, SiteDto } from '../../contracts';
-import { Panel, StatusPill } from '../../components/ui';
-import { Metric } from '../../components/widgets';
-import { CompletionBar } from '../../components/charting';
-import { ScopeGate } from '../../application/coordination/ScopeGate';
-import { validateScenario } from '../../domain/simulation/scenario';
-import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from '../../api/queries/runs.queries';
-import { createRun, invalidateRuns } from '../../api/mutations/runs.mutations';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { SiteDto } from '../../contracts';
 import { sitesQueryOptions } from '../../api/queries/sites.queries';
+import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from '../../api/queries/runs.queries';
 import { fab3dPath } from '../../app/router/url-mapping';
-import { useWorkbenchStore, workbenchActions } from './state/workbenchStore';
 import { useFabRuntimeRegistry } from '../../app/providers/RuntimeProvider';
+import { useWorkbenchStore, workbenchActions, type WorkbenchFormState } from './state/workbenchStore';
 import { CommandConsole } from './command-console';
-const message = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === 'object') {
-    const value = error as { status?: unknown; data?: unknown; error?: unknown };
-    if (value.data && typeof value.data === 'object') {
-      const detail = (value.data as { detail?: unknown; title?: unknown }).detail ?? (value.data as { title?: unknown }).title;
-      if (typeof detail === 'string') return detail;
-    }
-    if (typeof value.data === 'string') return value.data.slice(0, 180);
-    if (typeof value.error === 'string') return value.error;
-    if (value.status !== undefined) return `HTTP ${String(value.status)}`;
-  }
-  return '未知错误';
-};
-const complete = (status: string) => status.toUpperCase() === 'COMPLETED';
-const count = (value: string) => BigInt(value).toLocaleString('zh-CN');
+import { errorMessage } from './error-message';
+import { isCompleted } from './format';
+import { WorkbenchMetrics } from './components/workbench-metrics';
+import { RunForm } from './components/run-form';
+import { FabOverview } from './components/fab-overview';
+import { RunHistory } from './components/run-history';
+import { useRunSubmission } from './controllers/use-run-submission';
 
+/**
+ * Dashboard composition root: Query snapshots are selected here and handed to
+ * the presentational feature components; the submission command lives in its
+ * controller and no server payload is copied into client state.
+ */
 function Workbench({ site }: { site: SiteDto }) {
   const { runId, form, submitError } = useWorkbenchStore();
-  const { lotCount, processTimeUs, durationUs, warmupUs, masterSeed } = form;
-  const submissionScope = useMemo(() => new ScopeGate(), []);
-  const queryClient = useQueryClient();
   const runsQuery = useQuery({ ...runsQueryOptions(), refetchInterval: 1500 });
-  const scopedRuns = useMemo(() => (runsQuery.data ?? []).filter((value) => value.siteId === site.siteId), [runsQuery.data, site.siteId]);
-  const runs = scopedRuns;
-  const listError = runsQuery.error ? message(runsQuery.error) : '';
+  const scopedRuns = useMemo(
+    () => (runsQuery.data ?? []).filter((value) => value.siteId === site.siteId),
+    [runsQuery.data, site.siteId],
+  );
+  const listError = runsQuery.error ? errorMessage(runsQuery.error) : '';
   const runQuery = useQuery({ ...runQueryOptions(runId), enabled: !!runId, refetchInterval: 1500 });
-  const runCompleted = !!runQuery.data && complete(runQuery.data.status);
+  const runCompleted = !!runQuery.data && isCompleted(runQuery.data.status);
   // Results are only requested once the backend reports COMPLETED, exactly like the skipped RTK query.
   const resultQuery = useQuery({ ...runResultsQueryOptions(runId), enabled: !!runId && runCompleted });
   const run = runQuery.data;
   const result = resultQuery.data;
-  const runError = runQuery.error ? message(runQuery.error) : resultQuery.error ? message(resultQuery.error) : '';
-  const createRunMutation = useMutation({
-    mutationFn: createRun,
-    // The RTK mutation invalidated the Runs tag on success; keep that refresh for list/detail/results.
-    onSuccess: () => {
-      void invalidateRuns(queryClient);
-    },
-  });
-  const submitting = createRunMutation.isPending;
-  useEffect(() => () => submissionScope.dispose(), [submissionScope]);
+  const runError = runQuery.error ? errorMessage(runQuery.error) : resultQuery.error ? errorMessage(resultQuery.error) : '';
+  const { submit, submitting } = useRunSubmission(site, form);
   useEffect(() => {
     workbenchActions.runsReceived({ siteId: site.siteId, runIds: scopedRuns.map((value) => value.runId) });
   }, [scopedRuns, site.siteId]);
-
-  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-    workbenchActions.submitErrorSet('');
-    if (site.fabs.length === 0) {
-      workbenchActions.submitErrorSet('当前站点没有可用的 FAB');
-      return;
-    }
-    const validationError = validateScenario({ lotCount, processTimeUs, durationUs, warmupUs, masterSeed });
-    if (validationError) {
-      workbenchActions.submitErrorSet(validationError);
-      return;
-    }
-    const request: CreateRunRequest = {
-      scenario: {
-        contractVersion: 1, siteId: site.siteId, mode: 'INDEPENDENT', masterSeed, durationUs, warmupUs,
-        // One execution per site FAB; the catalog is data-driven, never a fixed count.
-        fabs: site.fabs.map((member) => ({ fabId: member.fabId, code: member.code, lotCount: Number(lotCount), processTimeUs })),
-      },
-    };
-    const json = JSON.stringify(request);
-    workbenchActions.submissionPrepared({ json, key: crypto.randomUUID() });
-    const key = useWorkbenchStore.getState().pendingSubmission!.key;
-    const token = submissionScope.begin(site.siteId);
-    try {
-      const created = await createRunMutation.mutateAsync({ request, idempotencyKey: key });
-      if (submissionScope.accepts(token)) {
-        workbenchActions.submissionCompleted({ siteId: site.siteId, key, runId: created.runId });
-      }
-    } catch (error: unknown) {
-      if (submissionScope.accepts(token)) workbenchActions.submitErrorSet(message(error));
-    }
-  }
-
-
-  const setField = (field: 'lotCount' | 'processTimeUs' | 'durationUs' | 'warmupUs' | 'masterSeed', value: string) => workbenchActions.formFieldSet({ field, value });
+  const setField = (field: keyof WorkbenchFormState, value: string) =>
+    workbenchActions.formFieldSet({ field, value });
   const displayedRun = run?.runId === runId && run.siteId === site.siteId ? run : undefined;
   const displayedResult = displayedRun && result?.runId === runId ? result : undefined;
   const completedLots = displayedResult?.fabs.reduce(
     (sum, resultFab) => sum + BigInt(resultFab.completedLots),
     0n,
   );
-  const executionFor = (fabId: string) => displayedRun?.executions.find((value) => value.fabId === fabId);
-  const metricsFor = (fabId: string) => displayedResult?.fabs.find((value) => value.fabId === fabId);
   return (
     <>
-      <div className="metrics">
-        <Metric
-          label="FAB"
-          value={String(site.fabs.length).padStart(2, '0')}
-          hint={`${site.fabs.map((member) => member.code).join(' · ')} · 独立执行域`}
-        />
-        <Metric
-          label="当前运行"
-          value={displayedRun ? <StatusPill status={displayedRun.status} /> : '—'}
-          hint={displayedRun ? `版本 ${displayedRun.version}` : '选择或创建一个 Run'}
-        />
-        <Metric
-          label="完成 Lot"
-          value={completedLots?.toLocaleString('zh-CN') ?? '—'}
-          hint="仅展示后端已提交的完整结果"
-        />
-        <Metric label="运行模式" value="独立仿真" hint="INDEPENDENT · 合成 FIFO 模型" />
-      </div>
-      <div className="workbench-run-form">
-        <Panel title="新建仿真" subtitle={`${site.fabs.length} 个 FAB · 独立执行域。`}>
-          <form
-            onSubmit={(event) => {
-              void submit(event);
-            }}
-          >
-            <div className="model-label">◇ 合成 FIFO · 单设备加工模型</div>
-            <div className="field-grid">
-              <label>
-                Lot 数
-                <input
-                  value={lotCount}
-                  onChange={(event) => setField('lotCount', event.target.value)}
-                  inputMode="numeric"
-                  required
-                />
-              </label>
-              <label>
-                单 Lot 加工 / μs
-                <input
-                  value={processTimeUs}
-                  onChange={(event) => setField('processTimeUs', event.target.value)}
-                  inputMode="numeric"
-                  required
-                />
-              </label>
-              <label>
-                仿真时域 / μs
-                <input
-                  value={durationUs}
-                  onChange={(event) => setField('durationUs', event.target.value)}
-                  inputMode="numeric"
-                  required
-                />
-              </label>
-              <label>
-                预热时长 / μs
-                <input
-                  value={warmupUs}
-                  onChange={(event) => setField('warmupUs', event.target.value)}
-                  inputMode="numeric"
-                  required
-                />
-              </label>
-            </div>
-            <label>
-              主随机种子
-              <input
-                value={masterSeed}
-                onChange={(event) => setField('masterSeed', event.target.value)}
-                inputMode="numeric"
-                required
-              />
-            </label>
-            <p className="form-note">
-              整数微秒 · 权威 DES 在后端执行
-              <br />
-              不包含共享产能或真实工艺模型。
-            </p>
-            {submitError && (
-              <div className="error" role="alert">
-                {submitError}
-              </div>
-            )}
-            <button className="primary" disabled={submitting || site.fabs.length === 0}>
-              {submitting ? '正在提交…' : '创建并运行'}
-              <span>↗</span>
-            </button>
-          </form>
-        </Panel>
-      </div>
-      <div className="section-heading">
-        <div>
-          <h2>FAB 执行概览</h2>
-          <p>HTTP 全量快照 · 每 1.5 秒查询 · 无二进制实时流</p>
-        </div>
-        <span className="technical">
-          {displayedRun ? `RUN / ${displayedRun.runId.slice(0, 8)}` : 'AWAITING RUN'}
-        </span>
-      </div>
-      {runError && (
-        <div className="error" role="alert">
-          运行查询失败：{runError}；下列已显示值可能过期。
-        </div>
-      )}
-      <div className={`fab-grid${site.fabs.length === 1 ? ' single-fab' : ''}`}>
-        {site.fabs.map((member, index) => {
-          const execution = executionFor(member.fabId);
-          const metrics = metricsFor(member.fabId);
-          return (
-            <article className="fab-card" key={member.fabId}>
-              <div className="fab-card-head">
-                <span className="fab-icon">{String(index + 1).padStart(2, '0')}</span>
-                <div>
-                  <h3>{member.code}</h3>
-                  <small>独立执行域</small>
-                </div>
-                {execution ? (
-                  <StatusPill status={execution.status} />
-                ) : (
-                  <span className="muted">待选择 Run</span>
-                )}
-              </div>
-              <div className="fab-values">
-                <div>
-                  <span>完成 / 总 Lot</span>
-                  <strong>
-                    {execution
-                      ? `${count(execution.completedLots)} / ${count(execution.totalLots)}`
-                      : '—'}
-                  </strong>
-                </div>
-                <div>
-                  <span>仿真时间 / μs</span>
-                  <strong>{execution ? count(execution.simulationTimeUs) : '—'}</strong>
-                </div>
-              </div>
-              {execution && (
-                <CompletionBar completed={execution.completedLots} total={execution.totalLots} />
-              )}
-              <div className="hash">
-                {metrics ? `轨迹 SHA ${metrics.traceHash.slice(0, 18)}…` : '等待后端提交结果'}
-              </div>
-              {execution?.error && <div className="error">{execution.error}</div>}
-            </article>
-          );
-        })}
-      </div>
-      <Panel title="运行记录" subtitle="站点范围内的持久化 Run；点击查看执行状态与完整结果。">
-        {listError && (
-          <div className="error" role="alert">
-            列表查询失败：{listError}
-          </div>
-        )}
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>运行标识</th>
-                <th>创建时间</th>
-                <th>FAB 数</th>
-                <th>状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((value) => (
-                <tr key={value.runId} className={runId === value.runId ? 'selected' : ''}>
-                  <td className="mono">{value.runId.slice(0, 8)}</td>
-                  <td>{new Date(value.createdAtUtc).toLocaleString('zh-CN', { hour12: false })}</td>
-                  <td>{value.executions.length}</td>
-                  <td>
-                    <StatusPill status={value.status} />
-                  </td>
-                  <td>
-                    <button className="text-button" onClick={() => workbenchActions.runIdSet(value.runId)}>
-                      {runId === value.runId ? '当前运行' : '查看运行'} →
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {runs.length === 0 && (
-            <div className="empty">
-              {listError ? '暂无可用运行数据' : '暂无运行记录。创建一次仿真，开始查看后端结果。'}
-            </div>
-          )}
-        </div>
-      </Panel>
+      <WorkbenchMetrics site={site} run={displayedRun} completedLots={completedLots} />
+      <RunForm
+        site={site}
+        form={form}
+        submitting={submitting}
+        submitError={submitError}
+        onSubmit={(event) => {
+          void submit(event);
+        }}
+        onFieldChange={setField}
+      />
+      <FabOverview site={site} run={displayedRun} result={displayedResult} error={runError} />
+      <RunHistory
+        runs={scopedRuns}
+        runId={runId}
+        error={listError}
+        onSelect={(next) => workbenchActions.runIdSet(next)}
+      />
     </>
   );
 }
 
+/** Page composition root: shell/navigation plus the keyed workbench sections. */
 export default function WorkbenchApp() {
   const siteId = useWorkbenchStore((state) => state.siteId);
   const runtimeRegistry = useFabRuntimeRegistry();
@@ -304,7 +79,7 @@ export default function WorkbenchApp() {
   const sitesQuery = useQuery(sitesQueryOptions());
   const sites = sitesQuery.data ?? [];
   const loading = sitesQuery.isLoading;
-  const error = sitesQuery.error ? message(sitesQuery.error) : '';
+  const error = sitesQuery.error ? errorMessage(sitesQuery.error) : '';
   useEffect(() => {
     if (sites.length === 0) return;
     if (!sites.some((value) => value.siteId === siteId)) workbenchActions.siteIdSet(sites[0].siteId);

@@ -71,3 +71,20 @@ it('does not turn arbitrary provenance strings into executable links', () => {
   expect(safeExternalUrl('segment mapping v1.0')).toBeUndefined();
   expect(safeExternalUrl('https://example.test/spec')).toBe('https://example.test/spec');
 });
+
+it('only accepts absolute HTTP(S) URLs without credentials or protocol-relative forms', () => {
+  // The allowlist is scheme-based; every other scheme stays inert text.
+  expect(safeExternalUrl('HTTPS://Example.TEST/spec')).toBe('https://example.test/spec');
+  expect(safeExternalUrl('http://example.test')).toBe('http://example.test/');
+  expect(safeExternalUrl('ftp://example.test/spec')).toBeUndefined();
+  expect(safeExternalUrl('mailto:ops@example.test')).toBeUndefined();
+  expect(safeExternalUrl('file:///etc/passwd')).toBeUndefined();
+  expect(safeExternalUrl('vbscript:msgbox(1)')).toBeUndefined();
+  expect(safeExternalUrl('//example.test/spec')).toBeUndefined();
+  expect(safeExternalUrl('https://user:pass@example.test/spec')).toBeUndefined();
+  expect(safeExternalUrl('https://example.test/spec with space')).toBe(
+    'https://example.test/spec%20with%20space',
+  );
+  expect(safeExternalUrl('')).toBeUndefined();
+  expect(safeExternalUrl(null)).toBeUndefined();
+});

@@ -7,12 +7,17 @@ export interface WorkbenchFormState {
   warmupUs: string;
   masterSeed: string;
 }
+/**
+ * Workbench client UI state only: active site/run selection, the form draft and
+ * the current submit error. Server snapshots stay in TanStack Query and the
+ * submission lifecycle (idempotency key, in-flight command) stays in
+ * controllers/use-run-submission.ts, so the store never mirrors either.
+ */
 export interface WorkbenchState {
   siteId: string;
   runId: string;
   form: WorkbenchFormState;
   submitError: string;
-  pendingSubmission?: { json: string; key: string };
 }
 
 export const initialWorkbenchState: WorkbenchState = {
@@ -25,17 +30,11 @@ export const initialWorkbenchState: WorkbenchState = {
 const workbench = createSliceStore(initialWorkbenchState, {
   siteIdSet: (state, siteId: string) => state.siteId === siteId
     ? state
-    : { ...state, siteId, runId: '', submitError: '', pendingSubmission: undefined },
+    : { ...state, siteId, runId: '', submitError: '' },
   runsReceived: (state, payload: { siteId: string; runIds: string[] }) => state.siteId === payload.siteId && !state.runId
     ? { ...state, runId: payload.runIds[0] ?? '' }
     : state,
   runIdSet: (state, runId: string) => ({ ...state, runId, submitError: '' }),
-  submissionPrepared: (state, pendingSubmission: { json: string; key: string }) => state.pendingSubmission?.json === pendingSubmission.json
-    ? state
-    : { ...state, pendingSubmission },
-  submissionCompleted: (state, payload: { siteId: string; key: string; runId: string }) => state.siteId !== payload.siteId || state.pendingSubmission?.key !== payload.key
-    ? state
-    : { ...state, runId: payload.runId, pendingSubmission: undefined, submitError: '' },
   formFieldSet: (state, payload: { field: keyof WorkbenchFormState; value: string }) => ({
     ...state,
     form: { ...state.form, [payload.field]: payload.value },

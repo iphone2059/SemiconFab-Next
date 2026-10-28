@@ -1,502 +1,102 @@
-import {
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  type ChangeEvent,
-  type MouseEvent,
-} from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { catalogActions, useCatalogStore } from './state/catalogStore';
-import { localeActions, useLocaleStore } from '../../state/localeStore';
-import { catalogQueryOptions } from '../../api/queries/catalog.queries';
+import type { MouseEvent } from 'react';
 import type { CatalogEntryDto } from '../../contracts';
+import type { RouterSearch } from '../../app/router/search';
+import { catalogActions } from './state/catalogStore';
+import { localeActions } from '../../state/localeStore';
+import { text } from './labels';
+import type { CatalogView } from './types';
+import { CatalogHeader } from './components/catalog-header';
+import { CatalogFooter } from './components/catalog-footer';
+import { CatalogToolbar } from './components/catalog-toolbar';
+import { CatalogFilters } from './components/catalog-filters';
+import { CatalogTable } from './components/catalog-table';
+import { CatalogComparison } from './components/catalog-comparison';
+import { EquipmentDetails } from './components/catalog-detail';
+import { useCatalogData } from './controllers/use-catalog-data';
+import { useCatalogRouteState } from './controllers/use-catalog-route-state';
+import { useCatalogImport } from './controllers/use-catalog-import';
+import { useCatalogDownloads } from './export/use-catalog-downloads';
 import {
-  catalogFields,
-  filterCatalog,
-  parseCatalogEntries,
-  safeExternalUrl,
-  type CatalogField,
-} from './catalog-data';
-import { languageTag, readPreferences, type Preferences } from '../../state/preferences';
-import { searchToQueryString, type RouterSearch } from '../../app/router/search';
-import { catalogSearchFrom, catalogSearchPatch } from './search';
+  CATALOG_EXPORT_FILENAME,
+  catalogExportDocument,
+  catalogRecordFilename,
+} from './export/catalog-export';
 import '../../../assets/catalog.css';
-import legacyLicenseUrl from '../../../assets/legacy-LICENSE.txt';
-import { Modal, ModalTitle } from '../../components/modal';
-
-type Language = Preferences['language'];
-const text = (language: Language, zh: string, en: string) => (language === 'zh' ? zh : en);
-const pageSize = 40;
-const valueText = (value: unknown) =>
-  value === null || value === undefined
-    ? '—'
-    : typeof value === 'object'
-      ? JSON.stringify(value)
-      : String(value);
-const categoryNames: Readonly<Record<string, readonly [string, string]>> = {
-  lithography: ['光刻', 'Lithography'],
-  resist_track: ['涂胶显影', 'Resist track'],
-  dry_etch: ['干法刻蚀', 'Dry etch'],
-  wet_clean: ['湿法清洗', 'Wet clean'],
-  thin_film_deposition: ['薄膜沉积', 'Thin film deposition'],
-  cmp: ['化学机械抛光', 'CMP'],
-  thermal_processing: ['热处理', 'Thermal processing'],
-  ion_implantation: ['离子注入', 'Ion implantation'],
-  metrology: ['量测', 'Metrology'],
-  inspection: ['检测', 'Inspection'],
-  test: ['测试', 'Test'],
-  packaging: ['封装', 'Packaging'],
-  other: ['其他', 'Other'],
-  osat_dicing: ['OSAT 划片', 'OSAT dicing'],
-  osat_die_attach: ['OSAT 固晶', 'OSAT die attach'],
-  osat_wire_bonding: ['OSAT 引线键合', 'OSAT wire bonding'],
-  osat_flip_chip: ['OSAT 倒装', 'OSAT flip chip'],
-  osat_molding: ['OSAT 塑封', 'OSAT molding'],
-  osat_singulation: ['OSAT 分割', 'OSAT singulation'],
-  osat_bumping_rdl: ['OSAT 凸点 / RDL', 'OSAT bumping / RDL'],
-  osat_prober: ['OSAT 探针台', 'OSAT prober'],
-  osat_ate: ['OSAT 自动测试', 'OSAT ATE'],
-  osat_test_handler: ['OSAT 测试分选', 'OSAT test handler'],
-  osat_inspection: ['OSAT 检测', 'OSAT inspection'],
-};
-const categoryText = (category: string, language: Language) =>
-  categoryNames[category]?.[language === 'zh' ? 0 : 1] ?? category;
-
-function Price({ entry, language }: { entry: CatalogEntryDto; language: Language }) {
-  const low = entry.price?.low_usd;
-  const high = entry.price?.high_usd;
-  if (
-    typeof low !== 'number' ||
-    typeof high !== 'number' ||
-    !Number.isFinite(low) ||
-    !Number.isFinite(high)
-  )
-    return <span className="catalog-muted">{text(language, '暂无估价', 'Not available')}</span>;
-  const format = new Intl.NumberFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  });
-  return (
-    <span>
-      {format.format(low)} – {format.format(high)}
-      <small>
-        {valueText(entry.price?.as_of)} · {valueText(entry.price?.basis)}
-      </small>
-    </span>
-  );
-}
-
-function FieldValue({ field }: { field: CatalogField | undefined }) {
-  if (!field) return <>—</>;
-  const href = safeExternalUrl(field.source);
-  return (
-    <>
-      <span>
-        {valueText(field.value)}
-        {field.unit && ` ${field.unit}`}
-      </span>
-      {field.tier && <small>{field.tier}</small>}
-      {field.source && (
-        <small>
-          {href ? (
-            <a href={href} target="_blank" rel="noopener noreferrer">
-              {field.source} ↗
-            </a>
-          ) : (
-            field.source
-          )}
-        </small>
-      )}
-    </>
-  );
-}
-
-export function RecordFields({ entry, language }: { entry: CatalogEntryDto; language: Language }) {
-  const fields = useMemo(() => catalogFields(entry.record), [entry.record]);
-  return (
-    <div className="catalog-table-scroll">
-      <table className="catalog-field-table">
-        <thead>
-          <tr>
-            <th>{text(language, '字段', 'Field')}</th>
-            <th>{text(language, '值、单位与来源', 'Value, unit & provenance')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {fields.map((field) => (
-            <tr key={field.path}>
-              <th scope="row">{field.path}</th>
-              <td>
-                <FieldValue field={field} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-export function CatalogComparison({
-  entries,
-  language,
-  onRemove,
-}: {
-  entries: readonly CatalogEntryDto[];
-  language: Language;
-  onRemove: (id: string) => void;
-}) {
-  const fields = useMemo(
-    () =>
-      entries.map(
-        (entry) => new Map(catalogFields(entry.record).map((field) => [field.path, field])),
-      ),
-    [entries],
-  );
-  const paths = useMemo(
-    () => [...new Set(fields.flatMap((map) => [...map.keys()]))].sort(),
-    [fields],
-  );
-  if (entries.length === 0)
-    return (
-      <p className="catalog-empty">
-        {text(
-          language,
-          '从下方目录勾选设备，最多对比 4 项。',
-          'Select up to 4 tools from the catalog below.',
-        )}
-      </p>
-    );
-  return (
-    <div className="catalog-table-scroll">
-      <table className="catalog-comparison">
-        <thead>
-          <tr>
-            <th>{text(language, '对比项目', 'Comparison')}</th>
-            {entries.map((entry) => (
-              <th key={entry.recordId}>
-                {entry.vendor}
-                <strong>{entry.model}</strong>
-                <button onClick={() => onRemove(entry.recordId)}>
-                  {text(language, '移除', 'Remove')}
-                </button>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <th scope="row">{text(language, '原版等级', 'Legacy level')}</th>
-            {entries.map((entry) => (
-              <td key={entry.recordId}>
-                {entry.conformanceLevel} · {entry.completenessPct}%
-              </td>
-            ))}
-          </tr>
-          <tr>
-            <th scope="row">{text(language, '估算价格 / USD', 'Estimated price / USD')}</th>
-            {entries.map((entry) => (
-              <td key={entry.recordId}>
-                <Price entry={entry} language={language} />
-              </td>
-            ))}
-          </tr>
-          <tr>
-            <th scope="row">{text(language, '缺失字段', 'Missing fields')}</th>
-            {entries.map((entry) => (
-              <td key={entry.recordId}>{entry.missingFields.join(', ') || '—'}</td>
-            ))}
-          </tr>
-          {paths.map((path) => (
-            <tr key={path}>
-              <th scope="row">{path}</th>
-              {entries.map((entry, index) => (
-                <td key={entry.recordId}>
-                  <FieldValue field={fields[index]?.get(path)} />
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function downloadJson(value: unknown, name: string): void {
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }),
-  );
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function EquipmentDetails({
-  entry,
-  language,
-  onClose,
-}: {
-  entry: CatalogEntryDto;
-  language: Language;
-  onClose: () => void;
-}) {
-  return (
-    <Modal
-      className="catalog-dialog"
-      backdropClassName="catalog-dialog-backdrop"
-      onClose={onClose}
-    >
-      <div className="catalog-dialog-head">
-        <div>
-          <span className="catalog-eyebrow">{entry.vendor}</span>
-          <ModalTitle asChild><h2>{entry.model}</h2></ModalTitle>
-          <span className="catalog-muted">{entry.recordId}</span>
-        </div>
-        <button onClick={onClose} autoFocus>
-          {text(language, '关闭', 'Close')} ×
-        </button>
-      </div>
-      <div className="catalog-dialog-body">
-        <p>
-          {categoryText(entry.category, language)} · {entry.conformanceLevel} ·{' '}
-          {entry.completenessPct}%
-        </p>
-        <p className="catalog-notice">
-          {text(
-            language,
-            '等级与完整度保留原版标签，尚未重新进行完整标准校验。',
-            'Level and completeness are preserved legacy labels; full conformance has not been revalidated.',
-          )}
-        </p>
-        <p>
-          <Price entry={entry} language={language} />
-        </p>
-        <p>
-          {text(language, '缺失字段：', 'Missing fields: ')}
-          {entry.missingFields.join(', ') || '—'}
-        </p>
-        <RecordFields entry={entry} language={language} />
-        <details>
-          <summary>
-            {text(language, '完整原始记录与估价', 'Complete original record & estimate')}
-          </summary>
-          <pre>
-            {JSON.stringify(
-              { record: entry.record, price: entry.price, legacy: entry.legacy },
-              null,
-              2,
-            )}
-          </pre>
-        </details>
-        <button onClick={() => downloadJson(entry.record, `${entry.recordId}.json`)}>
-          {text(language, '下载设备记录 JSON', 'Download equipment record JSON')}
-        </button>
-      </div>
-    </Modal>
-  );
-}
-
-function preferencesFromSearch(search: RouterSearch): Preferences {
-  const query = searchToQueryString(search);
-  try {
-    return readPreferences(localStorage, query);
-  } catch {
-    return readPreferences({ getItem: () => null }, query);
-  }
-}
 
 export interface CatalogPageProps {
-  view: 'catalog' | 'compare';
+  view: CatalogView;
   /** Router-owned search state; the page never reads window.location for product state. */
   search: RouterSearch;
   onSearchChange: (patch: Partial<RouterSearch>, replace?: boolean) => void;
-  onViewChange: (next: 'catalog' | 'compare', patch: Partial<RouterSearch>) => void;
+  onViewChange: (next: CatalogView, patch: Partial<RouterSearch>) => void;
 }
 
+/**
+ * Route composition root. Data selection, URL coordination and the export
+ * lifecycle are owned by the feature controllers/modules; this file only composes
+ * the shell, the list/compare views and the detail dialog.
+ */
 export function CatalogPage({ view: initialView, search, onSearchChange, onViewChange }: CatalogPageProps) {
-  const catalogState = useCatalogStore();
-  const {
-    view, domain, category, query, hideDrafts, selected,
-    detailId, page, localEntries, localImportId, importError,
-  } = catalogState;
-  const preferences = useLocaleStore();
-  const language = preferences.language;
+  const data = useCatalogData();
+  const route = useCatalogRouteState({
+    initialView,
+    search,
+    onSearchChange,
+    onViewChange,
+    entries: data.entries,
+  });
+  const catalogImport = useCatalogImport();
+  const downloads = useCatalogDownloads();
+  const { preferences, language, view, openView, hrefFor, navigate } = route;
   const t = (zh: string, en: string) => text(language, zh, en);
-  const catalogQuery = useQuery(catalogQueryOptions());
-  const entries = useMemo(
-    () => localEntries ?? (catalogQuery.data ? parseCatalogEntries({ entries: catalogQuery.data.items }) : []),
-    [localEntries, catalogQuery.data],
-  );
-  const importId = localEntries ? localImportId : (catalogQuery.data?.importId ?? '');
-  const localPreview = localEntries !== null;
-  const error = importError || (catalogQuery.error instanceof Error ? 'Catalog request failed' : '');
-  const loading = catalogQuery.isLoading && !localEntries;
-  const detail = entries.find((entry) => entry.recordId === detailId);
-  const deferredQuery = useDeferredValue(query);
-  const filtered = useMemo(
-    () => filterCatalog(entries, domain, category, deferredQuery, hideDrafts),
-    [entries, domain, category, deferredQuery, hideDrafts],
-  );
-  const categories = useMemo(
-    () => [...new Set(entries.filter((entry) => domain === 'ALL' || entry.domain === domain).map((entry) => entry.category))].sort(),
-    [entries, domain],
-  );
-  const selectedEntries = useMemo(
-    () => selected.flatMap((id) => {
-      const entry = entries.find((item) => item.recordId === id);
-      return entry ? [entry] : [];
-    }),
-    [selected, entries],
-  );
-  const missingIds = selected.filter((id) => !entries.some((entry) => entry.recordId === id));
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const currentPage = Math.min(page, pageCount - 1);
-
-  const searchKey = searchToQueryString(search);
-
-  // URL is the owner: hydrate page state whenever the router search changes
-  // (first load, back/forward, programmatic navigation).
-  useEffect(() => {
-    const route = catalogSearchFrom(search);
-    catalogActions.hydrate({
-      view: initialView,
-      domain: route.domain,
-      category: route.category,
-      query: route.query,
-      hideDrafts: route.hideDrafts,
-      selected: route.compare,
-      page: 0,
-    });
-    localeActions.preferencesSet(preferencesFromSearch(search));
-  }, [initialView, searchKey]);
-
-  useEffect(() => {
-    if (view !== 'compare' || selected.length > 0 || entries.length === 0) return;
-    if (catalogSearchFrom(search).compare.length > 0) return;
-    catalogActions.selectedSet(entries.filter((entry) => entry.category === 'lithography').slice(0, 3).map((entry) => entry.recordId));
-  }, [view, selected.length, entries, searchKey]);
-
-  useEffect(() => {
-    // Hydration (or another effect) can replace these snapshots earlier in this
-    // commit. Only write the current render back; otherwise URL input and old
-    // store values repeatedly overwrite each other.
-    if (useCatalogStore.getState() !== catalogState || useLocaleStore.getState() !== preferences) return;
-    document.documentElement.lang = languageTag(language);
-    document.title = `${t(view === 'compare' ? '设备对比' : '设备目录', view === 'compare' ? 'Equipment comparison' : 'Equipment catalog')} · SemiconFab Next`;
-    try {
-      localStorage.setItem('semiconfab_lang', languageTag(language));
-      localStorage.setItem('semicon_lang', language);
-      localStorage.setItem('semicon_theme', preferences.theme);
-    } catch {
-      /* Storage may be unavailable. */
-    }
-    const patch = catalogSearchPatch({
-      domain,
-      category,
-      query,
-      hideDrafts,
-      selected,
-      language,
-      theme: preferences.theme,
-    });
-    if (searchToQueryString({ ...search, ...patch }) !== searchToQueryString(search)) {
-      onSearchChange(patch, true);
-    }
-  }, [catalogState, preferences, language, preferences.theme, view, domain, category, query, selected, hideDrafts, search, onSearchChange]);
 
   function toggle(id: string): void {
     catalogActions.selectedToggled(id);
   }
-  function openView(next: 'catalog' | 'compare'): void {
-    const patch = {
-      ...catalogSearchPatch({
-        domain, category, query, hideDrafts, selected, language, theme: preferences.theme,
+  function selectDomain(domain: 'ALL' | 'FAB' | 'OSAT'): void {
+    catalogActions.domainSet(domain);
+    catalogActions.categorySet('');
+    catalogActions.pageSet(0);
+  }
+  function selectQuery(query: string): void {
+    catalogActions.querySet(query);
+    catalogActions.pageSet(0);
+  }
+  function selectCategory(category: string): void {
+    catalogActions.categorySet(category);
+    catalogActions.pageSet(0);
+  }
+  function selectHideDrafts(hideDrafts: boolean): void {
+    catalogActions.hideDraftsSet(hideDrafts);
+    catalogActions.pageSet(0);
+  }
+  function exportCatalog(): void {
+    downloads.downloadJson(
+      catalogExportDocument(data.entries, {
+        importId: data.importId,
+        localPreview: data.localPreview,
       }),
-      compare: selected.join(',') || undefined,
-    };
-    catalogActions.viewSet(next);
-    onViewChange(next, patch);
+      CATALOG_EXPORT_FILENAME,
+    );
   }
-  function hrefFor(next: 'catalog' | 'compare'): string {
-    const patch = {
-      ...catalogSearchPatch({
-        domain, category, query, hideDrafts, selected, language, theme: preferences.theme,
-      }),
-      compare: next === 'compare' ? selected.join(',') || undefined : undefined,
-    };
-    const qs = searchToQueryString({ ...search, ...patch });
-    return `${next === 'compare' ? '/equipment/compare' : '/equipment'}${qs ? `?${qs}` : ''}`;
+  function downloadRecord(entry: CatalogEntryDto): void {
+    downloads.downloadJson(entry.record, catalogRecordFilename(entry.recordId));
   }
-  function navigate(event: MouseEvent<HTMLAnchorElement>, next: 'catalog' | 'compare'): void {
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
-      return;
-    event.preventDefault();
-    openView(next);
-  }
-  async function importFile(event: ChangeEvent<HTMLInputElement>): Promise<void> {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = '';
-    if (!file) return;
-    const requestId = crypto.randomUUID();
-    catalogActions.importStarted(requestId);
-    if (file.size > 10 * 1024 * 1024) {
-      catalogActions.importFailed({ requestId, error: t('文件超过 10 MiB。', 'File exceeds 10 MiB.') });
-      return;
-    }
-    try {
-      const parsed = parseCatalogEntries(JSON.parse(await file.text()));
-      catalogActions.localImportApplied({ requestId, entries: parsed, importId: file.name });
-    } catch (reason: unknown) {
-      catalogActions.importFailed({ requestId, error: reason instanceof Error ? reason.message : t('导入失败', 'Import failed') });
-    }
+  function navigateView(event: MouseEvent<HTMLAnchorElement>, next: CatalogView): void {
+    navigate(event, next);
   }
 
   return (
     <div className="catalog-shell" data-theme={preferences.theme}>
-      <header className="catalog-header">
-        <a className="catalog-brand" href="/">
-          SEMICON<span>FAB</span>
-          <small>NEXT</small>
-        </a>
-        <nav aria-label={t('主导航', 'Main navigation')}>
-          <a href="/">{t('基地工作台', 'Workbench')}</a>
-          <a
-            className={view === 'catalog' ? 'active' : ''}
-            href={hrefFor('catalog')}
-            onClick={(event) => navigate(event, 'catalog')}
-          >
-            {t('设备目录', 'Catalog')}
-          </a>
-          <a
-            className={view === 'compare' ? 'active' : ''}
-            href={hrefFor('compare')}
-            onClick={(event) => navigate(event, 'compare')}
-          >
-            {t('设备对比', 'Compare')}
-          </a>
-        </nav>
-        <div className="catalog-preferences">
-          <button
-            onClick={() =>
-              localeActions.languageToggled()
-            }
-          >
-            {language === 'zh' ? 'EN' : '中文'}
-          </button>
-          <button
-            aria-label={t('切换主题', 'Toggle theme')}
-            onClick={() =>
-              localeActions.themeToggled()
-            }
-          >
-            {preferences.theme === 'light' ? '◐' : '☀'}
-          </button>
-        </div>
-      </header>
+      <CatalogHeader
+        view={view}
+        language={language}
+        theme={preferences.theme}
+        hrefFor={hrefFor}
+        onNavigate={navigateView}
+        onToggleLanguage={() => localeActions.languageToggled()}
+        onToggleTheme={() => localeActions.themeToggled()}
+      />
       <main className="catalog-main">
         <div className="catalog-heading">
           <div>
@@ -514,12 +114,12 @@ export function CatalogPage({ view: initialView, search, onSearchChange, onViewC
             </p>
           </div>
           <span className="catalog-total">
-            <strong>{entries.length}</strong>
+            <strong>{data.entries.length}</strong>
             {t('条设备记录', 'equipment records')}
           </span>
         </div>
         <div className="catalog-notice">
-          {localPreview
+          {data.localPreview
             ? t(
                 '本地预览：仅替换此页面显示，不会上传、批准或修改基地设备。',
                 'Local preview: this page only. No upload, approval or Site equipment changes. Export JSON to share local data.',
@@ -529,19 +129,19 @@ export function CatalogPage({ view: initialView, search, onSearchChange, onViewC
                 'Migrated from the original catalog. L1 / draft are legacy labels; estimates are dated reference ranges.',
               )}
         </div>
-        {error && (
+        {data.error && (
           <div className="catalog-error" role="alert">
-            {error}{' '}
-            <button onClick={() => { catalogActions.localImportCleared(); void catalogQuery.refetch(); }}>
+            {data.error}{' '}
+            <button onClick={data.restoreServerCatalog}>
               {t('重新读取服务端目录', 'Reload server catalog')}
             </button>
           </div>
         )}
         {view === 'compare' && (
           <section className="catalog-section" aria-label={t('设备对比结果', 'Comparison results')}>
-            <CatalogComparison entries={selectedEntries} language={language} onRemove={toggle} />
-            {!loading &&
-              missingIds.map((id) => (
+            <CatalogComparison entries={data.selectedEntries} language={language} onRemove={toggle} />
+            {!data.loading &&
+              data.missingIds.map((id) => (
                 <p className="catalog-error" key={id}>
                   {t('目录中未找到：', 'Not found in catalog: ')}
                   {id} <button onClick={() => toggle(id)}>{t('移除', 'Remove')}</button>
@@ -550,212 +150,53 @@ export function CatalogPage({ view: initialView, search, onSearchChange, onViewC
           </section>
         )}
         <section className="catalog-section">
-          <div className="catalog-toolbar">
-            <div className="catalog-domains" aria-label={t('设备领域', 'Equipment domain')}>
-              {(['ALL', 'FAB', 'OSAT'] as const).map((value) => (
-                <button
-                  key={value}
-                  aria-pressed={domain === value}
-                  onClick={() => {
-                    catalogActions.domainSet(value);
-                    catalogActions.categorySet('');
-                    catalogActions.pageSet(0);
-                  }}
-                >
-                  {value === 'ALL' ? t('全部设备', 'All equipment') : value}
-                </button>
-              ))}
-            </div>
-            <label className="catalog-file">
-              {t('载入本地 JSON', 'Load local JSON')}
-              <input
-                type="file"
-                accept=".json,application/json"
-                onChange={(event) => {
-                  void importFile(event);
-                }}
-              />
-            </label>
-            <button
-              disabled={!entries.length}
-              onClick={() =>
-                downloadJson(
-                  {
-                    contractVersion: 1,
-                    importId,
-                    source: localPreview ? 'LOCAL_PREVIEW' : 'SemiconFab-main',
-                    entries,
-                  },
-                  'semiconfab-catalog.json',
-                )
-              }
-            >
-              {t('导出目录', 'Export catalog')}
-            </button>
-            {localPreview && (
-              <button onClick={() => { catalogActions.localImportCleared(); void catalogQuery.refetch(); }}>
-                {t('恢复服务端目录', 'Restore server catalog')}
-              </button>
-            )}
-          </div>
-          <div className="catalog-filters">
-            <label>
-              {t('搜索设备', 'Search equipment')}
-              <input
-                type="search"
-                value={query}
-                maxLength={200}
-                placeholder={t('厂商、型号或分类…', 'Vendor, model or category…')}
-                onChange={(event) => {
-                  catalogActions.querySet(event.target.value);
-                  catalogActions.pageSet(0);
-                }}
-              />
-            </label>
-            <label>
-              {t('设备分类', 'Category')}
-              <select
-                value={category}
-                onChange={(event) => {
-                  catalogActions.categorySet(event.target.value);
-                  catalogActions.pageSet(0);
-                }}
-              >
-                <option value="">{t('所有分类', 'All categories')}</option>
-                {category && !categories.includes(category) && (
-                  <option value={category}>{category}</option>
-                )}
-                {categories.map((value) => (
-                  <option key={value} value={value}>
-                    {categoryText(value, language)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="catalog-hide-drafts">
-              <input
-                type="checkbox"
-                checked={hideDrafts}
-                onChange={(event) => {
-                  catalogActions.hideDraftsSet(event.target.checked);
-                  catalogActions.pageSet(0);
-                }}
-              />
-              {t('隐藏 draft 记录', 'Hide draft records')}
-            </label>
-            <button disabled={selected.length === 0} onClick={() => openView('compare')}>
-              {t(`对比已选 ${selected.length} / 4`, `Compare ${selected.length} / 4`)}
-            </button>
-          </div>
-          <div className="catalog-result-heading">
-            <span aria-live="polite">
-              {loading
-                ? t('正在读取目录…', 'Loading catalog…')
-                : t(`找到 ${filtered.length} 条设备`, `${filtered.length} tools found`)}
-            </span>
-            <span className="catalog-muted">
-              {localPreview ? 'LOCAL PREVIEW' : importId ? `SNAPSHOT ${importId.slice(0, 12)}` : ''}
-            </span>
-          </div>
-          <div className="catalog-table-scroll">
-            <table className="catalog-list">
-              <thead>
-                <tr>
-                  <th>{t('对比', 'Compare')}</th>
-                  <th>{t('设备型号', 'Equipment')}</th>
-                  <th>{t('分类', 'Category')}</th>
-                  <th>{t('原版等级 / 完整度', 'Legacy level / completeness')}</th>
-                  <th>{t('估算价格 / USD', 'Estimated price / USD')}</th>
-                  <th>{t('详情', 'Details')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered
-                  .slice(currentPage * pageSize, (currentPage + 1) * pageSize)
-                  .map((entry) => (
-                    <tr key={entry.recordId}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          aria-label={t(`对比 ${entry.model}`, `Compare ${entry.model}`)}
-                          checked={selected.includes(entry.recordId)}
-                          disabled={selected.length >= 4 && !selected.includes(entry.recordId)}
-                          onChange={() => toggle(entry.recordId)}
-                        />
-                      </td>
-                      <td>
-                        <strong>{entry.model}</strong>
-                        <small>{entry.vendor}</small>
-                      </td>
-                      <td>{categoryText(entry.category, language)}</td>
-                      <td>
-                        <span className="catalog-level">{entry.conformanceLevel}</span>{' '}
-                        {entry.completenessPct}%
-                        <small>
-                          {t(
-                            `缺失 ${entry.missingFields.length} 项`,
-                            `${entry.missingFields.length} missing fields`,
-                          )}
-                        </small>
-                      </td>
-                      <td>
-                        <Price entry={entry} language={language} />
-                      </td>
-                      <td>
-                        <button
-                          onClick={() => catalogActions.detailIdSet(entry.recordId)}
-                          aria-label={t(`查看 ${entry.model}`, `Inspect ${entry.model}`)}
-                        >
-                          {t('查看规格', 'Inspect')} ↗
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-          {!loading && filtered.length === 0 && (
-            <p className="catalog-empty">
-              {error
-                ? t(
-                    '暂无可用目录，请重试或载入本地 JSON。',
-                    'Catalog unavailable. Retry or load local JSON.',
-                  )
-                : t('没有匹配设备，请调整筛选条件。', 'No matching tools. Adjust the filters.')}
-            </p>
-          )}
-          <div className="catalog-pagination">
-            <button disabled={currentPage === 0} onClick={() => catalogActions.pageSet(currentPage - 1)}>
-              {t('上一页', 'Previous')}
-            </button>
-            <span>
-              {currentPage + 1} / {pageCount}
-            </span>
-            <button
-              disabled={currentPage >= pageCount - 1}
-              onClick={() => catalogActions.pageSet(currentPage + 1)}
-            >
-              {t('下一页', 'Next')}
-            </button>
-          </div>
+          <CatalogToolbar
+            language={language}
+            domain={data.domain}
+            entriesCount={data.entries.length}
+            localPreview={data.localPreview}
+            onDomainChange={selectDomain}
+            onImportFile={catalogImport.importFile}
+            onExportCatalog={exportCatalog}
+            onRestoreServer={data.restoreServerCatalog}
+          />
+          <CatalogFilters
+            language={language}
+            query={data.query}
+            category={data.category}
+            categories={data.categories}
+            hideDrafts={data.hideDrafts}
+            selectedCount={data.selected.length}
+            onQueryChange={selectQuery}
+            onCategoryChange={selectCategory}
+            onHideDraftsChange={selectHideDrafts}
+            onCompare={() => openView('compare')}
+          />
+          <CatalogTable
+            language={language}
+            loading={data.loading}
+            error={data.error}
+            entries={data.pageEntries}
+            filteredCount={data.filtered.length}
+            localPreview={data.localPreview}
+            importId={data.importId}
+            selected={data.selected}
+            currentPage={data.currentPage}
+            pageCount={data.pageCount}
+            onToggle={toggle}
+            onInspect={(id) => catalogActions.detailIdSet(id)}
+            onPageChange={(page) => catalogActions.pageSet(page)}
+          />
         </section>
-        <footer className="catalog-footer">
-          <span>
-            SEMICONFAB NEXT ·{' '}
-            <a href={legacyLicenseUrl} target="_blank" rel="noopener noreferrer">
-              {t('数据许可', 'Data license')}
-            </a>
-          </span>
-          <span>
-            {t(
-              '原始数据与来源保留 · 型号目录独立于运行状态',
-              'Original data & provenance preserved · Catalog independent of Run state',
-            )}
-          </span>
-        </footer>
+        <CatalogFooter language={language} />
       </main>
-      {detail && (
-        <EquipmentDetails entry={detail} language={language} onClose={() => catalogActions.detailIdSet(undefined)} />
+      {data.detail && (
+        <EquipmentDetails
+          entry={data.detail}
+          language={language}
+          onClose={() => catalogActions.detailIdSet(undefined)}
+          onDownloadRecord={downloadRecord}
+        />
       )}
     </div>
   );
