@@ -55,7 +55,7 @@ const fabScenarioSchema: z.ZodType<FabScenario> = z.object({
   fabId: z.string().min(1),
   code: z.string().min(1),
   lotCount: z.number().int().positive(),
-  processTimeUs: z.string().regex(/^\\d+$/),
+  processTimeUs: z.string().regex(/^\d+$/),
 });
 
 const scenarioDefinitionSchema: z.ZodType<ScenarioDefinition> = z.object({
@@ -63,8 +63,8 @@ const scenarioDefinitionSchema: z.ZodType<ScenarioDefinition> = z.object({
   siteId: z.string().min(1),
   mode: z.string().min(1),
   masterSeed: z.string().min(1),
-  durationUs: z.string().regex(/^\\d+$/),
-  warmupUs: z.string().regex(/^\\d+$/),
+  durationUs: z.string().regex(/^\d+$/),
+  warmupUs: z.string().regex(/^\d+$/),
   fabs: z.array(fabScenarioSchema).min(1),
 });
 
