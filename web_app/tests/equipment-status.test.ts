@@ -1,5 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createEquipmentStatusGate, createOrderedEquipmentStatusConsumer, watchEquipmentStatus, type EquipmentStatusSnapshot } from '../src/realtime/equipment-status';
+import { createEquipmentStatusGate, createOrderedEquipmentStatusConsumer } from '../src/realtime/equipment-status/gate';
+import type { EquipmentStatusSnapshot } from '../src/realtime/equipment-status/protocol';
+import { watchEquipmentStatus } from '../src/realtime/equipment-status/stream';
 
 afterEach(() => vi.useRealTimers());
 

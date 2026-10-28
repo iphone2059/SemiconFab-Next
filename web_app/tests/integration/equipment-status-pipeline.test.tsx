@@ -9,7 +9,7 @@ import { TwinPage } from '../../src/features/twin/twin-page';
 import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
 import { equipmentStatusQueryKey } from '../../src/api/queries/equipment.queries';
 import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
-import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-status';
+import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-status/protocol';
 import { resetTwinUiStore, twinUiActions } from '../../src/features/twin/state/twinUiStore';
 import { resetTwinPageStore, useTwinPageStore } from '../../src/features/twin/state/twinPageStore';
 import { resetRuntimeStore } from '../../src/state/runtimeStore';

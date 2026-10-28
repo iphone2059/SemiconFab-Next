@@ -2,8 +2,8 @@ import { expect, it, vi } from 'vitest';
 import {
   createEquipmentStatusGate,
   createOrderedEquipmentStatusConsumer,
-  type EquipmentStatusSnapshot,
-} from '../src/realtime/equipment-status';
+} from '../src/realtime/equipment-status/gate';
+import type { EquipmentStatusSnapshot } from '../src/realtime/equipment-status/protocol';
 
 /**
  * A03: sequence + timestamp cannot distinguish server epochs. The additive
@@ -108,4 +108,27 @@ it('A03: legacy frames without an epoch keep the current sequence/timestamp beha
   expect(timestampApply(base({ sequence: undefined, generatedAt: '2026-10-24T01:59:59Z' }))).toBe(false);
   expect(timestampApply(base({ sequence: undefined, generatedAt: '2026-10-24T02:00:00Z' }))).toBe(true);
   expect(timestampSnapshots).toHaveBeenCalledTimes(2);
+});
+
+it('A03: reconnect replays the same epoch/sequence as a duplicate and resets only on a higher epoch', () => {
+  const onInvalid = vi.fn();
+  const gate = createEquipmentStatusGate(scope, 2, onInvalid);
+  const accepted = base({ epoch: 1, sequence: 10, generatedAt: '2026-10-24T02:00:10Z' });
+  expect(gate.accept(accepted)).toBeDefined();
+
+  // The browser reconnects and the backend replays its last frame: an exact
+  // duplicate must not be re-published to the cache.
+  expect(gate.accept({ ...accepted })).toBeUndefined();
+  // Any earlier sequence of the same generation is equally a late duplicate.
+  expect(gate.accept(base({ epoch: 1, sequence: 9, generatedAt: '2026-10-24T02:00:09Z' }))).toBeUndefined();
+  // A duplicate is an ordering rejection, not invalid data: no stale signal.
+  expect(onInvalid).not.toHaveBeenCalled();
+
+  // The restarted backend bumps the epoch and restarts the sequence: accepted.
+  expect(gate.accept(base({ epoch: 2, sequence: 1, generatedAt: '2026-10-24T02:00:20Z' }))).toBeDefined();
+  // A delayed frame from the pre-restart generation must never roll the feed back.
+  expect(gate.accept(base({ epoch: 1, sequence: 11, generatedAt: '2026-10-24T02:00:21Z' }))).toBeUndefined();
+  // The new generation's ordering high-water is independent of the old one.
+  expect(gate.accept(base({ epoch: 2, sequence: 2, generatedAt: '2026-10-24T02:00:22Z' }))).toBeDefined();
+  expect(onInvalid).not.toHaveBeenCalled();
 });

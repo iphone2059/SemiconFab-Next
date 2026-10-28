@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { watchEquipmentStatus, type EquipmentStatusSnapshot, type EquipmentStatusScope } from '../../realtime/equipment-status';
+import { watchEquipmentStatus } from '../../realtime/equipment-status/stream';
+import type { EquipmentStatusSnapshot, EquipmentStatusScope } from '../../realtime/equipment-status/protocol';
 import { FAB_LAYOUT, type FabToolState } from '../../domain/fab/fab-layout';
 import { equipmentStatusQueryOptions } from '../../api/queries/equipment.queries';
-import { acceptEquipmentStatusSnapshot, activateEquipmentStatusScope } from '../../api/queries/equipment-status-bridge';
-import { createCoalescedDispatcher } from '../../realtime/telemetry/telemetry-buffer';
+import { acceptEquipmentStatusSnapshot, activateEquipmentStatusScope } from '../../api/cache/equipment-status-bridge';
+import { createCoalescedDispatcher } from '../../shared/scheduling/coalesced-dispatcher';
 import { twinPageActions } from './state/twinPageStore';
 
 interface EquipmentStatusPipelineProps {

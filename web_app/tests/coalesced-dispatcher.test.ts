@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createCoalescedDispatcher } from '../src/realtime/telemetry/telemetry-buffer';
+import { createCoalescedDispatcher } from '../src/shared/scheduling/coalesced-dispatcher';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());

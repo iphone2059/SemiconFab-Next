@@ -111,3 +111,38 @@ it('clears consumer counts on disposeAll so stale releases cannot stop a later r
   releaseNew();
   expect(second.stop).toHaveBeenCalledTimes(1);
 });
+
+it('two consumers survive one unsubscribe across a Runtime replaceAll with idempotent releases', () => {
+  const first = fakeRuntime('fab-a');
+  const second = fakeRuntime('fab-a');
+  const registry = new FabTelemetryRegistry();
+  registry.replaceAll(new Map([['fab-a', first]]));
+
+  const releaseA = registry.acquire('fab-a');
+  const releaseB = registry.acquire('fab-a');
+  expect(first.start).toHaveBeenCalledTimes(1);
+
+  // One consumer unsubscribes while the other keeps streaming: the runtime stays.
+  releaseA();
+  expect(first.stop).not.toHaveBeenCalled();
+
+  // A new runtime generation replaces the whole registry (e.g. telemetry provider
+  // rebuild): the old runtime is stopped exactly once by the replacement.
+  registry.replaceAll(new Map([['fab-a', second]]));
+  expect(first.stop).toHaveBeenCalledTimes(1);
+  // Replaced runtimes are not started for consumers that no longer exist.
+  expect(second.start).not.toHaveBeenCalled();
+
+  // The old generation's late cleanup must not stop (or otherwise touch) the
+  // replacement runtime, and duplicate releases stay idempotent.
+  releaseB();
+  releaseB();
+  expect(second.stop).not.toHaveBeenCalled();
+
+  // The replacement starts for its first current consumer and stops exactly once.
+  const releaseNew = registry.acquire('fab-a');
+  expect(second.start).toHaveBeenCalledTimes(1);
+  releaseNew();
+  releaseNew();
+  expect(second.stop).toHaveBeenCalledTimes(1);
+});

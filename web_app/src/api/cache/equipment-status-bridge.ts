@@ -3,16 +3,20 @@ import { FAB_LAYOUT } from '../../domain/fab/fab-layout';
 import {
   createEquipmentStatusGate,
   type EquipmentStatusGate,
-  type EquipmentStatusScope,
-  type EquipmentStatusSnapshot,
-} from '../../realtime/equipment-status';
-import { queryKeys } from './queryKeys';
+} from '../../realtime/equipment-status/gate';
+import type {
+  EquipmentStatusScope,
+  EquipmentStatusSnapshot,
+} from '../../realtime/equipment-status/protocol';
+import { queryKeys } from '../queries/queryKeys';
 
 /**
- * Shared bridge between TanStack Query and the framework-free ordered equipment
- * status gate.
+ * Projection bridge between the REST/SSE equipment-status transports and the
+ * TanStack Query cache.
  *
- * A01/A02: the FAB-scoped Query cache entry is the single server-snapshot owner.
+ * A01/A02: the FAB-scoped Query cache entry is the single owner of accepted
+ * server snapshots; this module keeps no parallel raw snapshot store (the only
+ * retained state is the per-scope ordering gate, which is not a snapshot).
  * REST (queryFn) and SSE (page listener) must pass the exact same per-scope
  * acceptance rules before a snapshot can be published; ordering high-water marks
  * are kept per (siteId, fabId) and per QueryClient so two FABs of one site never

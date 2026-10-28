@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
-import type { EquipmentStatusSnapshot } from '../../realtime/equipment-status';
-import { acceptEquipmentStatusSnapshot } from './equipment-status-bridge';
+import type { EquipmentStatusSnapshot } from '../../realtime/equipment-status/protocol';
+import { acceptEquipmentStatusSnapshot } from '../cache/equipment-status-bridge';
 import { httpTransport } from '../transport/http';
 import { queryKeys } from './queryKeys';
 
