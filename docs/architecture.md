@@ -137,7 +137,7 @@ web_app/
       equipment-status/     protocol（payload/scope）/ gate（epoch+sequence 唯一权威）/ stream（SSE）/ index
       protocol/             MessageDecoder（SSE envelope 解码）
       telemetry/            TelemetryRuntime（传输/帧/背压）+ FabTelemetryRegistry（acquire/release）
-      transport/            SseCommandEventSource / HttpCommandGateway
+      transport/            SseCommandEventSource（权威 HTTP Gateway 在 api/transport）
       workers/              telemetryWorker（入口）/ telemetryWorker.logic（纯 handler）/ createTelemetryWorker
       buffers/              FrameRingBuffer
     runtime/
@@ -895,8 +895,8 @@ FAB 级 20Hz 遥测 SSE -> TelemetryRuntime -> telemetryWorker（module Worker�
 - **领域**：`domain/simulation/tour-timeline.ts`（Tour）+ `domain/wafer/wafer-timeline.ts`（Wafer）+ `domain/math/{vec3,round}.ts`（共享原语）；`domain/fab/process-control.ts` 的 `createMesJob/createProcessMesJob` 必须收到显式非负安全整数 epoch-ms（NaN/小数/负数/Infinity 抛 RangeError，无隐式 `Date.now()`）；`TwinLanguage` 在 `localization/language.ts`，`domain/` 无框架/隐式时钟/DOM/随机（R3/R8）。
 - **渲染**：`rendering/lite/effects/{xray,xray-shaders,cut,wafer,index}.ts` 为独立资源所有者；静态结构生成物的手写类型合同在 `rendering/contracts/static-structure-data.ts`，生成物仅 type-only 引用它（无类型反向依赖）。
 - **生成物**：`src/generated/` 三件产物由 `tools/generated-artifacts.json` 登记（generator command/check、输入与输出 sha256）；`node tools/check_generated_artifacts.mjs --check` 校验 registry/输入/输出并保证 `src/generated` 全覆盖（R11）；生成器各自 `--check` 已并入 `scripts/verify.ps1`。`app/router/routeTree.gen.ts` 保留插件约定位置、不进 registry，其可复现性由 `tests/architecture/route-tree-generation.test.ts` 精确验证（隔离 worktree + 官方构建 + 逐字节比对 + 版本固定）。
-- **实时**：`realtime/equipment-status/{protocol,gate,stream,index}.ts`（payload/scope、epoch+sequence 唯一顺序权威、SSE 生命周期）；`realtime/protocol/MessageDecoder.ts`；`realtime/telemetry/{TelemetryRuntime,FabTelemetryRegistry}.ts`；`realtime/transport/{SseCommandEventSource,HttpCommandGateway}.ts`；`realtime/workers/` + `realtime/buffers/FrameRingBuffer.ts`；REST/SSE→Query 的唯一投影桥在 `api/cache/equipment-status-bridge.ts`；通用合批原语在 `shared/scheduling/coalesced-dispatcher.ts`。生产 WebSocket/`realtime/streams`/`RealtimeGateway` 仍未来实现。
-- **API**：`api/transport/http.ts` 是唯一 HTTP 策略；`api/schemas/command.schema.ts` 做运行时校验；`api/queries/` 为 TanStack Query options/keys；命令权威状态读取经 `HttpCommandGateway`（`GET /api/v1/commands/{id}`），不用 Query 建模进行中生命周期。
+- **实时**：`realtime/equipment-status/{protocol,gate,stream,index}.ts`（payload/scope、epoch+sequence 唯一顺序权威、SSE 生命周期）；`realtime/protocol/MessageDecoder.ts`；`realtime/telemetry/{TelemetryRuntime,FabTelemetryRegistry}.ts`；`realtime/transport/SseCommandEventSource.ts + api/transport/HttpCommandGateway.ts`；`realtime/workers/` + `realtime/buffers/FrameRingBuffer.ts`；REST/SSE→Query 的唯一投影桥在 `api/cache/equipment-status-bridge.ts`；通用合批原语在 `shared/scheduling/coalesced-dispatcher.ts`。生产 WebSocket/`realtime/streams`/`RealtimeGateway` 仍未来实现。
+- **API**：`api/transport/http.ts` 是唯一 HTTP 策略；`api/schemas/{command,catalog,runs}.schema.ts` 做运行时输入/输出校验；`api/queries/` 为 TanStack Query options/keys；命令权威状态读取经 `api/transport/HttpCommandGateway.ts`（`GET /api/v1/commands/{id}`），不用 Query 建模进行中生命周期。
 - **Features/组件**：`features/catalog/{components,controllers,export,state}/`、`features/workbench/{components,controllers,state}/`、`features/twin/controllers/`（10 个控制器，零相互 import）；全局 `components/widgets.tsx`/`charting.tsx` 已删除，Metric/CompletionBar 等归 feature 本地；`components/ui.tsx` 已删除，Panel/StatusPill 归 `features/workbench/components/{panel,status-pill}.tsx`（R12：单 feature 组件不占全局槽位；app-infrastructure 角色由 `app/**` import 图验证）；`components/original-icons.tsx` 拆出纯数据 `original-icons-data.ts`。
 - **测试**：`web_app/tests/` 按所有权镜像（`api/application/components/contract/domain/features/integration/performance/realtime/rendering/state/architecture` + `fixtures/support/types`）；R7–R14 门禁位于 `tests/architecture/architecture-contract-rules.test.ts`，R0–R6 位于同目录 `architecture-import-graph.test.ts`。
 

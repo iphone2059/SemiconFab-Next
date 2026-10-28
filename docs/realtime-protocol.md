@@ -28,7 +28,7 @@
 
 | 层 | 目录/文件 | 组件 | 职责 | 不得做 |
 |---|---|---|---|---|
-| transport（命令） | `realtime/transport/SseCommandEventSource.ts`、`HttpCommandGateway.ts` | SSE 事件源、权威 HTTP 查询 | EventSource 生命周期、journal 游标 `{epoch}:{sequence}`、`replay-gap` → `gaps$`；权威状态查询 | 业务去重、UI、工作流 |
+| transport（命令） | `realtime/transport/SseCommandEventSource.ts` + `api/transport/HttpCommandGateway.ts` | SSE 事件源、权威 HTTP 查询 | EventSource 生命周期、journal 游标 `{epoch}:{sequence}`、`replay-gap` → `gaps$`；权威状态查询 | 业务去重、UI、工作流 |
 | protocol | `realtime/protocol/MessageDecoder.ts` | `MessageDecoder` | envelope 版本/字段解码与校验 | 业务去重、按“看起来重复”丢消息 |
 | equipment-status | `realtime/equipment-status/{protocol,gate,stream,index}.ts` | payload/scope、epoch+sequence gate、SSE 生命周期 | FAB 作用域快照的**唯一**解码/顺序/传输权威；REST 与 SSE 共用同一 gate | 写 Query 缓存（由 `api/cache/` 投影桥负责） |
 | telemetry | `realtime/telemetry/{TelemetryRuntime,FabTelemetryRegistry}.ts` | 20Hz SSE 运行时、按 FAB 引用计数 | 传输/解码/帧/背压、Worker 生命周期 | 逐帧 React state |

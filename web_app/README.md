@@ -22,7 +22,7 @@ web_app/
 │  │  ├─ coordination/         # CommandEventBridge / CommandEventRecovery / CommandCorrelationRegistry / ScopeGate
 │  │  └─ ports/scene.ts        # ScenePort：必需 SceneCommands + 强类型 SceneMountOptions + mount/dispose 生命周期（R-04/R9）
 │  ├─ api/
-│  │  ├─ transport/http.ts     # 唯一 HTTP transport（同源相对路径、no-store、ProblemDetails、FetchLike 注入）
+│  │  ├─ transport/            # http.ts + HttpCommandGateway.ts（统一身份、状态与错误策略）
 │  │  ├─ schemas/              # command/catalog/runs 完整运行时契约
 │  │  ├─ cache/                # equipment-status-bridge：REST/SSE 经唯一 acceptance gate 写入 Query 缓存
 │  │  ├─ queries/              # queryClient / queryKeys / sites|equipment|catalog|runs|research|wafer.queries
@@ -31,7 +31,7 @@ web_app/
 │  │  ├─ equipment-status/     # protocol / gate / stream / index（FAB 作用域、epoch/sequence 唯一权威）
 │  │  ├─ protocol/             # MessageDecoder（SSE envelope 解码）
 │  │  ├─ telemetry/            # TelemetryRuntime / FabTelemetryRegistry（acquire/release）
-│  │  ├─ transport/            # SseCommandEventSource / HttpCommandGateway
+│  │  ├─ transport/            # SseCommandEventSource（命令权威 HTTP 查询归 api/transport）
 │  │  ├─ workers/              # createTelemetryWorker / telemetryWorker(.logic)
 │  │  └─ buffers/              # FrameRingBuffer
 │  ├─ runtime/                 # FabRuntime / Factory / Registry / LifecycleCoordinator / commandSources
