@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import type { CatalogDomain } from '../../features/catalog/catalog-data';
 
 /**
  * Search params parsed on every canonical route. Every known key is optional and
@@ -11,9 +10,10 @@ import type { CatalogDomain } from '../../features/catalog/catalog-data';
  * symmetrically. The object is loose: unknown debug params are preserved
  * unchanged, while the listed product params stay validated.
  *
- * The helpers below are the single place that converts between the router search
- * object and the catalog/twin page state; pages no longer read `location` for
- * product state.
+ * The helpers below only convert generic router search values; feature-specific
+ * conversions live in the owning feature module (for example
+ * features/catalog/search.ts), so this generic router utility never imports a
+ * feature. Pages no longer read `location` for product state.
  */
 const textParam = z.union([z.string(), z.number(), z.boolean()]).optional().catch(undefined);
 
@@ -52,68 +52,4 @@ export function searchToQueryString(search: RouterSearch): string {
     params.set(key, String(value));
   }
   return params.toString();
-}
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export interface CatalogSearchState {
-  domain: CatalogDomain;
-  category: string;
-  query: string;
-  hideDrafts: boolean;
-  compare: string[];
-}
-
-/** Read catalog filters/selection from the router search (URL is the owner). */
-export function catalogSearchFrom(search: RouterSearch): CatalogSearchState {
-  const domain = searchText(search.domain)?.toUpperCase();
-  const compare = (searchText(search.compare) ?? '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter((value) => UUID_RE.test(value));
-  return {
-    domain: domain === 'FAB' || domain === 'OSAT' ? domain : 'ALL',
-    category: searchText(search.category) ?? '',
-    query: searchText(search.q) ?? '',
-    hideDrafts: searchFlag(search.hideDrafts),
-    compare: [...new Set(compare)].slice(0, 4),
-  };
-}
-
-/** Build the search patch for the current catalog page state. */
-export function catalogSearchPatch(input: {
-  domain: CatalogDomain;
-  category: string;
-  query: string;
-  hideDrafts: boolean;
-  selected: string[];
-  language: 'zh' | 'en';
-  theme: 'light' | 'dark';
-}): Partial<RouterSearch> {
-  return {
-    domain: input.domain === 'ALL' ? undefined : input.domain.toLowerCase(),
-    category: input.category || undefined,
-    q: input.query || undefined,
-    hideDrafts: input.hideDrafts ? 1 : undefined,
-    compare: input.selected.length ? input.selected.join(',') : undefined,
-    lang: input.language === 'en' ? 'en-US' : 'zh-CN',
-    theme: input.theme,
-  };
-}
-
-export type TwinModalSearch = 'database' | 'catalog' | 'arch' | 'yms';
-export type TwinModeSearch = 'engineer' | 'visitor' | 'research';
-
-export function twinModeFrom(search: RouterSearch): TwinModeSearch | undefined {
-  const mode = searchText(search.mode);
-  return mode === 'engineer' || mode === 'visitor' || mode === 'research' ? mode : undefined;
-}
-
-export function twinModalFrom(search: RouterSearch): TwinModalSearch | undefined {
-  const modal = searchText(search.modal);
-  return modal === 'database' || modal === 'catalog' || modal === 'arch' || modal === 'yms' ? modal : undefined;
-}
-
-export function twinSiteIdFrom(search: RouterSearch): string | undefined {
-  return searchText(search.siteId);
 }

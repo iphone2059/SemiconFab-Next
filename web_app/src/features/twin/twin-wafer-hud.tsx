@@ -1,7 +1,7 @@
-import { OriginalIcon } from '../../original-icons';
-import { useTwinPageStore } from '../../state/twinPageStore';
-import { useTwinUiStore } from '../../state/twinUiStore';
-import type { WaferProduct } from '../../wafer-route';
+import { OriginalIcon } from '../../components/original-icons';
+import { useTwinPageStore } from './state/twinPageStore';
+import { useTwinUiStore } from './state/twinUiStore';
+import type { WaferProduct } from '../../domain/wafer/wafer-route';
 import { useTwinLocale } from './twin-i18n';
 
 export interface TwinWaferHudProps {

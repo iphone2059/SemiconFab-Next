@@ -1,4 +1,4 @@
-import type { FabToolState } from '../../fab-layout';
+import type { FabToolState } from '../../domain/fab/fab-layout';
 
 export type ToolStateMerger = (
   base: readonly FabToolState[],

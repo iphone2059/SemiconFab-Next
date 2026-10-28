@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, type PropsWithChildren } from 'react';
 import { useLocaleStore, localeActions } from '../../state/localeStore';
-import { TWIN_EN } from '../../twin-translations';
-import { GENERATED_TWIN_EN } from '../../twin-translations.generated';
-import { languageTag } from '../../preferences';
+import { TWIN_EN } from './twin-translations';
+import { GENERATED_TWIN_EN } from '../../generated/twin-translations.generated';
+import { languageTag } from '../../state/preferences';
 
-export type TwinLanguage = 'zh' | 'en';
+import type { TwinLanguage } from '../../domain/contracts/language';
+export type { TwinLanguage } from '../../domain/contracts/language';
 export function persistTwinLanguage(storage: Pick<Storage, 'setItem'>, language: TwinLanguage): void {
   try {
     storage.setItem('semiconfab_lang', languageTag(language));

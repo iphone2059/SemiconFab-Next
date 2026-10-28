@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { useTwinLocale } from './twin-i18n';
-import { ORIGINAL_TWIN_UI, filterOriginalOem, type OriginalOem } from '../../original-twin-data';
-import { useTwinPageStore, twinPageActions } from '../../state/twinPageStore';
+import { ORIGINAL_TWIN_UI, filterOriginalOem, type OriginalOem } from '../../domain/fab/original-twin-data';
+import { useTwinPageStore, twinPageActions } from './state/twinPageStore';
 import { Modal, ModalTitle } from '../../components/modal';
-import { classNames } from '../../class-names';
+import { classNames } from '../../components/class-names';
 
 const ARCH_LAYERS = [
   {

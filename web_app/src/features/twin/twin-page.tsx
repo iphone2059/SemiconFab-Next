@@ -1,161 +1,42 @@
-import { OriginalIcon } from '../../original-icons';
-import { useTwinLocale, TwinLocaleProvider } from './twin-i18n';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useShallow } from 'zustand/react/shallow';
-import { watchEquipmentStatus, type EquipmentStatusSnapshot, type EquipmentStatusScope } from '../../equipment-status';
-import { FAB_LAYOUT, FAB_TOOL_STATE_META, type FabToolState } from '../../fab-layout';
-import type { AmhsStats, CutAxis, PickedTool, SceneLayer, XRayFilter } from '../../fab-scene';
+import { OriginalIcon } from '../../components/original-icons';
+import { TwinLocaleProvider } from './twin-i18n';
+import { useEffect, useMemo, useRef } from 'react';
+import type { AmhsStats, CutAxis } from '../../rendering/fab-scene';
+import { FAB_TOOL_STATE_META, type FabToolState } from '../../domain/fab/fab-layout';
+import { YIELD_SCENARIOS } from '../../domain/fab/fab-yield';
+import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '../../domain/simulation/original-tour';
+import { TWIN_LAYOUT_IDENTITIES } from '../../domain/simulation/twin-equipment';
+import { cleanroomPressureField } from '../../domain/fab/cleanroom-pressure';
+import { researchClock } from '../../domain/simulation/research-replay';
+import { createTwinUiState, projectTwinSceneState, type EntryMode } from './state/twin-state';
+import { classNames } from '../../components/class-names';
+import type { RouterSearch } from '../../app/router/search';
+import { useTwinPageStore, twinPageActions } from './state/twinPageStore';
+import { useTwinDemoStore, twinDemoActions } from './state/twinDemoStore';
+import { useTwinUiStore, twinUiActions } from './state/twinUiStore';
+import { createCoalescedDispatcher } from '../../realtime/telemetry/telemetry-buffer';
+import { useFabTelemetry } from '../../app/providers/TelemetryProvider';
 import { FabViewport, type FabViewportHandle } from './fab-viewer';
+import { EquipmentStatusPipeline } from './equipment-status-pipeline';
 import { TwinSidebar } from './twin-sidebar';
 import { OriginalInspector } from './twin-inspector';
 import { TwinInfoDialog } from './twin-dialogs';
 import { createToolStateMerger } from './tool-state-merge';
 import { AmhsOhtReadout, AmhsResearchBadge } from './twin-amhs-hud';
-import { TwinTourHud, type TourHudSnapshot, type TwinTourHudHandle } from './twin-tour-hud';
+import { TwinTourHud } from './twin-tour-hud';
 import { TwinWaferHud } from './twin-wafer-hud';
 import { TwinYmsPanel, TwinYieldPill } from './twin-yms';
-import { classNames } from '../../class-names';
-import { ORIGINAL_TWIN_UI, type TwinSelection } from '../../original-twin-data';
-import { ResearchReplay, researchClock } from '../../research-replay';
-import type { WaferProduct } from '../../wafer-route';
-import { buildWaferScenario } from '../../wafer-scenario';
-import { applyMesAction, buildTelemetry, computeSpc, createMesJob, type MesAction, type MesJob } from '../../process-control';
-import { YIELD_SCENARIOS } from '../../fab-yield';
-import { createTwinUiState, projectTwinSceneState, type EntryMode, type TwinView as CameraView } from '../../twin-state';
-import { DEMO_TICK_MS, projectReplayStates, TWIN_LAYOUT_IDENTITIES } from '../../twin-equipment';
-import { cleanroomPressureField } from '../../cleanroom-pressure';
-import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '../../original-tour';
-import { buildTourScenario, TOUR_INITIAL_CAMERA, TOUR_INITIAL_TARGET } from '../../tour-scenario';
-import { createTourTimeline, createWaferTimeline, type TourFrame, type TourTimeline, type WaferTimeline, type WaferHud } from '../../tour-wafer-timeline';
-import { useTwinUiStore, twinUiActions } from '../../state/twinUiStore';
-import { readPreferences, languageTag } from '../../preferences';
-import { searchToQueryString, twinModalFrom, twinModeFrom, twinSiteIdFrom, type RouterSearch } from '../../app/router/search';
-import { useTwinPageStore, twinPageActions } from '../../state/twinPageStore';
-import { useTwinDemoStore, twinDemoActions } from '../../state/twinDemoStore';
-import { useRuntimeStore, runtimeActions } from '../../state/runtimeStore';
-import { useLocaleStore } from '../../state/localeStore';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SiteDto } from '../../contracts';
-import { sitesQueryOptions } from '../../api/queries/sites.queries';
-import { equipmentStatusQueryOptions } from '../../api/queries/equipment.queries';
-import { acceptEquipmentStatusSnapshot, activateEquipmentStatusScope } from '../../api/queries/equipment-status-bridge';
-import { researchEventsQueryOptions } from '../../api/queries/research.queries';
-import { waferRoutesQueryOptions } from '../../api/queries/wafer.queries';
-import { createCoalescedDispatcher } from '../../state/telemetry-buffer';
-import { useFabTelemetry } from '../../app/providers/TelemetryProvider';
-const ONBOARDING_KEY = 'semicon_twin_onboarding_dismissed';
-const ONBOARDING_STEPS = [
-  { title: '一个单 FAB 洁净室', body: '121 台设备、双环 OHT、天花板 FFU 与 Subfab 都在同一场景中。' },
-  { title: '层级与空间模式', body: '用 L1 / B1 / DUAL / Explode 切换楼层和拆解；设备卡可打开右侧检查器。' },
-  { title: '开始五站导览', body: 'Tour 会依次带你查看光刻、刻蚀、OHT 和 Subfab。按 Esc 可退出。' },
-];
-
-const CATEGORY_LABELS: Record<string, string> = {
-  lithography: '光刻',
-  resist_track: '涂胶显影',
-  dry_etch: '干法刻蚀',
-  thin_film_deposition: '薄膜沉积',
-  cmp: '化学机械抛光',
-  wet_clean: '湿法清洗',
-  ion_implantation: '离子注入',
-  thermal_processing: '热处理',
-  metrology: '量测',
-  inspection: '检测',
-  packaging: '封装',
-  test: '测试',
-  other: '其他设备',
-};
-
-const LAYER_LABELS: { layer: SceneLayer; label: string }[] = [
-  { layer: 'amhs', label: 'AMHS' },
-  { layer: 'ceiling', label: 'FFU' },
-  { layer: 'roof', label: 'Roof/HVAC' },
-  { layer: 'subfab', label: 'Subfab' },
-  { layer: 'heatmap', label: 'Heatmap' },
-  { layer: 'airflow', label: 'Airflow' },
-];
-const XRAY_FILTERS: { filter: XRayFilter; label: string }[] = [
-  { filter: 'all', label: 'ALL' },
-  { filter: 'upw', label: 'UPW Water' },
-  { filter: 'gas', label: 'GAS Specialty' },
-  { filter: 'vac', label: 'VAC Vacuum' },
-  { filter: 'exhaust', label: 'EXHAUST' },
-  { filter: 'amhs', label: 'AMHS Track' },
-];
-
-interface EquipmentStatusPipelineProps {
-  siteId: string;
-  fabId: string;
-}
-
-interface EquipmentStatusProjectionFrame {
-  readonly scope: EquipmentStatusScope;
-  readonly snapshot: EquipmentStatusSnapshot;
-}
-
-/**
- * A01/A02: isolated subscriber for the FAB-scoped equipment status. Keeping the
- * Query subscription and the SSE listener in a child that renders nothing means
- * a raw SSE cache write no longer rerenders TwinContent/FabViewport; accepted
- * frames reach the page at most once per 100 ms through the shared batcher.
- *
- * Scope handover is atomic: pending frames from the previous FAB are cancelled in
- * a layout effect, the new scope starts with a fresh ordering high-water seeded
- * from the accepted cache, and every FAB-scoped store projection is cleared
- * before the browser can paint. Store actions additionally carry the composite
- * scope as a token, so a stale callback can never apply to the new FAB.
- */
-function EquipmentStatusPipeline({ siteId, fabId }: EquipmentStatusPipelineProps) {
-  const queryClient = useQueryClient();
-  const scope = useMemo<EquipmentStatusScope>(() => ({ siteId, fabId }), [siteId, fabId]);
-  const batcher = useMemo(() => createCoalescedDispatcher<EquipmentStatusProjectionFrame>((frame) => {
-    const states = FAB_LAYOUT.map((_, index): FabToolState => {
-      const value = frame.snapshot.tools[index]?.state;
-      return value === 'running' || value === 'idle' || value === 'down' || value === 'maint' ? value : 'idle';
-    });
-    twinPageActions.liveSnapshotReceived({ scope: frame.scope, states, updatedAt: frame.snapshot.generatedAt });
-  }, 100), []);
-  useLayoutEffect(() => {
-    // Atomic handover: cancel A's pending batch before the new ordering history
-    // and projections exist, all before paint.
-    batcher.cancel();
-    activateEquipmentStatusScope(queryClient, scope, () => twinPageActions.statusFeedStale({ scope }));
-    twinPageActions.liveScopeActivated(scope);
-  }, [batcher, queryClient, scope]);
-  useLayoutEffect(() => () => batcher.cancel(), [batcher]);
-
-  // The page's only subscription for the FAB status entry. The queryFn already
-  // gated REST frames; SSE frames go through the same gate in the effect below.
-  const statusQuery = useQuery({
-    ...equipmentStatusQueryOptions(siteId, fabId),
-    refetchInterval: 4000,
-  });
-
-  // The accepted Query cache entry is the single snapshot owner; this is the one
-  // path that feeds the throttled projection (no per-frame parent render).
-  useEffect(() => {
-    if (statusQuery.data) batcher.push({ scope, snapshot: statusQuery.data });
-  }, [batcher, scope, statusQuery.data]);
-
-  useEffect(() => {
-    if (statusQuery.isError) twinPageActions.statusFeedStale({ scope });
-  }, [scope, statusQuery.isError]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const source = new EventSource(
-      `/api/v1/sites/${encodeURIComponent(siteId)}/fabs/${encodeURIComponent(fabId)}/equipment-status/stream`,
-    );
-    watchEquipmentStatus(source, scope, (snapshot) => {
-      // One acceptance boundary: a frame the ordered consumer rejects is never
-      // written to the FAB-scoped cache (and therefore never reaches the page).
-      acceptEquipmentStatusSnapshot(queryClient, scope, snapshot);
-    }, () => twinPageActions.statusFeedStale({ scope }), controller.signal);
-    return () => controller.abort();
-  }, [fabId, queryClient, scope, siteId]);
-
-  return null;
-}
+import { CATEGORY_LABELS, LAYER_LABELS, ONBOARDING_STEPS, XRAY_FILTERS } from './twin-page-data';
+import { useTwinActions } from './controllers/use-twin-actions';
+import { useTwinDemoClock } from './controllers/use-twin-demo-clock';
+import { useTwinKeyboard } from './controllers/use-twin-keyboard';
+import { useTwinProcessProjection } from './controllers/use-twin-process-projection';
+import { useResearchPlayback } from './controllers/use-research-playback';
+import { useTourController } from './controllers/use-tour-controller';
+import { useTwinRouteState } from './controllers/use-twin-route-state';
+import { useTwinSlices } from './controllers/use-twin-slices';
+import { useTwinSceneSync } from './controllers/use-twin-scene-sync';
+import { useWaferPlayback } from './controllers/use-wafer-playback';
 
 interface TwinContentProps {
   fabId?: string;
@@ -164,60 +45,17 @@ interface TwinContentProps {
   onSearchChange?: (patch: Partial<RouterSearch>, replace?: boolean) => void;
 }
 
+/**
+ * 3D FAB page = composition/layout + projections.
+ *
+ * Everything with a lifetime (URL sync, the scene, the tour and wafer playback
+ * RAFs, the keyboard, the selected-tool projections) lives in the controllers
+ * under ./controllers. This component only subscribes to the slices it renders,
+ * wires the controllers to the layout and renders the frozen DOM.
+ */
 function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
-  const { t, language, toggleLanguage } = useTwinLocale();
-  const theme = useLocaleStore((state) => state.theme);
-  const searchQuery = searchToQueryString(search ?? {});
   const scene = useRef<FabViewportHandle>(null);
-  // Subscribe to exactly the UI branches this component renders. Wafer
-  // playing/speed move with the wafer HUD child below, so its 20 Hz frames no
-  // longer rerender TwinContent or FabViewport.
-  const ui = useTwinUiStore(useShallow((state) => ({
-    entryMode: state.entryMode,
-    view: state.view,
-    level: state.level,
-    spatialMode: state.spatialMode,
-    cut: state.cut,
-    xray: state.xray,
-    explodePercent: state.explodePercent,
-    aeroHeatmap: state.aeroHeatmap,
-    tour: state.tour,
-    onboarding: state.onboarding,
-    waferActive: state.wafer.active,
-    research: state.research,
-    statusSource: state.statusSource,
-    preferredStatusSource: state.preferredStatusSource,
-  })));
-  // demo.states feeds the scene projection; demo.keys feeds the sidebar/inspector props.
-  // referenceLights/yieldJitter are only used by the extracted yield children.
-  const demo = useTwinDemoStore(useShallow((state) => ({
-    states: state.states,
-    keys: state.keys,
-    cycle: state.cycle,
-    playing: state.playing,
-    scenarioId: state.scenarioId,
-  })));
-  // Subscribe to exactly the page fields TwinContent itself renders. The wafer
-  // HUD, AMHS readouts, YMS dialog and yield pill own their slices in children
-  // (twin-wafer-hud.tsx / twin-amhs-hud.tsx / twin-yms.tsx), so their
-  // high-frequency or nested updates never rerender this page or FabViewport.
-  const page = useTwinPageStore(useShallow((state) => ({
-    siteId: state.siteId,
-    siteError: state.siteError,
-    liveToolStates: state.liveToolStates,
-    replayBase: state.replayBase,
-    statusFeed: state.statusFeed,
-    selected: state.selected,
-    selection: state.selection,
-    mesJobs: state.mesJobs,
-    layerPreferences: state.layerPreferences,
-    infoDialog: state.infoDialog,
-    showResearchUtil: state.showResearchUtil,
-    onboardingDontShow: state.onboardingDontShow,
-    ymsOpen: state.yms.open,
-  })));
-  const status = useRuntimeStore(state => state.viewer.status);
-  const viewerEpoch = useRuntimeStore(state => state.viewer.epoch);
+  const { t, language, toggleLanguage, theme, ui, demo, page, status, viewerEpoch } = useTwinSlices();
   const mode = ui.entryMode;
   const view = ui.view;
   const level = ui.level;
@@ -236,43 +74,18 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const researchSpeed = ui.research.speed;
   const { siteId, siteError: error, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, infoDialog, showResearchUtil, onboardingDontShow, ymsOpen } = page;
 
-  const sitesQuery = useQuery(sitesQueryOptions());
-  // Canonical /fabs/$fabId/3d identity wins; the store/legacy fallback only
-  // applies when TwinPage is rendered without a route param (SSR, tests).
-  const site = useMemo(() => {
-    const sites = sitesQuery.data;
-    if (!sites) return undefined;
-    if (fabId) return sites.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
-    return sites.find((value) => value.siteId === siteId) ?? sites[0];
-  }, [sitesQuery.data, siteId, fabId]);
-  const selectedFabId = useMemo(() => fabId ?? site?.fabs[0]?.fabId, [fabId, site]);
-  const fab = useMemo(
-    () => site ? site.fabs.find((value) => value.fabId === selectedFabId) ?? site.fabs[0] : undefined,
-    [site, selectedFabId],
-  );
+  const { site, fab, selectedFabId, statusSiteId } = useTwinRouteState({
+    fabId, search, onSearchChange, siteId, mode, language, theme, t,
+  });
   const telemetry = useFabTelemetry(selectedFabId);
-  // TanStack Query owns the FAB-scoped server cache (ARCH-02/G-02); the isolated
-  // EquipmentStatusPipeline below subscribes to it and feeds the page through a
-  // throttled projection, so raw SSE cache writes do not rerender TwinContent.
-  const statusSiteId = site?.siteId;
-  const researchQuery = useQuery({ ...researchEventsQueryOptions(), enabled: mode === 'research' });
-  const waferRoutesQuery = useQuery({ ...waferRoutesQueryOptions(), enabled: waferActive });
-  const waferRoutes = waferRoutesQuery.data;
-  // A16: a parse failure is a distinct, visible state; it must not silently become
-  // undefined and only reuse the network error owned by the Query.
-  const researchParse = useMemo<{ replay?: ResearchReplay; error: string }>(() => {
-    if (!researchQuery.data) return { replay: undefined, error: '' };
-    try {
-      return { replay: ResearchReplay.parse(researchQuery.data), error: '' };
-    } catch (error) {
-      return { replay: undefined, error: error instanceof Error ? error.message : String(error) };
-    }
-  }, [researchQuery.data]);
-  const research = researchParse.replay;
-  const researchParseError = researchParse.error;
-  const researchLoading = mode === 'research' && researchQuery.isLoading;
-  const researchError = researchQuery.isError ? t('回放数据加载失败') : '';
-  const waferError = waferRoutesQuery.isError ? t('路线加载失败') : '';
+  const tour = useTourController({ scene, language });
+  const wafer = useWaferPlayback({ scene, waferActive, language, endTour: tour.finishTour, t });
+  const {
+    research, loading: researchLoading, error: researchError, parseError: researchParseError,
+    snapshot: researchSnapshot, replayProjection,
+    setResearchPlaying, setResearchTime, setResearchSpeed,
+  } = useResearchPlayback({ mode, researchTime, researchPlaying, researchSpeed, replayBase, t });
+
   // projectTwinSceneState only reads the level/spatial/cut/xray/explode branches;
   // rebuilding the snapshot from the subscribed values keeps the same projection
   // without a whole-store subscription.
@@ -287,179 +100,25 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   });
   const layers = useMemo(() => ({ ...layerPreferences, airflow: projected.airflow, heatmap: projected.heatmap, xray: projected.xray !== null }),
     [layerPreferences, projected.airflow, projected.heatmap, projected.xray]);
-  const appliedCameraView = useRef<{ epoch: string | undefined; view: CameraView } | undefined>(undefined);
-  const tourTimelineRef = useRef<TourTimeline | null>(null);
-  const waferTimelineRef = useRef<WaferTimeline | null>(null);
-  const waferHudRef = useRef<WaferHud | null>(null);
-  const tourLoopRef = useRef<number | null>(null);
-  const tourIndexRef = useRef(-1);
-  const tourHudRef = useRef<TwinTourHudHandle>(null);
-  // Mount-time seed for the tour HUD; later frames are pushed through tourHudRef.
-  const [tourHudSeed, setTourHudSeed] = useState<TourHudSnapshot | null>(null);
+
+  const toolStates = ui.statusSource === 'research-replay' ? replayProjection?.states ?? replayBase
+    : ui.statusSource === 'demo' ? demo.states : liveToolStates;
+  const { selectedTelemetry, selectedSpc, selectedMes, spcPlot } = useTwinProcessProjection({ selected, toolStates, mesJobs });
+  const actions = useTwinActions({
+    scene, mode, view, level, exploded, selected, mesJobs, layerPreferences, toolStates,
+    onboardingDontShow, startTour: tour.startTour,
+  });
+  useTwinSceneSync({
+    scene, status, viewerEpoch, view, language, level, basement, exploded, explodePercent,
+    cutActive, cutAxis, cutPosition, cutInvert, xrayFilter,
+    tourActive: ui.tour.active, cancelTourIfRunning: tour.cancelTourIfRunning,
+  });
+  useTwinKeyboard({ onEscape: actions.escape, setCamera: actions.setCamera });
+  useTwinDemoClock(ui.statusSource, demo.playing);
+
   const amhsBatcher = useMemo(() => createCoalescedDispatcher<AmhsStats>((stats) => twinPageActions.amhsSet(stats), 100), []);
   useEffect(() => () => amhsBatcher.cancel(), [amhsBatcher]);
 
-  const setSelected = (value?: PickedTool) => twinPageActions.selectedSet(value);
-  const setSelection = (value?: TwinSelection) => twinPageActions.selectionSet(value);
-  const setReplayBase = (value: readonly FabToolState[]) => twinPageActions.replayBaseSet(value);
-  const setInfoDialog = (value: 'architecture' | 'database' | null) => twinPageActions.infoDialogSet(value);
-  const toggleResearchUtil = () => twinPageActions.showResearchUtilToggled();
-  const setOnboardingDontShow = (value: boolean) => twinPageActions.onboardingDontShowSet(value);
-  const setYmsOpen = (value: boolean) => twinPageActions.ymsOpenSet(value);
-  const setYmsTab = (value: 'map' | 'yield') => twinPageActions.ymsTabSet(value);
-  const setWaferFollow = (value: boolean) => twinPageActions.waferFollowSet(value);
-  const setMesJobs = (updater: (current: Record<number, MesJob>) => Record<number, MesJob>) => {
-    const next = updater(mesJobs);
-    for (const [index, job] of Object.entries(next)) twinPageActions.mesJobSet({ index: Number(index), job });
-  };
-  const setLayers = (updater: (current: Record<SceneLayer, boolean>) => Record<SceneLayer, boolean>) => {
-    const next = updater(layerPreferences);
-    for (const layer of Object.keys(next) as SceneLayer[]) if (next[layer] !== layerPreferences[layer]) twinPageActions.layerToggled(layer);
-  };
-  const setWaferPlaying = (playing: boolean) => twinUiActions.waferPlay(playing);
-  const setWaferSpeed = (speed: 1 | 4 | 16) => {
-    waferTimelineRef.current?.setSpeed(speed);
-    twinUiActions.waferSpeedSet(speed);
-  };
-  const setResearchPlaying = (playing: boolean) => twinUiActions.researchPlay(playing);
-  const setResearchTime = (timeSec: number) => twinUiActions.researchSeek(timeSec);
-  const setResearchSpeed = (speed: 1 | 10 | 100 | 500) => twinUiActions.researchSpeedSet(speed);
-
-
-  useEffect(() => { scene.current?.setLanguage(language); }, [language, status]);
-
-  // URL is the owner of persisted language/theme overrides; the store is synced
-  // from the router search and writes back through it (no history/location use).
-  useEffect(() => {
-    try {
-      useLocaleStore.setState(readPreferences(localStorage, searchQuery), true);
-    } catch {
-      /* Storage denial must not prevent opening the FAB. */
-    }
-  }, [searchQuery]);
-
-  useEffect(() => {
-    const requested = twinModeFrom(search ?? {});
-    if (requested && useTwinUiStore.getState().entryMode !== requested) twinUiActions.modeSet(requested);
-  }, [search?.mode]);
-
-  useEffect(() => {
-    if (useTwinUiStore.getState().entryMode !== mode) return;
-    const patch = { mode };
-    if (searchToQueryString({ ...(search ?? {}), ...patch }) !== searchQuery) onSearchChange?.(patch, true);
-  }, [mode, onSearchChange, search, searchQuery]);
-
-  useEffect(() => {
-    const current = useLocaleStore.getState();
-    if (current.language !== language || current.theme !== theme) return;
-    const patch = { lang: languageTag(language), theme };
-    if (searchToQueryString({ ...(search ?? {}), ...patch }) !== searchQuery) onSearchChange?.(patch, true);
-  }, [language, theme, onSearchChange, search, searchQuery]);
-
-  useEffect(() => {
-    if (!sitesQuery.data) return;
-    // Canonical route identity (/fabs/$fabId/3d) wins over the transitional
-    // ?siteId= compatibility parameter; the legacy parameter is still honoured
-    // when the route does not carry a FAB id.
-    const legacySiteId = twinSiteIdFrom(search ?? {});
-    let next: SiteDto | undefined;
-    if (fabId) {
-      next = sitesQuery.data.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
-      if (!next) {
-        twinPageActions.siteErrorSet(t("指定的 FAB 不存在：{0}", [fabId]));
-        return;
-      }
-    } else if (siteId) {
-      return;
-    } else {
-      next = legacySiteId ? sitesQuery.data.find((value) => value.siteId === legacySiteId) : sitesQuery.data[0];
-      if (!next) {
-        twinPageActions.siteErrorSet(legacySiteId ? t("指定的 FAB 站点不存在：{0}", [legacySiteId]) : t("没有可用的 FAB 站点"));
-        return;
-      }
-    }
-    // Multiple FABs are a first-class product shape: the route/first-FAB fallback
-    // selects one FAB, it never rejects the site for having more than one.
-    if (useTwinPageStore.getState().siteId !== next.siteId) twinPageActions.siteIdSet(next.siteId);
-    if (useTwinPageStore.getState().siteError !== undefined) twinPageActions.siteErrorSet(undefined);
-  }, [sitesQuery.data, siteId, fabId, t]);
-
-  useEffect(() => {
-    if (!sitesQuery.error) return;
-    twinPageActions.siteErrorSet(sitesQuery.error instanceof Error ? sitesQuery.error.message : t('FAB 数据加载失败'));
-  }, [sitesQuery.error, t]);
-
-  useEffect(() => {
-    const modal = twinModalFrom(search ?? {});
-    if (modal === 'database' || modal === 'catalog') twinPageActions.infoDialogSet('database');
-    else if (modal === 'arch') twinPageActions.infoDialogSet('architecture');
-    else if (modal === 'yms') { twinPageActions.ymsOpenSet(true); twinPageActions.ymsTabSet('map'); }
-  }, [search?.modal]);
-
-  useEffect(() => {
-    if (ui.statusSource !== 'demo' || !demo.playing) return;
-    const timer = window.setInterval(() => twinDemoActions.tick(), DEMO_TICK_MS);
-    return () => window.clearInterval(timer);
-  }, [ui.statusSource, demo.playing]);
-
-  useEffect(() => {
-    if (site) document.title = `${site.code} / ${fab?.code ?? 'FAB'} · 3D FAB`;
-  }, [site, fab]);
-
-  // Mode changes are written through the router search above; no history writes here.
-
-  useEffect(() => {
-    if (!status.startsWith('WebGPU')) return;
-    // Restore material state before changing levels, then apply the single active mode.
-    scene.current?.setXRayFilter(null);
-    scene.current?.setBasement(basement);
-    scene.current?.setDual(level === 'DUAL');
-    scene.current?.setExplodeFactor(exploded ? explodePercent / 100 : 0, exploded);
-    scene.current?.setCutPlane(cutActive, cutAxis, cutPosition, cutInvert);
-    scene.current?.setXRayFilter(xrayFilter);
-  }, [status, basement, level, exploded, explodePercent, cutActive, cutAxis, cutPosition, cutInvert, xrayFilter]);
-
-  useEffect(() => {
-    if (!status.startsWith('WebGPU')) return;
-    // GPU recovery belongs to the same viewport lifetime and restores its user
-    // pose. Only a fresh mount/reload or a requested view change applies a preset.
-    if (appliedCameraView.current?.epoch !== viewerEpoch || appliedCameraView.current?.view !== view) scene.current?.setView(view);
-    appliedCameraView.current = { epoch: viewerEpoch, view };
-  }, [status, view, viewerEpoch]);
-
-  useEffect(() => {
-    if (!status.startsWith('WebGPU')) return;
-    scene.current?.setTour(ui.tour.active);
-    // Escape/mode/level actions can stop Tour through the store without clicking
-    // its Stop button. Cancel the controller too, or its next waypoint revives UI.
-    if (!ui.tour.active && tourTimelineRef.current) finishTour();
-  }, [status, ui.tour.active]);
-
-  useEffect(() => {
-    if (!research) return;
-    setResearchTime(Math.min(3600, research.durationSec));
-  }, [research]);
-
-  useEffect(() => {
-    if (!researchPlaying || !research) return;
-    let last = performance.now();
-    const timer = window.setInterval(() => {
-      const now = performance.now();
-      const elapsed = ((now - last) / 1000) * researchSpeed;
-      last = now;
-      twinUiActions.researchAdvance({ deltaSec: elapsed, durationSec: research.durationSec });
-    }, 100);
-    return () => window.clearInterval(timer);
-  }, [researchPlaying, research, researchSpeed]);
-
-  const researchSnapshot = useMemo(() => research?.snapshot(researchTime), [research, researchTime]);
-  const replayProjection = useMemo(() => researchSnapshot ? projectReplayStates(researchSnapshot, replayBase) : undefined, [researchSnapshot, replayBase]);
-  const toolStates = ui.statusSource === 'research-replay' ? replayProjection?.states ?? replayBase
-    : ui.statusSource === 'demo' ? demo.states : liveToolStates;
-  const setMode = (value: EntryMode): void => {
-    if (value === 'research' && mode !== 'research') setReplayBase(toolStates);
-    twinUiActions.modeSet(value);
-  };
   // The scene frame loop reads the Zustand snapshots directly for demo/live modes.
   // Research replay keeps its derived array in a ref until the query state lands.
   const directToolStates = useRef<readonly FabToolState[]>(toolStates);
@@ -475,316 +134,12 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     return mergeToolStates(base, telemetry?.getToolStates());
   }, [telemetry, mergeToolStates]);
 
-  const selectedTelemetry = useMemo(() => selected ? buildTelemetry(FAB_LAYOUT[selected.index], selected.index) : undefined, [selected?.index]);
-  const selectedSpc = useMemo(() => selectedTelemetry ? computeSpc(selectedTelemetry.history, selectedTelemetry.sensors[0], toolStates[selected?.index ?? 0] === 'down') : undefined, [selectedTelemetry, toolStates, selected?.index]);
-  const selectedMes = selected ? mesJobs[selected.index] ?? createMesJob(FAB_LAYOUT[selected.index], selected.index) : undefined;
-  const spcPlot = selectedTelemetry ? (() => {
-    const values = selectedTelemetry.history;
-    const low = Math.min(...values);
-    const high = Math.max(...values);
-    const range = high - low || 1;
-    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-    const std = Math.sqrt(values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / Math.max(1, values.length - 1)) || 0.001;
-    return {
-      points: values.map((value, index) => `${(index / (values.length - 1)) * 240},${30 - ((value - low) / range) * 26 - 2}`).join(' '),
-      meanY: 30 - ((mean - low) / range) * 26 - 2,
-      uclY: 30 - ((mean + 3 * std - low) / range) * 26 - 2,
-      lclY: 30 - ((mean - 3 * std - low) / range) * 26 - 2,
-    };
-  })() : undefined;
-
-  useEffect(() => {
-    if (!waferActive || !waferRoutes) return;
-    // Keep one controller and one RAF across play/pause, speed, follow and locale
-    // changes. Paused frames still apply the source camera, never a waypoint snap.
-    let controller = waferTimelineRef.current;
-    if (!controller) {
-      controller = createWaferTimeline(buildWaferScenario(waferRoutes, useLocaleStore.getState().language));
-      controller.setSpeed(useTwinUiStore.getState().wafer.speed);
-      waferTimelineRef.current = controller;
-    }
-    controller.open();
-    const initial = controller.readFrame();
-    scene.current?.setWaferPoint(initial.position.x, initial.position.y, initial.position.z, true, false, initial.rotationY);
-    waferHudRef.current = null;
-    syncWaferHud();
-    let frame = 0;
-    let last = performance.now();
-    const tick = (now: number) => {
-      controller.step(Math.max(0, now - last));
-      last = now;
-      const current = controller.readFrame();
-      const { x, y, z } = current.position;
-      scene.current?.setWaferPoint(x, y, z, true, false, current.rotationY);
-      if (useTwinPageStore.getState().wafer.follow) {
-        scene.current?.setCameraPose([current.camera.x, current.camera.y, current.camera.z], [x, y, z], 0);
-      }
-      scene.current?.setWaferTrail(controller.readTrailPoints().map(point => [point.x, point.y, point.z]));
-      syncWaferHud();
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(frame);
-      controller.close();
-      scene.current?.setWaferPoint(0, 0, 0, false, false);
-      scene.current?.setWaferTrail([]);
-    };
-  }, [waferActive, waferRoutes]);
-
-  useEffect(() => {
-    waferTimelineRef.current?.setLanguage(language === 'zh' ? 'zh-CN' : 'en');
-    syncWaferHud();
-  }, [language]);
-
-  useEffect(() => {
-    try {
-      const modal = twinModalFrom(search ?? {});
-      if (!modal && localStorage.getItem(ONBOARDING_KEY) !== '1') twinUiActions.onboardingOpen();
-    } catch {
-      // Storage may be blocked; the page still works without onboarding memory.
-    }
-  }, [search?.modal]);
-
-  useEffect(() => () => {
-    if (tourLoopRef.current !== null) cancelAnimationFrame(tourLoopRef.current);
-    tourTimelineRef.current?.stop();
-  }, []);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (event.key === 'Escape') {
-        twinUiActions.escape();
-        scene.current?.clearSelection();
-        setSelected(undefined);
-        setSelection(undefined);
-        setYmsOpen(false);
-        setInfoDialog(null);
-        return;
-      }
-      if (target && /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) return;
-      if (event.key === '1') setCamera('iso');
-      if (event.key === '2') setCamera('top');
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-
   const stateCounts = useMemo(() => {
     const counts = { running: 0, idle: 0, down: 0, maint: 0 };
     for (const state of toolStates) counts[state] += 1;
     return counts;
   }, [toolStates]);
   const pressure = cleanroomPressureField(selected?.x ?? 0, selected?.z ?? 0);
-
-  function setCamera(next: CameraView): void {
-    twinUiActions.viewSet(next);
-    // Repeating the active preset still re-centres a manually moved camera.
-    if (next === view) scene.current?.setView(next);
-  }
-  function toggleLayer(layer: SceneLayer): void {
-    if (layer === 'airflow') { twinUiActions.spatialToggle('aerodynamics'); return; }
-    if (layer === 'heatmap') { twinUiActions.aeroHeatmapToggle(); return; }
-    if (layer === 'xray') { twinUiActions.spatialToggle('xray'); return; }
-    setLayers((current) => ({ ...current, [layer]: !current[layer] }));
-  }
-  function applyXRayFilter(filter: XRayFilter | null): void { twinUiActions.xraySet(filter); }
-  function toggleCut(): void { twinUiActions.spatialToggle('cut'); }
-  function updateCut(axis: CutAxis, position: number, invert: boolean): void {
-    twinUiActions.cutSet({ axis, positionM: position, invert });
-  }
-  function flyLevel(next: 'L1' | 'B1' | 'DUAL' | 'EXPLODED'): void {
-    const poses = {
-      L1: { position: [0, 52, 64] as const, target: [0, 2, 0] as const },
-      B1: { position: [-15, -2, 34] as const, target: [-15, -6, -5] as const },
-      DUAL: { position: [0, 38, 62] as const, target: [0, -3, 0] as const },
-      EXPLODED: { position: [55, 44, 72] as const, target: [0, -4, 0] as const },
-    };
-    const pose = poses[next];
-    scene.current?.setCameraPose(pose.position, pose.target, 850);
-  }
-  // Frozen switchFabLevel/activateSpatialMode semantics: entering Exploded always targets 100%,
-  // leaving it resets the preset to 0%; any level switch away also closes the exploded mode.
-  function leaveExploded(): void { if (exploded) twinUiActions.explodeSet(0); }
-  function setL1(): void { leaveExploded(); twinUiActions.levelSet('L1'); flyLevel('L1'); }
-  function setB1(): void { const next = level === 'B1' ? 'L1' : 'B1'; leaveExploded(); twinUiActions.levelSet(next); flyLevel(next); }
-  function setDual(): void { const next = level === 'DUAL' ? 'L1' : 'DUAL'; leaveExploded(); twinUiActions.levelSet(next); flyLevel(next); }
-  function toggleExploded(): void {
-    if (exploded) {
-      twinUiActions.explodeSet(0);
-      twinUiActions.spatialToggle('exploded');
-      flyLevel('L1');
-    } else {
-      twinUiActions.spatialToggle('exploded');
-      flyLevel('EXPLODED');
-      twinUiActions.explodeSet(100);
-    }
-  }
-  function changeExplode(percent: number): void { twinUiActions.explodeSet(percent); }
-  function applyTourStep(index: number): void {
-    const stop = TOUR_STOPS[index];
-    if (stop) twinUiActions.tourStep({ waypoint: index, level: stop.level, view: 'iso' });
-  }
-  function handleTwinSelection(next: TwinSelection): void {
-    setSelection(next);
-    if (next.kind === 'reference') {
-      const row = ORIGINAL_TWIN_UI.equipment.find((item) => item.id === next.id);
-      const catalogIndex = FAB_LAYOUT.findIndex((tool) => tool.originalKind === 'catalog' && tool.recordId === next.id);
-      setSelected(undefined);
-      if (catalogIndex >= 0) {
-        const token = crypto.randomUUID();
-        runtimeActions.viewerSelectionSyncStarted(token);
-        scene.current?.selectTool(catalogIndex, false);
-        window.setTimeout(() => runtimeActions.viewerSelectionSyncFinished(token), 0);
-      }
-      else scene.current?.clearSelection();
-      if (row?.level === 'B1') { twinUiActions.levelSet('B1'); flyLevel('B1'); scene.current?.setDual(false); scene.current?.setBasement(true); }
-    } else if (next.kind === 'oem') {
-      setSelected(undefined);
-      scene.current?.clearSelection();
-    }
-  }
-  function handleToolChange(tool?: PickedTool): void {
-    setSelected(tool);
-    const sync = useRuntimeStore.getState().viewer.selectionSync;
-    if (sync) { runtimeActions.viewerSelectionSyncFinished(sync); return; }
-    // A05: the scene keeps this callback across renders, so read the latest
-    // selection from the store instead of the render closure.
-    const currentSelection = useTwinPageStore.getState().selection;
-    if (tool && currentSelection?.kind === 'reference' && FAB_LAYOUT[tool.index]?.recordId === currentSelection.id) return;
-    if (tool) setSelection({ kind: 'layout', index: tool.index });
-    else if (currentSelection?.kind === 'layout') setSelection(undefined);
-  }
-  function handleManualKey(key: string, state: FabToolState): void {
-    twinDemoActions.manualKeySet({ key, state });
-  }
-  function runMesAction(action: MesAction): void {
-    if (!selected) return;
-    const index = selected.index;
-    setMesJobs((current) => ({
-      ...current,
-      [index]: applyMesAction(current[index] ?? createMesJob(FAB_LAYOUT[index], index), action),
-    }));
-  }
-  function chooseDemoScenario(id: string): void {
-    const scenario = YIELD_SCENARIOS.find((entry) => entry.id === id);
-    if (!scenario) return;
-    twinUiActions.sourceSet('demo');
-    twinDemoActions.scenarioApplied(scenario);
-    twinPageActions.ymsYieldScenarioSet('live');
-    twinPageActions.ymsYieldInputSet({ purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime });
-  }
-  function syncWaferHud(): void {
-    const controller = waferTimelineRef.current;
-    if (!controller) return;
-    const frame = controller.readFrame();
-    if (frame.hud !== waferHudRef.current) {
-      waferHudRef.current = frame.hud;
-      twinPageActions.waferFrameReceived({ product: frame.product as WaferProduct, index: frame.index,
-        hud: frame.hud, completed: controller.readStats().completed });
-    }
-    if (frame.playing !== useTwinUiStore.getState().wafer.playing) setWaferPlaying(frame.playing);
-  }
-  function startWafer(): void {
-    finishTour();
-    twinUiActions.waferOpen();
-  }
-  function closeWafer(): void {
-    twinUiActions.waferClose();
-    setWaferPlaying(false);
-    scene.current?.setWaferPoint(0, 0, 0, false, false);
-    scene.current?.setWaferTrail([]);
-    scene.current?.setView('iso');
-  }
-  function replayWafer(): void {
-    waferTimelineRef.current?.replay();
-    syncWaferHud();
-  }
-  function changeWaferProduct(product: WaferProduct): void {
-    waferTimelineRef.current?.setProduct(product);
-    syncWaferHud();
-  }
-  function toggleWaferPlay(): void {
-    waferTimelineRef.current?.togglePlay();
-    syncWaferHud();
-  }
-  function syncTourHud(frame: TourFrame): void {
-    // The tour card owns its high-frequency state; pushing frames through the
-    // ref handle keeps the ~60 Hz countdown/progress updates out of TwinContent.
-    tourHudRef.current?.setHud({ tag: frame.hudTag, timerText: frame.timerText, progressWidth: frame.progressWidth, activeDot: frame.activeDot });
-  }
-  function finishTour(): void {
-    if (tourLoopRef.current !== null) { cancelAnimationFrame(tourLoopRef.current); tourLoopRef.current = null; }
-    tourTimelineRef.current?.stop();
-    tourTimelineRef.current = null;
-    tourIndexRef.current = -1;
-    setTourHudSeed(null);
-    twinUiActions.tourStop();
-  }
-  function startTour(): void {
-    // The frozen controller tweens from the current camera pose, exactly like
-    // tweenCamera in startCinematicTour.
-    const camera = scene.current?.getCameraPose();
-    const controller = createTourTimeline(buildTourScenario(TOUR_STOPS, language, {
-      camera: camera ? { x: camera.position[0], y: camera.position[1], z: camera.position[2] } : TOUR_INITIAL_CAMERA,
-      target: camera ? { x: camera.target[0], y: camera.target[1], z: camera.target[2] } : TOUR_INITIAL_TARGET,
-    }));
-    tourTimelineRef.current = controller;
-    tourIndexRef.current = -1;
-    controller.start();
-    applyTourStep(0);
-    setTourHudSeed({ tag: TOUR_STOPS[0].tag, timerText: '5s', progressWidth: '100%', activeDot: 0 });
-    const frameMs = 1000 / 60;
-    let lastFrameMs = performance.now();
-    let accumulatedMs = 0;
-    const step = (): void => {
-      const active = tourTimelineRef.current;
-      if (!active) return;
-      // The frozen controller advances on 60 Hz RAF ticks. Under a slower compositor,
-      // catch up the missed virtual frames so the tour keeps source wall-clock timing.
-      const now = performance.now();
-      accumulatedMs += Math.max(0, now - lastFrameMs);
-      lastFrameMs = now;
-      const advanceCount = Math.min(8, Math.floor(accumulatedMs / frameMs));
-      if (advanceCount > 0) {
-        accumulatedMs = Math.max(0, accumulatedMs - advanceCount * frameMs);
-        for (let count = 0; count < advanceCount; count += 1) {
-          active.step();
-          if (!active.readFrame().active) { finishTour(); return; }
-        }
-      }
-      const frame = active.readFrame();
-      if (frame.index !== tourIndexRef.current) {
-        tourIndexRef.current = frame.index;
-        applyTourStep(frame.index);
-      }
-      scene.current?.setCameraPose([frame.camera.x, frame.camera.y, frame.camera.z], [frame.target.x, frame.target.y, frame.target.z], 0);
-      syncTourHud(frame);
-      tourLoopRef.current = requestAnimationFrame(step);
-    };
-    tourLoopRef.current = requestAnimationFrame(step);
-  }
-  function endTour(): void {
-    finishTour();
-  }
-  function advanceTour(): void {
-    const controller = tourTimelineRef.current;
-    if (!controller) return;
-    if (tourIndexRef.current >= TOUR_STOPS.length - 1) { finishTour(); return; }
-    controller.next();
-  }
-  function previousTour(): void {
-    tourTimelineRef.current?.prev();
-  }
-  function dismissOnboarding(): void {
-    twinUiActions.onboardingClose();
-    try { if (onboardingDontShow) localStorage.setItem(ONBOARDING_KEY, '1'); } catch { /* ignore storage denial */ }
-  }
-  function finishOnboarding(): void {
-    dismissOnboarding();
-    startTour();
-  }
 
   if (error) {
     return <main className="twin-page twin-error"><h1>{t("无法加载 FAB")}</h1><p>{error}</p><a href="/">{t("返回工作台")}</a></main>;
@@ -802,32 +157,32 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
           <div><strong>{t("300mm晶圆制造厂 (Fab)")}</strong><small>{t("先进试验线")}</small></div>
         </a>
         <div className="twin-topgroup">
-          <label className="twin-mode">{t("模式:")}<select id="mode-select" value={mode} onChange={(event) => setMode(event.target.value as EntryMode)}>
+          <label className="twin-mode">{t("模式:")}<select id="mode-select" value={mode} onChange={(event) => actions.setMode(event.target.value as EntryMode)}>
               <option value="visitor">{t("Visitor 导览")}</option><option value="engineer">{t("Engineer 工程师")}</option><option value="research">{t("Research 科研")}</option>
             </select>
           </label>
           <div className="twin-levels" role="group" aria-label={t("楼层")}>
-            <button id="level-btn-l1" type="button" className={level === 'L1' ? 'active' : ''} onClick={setL1}><OriginalIcon name="l1" /> L1</button>
-            <button id="level-btn-b1" type="button" className={level === 'B1' ? 'active' : ''} onClick={setB1}><OriginalIcon name="b1" /> B1</button>
-            <button id="level-btn-dual" type="button" className={level === 'DUAL' ? 'active' : ''} onClick={setDual}><OriginalIcon name="dual" /> Dual</button>
-            <button id="level-btn-exploded" type="button" className={level === 'EXPLODED' ? 'active' : ''} onClick={toggleExploded}><OriginalIcon name="exploded" />{t("爆炸解构")}</button>
+            <button id="level-btn-l1" type="button" className={level === 'L1' ? 'active' : ''} onClick={actions.setL1}><OriginalIcon name="l1" /> L1</button>
+            <button id="level-btn-b1" type="button" className={level === 'B1' ? 'active' : ''} onClick={actions.setB1}><OriginalIcon name="b1" /> B1</button>
+            <button id="level-btn-dual" type="button" className={level === 'DUAL' ? 'active' : ''} onClick={actions.setDual}><OriginalIcon name="dual" /> Dual</button>
+            <button id="level-btn-exploded" type="button" className={level === 'EXPLODED' ? 'active' : ''} onClick={actions.toggleExploded}><OriginalIcon name="exploded" />{t("爆炸解构")}</button>
           </div>
         </div>
         <div className="twin-topright">
           <div className="twin-cameras" id="camera-presets-group" role="group" aria-label={t("相机预设")}>
-            <button type="button" aria-label="ISO" title="Isometric View" onClick={() => setCamera('iso')}><OriginalIcon name="iso" /></button>
-            <button type="button" aria-label="Top" title="Top Down Plan View" onClick={() => setCamera('top')}><OriginalIcon name="top" /></button>
-            <button type="button" aria-label="Litho" title="Focus Litho Amber Core" onClick={() => setCamera('litho')}><OriginalIcon name="litho" /></button>
-            <button type="button" aria-label="Airlock" title="Focus Cleanroom Air Shower" onClick={() => setCamera('airshower')}><OriginalIcon name="airlock" /></button>
+            <button type="button" aria-label="ISO" title="Isometric View" onClick={() => actions.setCamera('iso')}><OriginalIcon name="iso" /></button>
+            <button type="button" aria-label="Top" title="Top Down Plan View" onClick={() => actions.setCamera('top')}><OriginalIcon name="top" /></button>
+            <button type="button" aria-label="Litho" title="Focus Litho Amber Core" onClick={() => actions.setCamera('litho')}><OriginalIcon name="litho" /></button>
+            <button type="button" aria-label="Airlock" title="Focus Cleanroom Air Shower" onClick={() => actions.setCamera('airshower')}><OriginalIcon name="airlock" /></button>
             <button id="btn-focus-patrol" type="button" aria-label={t("跟踪巡检工程师")} title={t("跟踪巡检工程师")} onClick={() => scene.current?.focusPatrol()}><OriginalIcon name="user-check" /></button>
           </div>
-          <button id="btn-cinematic-tour" type="button" className={`twin-tour${tourStep !== undefined ? ' active' : ''}`} aria-pressed={tourStep !== undefined} onClick={() => { if (tourStep === undefined) startTour(); else endTour(); }}><OriginalIcon name="tour" />{tourStep === undefined ? 'Tour' : 'Stop'}</button>
+          <button id="btn-cinematic-tour" type="button" className={`twin-tour${tourStep !== undefined ? ' active' : ''}`} aria-pressed={tourStep !== undefined} onClick={() => { if (tourStep === undefined) tour.startTour(); else tour.endTour(); }}><OriginalIcon name="tour" />{tourStep === undefined ? 'Tour' : 'Stop'}</button>
           <div className="twin-layers" aria-label={t("图层")}>
             {LAYER_LABELS.filter(({ layer }) => layer !== 'airflow').map(({ layer, label }) => (
-              <button id={layer === 'amhs' ? 'btn-toggle-oht' : layer === 'ceiling' ? 'btn-toggle-ceiling' : layer === 'roof' ? 'btn-toggle-roof' : layer === 'heatmap' ? 'btn-toggle-heatmap' : 'btn-toggle-piping'} type="button" key={layer} className={layers[layer] ? 'active' : ''} aria-pressed={!!layers[layer]} onClick={() => toggleLayer(layer)}><OriginalIcon name={layer === 'amhs' ? 'amhs' : layer === 'ceiling' || layer === 'roof' ? 'ffu' : 'heatmap'} />{layer === 'heatmap' ? t("气流热力图") : label}</button>
+              <button id={layer === 'amhs' ? 'btn-toggle-oht' : layer === 'ceiling' ? 'btn-toggle-ceiling' : layer === 'roof' ? 'btn-toggle-roof' : layer === 'heatmap' ? 'btn-toggle-heatmap' : 'btn-toggle-piping'} type="button" key={layer} className={layers[layer] ? 'active' : ''} aria-pressed={!!layers[layer]} onClick={() => actions.toggleLayer(layer)}><OriginalIcon name={layer === 'amhs' ? 'amhs' : layer === 'ceiling' || layer === 'roof' ? 'ffu' : 'heatmap'} />{layer === 'heatmap' ? t("气流热力图") : label}</button>
             ))}
             <button id="btn-toggle-laminar" type="button" className={ui.spatialMode === 'aerodynamics' ? 'active' : ''} aria-pressed={ui.spatialMode === 'aerodynamics'} onClick={() => twinUiActions.spatialToggle('aerodynamics')}><OriginalIcon name="airflow" /> Airflow</button>
-            <button id="btn-toggle-xray" type="button" className={xrayFilter ? 'active' : ''} aria-pressed={!!xrayFilter} onClick={() => applyXRayFilter(xrayFilter ? null : 'all')}><OriginalIcon name="xray" />{t("全息透视")}</button>
+            <button id="btn-toggle-xray" type="button" className={xrayFilter ? 'active' : ''} aria-pressed={!!xrayFilter} onClick={() => actions.applyXRayFilter(xrayFilter ? null : 'all')}><OriginalIcon name="xray" />{t("全息透视")}</button>
           </div>
           <button id="lang-toggle-btn" className="twin-language-toggle" type="button" title={language === 'zh' ? 'Switch to English' : '切换为中文'} onClick={toggleLanguage}>{language === 'zh' ? '中文' : 'English'}</button>
         </div>
@@ -837,13 +192,13 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
         <TwinYieldPill toolStates={toolStates} />
         <section className="twin-simulation" aria-label={t("B01 场景控制")}>
           <button id="btn-sim-play" type="button" disabled={ui.statusSource !== 'demo'} title={ui.statusSource !== 'demo' ? t("请选择本地 DEMO 状态来源") : 'Toggle Sim Clock · 1600 ms'} onClick={() => twinDemoActions.playingSet(!demo.playing)} aria-pressed={ui.statusSource === 'demo' && demo.playing}>{demo.playing ? 'Ⅱ' : '▶'} <span id="lbl-sim-cycle">#{demo.cycle}</span></button>
-          <select id="dt-scenario-select" aria-label="Scenario" value={demo.scenarioId} disabled={ui.statusSource !== 'demo'} onChange={(event) => chooseDemoScenario(event.target.value)}>
+          <select id="dt-scenario-select" aria-label="Scenario" value={demo.scenarioId} disabled={ui.statusSource !== 'demo'} onChange={(event) => actions.chooseDemoScenario(event.target.value)}>
             {YIELD_SCENARIOS.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
           </select>
         </section>
-        <button type="button" className={`twin-yms-toggle${ymsOpen ? ' active' : ''}`} aria-pressed={ymsOpen} onClick={() => { setYmsTab('map'); setYmsOpen(!ymsOpen); }}><OriginalIcon name="wafer" />{t("YMS 晶圆图谱")}</button>
-        <button id="btn-toggle-cut" type="button" className={classNames('twin-cut-toggle', { active: cutActive })} aria-pressed={cutActive} onClick={toggleCut}><OriginalIcon name="cut" />{t("动态剖切")}</button>
-        <button id="btn-follow-wafer" type="button" className={classNames('twin-wafer-toggle', { active: waferActive })} aria-pressed={waferActive} onClick={() => { if (waferActive) closeWafer(); else startWafer(); }}><OriginalIcon name="wafer" />{t("跟随晶圆")}</button>
+        <button type="button" className={`twin-yms-toggle${ymsOpen ? ' active' : ''}`} aria-pressed={ymsOpen} onClick={() => { actions.setYmsTab('map'); actions.setYmsOpen(!ymsOpen); }}><OriginalIcon name="wafer" />{t("YMS 晶圆图谱")}</button>
+        <button id="btn-toggle-cut" type="button" className={classNames('twin-cut-toggle', { active: cutActive })} aria-pressed={cutActive} onClick={actions.toggleCut}><OriginalIcon name="cut" />{t("动态剖切")}</button>
+        <button id="btn-follow-wafer" type="button" className={classNames('twin-wafer-toggle', { active: waferActive })} aria-pressed={waferActive} onClick={() => { if (waferActive) wafer.closeWafer(); else wafer.startWafer(); }}><OriginalIcon name="wafer" />{t("跟随晶圆")}</button>
         <label className="twin-source"><select aria-label={t("状态来源")} value={ui.preferredStatusSource} disabled={mode === 'research'} onChange={(event) => twinUiActions.sourceSet(event.target.value as 'demo' | 'sse-live')}>
           <option value="sse-live">SSE</option><option value="demo">DEMO</option>
         </select></label>
@@ -853,7 +208,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
       {level === 'EXPLODED' && (
         <div className="twin-explode" role="group" aria-label={t("爆炸视图")}>
           <span>EXPLODE</span>
-          <input id="explode-slider" type="range" min={0} max={100} step={1} value={explodePercent} onChange={(event) => changeExplode(Number(event.target.value))} aria-label={t("爆炸视图比例")} />
+          <input id="explode-slider" type="range" min={0} max={100} step={1} value={explodePercent} onChange={(event) => actions.changeExplode(Number(event.target.value))} aria-label={t("爆炸视图比例")} />
           <b>{explodePercent}%</b>
         </div>
       )}
@@ -861,12 +216,12 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
       {cutActive && (
         <div className="twin-cut" role="group" aria-label={t("剖切平面")}>
           <span>CUT</span>
-          <select id="cut-axis-select" value={cutAxis} onChange={(event) => updateCut(event.target.value as CutAxis, cutPosition, cutInvert)} aria-label={t("剖切轴")}>
+          <select id="cut-axis-select" value={cutAxis} onChange={(event) => actions.updateCut(event.target.value as CutAxis, cutPosition, cutInvert)} aria-label={t("剖切轴")}>
             <option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option>
           </select>
-          <input id="cut-slider" type="range" min={-55} max={55} step={1} value={cutPosition} onChange={(event) => updateCut(cutAxis, Number(event.target.value), cutInvert)} aria-label={t("剖切位置")} />
+          <input id="cut-slider" type="range" min={-55} max={55} step={1} value={cutPosition} onChange={(event) => actions.updateCut(cutAxis, Number(event.target.value), cutInvert)} aria-label={t("剖切位置")} />
           <b>{cutPosition.toFixed(0)} m</b>
-          <label><input id="btn-cut-invert" type="checkbox" checked={cutInvert} onChange={(event) => updateCut(cutAxis, cutPosition, event.target.checked)} /> Invert</label>
+          <label><input id="btn-cut-invert" type="checkbox" checked={cutInvert} onChange={(event) => actions.updateCut(cutAxis, cutPosition, event.target.checked)} /> Invert</label>
         </div>
       )}
 
@@ -888,12 +243,9 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
           site={site}
           fab={fab}
           toolStates={toolStates}
-          onToolChange={handleToolChange}
+          onToolChange={actions.handleToolChange}
           onAmhsStatsChange={amhsBatcher.push}
-          onCameraInteraction={() => {
-            if (tourTimelineRef.current) finishTour();
-            if (useTwinPageStore.getState().wafer.follow) twinPageActions.waferFollowSet(false);
-          }}
+          onCameraInteraction={() => { tour.cancelTourIfRunning(); wafer.clearFollowOnCameraInteraction(); }}
           getToolStates={getToolStates}
           layers={layers}
           explodeFactor={level === 'EXPLODED' ? explodePercent / 100 : 0}
@@ -907,15 +259,15 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
             selection={selection}
             states={demo.keys}
             badgeCount={67}
-            onSelect={handleTwinSelection}
-            onArchitecture={() => setInfoDialog('architecture')}
-            onDatabase={() => setInfoDialog('database')}
+            onSelect={actions.handleTwinSelection}
+            onArchitecture={() => actions.setInfoDialog('architecture')}
+            onDatabase={() => actions.setInfoDialog('database')}
           /></div>
         )}
 
         {selected && mode !== 'visitor' && selection?.kind === 'layout' && (
           <aside className="twin-inspector" aria-label={t("设备详情")}>
-            <div className="twin-panel-title"><span>SELECTED TOOL · {String(selected.index + 1).padStart(3, '0')}</span><button type="button" aria-label={t("关闭设备详情")} onClick={() => { scene.current?.clearSelection(); setSelected(undefined); setSelection(undefined); }}>×</button></div>
+            <div className="twin-panel-title"><span>SELECTED TOOL · {String(selected.index + 1).padStart(3, '0')}</span><button type="button" aria-label={t("关闭设备详情")} onClick={actions.clearSelection}>×</button></div>
             <h2>{selected.vendor}</h2>
             <h3>{selected.model}</h3>
             <span className="twin-chip">{t(CATEGORY_LABELS[selected.category] ?? selected.category)}</span>
@@ -945,9 +297,9 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
                 </div>
                 <div className="twin-mes-step"><span>Step</span><b>{selectedMes.stepName}</b></div>
                 <div className="twin-mes-actions">
-                  <button type="button" onClick={() => runMesAction('track-in')}>Track-In</button>
-                  <button type="button" onClick={() => runMesAction('track-out')}>Track-Out</button>
-                  <button type="button" className="hold" onClick={() => runMesAction('hold')}>Hold</button>
+                  <button type="button" onClick={() => actions.runMesAction('track-in')}>Track-In</button>
+                  <button type="button" onClick={() => actions.runMesAction('track-out')}>Track-Out</button>
+                  <button type="button" className="hold" onClick={() => actions.runMesAction('hold')}>Hold</button>
                 </div>
               </section>
             )}
@@ -983,10 +335,10 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
             key={`${selection.kind}-${selection.id}`}
             selection={selection}
             states={demo.keys}
-            onClose={() => { scene.current?.clearSelection(); setSelection(undefined); setSelected(undefined); }}
-            onManualKey={handleManualKey}
-            onSelectReference={(id) => handleTwinSelection({ kind: 'reference', id })}
-            onSelectOem={(id) => handleTwinSelection({ kind: 'oem', id })}
+            onClose={actions.clearSelection}
+            onManualKey={actions.handleManualKey}
+            onSelectReference={(id) => actions.handleTwinSelection({ kind: 'reference', id })}
+            onSelectOem={(id) => actions.handleTwinSelection({ kind: 'oem', id })}
           />
         )}
 
@@ -1027,7 +379,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
                   <div><span>ACTIVE</span><strong>{researchSnapshot.activeTools}</strong><small>tools</small></div>
                   <div><span>TOP UTIL</span><strong>{(researchSnapshot.utilization[0]?.utilization ?? 0).toFixed(1)}%</strong><small>{researchSnapshot.utilization[0]?.toolGroup ?? '—'}</small></div>
                 </div>
-                <button id="btn-toggle-util-overlay" type="button" className="twin-research-util-toggle" aria-pressed={showResearchUtil} onClick={toggleResearchUtil}>{t("利用率热力图")}</button>
+                <button id="btn-toggle-util-overlay" type="button" className="twin-research-util-toggle" aria-pressed={showResearchUtil} onClick={actions.toggleResearchUtil}>{t("利用率热力图")}</button>
                 {showResearchUtil && <div id="research-utilization-overlay" className="twin-research-util">
                   {researchSnapshot.utilization.slice(0, 4).map((group) => (
                     <div key={group.toolGroup}>
@@ -1046,14 +398,14 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
 
         {waferActive && (
           <TwinWaferHud
-            routesReady={!!waferRoutes}
-            error={waferError}
-            onClose={closeWafer}
-            onProductChange={changeWaferProduct}
-            onTogglePlay={toggleWaferPlay}
-            onSpeedChange={setWaferSpeed}
-            onFollowChange={setWaferFollow}
-            onReplay={replayWafer}
+            routesReady={wafer.routesReady}
+            error={wafer.error}
+            onClose={wafer.closeWafer}
+            onProductChange={wafer.changeWaferProduct}
+            onTogglePlay={wafer.toggleWaferPlay}
+            onSpeedChange={wafer.setWaferSpeed}
+            onFollowChange={actions.setWaferFollow}
+            onReplay={wafer.replayWafer}
           />
         )}
 
@@ -1077,44 +429,44 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
             <div className="twin-xray-content">
               <strong>{t('全息 MEP 动力管网与系统 X-Ray')} <span>{t('全息幽灵外壳生效中')}</span></strong>
               <div>{XRAY_FILTERS.map(({ filter, label }) => (
-                <button id={`xray-btn-${filter}`} type="button" key={filter} className={xrayFilter === filter ? 'active' : ''} onClick={() => applyXRayFilter(filter)}>{t(label)}</button>
+                <button id={`xray-btn-${filter}`} type="button" key={filter} className={xrayFilter === filter ? 'active' : ''} onClick={() => actions.applyXRayFilter(filter)}>{t(label)}</button>
               ))}</div>
               <p>{t('设备外壳全息半透 · 高亮流光穿透华夫板与机电管网 · 实时追踪动力介质拓扑')}</p>
             </div>
-            <button type="button" className="close" onClick={() => applyXRayFilter(null)} aria-label={t("关闭 X-Ray")}>×</button>
+            <button type="button" className="close" onClick={() => actions.applyXRayFilter(null)} aria-label={t("关闭 X-Ray")}>×</button>
           </div>
         )}
 
         {tourStep !== undefined && TOUR_STOPS[tourStep] && (
           <TwinTourHud
-            ref={tourHudRef}
+            ref={tour.tourHudRef}
             tourStep={tourStep}
-            initialHud={tourHudSeed}
-            onEnd={endTour}
-            onPrev={previousTour}
-            onNext={advanceTour}
+            initialHud={tour.tourHudSeed}
+            onEnd={tour.endTour}
+            onPrev={tour.previousTour}
+            onNext={tour.advanceTour}
           />
         )}
 
         {infoDialog && (
           <TwinInfoDialog
             mode={infoDialog}
-            onClose={() => setInfoDialog(null)}
-            onSelectOem={(id) => handleTwinSelection({ kind: 'oem', id })}
+            onClose={() => actions.setInfoDialog(null)}
+            onSelectOem={(id) => actions.handleTwinSelection({ kind: 'oem', id })}
           />
         )}
 
         {onboarding && (
           <div id="onboarding-bubble" className="twin-onboarding" role="dialog" aria-modal="false" aria-label={t("首次引导")}>
             <div className="twin-onboarding-card">
-              <div className="twin-onboarding-head"><span id="onboarding-step-counter">{t("首次进入 ·")}{onboardingStep + 1}/{ONBOARDING_STEPS.length}</span><button type="button" onClick={dismissOnboarding} aria-label={t("跳过引导")}>×</button></div>
+              <div className="twin-onboarding-head"><span id="onboarding-step-counter">{t("首次进入 ·")}{onboardingStep + 1}/{ONBOARDING_STEPS.length}</span><button type="button" onClick={actions.dismissOnboarding} aria-label={t("跳过引导")}>×</button></div>
               <h3 id="onboarding-title">{t(ONBOARDING_STEPS[onboardingStep].title)}</h3>
               <p id="onboarding-desc">{t(ONBOARDING_STEPS[onboardingStep].body)}</p>
-              <label className="twin-onboarding-dont-show"><input id="onboarding-dont-show" type="checkbox" checked={onboardingDontShow} onChange={(event) => setOnboardingDontShow(event.target.checked)} /><span id="onboarding-dont-show-text">{t("不再提示")}</span></label>
+              <label className="twin-onboarding-dont-show"><input id="onboarding-dont-show" type="checkbox" checked={onboardingDontShow} onChange={(event) => actions.setOnboardingDontShow(event.target.checked)} /><span id="onboarding-dont-show-text">{t("不再提示")}</span></label>
               <div className="twin-onboarding-actions">
-                <button type="button" onClick={dismissOnboarding}>{t("跳过")}</button>
+                <button type="button" onClick={actions.dismissOnboarding}>{t("跳过")}</button>
                 <button id="onboarding-prev-btn" type="button" onClick={() => twinUiActions.onboardingStep(onboardingStep - 1)} disabled={onboardingStep === 0}>{t("上一步")}</button>
-                <button id="onboarding-next-btn" type="button" className="primary" onClick={() => { if (onboardingStep === ONBOARDING_STEPS.length - 1) finishOnboarding(); else twinUiActions.onboardingStep(onboardingStep + 1); }}>{onboardingStep === ONBOARDING_STEPS.length - 1 ? t("开始导览") : t("下一步")}</button>
+                <button id="onboarding-next-btn" type="button" className="primary" onClick={() => { if (onboardingStep === ONBOARDING_STEPS.length - 1) actions.finishOnboarding(); else twinUiActions.onboardingStep(onboardingStep + 1); }}>{onboardingStep === ONBOARDING_STEPS.length - 1 ? t("开始导览") : t("下一步")}</button>
               </div>
             </div>
           </div>

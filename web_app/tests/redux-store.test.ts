@@ -1,9 +1,9 @@
 import { beforeEach, expect, it } from 'vitest';
-import { resetTwinUiStore, twinUiActions, useTwinUiStore } from '../src/state/twinUiStore';
-import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '../src/state/twinPageStore';
-import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '../src/state/twinDemoStore';
-import { catalogActions, resetCatalogStore, useCatalogStore } from '../src/state/catalogStore';
-import { resetWorkbenchStore, useWorkbenchStore, workbenchActions } from '../src/state/workbenchStore';
+import { resetTwinUiStore, twinUiActions, useTwinUiStore } from '../src/features/twin/state/twinUiStore';
+import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '../src/features/twin/state/twinPageStore';
+import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '../src/features/twin/state/twinDemoStore';
+import { catalogActions, resetCatalogStore, useCatalogStore } from '../src/features/catalog/state/catalogStore';
+import { resetWorkbenchStore, useWorkbenchStore, workbenchActions } from '../src/features/workbench/state/workbenchStore';
 import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '../src/state/runtimeStore';
 import { resetLocaleStore, useLocaleStore } from '../src/state/localeStore';
 

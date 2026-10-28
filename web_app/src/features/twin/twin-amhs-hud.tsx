@@ -1,5 +1,5 @@
-import { useTwinPageStore } from '../../state/twinPageStore';
-import { useTwinUiStore } from '../../state/twinUiStore';
+import { useTwinPageStore } from './state/twinPageStore';
+import { useTwinUiStore } from './state/twinUiStore';
 
 /**
  * AMHS statistics are pushed from the scene frame loop to the page store at

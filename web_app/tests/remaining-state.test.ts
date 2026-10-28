@@ -1,13 +1,14 @@
 import { beforeEach, expect, it } from 'vitest';
 import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '../src/state/runtimeStore';
-import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '../src/state/twinPageStore';
-import { resetTwinUiStore, twinUiActions } from '../src/state/twinUiStore';
-import { catalogActions, resetCatalogStore, useCatalogStore } from '../src/state/catalogStore';
-import { resetWorkbenchStore, useWorkbenchStore, workbenchActions } from '../src/state/workbenchStore';
+import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '../src/features/twin/state/twinPageStore';
+import { resetTwinUiStore, twinUiActions, useTwinUiStore } from '../src/features/twin/state/twinUiStore';
+import { catalogActions, resetCatalogStore, useCatalogStore } from '../src/features/catalog/state/catalogStore';
+import { resetWorkbenchStore, useWorkbenchStore, workbenchActions } from '../src/features/workbench/state/workbenchStore';
 import { localeActions, resetLocaleStore, useLocaleStore } from '../src/state/localeStore';
-import { createWaferTimeline } from '../src/tour-wafer-timeline';
-import { buildWaferScenario } from '../src/wafer-scenario';
-import { parseWaferRoutes } from '../src/wafer-route';
+import { createWaferTimeline } from '../src/domain/wafer/tour-wafer-timeline';
+import { buildWaferScenario } from '../src/domain/wafer/wafer-scenario';
+import { parseWaferRoutes } from '../src/domain/wafer/wafer-route';
+import { closeWaferSession } from '../src/features/twin/wafer-session';
 import { readFileSync } from 'node:fs';
 
 beforeEach(() => {
@@ -32,16 +33,29 @@ it('owns viewer lifecycle and hover in the runtime store and ignores callbacks f
   expect(useRuntimeStore.getState().viewer.hover).toBeUndefined();
 });
 
-it('projects controller HUD into the twin page store and clears the panel on close', () => {
+it('projects controller HUD into the page store and closes the coordinated wafer session explicitly', () => {
   const routes = parseWaferRoutes(JSON.parse(readFileSync(new URL('../public/twin/routes.json', import.meta.url), 'utf8')));
   const timeline = createWaferTimeline(buildWaferScenario(routes, 'en'));
   timeline.setProduct('B');
   const frame = timeline.readFrame();
-  twinPageActions.waferFrameReceived({ product: 'B', index: frame.index, hud: frame.hud, completed: false });
+  twinUiActions.waferOpen();
+  twinPageActions.waferFrameReceived({ product: 'B', index: frame.index, hud: frame.hud, completed: true });
   expect(useTwinPageStore.getState().wafer).toMatchObject({ product: 'B', index: 0, hud: { step: 'Step 1/104', status: 'Navigating...' } });
-  // Closing the wafer HUD is a Twin-UI action that also clears the page frame.
+  expect(useTwinUiStore.getState().wafer).toMatchObject({ active: true, playing: true });
+
+  // The Twin UI store owns close/playback only. Closing it must never mutate the
+  // page store through a hidden cross-store call.
   twinUiActions.waferClose();
+  expect(useTwinUiStore.getState().wafer).toMatchObject({ active: false, playing: false });
+  expect(useTwinPageStore.getState().wafer.hud).toBeDefined();
+  expect(useTwinPageStore.getState().wafer.completed).toBe(true);
+
+  // The application-level use case coordinates both stores; the scene cleanup
+  // stays with the wafer playback controller/page caller.
+  closeWaferSession();
   expect(useTwinPageStore.getState().wafer.hud).toBeUndefined();
+  expect(useTwinPageStore.getState().wafer.completed).toBe(false);
+  expect(useTwinUiStore.getState().wafer).toMatchObject({ active: false, playing: false });
   expect(() => JSON.stringify(useTwinPageStore.getState())).not.toThrow();
 });
 

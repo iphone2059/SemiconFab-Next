@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
-import { classNames } from '../../class-names';
+import { classNames } from '../../components/class-names';
 import { useTwinLocale } from './twin-i18n';
-import { useTwinPageStore, twinPageActions } from '../../state/twinPageStore';
-import { ORIGINAL_TWIN_UI, filterOriginalOem, filterReferenceEquipment, localizedEquipment, type TwinSelection } from '../../original-twin-data';
-import type { FabToolState } from '../../fab-layout';
-import { OriginalIcon } from '../../original-icons';
+import { useTwinPageStore, twinPageActions } from './state/twinPageStore';
+import { ORIGINAL_TWIN_UI, filterOriginalOem, filterReferenceEquipment, localizedEquipment, type TwinSelection } from '../../domain/fab/original-twin-data';
+import type { FabToolState } from '../../domain/fab/fab-layout';
+import { OriginalIcon } from '../../components/original-icons';
 
 export const SOURCE_STATE_STYLE = {
   running: { bg:'bg-emerald-50 text-emerald-700 border-emerald-200',dot:'bg-emerald-500',zh:'运行中',en:'Running' },

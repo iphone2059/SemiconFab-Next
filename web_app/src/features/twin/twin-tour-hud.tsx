@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useState } from 'react';
-import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '../../original-tour';
+import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '../../domain/simulation/original-tour';
 import { useTwinLocale } from './twin-i18n';
 
 export interface TourHudSnapshot {

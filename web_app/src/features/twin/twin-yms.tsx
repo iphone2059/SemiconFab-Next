@@ -1,15 +1,15 @@
 import { memo, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import type { FabToolState } from '../../fab-layout';
-import { computeFabYield, DEFAULT_YIELD_INPUT, scenarioStates, YIELD_SCENARIOS, type YieldInput } from '../../fab-yield';
-import { ORIGINAL_TWIN_UI } from '../../original-twin-data';
-import { useTwinDemoStore } from '../../state/twinDemoStore';
-import { twinPageActions, useTwinPageStore } from '../../state/twinPageStore';
-import { resolveScenario } from '../../twin-equipment';
+import type { FabToolState } from '../../domain/fab/fab-layout';
+import { computeFabYield, DEFAULT_YIELD_INPUT, scenarioStates, YIELD_SCENARIOS, type YieldInput } from '../../domain/fab/fab-yield';
+import { ORIGINAL_TWIN_UI } from '../../domain/fab/original-twin-data';
+import { useTwinDemoStore } from './state/twinDemoStore';
+import { twinPageActions, useTwinPageStore } from './state/twinPageStore';
+import { resolveScenario } from '../../domain/simulation/twin-equipment';
 import {
   BIN_COLORS, BIN_LABELS, WM811K_DEFECT_METADATA, generateWaferMap, stdfSummary, theoreticalYieldModels, waferMetrics,
   type BinCode, type DefectPattern, type WaferDie,
-} from '../../wafer-map';
+} from '../../domain/wafer/wafer-map';
 import { useTwinLocale } from './twin-i18n';
 import { Modal, ModalTitle } from '../../components/modal';
 

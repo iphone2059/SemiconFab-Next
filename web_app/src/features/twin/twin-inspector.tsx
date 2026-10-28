@@ -1,11 +1,11 @@
 import { useEffect, useMemo } from 'react';
 import { useTwinLocale } from './twin-i18n';
-import { useTwinPageStore, twinPageActions } from '../../state/twinPageStore';
-import { useTwinDemoStore } from '../../state/twinDemoStore';
-import { ORIGINAL_TWIN_UI, localizedEquipment, type TwinSelection } from '../../original-twin-data';
-import type { FabToolState } from '../../fab-layout';
+import { useTwinPageStore, twinPageActions } from './state/twinPageStore';
+import { useTwinDemoStore } from './state/twinDemoStore';
+import { ORIGINAL_TWIN_UI, localizedEquipment, type TwinSelection } from '../../domain/fab/original-twin-data';
+import type { FabToolState } from '../../domain/fab/fab-layout';
 import { OriginalElevation } from './twin-elevation';
-import { applyMesAction, computeSpc, createProcessMesJob, type MesAction, type MesJob } from '../../process-control';
+import { applyMesAction, computeSpc, createProcessMesJob, type MesAction, type MesJob } from '../../domain/fab/process-control';
 const STATE_LABEL: Record<FabToolState,{zh:string;en:string;className:string}> = {
   running:{zh:'运行中',en:'Running',className:'state-running'}, idle:{zh:'待料',en:'Idle',className:'state-idle'},
   down:{zh:'告警',en:'Down',className:'state-down'}, maint:{zh:'维保',en:'PM',className:'state-maint'},

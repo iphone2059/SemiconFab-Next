@@ -8,12 +8,12 @@ installNativeDialogPolyfill();
 import { TwinPage } from '../../src/features/twin/twin-page';
 import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
 import { equipmentStatusQueryKey } from '../../src/api/queries/equipment.queries';
-import { FAB_LAYOUT } from '../../src/fab-layout';
-import type { EquipmentStatusSnapshot } from '../../src/equipment-status';
-import { resetTwinUiStore } from '../../src/state/twinUiStore';
-import { resetTwinPageStore, useTwinPageStore } from '../../src/state/twinPageStore';
+import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
+import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-status';
+import { resetTwinUiStore, twinUiActions } from '../../src/features/twin/state/twinUiStore';
+import { resetTwinPageStore, useTwinPageStore } from '../../src/features/twin/state/twinPageStore';
 import { resetRuntimeStore } from '../../src/state/runtimeStore';
-import { resetTwinDemoStore } from '../../src/state/twinDemoStore';
+import { resetTwinDemoStore } from '../../src/features/twin/state/twinDemoStore';
 
 /**
  * A02: the parent page consumes a frequency-controlled projection. Raw SSE cache
@@ -87,6 +87,11 @@ it('A02: SSE frames publish through one throttled projection instead of renderin
   await waitFor(() => expect(CapturingEventSource.instances.length).toBeGreaterThan(0));
   // Let the mount-time stores/effects settle before counting renders.
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)); });
+  // The page defaults to the DEMO clock; this test measures the SSE projection,
+  // so stop the 1600 ms demo tick before counting renders. Without this a slow
+  // (parallel-worker) run can legitimately tick the demo clock mid-assertion and
+  // add an unrelated FabViewport render.
+  await act(async () => { twinUiActions.sourceSet('sse-live'); });
   const source = CapturingEventSource.instances.find((value) => value.url.includes('/equipment-status/stream'));
   if (!source) throw new Error('missing equipment-status stream');
   const before = viewport.renders;
