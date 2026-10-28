@@ -19,7 +19,7 @@
  * Enforced rules (failures always name the rule id, the relative file path and the
  * offending specifier/module):
  *   R0  every relative import resolves (otherwise lenient resolution would hide edges)
- *   R1  the runtime module graph is acyclic (cycle path is reported)
+ *   R1  the module graph is acyclic, value and type-only edges included (cycle path is reported)
  *   R2  generic router utilities (files directly under app/router/) never import features/**
  *   R3  domain purity: domain/** only depends on domain/**, contracts, assets and no packages
  *   R4  features/catalog, features/twin and features/workbench never import each other
@@ -265,11 +265,13 @@ describe('architecture: real import graph', () => {
     expect(tsconfig.compilerOptions?.baseUrl, 'add alias resolution to this gate before adding compilerOptions.baseUrl').toBeUndefined();
   });
 
-  it('R1: the runtime module graph is acyclic (type-only edges are erased at emit and excluded)', () => {
-    // Type-only imports do not exist at runtime; the one remaining back-reference in the
-    // tree (generated/static-structure-packed.ts -> rendering/lite/geometry/static-structure.ts)
-    // is an explicit consumer contract pinned by R5. Value edges must stay acyclic.
-    const cycles = findCycles(graph.references.filter((reference) => !reference.typeOnly));
+  it('R1: the module graph is acyclic, type-only edges included', () => {
+    // The packed static-structure payload used to import its entity type from the lite renderer
+    // (generated/static-structure-packed.ts -> rendering/lite/geometry/static-structure.ts), a
+    // type-level cycle that 'import type' hid from a value-only check. It now imports the
+    // hand-written data contract (rendering/contracts/static-structure-data.ts), which is a leaf.
+    // Check every edge so a new back-reference cannot hide behind 'import type' again.
+    const cycles = findCycles(graph.references);
     expect(cycles.map((cycle) => cycle.join(' -> ')), 'R1: break the cycle by extracting a shared module').toEqual([]);
   });
 
@@ -357,11 +359,12 @@ describe('architecture: real import graph', () => {
       { file: 'generated/twin-translations.generated.ts', allowedImports: [] },
       {
         file: 'generated/static-structure-packed.ts',
-        // The consumer contract type for the decoded payload; type-only so it is erased at emit.
+        // The hand-written payload data contract (a leaf module, not a rendering consumer);
+        // type-only so generated data stays runtime-free.
         allowedImports: [
           {
-            specifier: '../rendering/lite/geometry/static-structure',
-            target: 'rendering/lite/geometry/static-structure.ts',
+            specifier: '../rendering/contracts/static-structure-data',
+            target: 'rendering/contracts/static-structure-data.ts',
             typeOnly: true,
           },
         ],
@@ -436,7 +439,7 @@ describe('architecture: real import graph', () => {
     }
     expectNoViolations(
       'R5',
-      'generated artifacts must be declared, marked and import-free (single type-only consumer contract exception)',
+      'generated artifacts must be declared, marked and data-only (single type-only data-contract import allowed)',
       violations,
     );
   });

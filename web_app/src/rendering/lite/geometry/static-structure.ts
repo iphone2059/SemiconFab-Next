@@ -6,19 +6,14 @@ import {
   enableMaterialUvTransform, loadHdrEnvironment, decomposeMat4, rebuildMaterial, markMaterialUboDirty, enableThinInstanceWorldBounds,
   type DynamicTexture2D, type EngineContext, type Mat4, type Material, type Mesh, type PbrMaterialProps, type PointLight, type SceneContext, type TransformNode,
 } from '@babylonjs/lite';
-import { staticStructure as source, type PackedSourceEntity } from '../../../generated/static-structure-packed';
+import { staticStructure as source } from '../../../generated/static-structure-packed';
+import type { PackedSourceEntity, StaticLayer } from '../../contracts/static-structure-data';
 import { originalFloorOpacity } from '../../../domain/fab/twin-spatial';
 import { liteXraySystemClass } from '../effects-xray-state';
 
-export type StaticLayer = 'shell' | 'ffu' | 'b1';
-export interface StaticSurfaceDefinition {
-  kind: 'pbr' | 'standard' | 'line'; color: number[]; alpha: number;
-  metallic?: number; roughness?: number; emissive?: number[]; specular?: number[]; power?: number;
-  doubleSided?: boolean; depthWrite?: boolean; zOffset?: number;
-  refraction?: { intensity: number; ior: number } | null;
-  texture?: { width: number; height: number; uScale: number; vScale: number; gammaSpace: boolean;
-    operations: unknown[][] };
-}
+// Re-exported so existing consumers keep importing the renderer entry point; the hand-written
+// data contract is the single owner of these types (generated code imports it directly).
+export type { StaticLayer, StaticSurfaceDefinition } from '../../contracts/static-structure-data';
 
 /** Lite transmission depends on an IBL fragment, even when scene radiance is zero.
  * Load an all-black 4x2 RGBE through the public HDR loader; material environment

@@ -14,24 +14,49 @@
  * every index must be a uint32. tests/static-structure-pack.test.ts deep-compares the decoded
  * module against the committed JSON asset so drift cannot land unnoticed.
  *
+ * The emitted module carries data only: it imports the hand-written payload contract from
+ * web_app/src/rendering/contracts/static-structure-data.ts (type-only, erased at emit) and the
+ * renderer imports the same contract, so generated data never points at a rendering consumer.
+ * validateContract() fails the run if that contract module or any expected export disappears.
+ *
  * Usage (from the repository root):
- *   node tools/pack_static_structure.mjs            regenerate the packed module
- *   node tools/pack_static_structure.mjs --check    exit 1 when the committed module is stale
- *   node tools/pack_static_structure.mjs --measure  print parse/encode/decode timings
+ *   node tools/pack_static_structure.mjs              regenerate the packed module
+ *   node tools/pack_static_structure.mjs --check      exit 1 when the committed module is stale
+ *   node tools/pack_static_structure.mjs --measure    print parse/encode/decode timings
+ *   node tools/pack_static_structure.mjs --output <path>  write elsewhere (freshness tests only)
  */
 
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SOURCE_JSON = join(ROOT, 'web_app', 'assets', 'lite-static-structure.json');
-const OUTPUT_TS = join(ROOT, 'web_app', 'src', 'generated', 'static-structure-packed.ts');
-const USAGE = 'usage: node tools/pack_static_structure.mjs [--check|--measure]';
+const DEFAULT_OUTPUT_TS = join(ROOT, 'web_app', 'src', 'generated', 'static-structure-packed.ts');
+const CONTRACT_TS = join(ROOT, 'web_app', 'src', 'rendering', 'contracts', 'static-structure-data.ts');
+const CONTRACT_IMPORT = '../rendering/contracts/static-structure-data';
+/** Every identifier the emitted module imports from the hand-written data contract. */
+const CONTRACT_EXPORTS = ['StaticLayer', 'StaticSurfaceDefinition', 'PackedGeometry', 'PackedLightDefinition', 'PackedSourceEntity', 'PackedStaticStructure'];
+const USAGE = 'usage: node tools/pack_static_structure.mjs [--check|--measure] [--output <path>]';
 
 function fail(message) {
   throw new Error('pack_static_structure: ' + message);
+}
+
+/** The generated module imports its payload types from the hand-written contract module. */
+function validateContract() {
+  let text;
+  try {
+    text = readFileSync(CONTRACT_TS, 'utf8');
+  } catch {
+    fail('data contract is missing: web_app/src/rendering/contracts/static-structure-data.ts');
+  }
+  for (const name of CONTRACT_EXPORTS) {
+    if (!new RegExp('export\\s+(?:type|interface)\\s+' + name + '\\b').test(text)) {
+      fail('data contract must export ' + name + ' from web_app/src/rendering/contracts/static-structure-data.ts');
+    }
+  }
 }
 
 function median(values) {
@@ -160,49 +185,24 @@ function renderModule(sourceText, payloads) {
     '// AUTO-GENERATED FILE - DO NOT EDIT BY HAND.',
     '// Source: web_app/assets/lite-static-structure.json (sha256 ' + sha256 + ')',
     '// Generator: node tools/pack_static_structure.mjs',
+    '// Data contract: web_app/src/rendering/contracts/static-structure-data.ts (type-only import)',
     '// Freshness check: node tools/pack_static_structure.mjs --check',
     '//',
     '// Vertex data is stored as little-endian Float32/Uint32 base64 payloads decoded synchronously at',
     '// module evaluation (no fetch; works in Node/Vitest and the browser). The generator refuses any',
     '// value that is not exactly representable, so this module decodes to the committed JSON asset',
     '// value-for-value; tests/static-structure-pack.test.ts enforces that invariant.',
+    '//',
+    '// Payload types are owned by the hand-written data contract above; this module carries only data',
+    '// and its decoder, so no rendering consumer is part of the generated module graph.',
     '',
-    "import type { StaticLayer, StaticSurfaceDefinition } from '../rendering/lite/geometry/static-structure';",
-    '',
-    'export interface PackedGeometry {',
-    '  readonly positions: Float32Array;',
-    '  readonly normals: Float32Array;',
-    '  readonly uvs: Float32Array;',
-    '  readonly indices: Uint32Array;',
-    '  readonly lines: boolean;',
-    '}',
-    '',
-    'export interface PackedSourceEntity {',
-    '  name: string;',
-    '  layer: StaticLayer;',
-    '  geometry: string;',
-    '  material: string;',
-    '  matrix: number[];',
-    '  caster: boolean | null;',
-    '  receiveShadows: boolean;',
-    '}',
-    '',
-    'export interface PackedLightDefinition {',
-    '  name: string;',
-    '  position: [number, number, number];',
-    '  color: [number, number, number];',
-    '  specular: [number, number, number];',
-    '  intensity: number;',
-    '  range: number;',
-    '  legacyDecay: number;',
-    '}',
-    '',
-    'export interface PackedStaticStructure {',
-    '  readonly geometries: Record<string, PackedGeometry>;',
-    '  readonly materials: Record<string, StaticSurfaceDefinition>;',
-    '  readonly entities: PackedSourceEntity[];',
-    '  readonly lights: PackedLightDefinition[];',
-    '}',
+    'import type {',
+    '  PackedGeometry,',
+    '  PackedLightDefinition,',
+    '  PackedSourceEntity,',
+    '  PackedStaticStructure,',
+    '  StaticSurfaceDefinition,',
+    "} from '" + CONTRACT_IMPORT + "';",
     '',
     'type GeometryPayload = readonly [positions: string, normals: string, uvs: string, indices: string, lines: boolean];',
     '',
@@ -327,43 +327,61 @@ async function measureMode(sourceText, payloads, content, payloadsMs, renderMs) 
   console.log('gzip source/generated:    ' + gzipSync(sourceText).length + ' / ' + gzipSync(content).length + ' bytes');
 }
 
-async function main() {
-  const mode = process.argv[2];
-  if (mode !== undefined && mode !== '--check' && mode !== '--measure') {
-    console.error(USAGE);
-    process.exitCode = 1;
-    return;
+function parseArguments(argv) {
+  const options = { mode: 'write', output: DEFAULT_OUTPUT_TS };
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === '--check' || argument === '--measure') {
+      const mode = argument === '--check' ? 'check' : 'measure';
+      if (options.mode !== 'write' && options.mode !== mode) fail('cannot combine --check and --measure');
+      options.mode = mode;
+    } else if (argument === '--output') {
+      const output = argv[index + 1];
+      if (output === undefined || output === '') fail('--output requires a path');
+      options.output = resolve(process.cwd(), output);
+      index += 1;
+    } else {
+      fail('unknown argument ' + JSON.stringify(argument) + '\n' + USAGE);
+    }
   }
+  return options;
+}
+
+async function main() {
+  const options = parseArguments(process.argv.slice(2));
   const sourceText = readFileSync(SOURCE_JSON, 'utf8');
   const data = JSON.parse(sourceText);
   validate(data);
+  validateContract();
   const payloadsStarted = performance.now();
   const payloads = buildPayloads(data);
   const payloadsMs = performance.now() - payloadsStarted;
   const renderStarted = performance.now();
   const content = renderModule(sourceText, payloads);
   const renderMs = performance.now() - renderStarted;
-  if (mode === '--check') {
+  const outputLabel = options.output === DEFAULT_OUTPUT_TS ? 'static-structure-packed.ts' : options.output;
+  if (options.mode === 'check') {
     let existing = '';
     try {
-      existing = readFileSync(OUTPUT_TS, 'utf8');
+      existing = readFileSync(options.output, 'utf8');
     } catch {
-      fail('committed module is missing: ' + OUTPUT_TS);
+      fail('committed module is missing: ' + options.output);
     }
     if (existing !== content) {
-      console.error('static-structure-packed.ts is stale; run: node tools/pack_static_structure.mjs');
+      console.error(outputLabel + ' is stale; run: node tools/pack_static_structure.mjs');
       process.exitCode = 1;
       return;
     }
-    console.log('static-structure-packed.ts is up to date (' + Buffer.byteLength(content) + ' bytes).');
+    console.log(outputLabel + ' is up to date (' + Buffer.byteLength(content) + ' bytes).');
     return;
   }
-  if (mode === '--measure') {
+  if (options.mode === 'measure') {
     await measureMode(sourceText, payloads, content, payloadsMs, renderMs);
     return;
   }
-  writeFileSync(OUTPUT_TS, content, 'utf8');
-  console.log('wrote ' + OUTPUT_TS);
+  mkdirSync(dirname(options.output), { recursive: true });
+  writeFileSync(options.output, content, 'utf8');
+  console.log('wrote ' + options.output);
   console.log('  source JSON: ' + Buffer.byteLength(sourceText) + ' bytes');
   console.log('  generated:   ' + Buffer.byteLength(content) + ' bytes (encoded in ' + (payloadsMs + renderMs).toFixed(2) + ' ms)');
 }

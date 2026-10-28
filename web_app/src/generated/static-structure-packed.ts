@@ -1,49 +1,24 @@
 // AUTO-GENERATED FILE - DO NOT EDIT BY HAND.
 // Source: web_app/assets/lite-static-structure.json (sha256 a0e86d228c33cc599d10de180d06aade45ee2541c122e0f7ad22b15982b37a03)
 // Generator: node tools/pack_static_structure.mjs
+// Data contract: web_app/src/rendering/contracts/static-structure-data.ts (type-only import)
 // Freshness check: node tools/pack_static_structure.mjs --check
 //
 // Vertex data is stored as little-endian Float32/Uint32 base64 payloads decoded synchronously at
 // module evaluation (no fetch; works in Node/Vitest and the browser). The generator refuses any
 // value that is not exactly representable, so this module decodes to the committed JSON asset
 // value-for-value; tests/static-structure-pack.test.ts enforces that invariant.
+//
+// Payload types are owned by the hand-written data contract above; this module carries only data
+// and its decoder, so no rendering consumer is part of the generated module graph.
 
-import type { StaticLayer, StaticSurfaceDefinition } from '../rendering/lite/geometry/static-structure';
-
-export interface PackedGeometry {
-  readonly positions: Float32Array;
-  readonly normals: Float32Array;
-  readonly uvs: Float32Array;
-  readonly indices: Uint32Array;
-  readonly lines: boolean;
-}
-
-export interface PackedSourceEntity {
-  name: string;
-  layer: StaticLayer;
-  geometry: string;
-  material: string;
-  matrix: number[];
-  caster: boolean | null;
-  receiveShadows: boolean;
-}
-
-export interface PackedLightDefinition {
-  name: string;
-  position: [number, number, number];
-  color: [number, number, number];
-  specular: [number, number, number];
-  intensity: number;
-  range: number;
-  legacyDecay: number;
-}
-
-export interface PackedStaticStructure {
-  readonly geometries: Record<string, PackedGeometry>;
-  readonly materials: Record<string, StaticSurfaceDefinition>;
-  readonly entities: PackedSourceEntity[];
-  readonly lights: PackedLightDefinition[];
-}
+import type {
+  PackedGeometry,
+  PackedLightDefinition,
+  PackedSourceEntity,
+  PackedStaticStructure,
+  StaticSurfaceDefinition,
+} from '../rendering/contracts/static-structure-data';
 
 type GeometryPayload = readonly [positions: string, normals: string, uvs: string, indices: string, lines: boolean];
 

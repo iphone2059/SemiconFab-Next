@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "description": "Machine-readable registry of committed generated artifacts: each entry names the generator command, the tracked source inputs, the committed output path and the sha256 of inputs and output. Generated files are written by their generator, never hand-edited; run node tools/check_generated_artifacts.mjs --check to verify, --update to re-record hashes after regeneration.",
+  "artifacts": [
+    {
+      "path": "web_app/src/generated/contracts.generated.ts",
+      "generator": {
+        "tool": "tools/generate_contracts.py",
+        "command": [
+          "python",
+          "tools/generate_contracts.py"
+        ],
+        "check": [
+          "python",
+          "tools/generate_contracts.py",
+          "--check"
+        ]
+      },
+      "sources": [
+        {
+          "path": "contracts/json-schema/contracts.schema.json",
+          "sha256": "edf7cf62cf1099db30f2526617701fcd20493343aeb241a6425912f42fd68e08"
+        }
+      ],
+      "sha256": "e3d8197f0e1c3dcd8985a1208930154514b73c65256a5f7e0004dab7bfd995e3"
+    },
+    {
+      "path": "web_app/src/generated/twin-translations.generated.ts",
+      "generator": {
+        "tool": "tools/build_twin_translations.cjs",
+        "command": [
+          "node",
+          "tools/build_twin_translations.cjs"
+        ],
+        "check": [
+          "node",
+          "tools/build_twin_translations.cjs",
+          "--check"
+        ]
+      },
+      "sources": [
+        {
+          "path": "web_app/assets/original-twin-i18n.json",
+          "sha256": "142ec5c2e8b3ec1f24f95dc4ca443eed65970198a2c1f79a7f50631bbc72a38d"
+        }
+      ],
+      "sha256": "6cfd292a5015b47f62c74d31bdc9f96d48331a3ebde1914d987e339d3bfc73a7"
+    },
+    {
+      "path": "web_app/src/generated/static-structure-packed.ts",
+      "generator": {
+        "tool": "tools/pack_static_structure.mjs",
+        "command": [
+          "node",
+          "tools/pack_static_structure.mjs"
+        ],
+        "check": [
+          "node",
+          "tools/pack_static_structure.mjs",
+          "--check"
+        ]
+      },
+      "sources": [
+        {
+          "path": "web_app/assets/lite-static-structure.json",
+          "sha256": "a0e86d228c33cc599d10de180d06aade45ee2541c122e0f7ad22b15982b37a03"
+        }
+      ],
+      "sha256": "554df800d3759d5ac1e1493c83bd7be5fc83525fa0f4acfbb6e3c96d676c0b4e"
+    }
+  ]
+}
