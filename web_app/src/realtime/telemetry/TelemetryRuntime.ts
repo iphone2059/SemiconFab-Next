@@ -330,9 +330,13 @@ export class TelemetryRuntime {
       this.statusValue = 'stale';
       if (immediateRebuildAvailable) {
         rebuildWorker();
-        // A healthy replacement resumes the existing pending slot. If allocation
-        // failed (or postMessage threw), retain the unsent frame for the retry.
-        if ((!this.worker || !flushAfterRebuild) && failedFrame) {
+        // Always retain the unanswered frame in the bounded pending slot: a healthy
+        // replacement must replay it even when no newer SSE frame arrives, otherwise
+        // the last decoded update is lost and the runtime stays stale until the next
+        // frame. Merging with a newer pending frame keeps the newest value per render
+        // slot (and that frame's sequence), so the replay cannot regress or duplicate
+        // state; if allocation failed it stays pending for the retry as before.
+        if (failedFrame) {
           this.pendingFrame = this.pendingFrame
             ? mergeTelemetryFrames(failedFrame, this.pendingFrame)
             : boundTelemetryFrame(failedFrame);

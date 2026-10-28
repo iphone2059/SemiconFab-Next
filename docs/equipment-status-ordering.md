@@ -29,12 +29,16 @@ Telemetry Worker faults release the in-flight slot, preserve a bounded slot-keye
 pending frame and retry failed construction/reset with one exponential timer
 (250ms, doubling to an 8s ceiling). A successful frame resets the backoff. Repeated
 asynchronous Worker errors also enter this backoff; stop cancels the timer.
+Any Worker fault that leaves a frame unanswered (`error`/`messageerror`, or an
+in-flight reply timeout) replays that frame into the replacement Worker immediately,
+merged by render slot with the newest pending frame and carrying that newer frame's
+sequence, so the last decoded update survives even when no further SSE frame arrives.
+A synchronous `postMessage` failure instead schedules the retained frame through the
+retry timer; a healthy replacement is reused, and the timer never submits a second
+frame while one is already in flight.
 During a Worker fault, renderer-facing `getToolStates()` yields no telemetry
 override, so the accepted equipment-status projection supplies the scene states.
 The previous Worker snapshot remains available for diagnostics, not rendering.
-A synchronous `postMessage` failure also schedules the retained pending frame,
-even if no further SSE frame arrives; a healthy replacement is reused, and the
-retry timer never submits a second frame while one is already in flight.
 
 GPU recovery still rebuilds the Lite world and guards its short state replays by
 world/generation/interaction identity. Canvas pointer, wheel, touch and double

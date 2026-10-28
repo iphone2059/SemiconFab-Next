@@ -503,7 +503,7 @@ it('caps Worker retry delays at eight seconds without making frame bursts create
   } finally { h.runtime.stop(); vi.useRealTimers(); }
 });
 
-it('releases the in-flight slot and exposes stale after a Worker error, then recovers', () => {
+it('releases the in-flight slot, replays the unanswered frame, then recovers', () => {
   const h = recoveryHarness({ deliverNow: false });
   h.send(1, 2); // in flight, reply withheld
   expect(h.frames()).toHaveLength(1);
@@ -516,14 +516,21 @@ it('releases the in-flight slot and exposes stale after a Worker error, then rec
   expect(h.workers).toHaveLength(2);
   expect(h.workers[0].terminated).toBe(true);
   expect(h.workers[1].terminated).toBe(false);
-
-  h.send(2, 1);
-  expect(h.frames().map((frame) => frame.sequence)).toEqual([1, 2]);
+  // The replacement receives the unanswered frame even though no newer SSE frame exists.
+  expect(h.frames().map((frame) => frame.sequence)).toEqual([1, 1]);
   expect(h.frames()[1].generation).toBeGreaterThan(h.frames()[0].generation ?? 0);
+  // The replayed payload is the original frame (equipment-0 state 2), not an empty replay.
+  expect(h.frames()[1].values?.[0]).toBe(2);
+
+  h.send(2, 1); // arrives while the replayed frame is in flight: bounded pending
+  expect(h.frames().map((frame) => frame.sequence)).toEqual([1, 1]);
   h.deliver(0); // reply from the obsolete generation: ignored, slot stays in flight
   expect(h.runtime.getSnapshot()).toBeUndefined();
   expect(h.runtime.stale).toBe(true);
-  h.deliver(1);
+  h.deliver(1); // replay reply: snapshot advances and the pending frame is submitted
+  expect(h.runtime.getSnapshot()?.sequence).toBe(1);
+  expect(h.frames().map((frame) => frame.sequence)).toEqual([1, 1, 2]);
+  h.deliver(2);
   expect(h.runtime.getSnapshot()?.sequence).toBe(2);
   expect(h.runtime.getToolStates()?.[0]).toBe('idle');
   expect(h.runtime.stale).toBe(false);
@@ -531,21 +538,41 @@ it('releases the in-flight slot and exposes stale after a Worker error, then rec
   h.runtime.stop();
 });
 
-it('releases the slot on messageerror and recovers through a rebuilt Worker', () => {
+it('merges an unanswered frame with newer pending deltas when the Worker is replaced', () => {
+  const h = recoveryHarness({ deliverNow: false });
+  h.sendSamples(1, [{ entityId: 'equipment-0', values: { state: 2 } }]); // in flight
+  h.sendSamples(2, [{ entityId: 'equipment-1', values: { state: 1 } }]); // pending delta
+  h.fail('error');
+  // One replay frame at the newest sequence: both slots survive and nothing is submitted twice.
+  expect(h.frames().map((frame) => frame.sequence)).toEqual([1, 2]);
+  const replayed = h.frames()[1].values!;
+  expect(replayed[0]).toBe(2); // unanswered frame's equipment-0 update
+  expect(replayed[2]).toBe(1); // pending delta's equipment-1 update
+  h.deliver(1);
+  expect(h.runtime.getSnapshot()?.sequence).toBe(2);
+  expect(h.runtime.getToolStates()?.slice(0, 2)).toEqual(['down', 'idle']);
+  expect(h.runtime.stale).toBe(false);
+  h.runtime.stop();
+});
+
+it('releases the slot on messageerror, replays, and recovers through a rebuilt Worker', () => {
   const h = recoveryHarness({ deliverNow: false });
   h.send(1, 0);
   h.fail('messageerror');
   expect(h.runtime.stale).toBe(true);
   expect(h.workers).toHaveLength(2);
-  h.send(2, 2);
-  h.deliver(1);
+  expect(h.frames().map((frame) => frame.sequence)).toEqual([1, 1]);
+  h.send(2, 2); // pending behind the replay
+  h.deliver(1); // replay reply
+  expect(h.runtime.getSnapshot()?.sequence).toBe(1);
+  h.deliver(2);
   expect(h.runtime.getSnapshot()?.sequence).toBe(2);
   expect(h.runtime.getToolStates()?.[0]).toBe('down');
   expect(h.runtime.stale).toBe(false);
   h.runtime.stop();
 });
 
-it('times out a wedged in-flight Worker reply and releases the slot', () => {
+it('times out a wedged in-flight Worker reply, replays it, and releases the slot', () => {
   vi.useFakeTimers();
   try {
     const h = recoveryHarness({ deliverNow: false, workerTimeoutMs: 50 });
@@ -557,9 +584,13 @@ it('times out a wedged in-flight Worker reply and releases the slot', () => {
     expect(h.runtime.stale).toBe(true);
     expect(h.runtime.status).toBe('stale');
     expect(h.workers).toHaveLength(2);
-    h.send(2, 3);
-    expect(h.frames()).toHaveLength(2);
+    // The replacement receives the timed-out frame even though no newer frame exists.
+    expect(h.frames().map((frame) => frame.sequence)).toEqual([1, 1]);
+    h.send(2, 3); // stays bounded behind the replayed frame
+    expect(h.frames().map((frame) => frame.sequence)).toEqual([1, 1]);
     h.deliver(1);
+    expect(h.runtime.getSnapshot()?.sequence).toBe(1);
+    h.deliver(2);
     expect(h.runtime.getSnapshot()?.sequence).toBe(2);
     expect(h.runtime.getToolStates()?.[0]).toBe('maint');
     expect(h.runtime.stale).toBe(false);
