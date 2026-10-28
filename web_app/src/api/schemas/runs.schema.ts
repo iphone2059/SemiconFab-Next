@@ -21,7 +21,7 @@ export const runSummarySchema: z.ZodType<RunSummary> = z.object({
   siteId: z.string().min(1),
   status: z.string().min(1),
   version: z.string().min(1),
-  createdAtUtc: z.string().min(1),
+  createdAtUtc: z.iso.datetime({ offset: true }),
   executions: z.array(executionSchema),
 });
 
@@ -55,11 +55,12 @@ const uuidD = z.string().regex(/^[a-fA-F0-9]{8}-(?:[a-fA-F0-9]{4}-){3}[a-fA-F0-9
   .refine((value) => value.replaceAll('-', '') !== '00000000000000000000000000000000', 'UUID must be nonzero');
 const uint64Max = 18446744073709551615n;
 const int64Max = 9223372036854775807n;
+const isCanonicalDecimal = (value: string) => /^(0|[1-9][0-9]*)$/.test(value) && value.length <= 20;
 const decimal = (limit: bigint, positive: boolean) => z.string()
   .regex(/^(0|[1-9][0-9]*)$/)
   .max(20)
   .refine((value) =>
-    /^(0|[1-9][0-9]*)$/.test(value) &&
+    isCanonicalDecimal(value) &&
     BigInt(value) <= limit &&
     (!positive || BigInt(value) > 0n), 'Decimal exceeds its wire range');
 
@@ -79,7 +80,8 @@ const scenarioDefinitionSchema: z.ZodType<ScenarioDefinition> = z.object({
   warmupUs: decimal(int64Max, false),
   fabs: z.array(fabScenarioSchema).min(1).max(32),
 }).superRefine((scenario, ctx) => {
-  if (BigInt(scenario.warmupUs) >= BigInt(scenario.durationUs))
+  if (isCanonicalDecimal(scenario.warmupUs) && isCanonicalDecimal(scenario.durationUs) &&
+      BigInt(scenario.warmupUs) >= BigInt(scenario.durationUs))
     ctx.addIssue({ code: 'custom', path: ['warmupUs'], message: 'Warmup must precede duration' });
   const ids = new Set<string>();
   const codes = new Set<string>();
@@ -89,8 +91,8 @@ const scenarioDefinitionSchema: z.ZodType<ScenarioDefinition> = z.object({
     if (codes.has(code)) ctx.addIssue({ code: 'custom', path: ['fabs', index, 'code'], message: 'Duplicate FAB code' });
     ids.add(id);
     codes.add(code);
-    const work = BigInt(fab.processTimeUs), count = BigInt(fab.lotCount);
-    if ((work + work / 10n) * count > int64Max)
+    if (isCanonicalDecimal(fab.processTimeUs) && Number.isInteger(fab.lotCount) &&
+        fab.lotCount > 0 && (BigInt(fab.processTimeUs) + BigInt(fab.processTimeUs) / 10n) * BigInt(fab.lotCount) > int64Max)
       ctx.addIssue({ code: 'custom', path: ['fabs', index, 'processTimeUs'], message: 'Worst-case completion exceeds Int64' });
   });
 });

@@ -56,7 +56,7 @@ it('encodes run ids and keeps list/detail/result endpoints distinct', async () =
 });
 
 it('sends JSON and Idempotency-Key on createRun', async () => {
-  const calls = captureFetch(() => jsonResponse({ runId: 'r1', siteId: 's1', status: 'QUEUED', version: '1', createdAtUtc: 'now', executions: [] }));
+  const calls = captureFetch(() => jsonResponse({ runId: 'r1', siteId: 's1', status: 'QUEUED', version: '1', createdAtUtc: '2026-10-28T00:00:00Z', executions: [] }));
   const request = {
     scenario: {
       contractVersion: 1, siteId: '3acd7b05-e6e8-5312-bb5b-045e7dd3074b', mode: 'INDEPENDENT', masterSeed: '1',

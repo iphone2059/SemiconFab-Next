@@ -73,4 +73,8 @@ it('validates run submissions before sending HTTP', () => {
     fabs: [{ ...valid.scenario.fabs[0], lotCount: -1 }] } })).toThrow();
   expect(() => createRunRequestSchema.parse({ ...valid, scenario: { ...valid.scenario,
     fabs: [{ ...valid.scenario.fabs[0], processTimeUs: 'invalid' }] } })).toThrow();
+  expect(() => createRunRequestSchema.parse({ ...valid, scenario: { ...valid.scenario,
+    warmupUs: 'broken' } })).toThrow();
+  expect(() => createRunRequestSchema.parse({ ...valid, scenario: { ...valid.scenario,
+    warmupUs: '1000' } })).toThrow();
 });
