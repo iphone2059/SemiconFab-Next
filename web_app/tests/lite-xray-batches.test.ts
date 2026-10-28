@@ -20,7 +20,7 @@ vi.mock('@babylonjs/lite', async importOriginal => ({
 import { createSceneContext, disposeScene, getShaderUniform,
   type EngineContext, type Mesh, type ShaderMaterial } from '@babylonjs/lite';
 import { createLiteStaticStructure } from '../src/rendering/lite/geometry/static-structure';
-import { createLiteEffects } from '../src/rendering/lite/effects';
+import { createLiteEffects } from '../src/rendering/lite/effects/index';
 import { liteXraySystemMatches } from '../src/rendering/lite/effects-xray-state';
 
 /**

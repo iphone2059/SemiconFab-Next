@@ -4,10 +4,13 @@ vi.hoisted(() => Object.assign(globalThis, {
   GPUTextureUsage: { RENDER_ATTACHMENT: 16, TEXTURE_BINDING: 4 },
 }));
 import { addToScene, createBox, createCsmDirectionalShadowGenerator, createDirectionalLight,
-  createLineMaterial, createLines, createPbrMaterial, createSceneContext, disposeScene,
+  createLineMaterial, createLines, createPbrMaterial, createSceneContext, decodeError, disposeScene,
   getCsmReceiverTexture, getMeshGeometry, getMeshIndexedDrawInfo, getShaderTexture, getShaderUniform,
   type EngineContext, type ShaderMaterial } from '@babylonjs/lite';
-import { createLiteEffects } from '../src/rendering/lite/effects';
+import { createLiteEffects } from '../src/rendering/lite/effects/index';
+import { createXrayEffect } from '../src/rendering/lite/effects/xray';
+import { LITE_XRAY_SHADER_PROGRAM, XRAY_GLOW, XRAY_LINE_PARAMS, XRAY_NORMAL_LINE_COLOR,
+  XRAY_TINT, XRAY_ZERO_PARAMS } from '../src/rendering/lite/effects/xray-shaders';
 import { liteXraySurfaceState, liteXraySystemMatches } from '../src/rendering/lite/effects-xray-state';
 
 function harness() {
@@ -216,5 +219,208 @@ it('skips the X-Ray palette CSM fan-out while inactive and resyncs the retained 
     publish(new Float32Array(80).fill(0.75));
     expect(Array.from(getShaderUniform(palette, 'xrayCascade2') as Float32Array)).toEqual(new Array(16).fill(0.75));
     expect(version(palette)).toBeGreaterThan(afterResync);
+  } finally { h.dispose(); }
+});
+
+// ---------------------------------------------------------------------------------------------
+// R-06 effect-ownership tests: independent X-Ray / cut / wafer owners with explicit
+// create/update/dispose. The golden parity assertions above stay untouched.
+// ---------------------------------------------------------------------------------------------
+
+it('declares the exact frozen X-Ray WGSL uniform / sampler / palette contract', () => {
+  const customUniforms = LITE_XRAY_SHADER_PROGRAM.uniforms.flatMap(uniform =>
+    typeof uniform === 'object' ? [uniform.name] : []);
+  expect(customUniforms).toEqual([
+    'xrayParams', 'xrayTint', 'xrayGlow', 'xrayOptions', 'xrayNormalColor', 'xrayTime', 'cutPlane',
+    'xrayShadowEnabled', 'xrayCascade0', 'xrayCascade1', 'xrayCascade2', 'xrayCascade3',
+    'xrayViewFrustumZ', 'xrayFrustumLengths', 'xrayShadowsInfo', 'xrayCsmParams',
+  ]);
+  // Every `shaderUniforms.<name>` read in either stage is declared, and every custom
+  // declaration is read: the WGSL and the structured contract cannot drift apart.
+  const referenced = new Set<string>();
+  for (const source of [LITE_XRAY_SHADER_PROGRAM.vertexSource, LITE_XRAY_SHADER_PROGRAM.fragmentSource]) {
+    for (const match of source.matchAll(/shaderUniforms\.([A-Za-z_][A-Za-z0-9_]*)/g)) referenced.add(match[1]);
+  }
+  expect([...referenced].sort()).toEqual([...customUniforms].sort());
+  expect(LITE_XRAY_SHADER_PROGRAM.attributes).toEqual(['position']);
+  expect(LITE_XRAY_SHADER_PROGRAM.samplers).toEqual([
+    { name: 'xrayDepth', sampleType: 'depth', viewDimension: '2d-array', comparison: true },
+  ]);
+  // Frozen palette / uniform values, xray-hologram.ts:114-116,154.
+  expect(XRAY_TINT).toEqual([2 / 255, 132 / 255, 199 / 255, 26]);
+  expect(XRAY_GLOW).toEqual([56 / 255, 189 / 255, 248 / 255, 1]);
+  expect(XRAY_NORMAL_LINE_COLOR).toEqual([217 / 255, 119 / 255, 6 / 255, 0.75]);
+  expect(XRAY_LINE_PARAMS).toEqual([1, 0.75, 0, 1.4]);
+  expect(XRAY_ZERO_PARAMS).toEqual([0, 0, 0, 0]);
+});
+
+it('fails loudly when the structured X-Ray shader contract is malformed (compile/validation path)', () => {
+  // Lite validates every declared uniform name against WGSL identifiers while the palette
+  // material is built. There is no GPU in unit fixtures, so this synchronous validation is
+  // the exact failure path the assembly takes before any pipeline can be compiled: a bad
+  // contract must surface the native Lite error instead of creating a silently broken
+  // hologram or being swallowed by the effect owner.
+  const invalid = {
+    ...LITE_XRAY_SHADER_PROGRAM,
+    uniforms: [...LITE_XRAY_SHADER_PROGRAM.uniforms, { name: 'xray bad', type: 'vec4<f32>' as const }],
+  };
+  let error: unknown;
+  try {
+    createXrayEffect({ program: invalid });
+  } catch (caught) {
+    error = caught;
+  }
+  expect(error).toBeDefined();
+  expect(decodeError(error)).toContain('"xray bad" is not a valid WGSL identifier');
+});
+
+it('counts X-Ray targets per source role and shares palette materials across filter switches', () => {
+  const h = harness();
+  try {
+    const equipment = Array.from({ length: 3 }, () => { const mesh = createBox(h.engine); mesh.material = createPbrMaterial(); return mesh; });
+    const floor = createBox(h.engine); floor.material = createPbrMaterial();
+    const subfabUpw = createBox(h.engine); subfabUpw.name = 'subfab-upw-main'; subfabUpw.material = createPbrMaterial();
+    const subfabCda = createBox(h.engine); subfabCda.name = 'subfab-cda-main'; subfabCda.material = createPbrMaterial();
+    const oht = createBox(h.engine); oht.name = 'native-oht-1'; oht.material = createPbrMaterial();
+    const ohtShadow = createBox(h.engine); ohtShadow.name = 'native-oht-1-shadow'; ohtShadow.material = createPbrMaterial();
+    const ohtShadowMaterial = ohtShadow.material;
+    for (const mesh of [...equipment, floor, subfabUpw, subfabCda, oht, ohtShadow]) addToScene(h.scene, mesh);
+    h.effects.configureXrayTargets([
+      ...equipment.map(mesh => ({ mesh, role: 'equipment' as const })),
+      { mesh: floor, role: 'floor' as const },
+      { mesh: subfabUpw, role: 'subfab' as const },
+      { mesh: subfabCda, role: 'subfab' as const },
+      { mesh: oht, role: 'oht' as const },
+      { mesh: ohtShadow, role: 'oht' as const },
+    ]);
+    expect(h.effects.targetCounts).toEqual({ equipment: 3, floor: 1, subfab: 2, oht: 2 });
+
+    h.effects.setXrayFilter('upw');
+    // One material instance per frozen surface state: the three equipment shells share it.
+    expect(equipment[0].material).toBe(equipment[1].material);
+    expect(equipment[1].material).toBe(equipment[2].material);
+    // UPW systems highlight; the other subfab branch ghosts.
+    expect(Array.from(getShaderUniform(subfabUpw.material as ShaderMaterial, 'xrayParams') as Float32Array))
+      .toEqual([1, 1, 1, expect.closeTo(1.8)]);
+    expect(Array.from(getShaderUniform(subfabCda.material as ShaderMaterial, 'xrayParams') as Float32Array))
+      .toEqual([1, expect.closeTo(.15), 0, expect.closeTo(1.8)]);
+
+    // 'all' collapses both subfab states onto the single highlighted material.
+    h.effects.setXrayFilter('all');
+    expect(subfabUpw.material).toBe(subfabCda.material);
+    expect(Array.from(getShaderUniform(subfabCda.material as ShaderMaterial, 'xrayParams') as Float32Array))
+      .toEqual([1, expect.closeTo(.55), 1, expect.closeTo(1.8)]);
+
+    // The AMHS contact-shadow decal is counted as a target but excluded from the surface set.
+    expect(ohtShadow.material).toBe(ohtShadowMaterial);
+
+    h.effects.configureXrayTargets([]);
+    expect(h.effects.targetCounts).toEqual({ equipment: 0, floor: 0, subfab: 0, oht: 0 });
+  } finally { h.dispose(); }
+});
+
+it('re-binds the borrowed CSM receiver after a generator rebuild and detaches the old callback', () => {
+  const h = harness();
+  try {
+    const receiverCallbacks = (generator: ReturnType<typeof createCsmDirectionalShadowGenerator>) =>
+      (generator as unknown as { _onReceiverData?: ((data: Float32Array) => void)[] })._onReceiverData ?? [];
+    const publish = (callbacks: readonly ((data: Float32Array) => void)[], data: Float32Array) => {
+      for (const callback of [...callbacks]) callback(data);
+    };
+    const version = (material: ShaderMaterial) => (material as unknown as { _uniformVersion: number })._uniformVersion;
+    const generator = (light: ReturnType<typeof createDirectionalLight>) =>
+      createCsmDirectionalShadowGenerator(h.engine, light, { numCascades: 2, mapSize: 2048 });
+
+    const lightA = createDirectionalLight([0, -1, 0]); addToScene(h.scene, lightA);
+    const generatorA = generator(lightA);
+    lightA.shadowGenerator = generatorA; h.scene.shadowGenerators.push(generatorA);
+    const mesh = createBox(h.engine); mesh.material = createPbrMaterial(); addToScene(h.scene, mesh);
+    h.effects.configureXrayTargets([{ mesh, role: 'equipment' }]);
+    h.effects.bindShadows(generatorA);
+    h.effects.setXrayFilter('all');
+    const palette = mesh.material as ShaderMaterial;
+    // Borrowed texture is bound, but the retained receiver snapshot only exists after a publish.
+    expect(h.effects.shadowLinked).toBe(false);
+    expect(getShaderTexture(palette, 'xrayDepth')).toBe(getCsmReceiverTexture(generatorA));
+    const callbacksA = receiverCallbacks(generatorA);
+    expect(callbacksA).toHaveLength(1);
+    publish(callbacksA, new Float32Array(80).fill(0.25));
+    expect(h.effects.shadowLinked).toBe(true);
+    expect(Array.from(getShaderUniform(palette, 'xrayCascade0') as Float32Array)).toEqual(new Array(16).fill(0.25));
+
+    // Device recovery / shadow-owner rebuild publishes a replacement generator.
+    const lightB = createDirectionalLight([0, -1, 0]); addToScene(h.scene, lightB);
+    const generatorB = generator(lightB);
+    lightB.shadowGenerator = generatorB; h.scene.shadowGenerators.push(generatorB);
+    h.effects.bindShadows(generatorB);
+    const callbacksB = receiverCallbacks(generatorB);
+    expect(callbacksA).toHaveLength(0);
+    expect(callbacksB).toHaveLength(1);
+    // Re-binding resets the retained snapshot and swaps the borrowed texture before the next publish.
+    expect(h.effects.shadowLinked).toBe(false);
+    expect(getShaderTexture(palette, 'xrayDepth')).toBe(getCsmReceiverTexture(generatorB));
+    expect(getShaderUniform(palette, 'xrayShadowEnabled')).toBe(0);
+    const beforeB = version(palette);
+    publish(callbacksA, new Float32Array(80).fill(0.125));
+    expect(version(palette)).toBe(beforeB);
+    publish(callbacksB, new Float32Array(80).fill(0.5));
+    expect(h.effects.shadowLinked).toBe(true);
+    expect(Array.from(getShaderUniform(palette, 'xrayCascade0') as Float32Array)).toEqual(new Array(16).fill(0.5));
+  } finally { h.dispose(); }
+});
+
+it('disposes idempotently without releasing the borrowed CSM receiver or resurrecting callbacks', () => {
+  const h = harness();
+  try {
+    const device = (h.engine as unknown as { _device: { createTexture: () => unknown } })._device;
+    const textures: { destroyed: boolean }[] = [];
+    device.createTexture = () => {
+      const texture = { width: 2048, height: 2048, createView: () => ({}), destroyed: false,
+        destroy() { texture.destroyed = true; } };
+      textures.push(texture);
+      return texture;
+    };
+    const light = createDirectionalLight([0, -1, 0]); addToScene(h.scene, light);
+    const generator = createCsmDirectionalShadowGenerator(h.engine, light, { numCascades: 2, mapSize: 2048 });
+    light.shadowGenerator = generator; h.scene.shadowGenerators.push(generator);
+    const mesh = createBox(h.engine); mesh.material = createPbrMaterial(); addToScene(h.scene, mesh);
+    mesh.metadata = { xrayCaster: false };
+    h.effects.configureXrayTargets([{ mesh, role: 'equipment' }]);
+    h.effects.bindShadows(generator);
+    h.effects.setXrayFilter('all');
+    const palette = mesh.material as ShaderMaterial;
+    const receiver = getCsmReceiverTexture(generator);
+    const callbacks = (generator as unknown as { _onReceiverData?: unknown[] })._onReceiverData ?? [];
+    expect(callbacks).toHaveLength(1);
+    const marker = h.effects.meshes.find(candidate => candidate.name === 'wafer-follow-marker')!;
+    const trail = h.effects.meshes.find(candidate => candidate.name === 'wafer-follow-trail')!;
+    h.effects.setWaferPoint(3, 4, 5, true);
+    const markerPosition = [marker.position.x, marker.position.y, marker.position.z];
+
+    h.effects.dispose();
+    h.effects.dispose();
+    // The generator keeps ownership: the effects owner must never release the borrowed wrapper.
+    expect(getCsmReceiverTexture(generator)).toBe(receiver);
+    expect(textures.every(texture => !texture.destroyed)).toBe(true);
+    expect(callbacks).toHaveLength(0);
+    expect(mesh.material).not.toBe(palette);
+    expect(mesh.metadata).toEqual({ xrayCaster: false });
+    expect(h.effects.shadowLinked).toBe(false);
+
+    // Every public mutator is a no-op after dispose (late GPU callbacks cannot touch the scene).
+    h.effects.bindShadows(generator);
+    expect(callbacks).toHaveLength(0);
+    h.effects.configureXrayTargets([{ mesh, role: 'equipment' }]);
+    h.effects.setXrayFilter('all');
+    h.effects.setCutPlane(true, 'Z', 5, false);
+    h.effects.setWaferPoint(9, 9, 9, true);
+    h.effects.setWaferTrail([[0, 0, 0], [1, 1, 1]]);
+    h.effects.update(16, 2000);
+    expect(h.scene.clipPlane).toBeNull();
+    expect([marker.position.x, marker.position.y, marker.position.z]).toEqual(markerPosition);
+    expect(trail.visible).toBe(false);
+    expect(mesh.material).not.toBe(palette);
+    // A second dispose after the no-op calls is still safe.
+    h.effects.dispose();
   } finally { h.dispose(); }
 });

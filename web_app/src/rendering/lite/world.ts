@@ -11,7 +11,7 @@ import type { AmhsStats, CutAxis, HoveredTool, PickedTool, SceneLayer, SceneView
 import { createAmhsStatsGate } from './amhs-stats';
 import { createLiteCamera } from './camera';
 import { createLiteCutPlane } from './cut-plane';
-import { createLiteEffects } from './effects';
+import { createLiteEffects } from './effects/index';
 import { createLiteEnvironment } from './environment';
 import { createLiteEquipment } from './geometry/tool-families';
 import { createLiteFacility } from './geometry/facility';
