@@ -78,7 +78,9 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     fabId, search, onSearchChange, siteId, mode, language, theme, t,
   });
   const telemetry = useFabTelemetry(selectedFabId);
-  const tour = useTourController({ scene, language });
+  // The tour controller is scoped to the viewer it writes to: a FAB switch or a
+  // viewer recreation (new epoch) must stop the running tour, not drive the new scene.
+  const tour = useTourController({ scene, language, scopeKey: `${selectedFabId ?? ''}:${viewerEpoch ?? ''}` });
   const wafer = useWaferPlayback({ scene, waferActive, language, endTour: tour.finishTour, t });
   const {
     research, loading: researchLoading, error: researchError, parseError: researchParseError,
