@@ -57,13 +57,20 @@ it('encodes run ids and keeps list/detail/result endpoints distinct', async () =
 
 it('sends JSON and Idempotency-Key on createRun', async () => {
   const calls = captureFetch(() => jsonResponse({ runId: 'r1', siteId: 's1', status: 'QUEUED', version: '1', createdAtUtc: 'now', executions: [] }));
-  await createRun({ request: { lotCount: 3 }, idempotencyKey: 'idem-1' });
+  const request = {
+    scenario: {
+      contractVersion: 1, siteId: 'site-1', mode: 'INDEPENDENT', masterSeed: '1',
+      durationUs: '1000000', warmupUs: '0',
+      fabs: [{ fabId: 'fab-1', code: 'FAB-1', lotCount: 3, processTimeUs: '100' }],
+    },
+  };
+  await createRun({ request, idempotencyKey: 'idem-1' });
   expect(calls[0].url).toBe('/api/v1/runs');
   expect(calls[0].init?.method).toBe('POST');
   const headers = new Headers(calls[0].init?.headers);
   expect(headers.get('Content-Type')).toBe('application/json');
   expect(headers.get('Idempotency-Key')).toBe('idem-1');
-  expect(calls[0].init?.body).toBe(JSON.stringify({ lotCount: 3 }));
+  expect(calls[0].init?.body).toBe(JSON.stringify(request));
 });
 
 it('preserves ProblemDetails and non-JSON gateway errors', async () => {
@@ -94,7 +101,7 @@ it('A03: keeps the additive server epoch through the zod REST schema', async () 
 
 it('A02: a partial FAB frame is rejected by the shared ordered gate before the cache', async () => {
   vi.stubGlobal('fetch', async () => jsonResponse({
-    siteId: 'site-1', fabId: 'fab-1', generatedAt: '2026-10-27T00:00:00Z', sequence: 1,
+    siteId: 'site-1', fabId: 'fab-1', generatedAt: '2026-10-27T00:00:00Z', sequence: 1, epoch: 1,
     tools: [{ state: 'running' }],
   }));
   const queryClient = client();

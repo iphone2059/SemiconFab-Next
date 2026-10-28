@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { RunResult, RunSummary, FabExecutionSummary, FabSimulationResult, SimulationEventDto } from '../../contracts';
+import type { CreateRunRequest, FabScenario, RunResult, RunSummary, FabExecutionSummary, FabSimulationResult, SimulationEventDto, ScenarioDefinition } from '../../contracts';
 
 /**
  * The generated .NET wire contracts are authoritative. This is the single runtime
@@ -48,4 +48,26 @@ const fabResultSchema: z.ZodType<FabSimulationResult> = z.object({
 export const runResultSchema: z.ZodType<RunResult> = z.object({
   runId: z.string().min(1),
   fabs: z.array(fabResultSchema),
+});
+
+/** Validate run submissions before they leave the browser, using generated contracts. */
+const fabScenarioSchema: z.ZodType<FabScenario> = z.object({
+  fabId: z.string().min(1),
+  code: z.string().min(1),
+  lotCount: z.number().int().positive(),
+  processTimeUs: z.string().regex(/^\\d+$/),
+});
+
+const scenarioDefinitionSchema: z.ZodType<ScenarioDefinition> = z.object({
+  contractVersion: z.literal(1),
+  siteId: z.string().min(1),
+  mode: z.string().min(1),
+  masterSeed: z.string().min(1),
+  durationUs: z.string().regex(/^\\d+$/),
+  warmupUs: z.string().regex(/^\\d+$/),
+  fabs: z.array(fabScenarioSchema).min(1),
+});
+
+export const createRunRequestSchema: z.ZodType<CreateRunRequest> = z.object({
+  scenario: scenarioDefinitionSchema,
 });
