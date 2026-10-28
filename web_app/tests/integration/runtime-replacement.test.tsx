@@ -36,11 +36,12 @@ it('re-subscribes to the replacement runtime instead of keeping a disposed one',
   firstSource.emit(commandResult({ fabId, commandId, revision: 1, outcome: 'accepted' }));
   await waitFor(() => expect(screen.getByTestId('projection').textContent).toBe('accepted:1'));
 
+  firstRegistry.disposeAll();
+  expect(firstSource.commandObservers).toBe(0);
   const secondSource = new FakeCommandEventSource();
   const secondRuntime = runtimeWithSource(secondSource);
   const secondRegistry = new FabRuntimeRegistry();
   secondRegistry.register(secondRuntime);
-  firstRuntime.dispose();
 
   rerender(<RuntimeProvider registry={secondRegistry} version={1}><Probe /></RuntimeProvider>);
   // The context version bump makes the hook pick the new runtime; no stale first projection.
@@ -52,5 +53,6 @@ it('re-subscribes to the replacement runtime instead of keeping a disposed one',
   firstSource.emit(commandResult({ fabId, commandId, revision: 2, outcome: 'executing' }));
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(screen.getByTestId('projection').textContent).toBe('accepted:1');
-  secondRuntime.dispose();
+  secondRegistry.disposeAll();
+  expect(secondSource.commandObservers).toBe(0);
 });

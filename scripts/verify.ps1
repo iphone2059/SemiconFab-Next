@@ -14,6 +14,8 @@ node --test tools/test_check_frozen_assets.mjs
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 python tools/check_architecture.py
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
+& (Join-Path $PSScriptRoot 'test-start-dev.ps1')
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
 python -m unittest discover -s tools -p 'test_*.py'
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 node --test tools/test_render_perf_checks.mjs

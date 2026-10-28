@@ -82,7 +82,7 @@ try {
         Write-Host 'PASS: cancellation cleanup releases owned ports and restores caller targets'
     } finally {
         $fabShell.Dispose()
-        [Environment]::SetEnvironmentVariable('ASPNETCORE_URLS', $fabPreviousUrls, 'Process')
-        [Environment]::SetEnvironmentVariable('FAB_API_TARGET', $fabPreviousTarget, 'Process')
+        Set-FabDevEnvironmentState -Name 'ASPNETCORE_URLS' -Value $fabPreviousUrls
+        Set-FabDevEnvironmentState -Name 'FAB_API_TARGET' -Value $fabPreviousTarget
     }
 }

@@ -7,9 +7,8 @@ namespace Fab.Site;
 
 /// <summary>
 /// Read-only synthetic development catalog for one demo Site. The catalog supports
-/// 1..32 FABs; the default development catalog exposes FAB-01..FAB-03 so every module
-/// is exercised with multiple independent FABs (the production count is configuration,
-/// not a compile-time constant).
+/// 1..32 FABs; the current development catalog defaults to FAB-01. Additional independent
+/// FABs remain configurable through the catalog count.
 ///
 /// FAB ids are derived deterministically from <c>{SiteCode}/{FabCode}</c>. FAB-01 keeps
 /// the Guid it always had, so existing URLs and stored data remain stable when the FAB
@@ -19,7 +18,7 @@ public sealed class SiteDirectory
 {
     public const int MinFabCount = 1;
     public const int MaxFabCount = 32;
-    public const int DefaultFabCount = 3;
+    public const int DefaultFabCount = 1;
     public const string DemoSiteCode = "DEMO-SITE";
     public static readonly Guid DemoSiteId = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
 

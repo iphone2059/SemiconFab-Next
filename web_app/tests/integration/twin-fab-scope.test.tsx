@@ -33,8 +33,6 @@ const sites = [{
   templateHash: 'test',
   fabs: [
     { fabId: 'fab-a', code: 'FAB-A' },
-    { fabId: 'fab-b', code: 'FAB-B' },
-    { fabId: 'fab-c', code: 'FAB-C' },
   ],
 }];
 
@@ -86,10 +84,10 @@ function renderTwin(client: QueryClient, fabId: string) {
   );
 }
 
-async function streamFor(fabId: string): Promise<CapturingEventSource> {
+async function streamFor(fabId: string, expectedCount = 1): Promise<CapturingEventSource> {
   const url = `/api/v1/sites/site-1/fabs/${fabId}/equipment-status/stream`;
-  await waitFor(() => expect(CapturingEventSource.instances.some((source) => source.url === url)).toBe(true));
-  const source = CapturingEventSource.instances.find((value) => value.url === url);
+  await waitFor(() => expect(CapturingEventSource.instances.filter((source) => source.url === url)).toHaveLength(expectedCount));
+  const source = CapturingEventSource.instances.filter((value) => value.url === url)[expectedCount - 1];
   if (!source) throw new Error('missing equipment-status stream for ' + fabId);
   return source;
 }
@@ -109,7 +107,7 @@ afterEach(() => {
   resetTwinUiStore(); resetTwinPageStore(); resetRuntimeStore(); resetTwinDemoStore();
 });
 
-it('scopes telemetry/status REST + SSE to the canonical route FAB of a multi-FAB site', async () => {
+it('scopes status REST + SSE to the single configured canonical route FAB', async () => {
   const fetchUrls: string[] = [];
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
     fetchUrls.push(String(input));
@@ -130,28 +128,25 @@ it('scopes telemetry/status REST + SSE to the canonical route FAB of a multi-FAB
 
   render(
     <QueryClientProvider client={client}>
-      <TwinPage fabId="fab-b" search={{ modal: 'arch' }} />
+      <TwinPage fabId="fab-a" search={{ modal: 'arch' }} />
     </QueryClientProvider>,
   );
 
-  // A 3-FAB site renders instead of the removed single-FAB product gate.
   await waitFor(() => expect(backend.mounts).toBe(1));
-  expect(document.body.textContent).not.toContain('当前产品必须只有一个 FAB');
-  await waitFor(() => expect(streamUrls).toContain('/api/v1/sites/site-1/fabs/fab-b/equipment-status/stream'));
-  await waitFor(() => expect(fetchUrls).toContain('/api/v1/sites/site-1/fabs/fab-b/equipment-status'));
-  expect(fetchUrls.some((url) => url.includes('/fabs/fab-a/'))).toBe(false);
-  expect(fetchUrls.some((url) => url.includes('/fabs/fab-c/'))).toBe(false);
-  expect(document.title).toBe('SITE-1 / FAB-B · 3D FAB');
+  await waitFor(() => expect(streamUrls).toEqual(['/api/v1/sites/site-1/fabs/fab-a/equipment-status/stream']));
+  await waitFor(() => expect(fetchUrls).toContain('/api/v1/sites/site-1/fabs/fab-a/equipment-status'));
+  expect(fetchUrls.filter((url) => url.includes('/fabs/')).every((url) => url.includes('/fabs/fab-a/'))).toBe(true);
+  expect(document.title).toBe('SITE-1 / FAB-A · 3D FAB');
   client.clear();
 });
 
-it('A01: an in-place A→B switch clears FAB-scoped projections before B has a frame', async () => {
+it('A01: remounting the Query provider clears projections before the same FAB has a new frame', async () => {
   const client = setup();
   const view = renderTwin(client, 'fab-a');
   const sourceA = await streamFor('fab-a');
   await waitFor(() => expect(useTwinPageStore.getState().liveStatusScope?.fabId).toBe('fab-a'));
 
-  // Seed MES demo state owned by A; it must not survive into B.
+  // Seed state owned by the previous provider lifetime.
   act(() => {
     twinPageActions.mesJobSet({ index: 3, job: createMesJob(FAB_LAYOUT[3], 3, 1000) });
     twinPageActions.inspectorMesSet({ id: 'ref-tool', job: createMesJob(FAB_LAYOUT[4], 4, 1000) });
@@ -161,33 +156,35 @@ it('A01: an in-place A→B switch clears FAB-scoped projections before B has a f
   await waitFor(() => expect(useTwinPageStore.getState().liveToolStates[0]).toBe('down'));
   expect(useTwinPageStore.getState().statusFeed).toEqual({ updatedAt: '2026-10-27T00:00:05Z', stale: false });
 
-  // Queue a newer A frame in the 100 ms batcher and switch FABs before it can
-  // publish: the pending batch must be cancelled, not flushed into B.
+  // Queue a frame in the 100 ms batcher and remount its Query provider before it
+  // can publish: pending work must not escape into the new lifetime.
   send(sourceA, frame({ sequence: 6, generatedAt: '2026-10-27T00:00:06Z', tools: tools({ 0: 'maint', 1: 'idle' }) }));
+  const replacementClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  replacementClient.setQueryData(sitesQueryOptions().queryKey, sites);
   view.rerender(
-    <QueryClientProvider client={client}>
-      <TwinPage fabId="fab-b" search={{ modal: 'arch' }} />
+    <QueryClientProvider key="replacement" client={replacementClient}>
+      <TwinPage fabId="fab-a" search={{ modal: 'arch' }} />
     </QueryClientProvider>,
   );
 
-  await waitFor(() => expect(useTwinPageStore.getState().liveStatusScope?.fabId).toBe('fab-b'));
-  // B renders only its own reset projections, never A's last frame or MES jobs.
+  await waitFor(() => expect(sourceA.onmessage).toBeNull());
+  // The same FAB starts its new provider lifetime without old projections.
   expect(useTwinPageStore.getState().liveToolStates).toEqual([...FAB_TOOL_STATES]);
   expect(useTwinPageStore.getState().statusFeed).toBeUndefined();
   expect(useTwinPageStore.getState().mesJobs).toEqual({});
   expect(useTwinPageStore.getState().inspectorMes).toEqual({});
   await flushProjection();
-  expect(useTwinPageStore.getState().liveStatusScope?.fabId).toBe('fab-b');
+  expect(useTwinPageStore.getState().liveStatusScope?.fabId).toBe('fab-a');
   expect(useTwinPageStore.getState().liveToolStates).toEqual([...FAB_TOOL_STATES]);
 
-  // B's first accepted frame may use a lower sequence than A: ordering state is
-  // per FAB, so the site never shares one high-water mark across FABs.
-  const sourceB = await streamFor('fab-b');
-  send(sourceB, frame({ fabId: 'fab-b', sequence: 1, generatedAt: '2026-10-27T00:00:20Z', tools: tools({ 0: 'idle' }) }));
+  // A new provider has independent ordering history for the same FAB.
+  const sourceNew = await streamFor('fab-a', 2);
+  send(sourceNew, frame({ sequence: 1, generatedAt: '2026-10-27T00:00:20Z', tools: tools({ 0: 'idle' }) }));
   await waitFor(() => expect(useTwinPageStore.getState().liveToolStates[0]).toBe('idle'));
-  expect(useTwinPageStore.getState().liveStatusScope).toEqual({ siteId: 'site-1', fabId: 'fab-b' });
+  expect(useTwinPageStore.getState().liveStatusScope).toEqual({ siteId: 'site-1', fabId: 'fab-a' });
   expect(useTwinPageStore.getState().statusFeed).toEqual({ updatedAt: '2026-10-27T00:00:20Z', stale: false });
   client.clear();
+  replacementClient.clear();
 });
 
 it('A02: an SSE frame rejected by the ordered consumer never reaches the FAB-scoped Query cache', async () => {

@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { FabViewport } from '../../../src/features/twin/fab-viewer';
-import { resetRuntimeStore, useRuntimeStore } from '../../../src/state/runtimeStore';
+import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '../../../src/state/runtimeStore';
 import type { SiteDto, FabDto } from '../../../src/contracts';
 import type { FabToolState } from '../../../src/domain/fab/fab-layout';
 import type { AmhsStats, PickedTool } from '../../../src/application/ports/scene';
@@ -26,10 +26,9 @@ vi.mock('../../../src/rendering/lite-backend', async () => {
 
 const site: SiteDto = {
   siteId: 'site-1', code: 'SITE-1', templateHash: 'test',
-  fabs: [{ fabId: 'fab-1', code: 'FAB-01' }, { fabId: 'fab-2', code: 'FAB-02' }],
+  fabs: [{ fabId: 'fab-1', code: 'FAB-01' }],
 };
 const fab1: FabDto = site.fabs[0];
-const fab2: FabDto = site.fabs[1];
 const toolStates: readonly FabToolState[] = ['running'];
 const layers = { amhs: true, ceiling: false, roof: false, subfab: false, heatmap: false, airflow: false, xray: false };
 const picked: PickedTool = { index: 3, x: 1, z: 2, width: 1, depth: 1, height: 1, category: 'litho', vendor: 'V', model: 'M', state: 'running' };
@@ -97,7 +96,7 @@ it('invokes the latest scene callbacks without remounting the GPU scene', async 
   expect(backend.instances).toHaveLength(1);
 });
 
-it('clears the selection through the latest handler when the FAB changes', async () => {
+it('clears selection through the latest handler when the same FAB viewer reloads', async () => {
   const onToolA = vi.fn();
   const onToolB = vi.fn();
   const view = render(createElement(FabViewport, { ...baseProps, onToolChange: onToolA }));
@@ -107,9 +106,10 @@ it('clears the selection through the latest handler when the FAB changes', async
   const firstPort = backend.instances[0];
   const staleMount = firstPort.mounts[0];
 
-  view.rerender(createElement(FabViewport, { ...baseProps, fab: fab2, onToolChange: onToolB }));
+  view.rerender(createElement(FabViewport, { ...baseProps, onToolChange: onToolB }));
+  act(() => runtimeActions.viewerReloadRequested());
   await waitFor(() => expect(backend.instances).toHaveLength(2));
-  // The fabId-change clear effect must reach the latest handler, never the old one.
+  // The reload's mount-time selection clear reaches the latest handler.
   await waitFor(() => expect(onToolB).toHaveBeenCalledWith(undefined));
   expect(onToolA.mock.calls.filter(([tool]) => tool === undefined)).toHaveLength(initialUndefinedCalls);
   // The replaced viewer lifetime is disposed, the new one owns a different stable identity.

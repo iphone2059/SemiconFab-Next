@@ -8,16 +8,18 @@ function fakeRuntime(fabId: string): FakeRuntime {
   return { fabId, start: vi.fn(), stop: vi.fn() } as unknown as FakeRuntime;
 }
 
-it('keys runtimes by fabId so two FABs of one site never share a telemetry stream', () => {
-  const fabA = fakeRuntime('fab-a');
-  const fabB = fakeRuntime('fab-b');
+it('resolves the configured FAB runtime and leaves unknown identities unregistered', () => {
+  const runtime = fakeRuntime('fab-a');
   const registry = new FabTelemetryRegistry();
-  registry.replaceAll(new Map([['fab-a', fabA], ['fab-b', fabB]]));
-  expect(registry.size).toBe(2);
-  expect(registry.fabIds).toEqual(['fab-a', 'fab-b']);
-  expect(registry.get('fab-a')).toBe(fabA);
+  registry.replaceAll(new Map([['fab-a', runtime]]));
+  expect(registry.size).toBe(1);
+  expect(registry.fabIds).toEqual(['fab-a']);
+  expect(registry.get('fab-a')).toBe(runtime);
   expect(registry.get('missing')).toBeUndefined();
   expect(registry.get(undefined)).toBeUndefined();
+  expect(runtime.start).not.toHaveBeenCalled();
+  registry.disposeAll();
+  expect(runtime.stop).toHaveBeenCalledOnce();
 });
 
 it('stops replaced and disposed runtimes exactly once', () => {

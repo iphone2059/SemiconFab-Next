@@ -55,6 +55,7 @@ infrastructure/ scripts/ tools/ .github/
 
 ```powershell
 # 本地开发：API(127.0.0.1:5080) + Web(127.0.0.1:5173)
+# 自动检查前置工具、按锁文件安装前端依赖；就绪后 Ctrl+点击输出网址
 ./scripts/start-dev.ps1
 
 # 全量校验：契约/架构检查、Python 工具测试、3 个 .NET 项目构建 + 测试、前端 typecheck/test/build
@@ -63,6 +64,8 @@ infrastructure/ scripts/ tools/ .github/
 # 真实 GPU/浏览器性能门禁（需先 ./scripts/start-dev.ps1）
 ./scripts/perf-render.ps1 -Url http://127.0.0.1:5173/fabs/{fabId}/3d
 ```
+
+首次克隆无需手动安装前端依赖。启动脚本会检查 `global.json` 指定的 .NET SDK 与 `web_app/package.json` 指定的 Node.js/npm，复用匹配的 pnpm 或自动准备到 `.local/tooling`，再按锁文件增量安装依赖。缺少运行时、端口占用或安装失败时会给出具体错误；API、页面和接口代理就绪后输出 `http://127.0.0.1:5173/`，由你 Ctrl+点击打开，不自动启动浏览器。首次安装需能访问 npm registry，详细参数与日志见 [scripts/README.md](scripts/README.md)。
 
 前端单独运行（在 `web_app` 内）：
 
@@ -91,7 +94,7 @@ npx --yes pnpm@12.15.0 build
 - **Zustand**：仅客户端 UI 状态，不保存 Query DTO、XState actor 或引擎对象。
 - **XState v6**：命令生命周期由 workflow 拥有，经 `CommandWorkflow` 契约暴露；`RuntimeBootstrap` 按 FAB 装配 `FabRuntime`，命令源接后端模拟 HTTP/SSE，含幂等键、能力/权限校验与权威核对。
 - **高频路径**：FAB 级遥测 SSE → 每 FAB Worker → TypedArray/FrameRingBuffer → 渲染 frame loop，不经过 Query/Zustand/XState。
-- **多 FAB**：后端默认 FAB-01/02/03，前端按 FAB 装配 Runtime/遥测/设备状态；命令/SSE 带复合身份与游标恢复。
+- **FAB 范围**：当前产品只运行 FAB-01，所有测试与验收使用单 FAB。架构保留多 FAB 扩展：`Fab:FabCount` 仍支持 1..32，前端按 FAB 装配 Runtime/遥测/设备状态，命令/SSE 保留复合身份与游标恢复。
 - **Babylon Lite/WebGPU-only**：无 WebGL 回退；缺少 WebGPU/安全上下文时明确报错。
 
 ## 文档
@@ -119,4 +122,4 @@ python tools/migrate_legacy_data.py --check
 - 后端 `--realtime`（WebSocket）/OT 仍是占位；当前产品使用 HTTP 命令 API + 命令 SSE + FAB 级遥测/设备状态 SSE 模拟实现。
 - PostgreSQL/Outbox/正式身份认证未实现（仓库无数据库/IdP 基础设施）；当前命令状态为内存存储 + 终态 TTL/容量限制，开发身份授权 seam 已就位。
 - Worker 已接 FAB 级遥测 SSE 并供渲染 frame loop 读取；SharedArrayBuffer/COOP-COEP 未启用。
-- GPU 门禁是单机 headless Chrome 基线，不是生产设备矩阵；产品默认 3 FAB，前端已数据驱动。
+- GPU 门禁是单机 headless Chrome 基线，不是生产设备矩阵；当前产品与测试仅一个 FAB，多 FAB 保留为架构扩展能力。

@@ -72,14 +72,13 @@ it('rejects invalid frame shapes without advancing the ordering watermark', () =
   expect(onInvalid).toHaveBeenCalledTimes(3);
 });
 
-it('keeps independent epochs and sequence high-water marks per FAB', () => {
-  const first = vi.fn(), second = vi.fn();
-  const fabA = createOrderedEquipmentStatusConsumer(scope, 2, first);
-  const fabB = createOrderedEquipmentStatusConsumer({ siteId: 'site-1', fabId: 'fab-b' }, 2, second);
-  expect(fabA(base({ sequence: 5 }))).toBe(true);
-  expect(fabB(base({ fabId: 'fab-b', sequence: 1 }))).toBe(true);
-  expect(fabA(base({ sequence: 6 }))).toBe(true);
-  expect(fabB(base({ fabId: 'fab-b', sequence: 2 }))).toBe(true);
-  expect(first).toHaveBeenCalledTimes(2);
-  expect(second).toHaveBeenCalledTimes(2);
+it('accepts a restarted epoch for the same FAB without replaying the previous generation', () => {
+  const onSnapshot = vi.fn();
+  const apply = createOrderedEquipmentStatusConsumer(scope, 2, onSnapshot);
+  expect(apply(base({ sequence: 5 }))).toBe(true);
+  expect(apply(base({ epoch: 2, sequence: 1 }))).toBe(true);
+  expect(apply(base({ epoch: 1, sequence: 6 }))).toBe(false);
+  expect(apply(base({ epoch: 2, sequence: 2 }))).toBe(true);
+  expect(onSnapshot).toHaveBeenCalledTimes(3);
+  expect(onSnapshot.mock.lastCall?.[0]).toMatchObject({ fabId: scope.fabId, epoch: 2, sequence: 2 });
 });

@@ -78,21 +78,22 @@ public sealed class LocalOrchestrationTests : IDisposable
     }
 
     [Fact]
-    public void Run_completes_only_after_all_results_are_persisted()
+    public void Run_completes_only_after_its_single_fab_result_is_persisted()
     {
         var store = new FileRunStore(directory);
-        var second = "20000000-0000-0000-0000-000000000002";
-        var request = Request() with { Scenario = Request().Scenario with { Fabs = [new(FabId, "FAB-01", 3, "100"), new(second, "FAB-02", 3, "100")] } };
-        var run = store.Submit(request, "operator", "key");
+        var run = store.Submit(Request(), "operator", "key");
         var id = Guid.Parse(run.RunId);
-        store.Complete(store.TryClaim("worker")!, Result());
+        Assert.Equal("QUEUED", store.Get(id)!.Status);
+        Assert.Null(store.GetResults(id));
+        var lease = store.TryClaim("worker")!;
         Assert.Equal("RUNNING", store.Get(id)!.Status);
         Assert.Null(store.GetResults(id));
-        var last = store.TryClaim("worker")!;
-        store.Complete(last, Result() with { FabId = second });
+        store.Complete(lease, Result());
         var restarted = new FileRunStore(directory);
         Assert.Equal("COMPLETED", restarted.Get(id)!.Status);
-        Assert.Equal(2, restarted.GetResults(id)!.Fabs.Length);
+        Assert.Equal("COMPLETED", Assert.Single(restarted.Get(id)!.Executions).Status);
+        Assert.Equal(FabId, Assert.Single(restarted.GetResults(id)!.Fabs).FabId);
+        Assert.Null(restarted.TryClaim("idle"));
     }
 
     [Fact]
@@ -102,7 +103,12 @@ public sealed class LocalOrchestrationTests : IDisposable
         var run = store.Submit(Request(), "operator", "key");
         var lease = store.TryClaim("worker")!;
         Assert.Throws<ArgumentException>(() => store.Complete(lease, Result() with { FabId = Guid.NewGuid().ToString() }));
-        Assert.NotEqual("COMPLETED", store.Get(Guid.Parse(run.RunId))!.Status);
+        var id = Guid.Parse(run.RunId);
+        Assert.Equal("RUNNING", store.Get(id)!.Status);
+        Assert.Null(store.GetResults(id));
+        store.Complete(lease, Result());
+        Assert.Equal("COMPLETED", store.Get(id)!.Status);
+        Assert.Equal(FabId, Assert.Single(store.GetResults(id)!.Fabs).FabId);
     }
 
     [Theory]

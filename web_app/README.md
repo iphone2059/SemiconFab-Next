@@ -2,6 +2,8 @@
 
 SemiconFab-Next 唯一 Web 前端：Vite + React 单页站点，V2.1 架构（TanStack Router/Query、Zustand、RxJS、XState v6、Babylon Lite/WebGPU）。没有内部子包，也没有 pnpm workspace。
 
+当前产品和所有测试仅使用一个活动 FAB（FAB-01）。按 FAB 装配的 Runtime/遥测/设备状态、复合身份和集合契约继续保留，支持将来扩展到多 FAB；当前无需多 FAB 场景验收。
+
 ## 目录
 
 2026-10-28 递归整改（R-01…R-14）后的真实布局；架构与门禁细节见 `docs/architecture.md` §30。
@@ -76,7 +78,7 @@ npx --yes pnpm@12.15.0 install --frozen-lockfile
 npm run dev                  # Vite 127.0.0.1:5173
 ```
 
-根目录 `scripts/start-dev.ps1` 会同时启动 API（127.0.0.1:5080）与本项目，并注入开发密钥。
+首次克隆推荐直接在根目录运行 `./scripts/start-dev.ps1`：它会检查 .NET/Node.js 前置工具，自动按锁文件安装前端依赖，再同时启动 API（127.0.0.1:5080）与本项目并注入开发密钥。页面和接口代理就绪后输出完整网址，Ctrl+点击即可打开；脚本不自动打开浏览器。
 
 开发服务器排障：不要在其运行期间删除 `node_modules/.vite`（Vite 预打包缓存）。缓存与运行中服务器的依赖哈希不一致时，浏览器会收到 `504 Outdated Optimize Dep` 并显示空白页；需要重建缓存时先停掉 dev server，删除缓存后重启（或换独立端口用 `--force` 验证）。
 

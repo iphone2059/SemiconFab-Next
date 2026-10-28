@@ -26,7 +26,7 @@ public sealed class EquipmentStatusTests
             var fab = Guid.NewGuid();
             var before = new EquipmentStatusService(directory);
             var first = before.Get(site, fab, DateTimeOffset.UtcNow);
-            Assert.Equal(first.Epoch, before.Get(site, Guid.NewGuid()).Epoch);
+            Assert.Equal(first.Epoch, before.Get(site, fab).Epoch);
             var restarted = new EquipmentStatusService(directory).Get(site, fab, DateTimeOffset.UnixEpoch);
             Assert.Equal(1_000_000_000_001L, first.Epoch);
             Assert.Equal(first.Epoch + 1, restarted.Epoch);
@@ -42,8 +42,10 @@ public sealed class EquipmentStatusTests
         var directory = Directory.CreateTempSubdirectory("fab-status-epoch-").FullName;
         try
         {
+            var site = Guid.NewGuid();
+            var fab = Guid.NewGuid();
             var epochs = Enumerable.Range(0, 12).AsParallel().Select(_ =>
-                new EquipmentStatusService(directory).Get(Guid.NewGuid(), Guid.NewGuid()).Epoch).Order().ToArray();
+                new EquipmentStatusService(directory).Get(site, fab).Epoch).Order().ToArray();
             Assert.Equal(Enumerable.Range(1, 12).Select(value => (long)value), epochs);
         }
         finally { Directory.Delete(directory, recursive: true); }
@@ -90,20 +92,20 @@ public sealed class EquipmentStatusTests
     }
 
     [Fact]
-    public void SequenceIsIndependentPerFab()
+    public void SingleFabSequencesAreIndependentAcrossServiceInstances()
     {
-        var service = new EquipmentStatusService();
+        var first = new EquipmentStatusService();
+        var second = new EquipmentStatusService();
         var siteId = Guid.NewGuid();
-        var fabA = Guid.NewGuid();
-        var fabB = Guid.NewGuid();
+        var fabId = Guid.NewGuid();
         var t0 = new DateTimeOffset(2026, 10, 24, 3, 0, 0, TimeSpan.Zero);
 
-        Assert.Equal(1, service.Get(siteId, fabA, t0).Sequence);
-        Assert.Equal(1, service.Get(siteId, fabB, t0).Sequence);
-        Assert.Equal(2, service.Get(siteId, fabA, t0.AddSeconds(8)).Sequence);
-        Assert.Equal(1, service.Get(siteId, fabB, t0).Sequence);
-        Assert.Equal(2, service.Get(siteId, fabB, t0.AddSeconds(8)).Sequence);
-        Assert.Equal(2, service.Get(siteId, fabB, t0.AddSeconds(8)).Sequence);
+        Assert.Equal(1, first.Get(siteId, fabId, t0).Sequence);
+        Assert.Equal(1, second.Get(siteId, fabId, t0).Sequence);
+        Assert.Equal(2, first.Get(siteId, fabId, t0.AddSeconds(8)).Sequence);
+        Assert.Equal(1, second.Get(siteId, fabId, t0).Sequence);
+        Assert.Equal(2, second.Get(siteId, fabId, t0.AddSeconds(8)).Sequence);
+        Assert.Equal(2, second.Get(siteId, fabId, t0.AddSeconds(8)).Sequence);
     }
 
     [Fact]
@@ -113,7 +115,7 @@ public sealed class EquipmentStatusTests
         var status = new EquipmentStatusService();
         var telemetry = new TelemetrySimulationService(directory, status);
         var siteId = SiteDirectory.DemoSiteId;
-        var fab = SiteDirectory.CreateFab(2);
+        var fab = directory.PrimaryFab;
         var t0 = new DateTimeOffset(2026, 10, 24, 4, 0, 0, TimeSpan.Zero);
 
         var snapshot = status.Get(siteId, fab.Id, t0);

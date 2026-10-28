@@ -159,13 +159,13 @@ it('start/stop/start reuses one loop slot and ignores late frames from the stopp
   expect(tourActive()).toBe(true);
 });
 
-it('stops the running tour when the owner scope changes (FAB switch / viewer recreation)', () => {
+it('stops the running tour when the same FAB viewer receives a new epoch', () => {
   const { result, scheduler, rerender, props } = renderTour();
   act(() => result.current.startTour());
   expect(scheduler.pendingCount).toBe(1);
   const staleFrame = scheduler.frames()[0];
 
-  act(() => rerender({ ...props, scopeKey: 'fab-2:epoch-2' }));
+  act(() => rerender({ ...props, scopeKey: 'fab-1:epoch-2' }));
   expect(scheduler.pendingCount).toBe(0);
   expect(tourActive()).toBe(false);
   expect(result.current.tourHudSeed).toBeNull();

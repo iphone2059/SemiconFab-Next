@@ -521,16 +521,23 @@ public sealed class CommandApiTests
         using var unknownProblem = JsonDocument.Parse(await unknown.Content.ReadAsStringAsync());
         Assert.Equal("Unknown equipment", unknownProblem.RootElement.GetProperty("title").GetString());
 
-        // FAB-02 is not explicitly configured, so it keeps the generated default capability surface.
-        var sites = (await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites"))!;
-        var otherFabId = Assert.Single(sites).Fabs[1].FabId;
-        using var otherFabAllowed = await PostCommandAsync(client, siteId,
-            new { fabId = otherFabId, equipmentId = "equipment-0", action = "STOP" }, "capability-other-fab-1");
-        Assert.Equal(HttpStatusCode.Accepted, otherFabAllowed.StatusCode);
-
         // The explicitly configured FAB accepts only its declared action for its declared equipment.
         using var allowed = await PostCommandAsync(client, siteId,
             new { fabId, equipmentId = "equipment-0", action = "START" }, "capability-allowed-1");
+        Assert.Equal(HttpStatusCode.Accepted, allowed.StatusCode);
+    }
+
+    [Fact]
+    public async Task UnmatchedCapabilityConfigurationLeavesSingleFabDefaultActionsAvailable()
+    {
+        using var factory = Factory(capabilitySettings:
+        [
+            ("Fab:EquipmentCapabilities:Fabs:FOREIGN-FAB:Equipment:equipment-0:Actions:0", "START")
+        ]);
+        using var client = Authorized(factory);
+        var (siteId, fabId) = await SiteAsync(client);
+        using var allowed = await PostCommandAsync(client, siteId,
+            new { fabId, equipmentId = "equipment-42", action = "STOP" }, "capability-fallback-1");
         Assert.Equal(HttpStatusCode.Accepted, allowed.StatusCode);
     }
 
@@ -621,36 +628,39 @@ public sealed class CommandApiTests
     }
 
     [Fact]
-    public async Task CommandStreamEnforcesFabAuthorizationAndFiltersEvents()
+    public async Task SingleFabCommandStreamRejectsForeignIdentityAndRetainsLifecycle()
     {
         var siteId = SiteDirectory.DemoSiteId.ToString("D");
-        var fab1 = SiteDirectory.CreateFab(1).Id.ToString("D");
-        var fab2 = SiteDirectory.CreateFab(2).Id.ToString("D");
-        using var factory = Factory(fabAuthorization: new FabScopedAuthorization(fab1));
+        var fabId = SiteDirectory.CreateFab(1).Id.ToString("D");
+        var foreignFabId = Guid.NewGuid().ToString("D");
+        using var factory = Factory(fabAuthorization: new FabScopedAuthorization(fabId));
         using var client = Authorized(factory);
 
-        // Seed a FAB-02 command directly through the service; the endpoint would deny it.
         var service = factory.Services.GetRequiredService<EquipmentCommandService>();
-        var seeded = service.Submit(Guid.Parse(siteId),
-            new EquipmentCommandRequest(fab2, "equipment-0", "START"), Principal, "seed-stream-fab2");
-        Assert.Equal(EquipmentCommandSubmitStatus.Accepted, seeded.Status);
+        var rejected = service.Submit(Guid.Parse(siteId),
+            new EquipmentCommandRequest(foreignFabId, "equipment-0", "START"), Principal, "foreign-stream-fab");
+        Assert.Equal(EquipmentCommandSubmitStatus.UnknownFab, rejected.Status);
+        Assert.Null(rejected.Command);
+        Assert.Empty(service.ReadJournal(Guid.Parse(siteId), null).Events);
 
-        using var submitFab1 = await PostCommandAsync(client, siteId,
-            new { fabId = fab1, equipmentId = "equipment-0", action = "START" }, "stream-fab-auth-1");
-        Assert.Equal(HttpStatusCode.Accepted, submitFab1.StatusCode);
-        var commandId = await CommandIdAsync(submitFab1);
+        using var submit = await PostCommandAsync(client, siteId,
+            new { fabId, equipmentId = "equipment-0", action = "START" }, "stream-fab-auth-1");
+        Assert.Equal(HttpStatusCode.Accepted, submit.StatusCode);
+        var commandId = await CommandIdAsync(submit);
 
-        using var denied = await client.GetAsync($"/api/v1/sites/{siteId}/commands/stream?fabId={fab2}");
+        using var denied = await client.GetAsync($"/api/v1/sites/{siteId}/commands/stream?fabId={foreignFabId}");
         Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
         Assert.Equal("application/problem+json", denied.Content.Headers.ContentType!.MediaType);
 
         using var timeout = new CancellationTokenSource(StreamTimeout);
-        using var response = await OpenCommandStreamAsync(client, siteId, fab1, lastEventId: null, timeout.Token);
+        using var response = await OpenCommandStreamAsync(client, siteId, fabId, lastEventId: null, timeout.Token);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         await using var body = await response.Content.ReadAsStreamAsync(timeout.Token);
         using var reader = new StreamReader(body, Encoding.UTF8);
 
         var fabIds = new List<string>();
+        var revisions = new List<int>();
+        var outcomes = new List<string>();
         while (fabIds.Count < 3)
         {
             var envelope = await ReadEnvelopeAsync(reader, timeout.Token)
@@ -658,38 +668,50 @@ public sealed class CommandApiTests
             var payload = envelope.GetProperty("payload");
             Assert.Equal(commandId, payload.GetProperty("commandId").GetString());
             fabIds.Add(payload.GetProperty("fabId").GetString()!);
+            revisions.Add(payload.GetProperty("revision").GetInt32());
+            outcomes.Add(payload.GetProperty("outcome").GetString()!);
         }
-        Assert.All(fabIds, eventFabId => Assert.Equal(fab1, eventFabId));
-        Assert.DoesNotContain(fab2, fabIds);
+        Assert.All(fabIds, eventFabId => Assert.Equal(fabId, eventFabId));
+        Assert.DoesNotContain(foreignFabId, fabIds);
+        Assert.Equal(new[] { 0, 1, 2 }, revisions);
+        Assert.Equal(new[] { "accepted", "executing", "succeeded" }, outcomes);
+
+        using var denyingFactory = Factory(denyFabAccess: true);
+        using var deniedClient = Authorized(denyingFactory);
+        using var deniedKnownFab = await deniedClient.GetAsync($"/api/v1/sites/{siteId}/commands/stream?fabId={fabId}");
+        Assert.Equal(HttpStatusCode.NotFound, deniedKnownFab.StatusCode);
+        Assert.Equal("application/problem+json", deniedKnownFab.Content.Headers.ContentType!.MediaType);
     }
 
     [Fact]
     public async Task FabScopedStatusAndTelemetryEndpointsEnforceAuthorization()
     {
         var siteId = SiteDirectory.DemoSiteId.ToString("D");
-        var fab1 = SiteDirectory.CreateFab(1).Id.ToString("D");
-        var fab2 = SiteDirectory.CreateFab(2).Id.ToString("D");
-        using var factory = Factory(fabAuthorization: new FabScopedAuthorization(fab1));
+        var fabId = SiteDirectory.CreateFab(1).Id.ToString("D");
+        using var factory = Factory(fabAuthorization: new FabScopedAuthorization(fabId));
         using var client = Authorized(factory);
 
-        using var allowedStatus = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fab1}/equipment-status");
+        using var allowedStatus = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fabId}/equipment-status");
         Assert.Equal(HttpStatusCode.OK, allowedStatus.StatusCode);
-        using var deniedStatus = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fab2}/equipment-status");
+
+        using var denyingFactory = Factory(denyFabAccess: true);
+        using var deniedClient = Authorized(denyingFactory);
+        using var deniedStatus = await deniedClient.GetAsync($"/api/v1/sites/{siteId}/fabs/{fabId}/equipment-status");
         Assert.Equal(HttpStatusCode.NotFound, deniedStatus.StatusCode);
         Assert.Equal("application/problem+json", deniedStatus.Content.Headers.ContentType!.MediaType);
 
         using var timeout = new CancellationTokenSource(StreamTimeout);
-        using var allowedTelemetry = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fab1}/telemetry/stream",
+        using var allowedTelemetry = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fabId}/telemetry/stream",
             HttpCompletionOption.ResponseHeadersRead, timeout.Token);
         Assert.Equal(HttpStatusCode.OK, allowedTelemetry.StatusCode);
         await using var telemetryBody = await allowedTelemetry.Content.ReadAsStreamAsync(timeout.Token);
         using var telemetryReader = new StreamReader(telemetryBody, Encoding.UTF8);
         Assert.NotNull(await ReadEnvelopeAsync(telemetryReader, timeout.Token));
 
-        using var deniedTelemetry = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fab2}/telemetry/stream");
+        using var deniedTelemetry = await deniedClient.GetAsync($"/api/v1/sites/{siteId}/fabs/{fabId}/telemetry/stream");
         Assert.Equal(HttpStatusCode.NotFound, deniedTelemetry.StatusCode);
 
-        using var deniedStatusStream = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fab2}/equipment-status/stream");
+        using var deniedStatusStream = await deniedClient.GetAsync($"/api/v1/sites/{siteId}/fabs/{fabId}/equipment-status/stream");
         Assert.Equal(HttpStatusCode.NotFound, deniedStatusStream.StatusCode);
     }
 
@@ -782,8 +804,7 @@ public sealed class CommandApiTests
     {
         var sites = await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites");
         var site = Assert.Single(sites!);
-        // The default catalog exposes FAB-01..FAB-03; command tests only need one member FAB.
-        return (site.SiteId, site.Fabs[0].FabId);
+        return (site.SiteId, Assert.Single(site.Fabs).FabId);
     }
 
     private static async Task<HttpResponseMessage> PostCommandAsync(HttpClient client, string siteId, object body,

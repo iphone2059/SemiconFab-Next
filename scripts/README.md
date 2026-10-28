@@ -6,9 +6,11 @@
 ./scripts/start-dev.ps1
 ```
 
-默认启动 API `http://127.0.0.1:5080` 与 Web `http://127.0.0.1:5173/`，自动生成并复用 `.local/development-key`。需已安装仓库指定的 .NET SDK、Node.js/npm，并完成 `web_app` 依赖安装。前端沿用 `npm run dev`，无需全局 pnpm shim。
+默认启动 API `http://127.0.0.1:5080` 与 Web `http://127.0.0.1:5173/`，自动生成并复用 `.local/development-key`。只需预装 `global.json` 指定的 .NET SDK、`web_app/package.json` 指定的 Node.js/npm；脚本会检查版本，不符合时显示所需版本。
 
-脚本等待 API 与 Web 就绪后显示地址。API、Web 输出分别写入 `.local/api.log`、`.local/web.log`，错误输出在同目录的 `*-error.log`；可在另一终端用 `Get-Content .local/web.log -Wait` 查看。按 Ctrl+C 会清理本次启动的 API、npm 与 Vite 子进程。端口占用会直接报错，已有服务不会被停止。
+每次启动先复用匹配版本的 pnpm JavaScript 入口；没有可用版本时自动安装到 `.local/tooling`，避开损坏的 Windows 全局 shim，不改全局工具。随后在 `web_app` 执行 `install --frozen-lockfile --prod=false`，由 pnpm 增量检查并补齐依赖，确保生产环境变量也不会省略 Vite。首次安装需能访问 npm registry；安装失败会停止启动并保留终端错误。前端仍沿用 `npm run dev` 与原 Vite 配置。
+
+脚本等待 API、Web 页面与 sites/catalog 接口代理全部就绪后显示完整网址，Ctrl+点击即可浏览，不自动打开浏览器。API、Web 输出分别写入 `.local/api.log`、`.local/web.log`，错误输出在同目录的 `*-error.log`；可在另一终端用 `Get-Content .local/web.log -Wait` 查看。按 Ctrl+C 会清理本次启动的 API、npm 与 Vite 子进程。端口占用会直接报错，已有服务不会被停止。
 
 ```powershell
 # 仅 API（默认内嵌 Worker）
@@ -20,7 +22,7 @@
 # 同时保留另一套服务：端口、密钥、数据、日志与构建产物均隔离
 ./scripts/start-dev.ps1 -ApiPort 5280 -WebPort 5273 -LocalDirectory '.local/second dev'
 
-# 不启动产品服务的回归检查
+# 不启动产品服务或浏览器的回归检查（包括隔离的完整启动顺序/失败测试）
 ./scripts/test-start-dev.ps1
 
 # 实际启动、HTTP 冒烟与取消清理检查（默认使用 5280 / 5273）
@@ -41,7 +43,7 @@
 1. **生成物一致性**：`python tools/generate_contracts.py --check`、`node tools/build_twin_translations.cjs --check`、`node tools/pack_static_structure.mjs --check`、`node tools/check_generated_artifacts.mjs --check`（登记表 `tools/generated-artifacts.json`）。
 2. **冻结 JSON 校验**：`node tools/check_frozen_assets.mjs` 检查原始 Twin 设备/OEM/本地化数据与 SVG 标签/属性白名单；`node --test tools/test_check_frozen_assets.mjs` 用损坏样例证明校验器会拒绝错误资产。
 3. **架构检查**：`python tools/check_architecture.py`（扁平项目布局、前端终态目录/旧路径缺席、domain 分层、src 根白名单、feature 状态归属、生成物区域、禁用依赖、ARCH-11 高频边界、模块档案数量）。
-4. 工具单测：`python -m unittest discover -s tools -p 'test_*.py'` 与 `node --test tools/test_render_perf_checks.mjs`。
+4. 工具单测：`./scripts/test-start-dev.ps1`、`python -m unittest discover -s tools -p 'test_*.py'` 与 `node --test tools/test_render_perf_checks.mjs`。
 5. 导入快照：`python tools/migrate_legacy_data.py --check`。
 6. 3 个独立 .NET 项目 Release 构建，并对 `fab_tests` 执行 `dotnet test --no-build`。
 7. `web_app` 内用 `package.json` 锁定的 pnpm 版本执行 `install --frozen-lockfile`、`typecheck`、`test`、`build`。

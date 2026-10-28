@@ -12,7 +12,7 @@ namespace Fab.Tests;
 
 /// <summary>
 /// API-level coverage for the FAB-scoped telemetry.frame SSE stream: requested-FAB payload
-/// identity, camelCase envelope, numeric samples, per-FAB independence and 404 scoping.
+/// identity, camelCase envelope, numeric samples, connection independence and 404 scoping.
 /// </summary>
 public sealed class TelemetryApiTests
 {
@@ -24,7 +24,7 @@ public sealed class TelemetryApiTests
     {
         using var factory = Factory();
         using var client = Authorized(factory);
-        var (siteId, fabId) = await SiteFabAsync(client, fabIndex: 1);
+        var (siteId, fabId) = await SiteFabAsync(client);
 
         using var timeout = new CancellationTokenSource(StreamTimeout);
         using var response = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fabId}/telemetry/stream",
@@ -70,36 +70,37 @@ public sealed class TelemetryApiTests
     }
 
     [Fact]
-    public async Task TwoFabStreamsCarryTheirOwnFabIdAndSequence()
+    public async Task SingleFabStreamsKeepIndependentConnectionSequences()
     {
         using var factory = Factory();
         using var clientA = Authorized(factory);
         using var clientB = Authorized(factory);
         var site = await SiteAsync(clientA);
-        var fabA = site.Fabs[0].FabId;
-        var fabB = site.Fabs[1].FabId;
+        var fabId = Assert.Single(site.Fabs).FabId;
         using var timeout = new CancellationTokenSource(StreamTimeout);
 
-        using var responseA = await clientA.GetAsync($"/api/v1/sites/{site.SiteId}/fabs/{fabA}/telemetry/stream",
-            HttpCompletionOption.ResponseHeadersRead, timeout.Token);
-        using var responseB = await clientB.GetAsync($"/api/v1/sites/{site.SiteId}/fabs/{fabB}/telemetry/stream",
+        using var responseA = await clientA.GetAsync($"/api/v1/sites/{site.SiteId}/fabs/{fabId}/telemetry/stream",
             HttpCompletionOption.ResponseHeadersRead, timeout.Token);
         Assert.Equal(HttpStatusCode.OK, responseA.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, responseB.StatusCode);
-
         await using var bodyA = await responseA.Content.ReadAsStreamAsync(timeout.Token);
-        await using var bodyB = await responseB.Content.ReadAsStreamAsync(timeout.Token);
         using var readerA = new StreamReader(bodyA, Encoding.UTF8);
-        using var readerB = new StreamReader(bodyB, Encoding.UTF8);
         var frameA = await ReadEnvelopeAsync(readerA, timeout.Token)
-            ?? throw new XunitException("FAB A telemetry stream ended before the first frame.");
-        var frameB = await ReadEnvelopeAsync(readerB, timeout.Token)
-            ?? throw new XunitException("FAB B telemetry stream ended before the first frame.");
+            ?? throw new XunitException("The first connection ended before its first frame.");
+        var nextA = await ReadEnvelopeAsync(readerA, timeout.Token)
+            ?? throw new XunitException("The first connection ended before its second frame.");
 
-        Assert.Equal(fabA, frameA.GetProperty("payload").GetProperty("fabId").GetString());
-        Assert.Equal(fabB, frameB.GetProperty("payload").GetProperty("fabId").GetString());
-        Assert.NotEqual(fabA, fabB);
+        using var responseB = await clientB.GetAsync($"/api/v1/sites/{site.SiteId}/fabs/{fabId}/telemetry/stream",
+            HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        Assert.Equal(HttpStatusCode.OK, responseB.StatusCode);
+        await using var bodyB = await responseB.Content.ReadAsStreamAsync(timeout.Token);
+        using var readerB = new StreamReader(bodyB, Encoding.UTF8);
+        var frameB = await ReadEnvelopeAsync(readerB, timeout.Token)
+            ?? throw new XunitException("The second connection ended before its first frame.");
+
+        foreach (var frame in new[] { frameA, nextA, frameB })
+            Assert.Equal(fabId, frame.GetProperty("payload").GetProperty("fabId").GetString());
         Assert.Equal(1, frameA.GetProperty("payload").GetProperty("sequence").GetInt64());
+        Assert.Equal(2, nextA.GetProperty("payload").GetProperty("sequence").GetInt64());
         Assert.Equal(1, frameB.GetProperty("payload").GetProperty("sequence").GetInt64());
     }
 
@@ -131,10 +132,10 @@ public sealed class TelemetryApiTests
         return Assert.Single(sites!);
     }
 
-    private static async Task<(string SiteId, string FabId)> SiteFabAsync(HttpClient client, int fabIndex)
+    private static async Task<(string SiteId, string FabId)> SiteFabAsync(HttpClient client)
     {
         var site = await SiteAsync(client);
-        return (site.SiteId, site.Fabs[fabIndex].FabId);
+        return (site.SiteId, Assert.Single(site.Fabs).FabId);
     }
 
     private static async Task<JsonElement?> ReadEnvelopeAsync(StreamReader reader, CancellationToken cancellationToken)

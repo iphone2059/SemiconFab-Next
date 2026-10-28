@@ -17,8 +17,8 @@ import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-statu
  *   forces a refetch), while the page subscription refetches on Query staleness.
  * - RQ-03: a mutation invalidates the runs prefix and the next read returns the
  *   authoritative server list.
- * - RQ-04: Query keys carry the (siteId, fabId) identity, so two FABs cannot
- *   share one equipment-status cache entry even inside the same site.
+ * - RQ-04: Query keys carry the (siteId, fabId) identity, and foreign identities
+ *   cannot write the configured FAB's equipment-status cache entry.
  * - A02/A03: REST frames pass the same per-scope ordered acceptance gate as SSE;
  *   a rejected/delayed frame can never regress the FAB-scoped cache entry.
  */
@@ -38,7 +38,6 @@ const statusFrame = (siteId: string, fabId: string, sequence: number, generatedA
   tools: FAB_LAYOUT.map(() => ({ state })),
 });
 const STATUS_A = statusFrame('site-a', 'fab-1', 1, '2026-10-27T00:00:00Z');
-const STATUS_B = statusFrame('site-a', 'fab-2', 1, '2026-10-27T00:00:00Z', 'down');
 
 const jsonResponse = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
@@ -107,28 +106,32 @@ it('RQ-03: createRun invalidation refreshes the authoritative runs list', async 
   expect(fetchMock).toHaveBeenCalledTimes(3); // GET, POST, invalidated GET
 });
 
-it('RQ-04: FAB-scoped Query keys isolate identical equipment ids per FAB', async () => {
+it('RQ-04: the configured FAB cache rejects crossed FAB and site identities', async () => {
+  const scope = { siteId: 'site-a', fabId: 'fab-1' };
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes('/fabs/fab-1/')) return jsonResponse(STATUS_A);
-    if (url.includes('/fabs/fab-2/')) return jsonResponse(STATUS_B);
     throw new Error('unexpected request ' + url);
   });
   vi.stubGlobal('fetch', fetchMock);
   const queryClient = freshClient();
-  // Same site, different FABs: the composite identity must keep the keys apart.
+  // Both parts of the composite identity participate in the key. Foreign IDs
+  // are rejection probes only; no second FAB is configured or fetched.
   expect(equipmentStatusQueryOptions('site-a', 'fab-1').queryKey)
-    .not.toEqual(equipmentStatusQueryOptions('site-a', 'fab-2').queryKey);
+    .not.toEqual(equipmentStatusQueryOptions('site-a', 'unknown-fab').queryKey);
+  expect(equipmentStatusQueryOptions('site-a', 'fab-1').queryKey)
+    .not.toEqual(equipmentStatusQueryOptions('unknown-site', 'fab-1').queryKey);
 
   expect(await queryClient.ensureQueryData(equipmentStatusQueryOptions('site-a', 'fab-1'))).toEqual(STATUS_A);
-  expect(await queryClient.ensureQueryData(equipmentStatusQueryOptions('site-a', 'fab-2'))).toEqual(STATUS_B);
+  expect(acceptEquipmentStatusSnapshot(queryClient, scope, { ...STATUS_A, fabId: 'unknown-fab', sequence: 9 })).toBeUndefined();
+  expect(acceptEquipmentStatusSnapshot(queryClient, scope, { ...STATUS_A, siteId: 'unknown-site', sequence: 9 })).toBeUndefined();
   expect(queryClient.getQueryData(equipmentStatusQueryKey('site-a', 'fab-1'))).toEqual(STATUS_A);
-  expect(queryClient.getQueryData(equipmentStatusQueryKey('site-a', 'fab-2'))).toEqual(STATUS_B);
-  expect(queryClient.getQueryData(equipmentStatusQueryKey('site-a', 'fab-1'))).not.toEqual(STATUS_B);
-  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(queryClient.getQueryData(equipmentStatusQueryKey('site-a', 'unknown-fab'))).toBeUndefined();
+  expect(queryClient.getQueryData(equipmentStatusQueryKey('unknown-site', 'fab-1'))).toBeUndefined();
+  expect(queryClient.getQueryCache().getAll()).toHaveLength(1);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
   expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
     '/api/v1/sites/site-a/fabs/fab-1/equipment-status',
-    '/api/v1/sites/site-a/fabs/fab-2/equipment-status',
   ]);
 });
 

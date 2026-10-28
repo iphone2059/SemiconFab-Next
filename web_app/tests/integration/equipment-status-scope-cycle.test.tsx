@@ -16,12 +16,11 @@ import { resetTwinDemoStore } from '../../src/features/twin/state/twinDemoStore'
 import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-status/protocol';
 
 /**
- * FAB A→B→A scope cycle across the real TwinPage pipeline: the Query cache,
- * the per-scope ordering gate, the SSE subscriptions and the page projection
- * must stay isolated, and a re-entered FAB must resume from its accepted
- * cache/ordering high-water instead of regressing. Also pins that the old
+ * Same-FAB mount/unmount/remount cycle across the real TwinPage pipeline: the
+ * Query cache, ordering gate, SSE subscriptions and page projection must resume
+ * from the accepted cache/ordering high-water instead of regressing. Pins that the old
  * EventSource generation is detached (no stale-generation async callback can
- * publish into the new FAB).
+ * publish into the remounted page).
  */
 
 const viewport = vi.hoisted(() => ({ renders: 0 }));
@@ -41,7 +40,6 @@ const site = {
   templateHash: 'test',
   fabs: [
     { fabId: 'fab-a', code: 'FAB-A' },
-    { fabId: 'fab-b', code: 'FAB-B' },
   ],
 };
 
@@ -51,13 +49,14 @@ class CapturingEventSource {
   onmessage: ((event: { data: string }) => void) | null = null;
   onerror: ((event: unknown) => void) | null = null;
   readonly url: string;
+  closed = false;
   constructor(url: string) {
     this.url = url;
     CapturingEventSource.instances.push(this);
   }
   addEventListener() {}
   removeEventListener() {}
-  close() {}
+  close() { this.closed = true; }
 }
 
 const tools = (overrides: Record<number, FabToolState> = {}, fallback: FabToolState = 'running') =>
@@ -101,16 +100,17 @@ afterEach(() => {
   resetTwinUiStore(); resetTwinPageStore(); resetRuntimeStore(); resetTwinDemoStore();
 });
 
-it('keeps Query cache, ordering and SSE generation isolated across A→B→A', async () => {
+it('keeps Query cache and ordering across same-FAB remounts while detaching old SSE generations', async () => {
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
   vi.stubGlobal('EventSource', CapturingEventSource);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
   client.setQueryData(sitesQueryOptions().queryKey, [site]);
-  const view = render(
+  const tree = (
     <QueryClientProvider client={client}>
       <TwinPage fabId="fab-a" search={{ modal: 'arch' }} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const view = render(tree);
 
   const sourceA = await streamFor('fab-a', 1);
   await waitFor(() => expect(useTwinPageStore.getState().liveStatusScope?.fabId).toBe('fab-a'));
@@ -120,37 +120,19 @@ it('keeps Query cache, ordering and SSE generation isolated across A→B→A', a
   await waitFor(() => expect(cached(client, 'fab-a')?.sequence).toBe(5));
   await waitFor(() => expect(useTwinPageStore.getState().liveToolStates[0]).toBe('down'));
 
-  // A→B: the FAB-scoped query keys, streams and projections are independent.
-  view.rerender(
-    <QueryClientProvider client={client}>
-      <TwinPage fabId="fab-b" search={{ modal: 'arch' }} />
-    </QueryClientProvider>,
-  );
-  await waitFor(() => expect(useTwinPageStore.getState().liveStatusScope?.fabId).toBe('fab-b'));
-  const sourceB = await streamFor('fab-b', 1);
-  expect(cached(client, 'fab-b')).toBeUndefined();
-  expect(cached(client, 'fab-a')?.sequence).toBe(5);
-  // The unmounted A subscription is detached, so no late A frame can be delivered.
-  expect(sourceA.onmessage).toBeNull();
-
-  send(sourceB, frame('fab-b', 1, '2026-10-27T00:00:20Z', { tools: tools({ 0: 'idle' }) }));
-  await waitFor(() => expect(cached(client, 'fab-b')?.sequence).toBe(1));
-  await waitFor(() => expect(useTwinPageStore.getState().liveToolStates[0]).toBe('idle'));
-  expect(cached(client, 'fab-a')?.sequence).toBe(5);
-
-  // B→A: re-enter A with a fresh SSE generation whose ordering resumes from A's
-  // accepted cache entry (sequence 5), while B stays untouched.
-  view.rerender(
-    <QueryClientProvider client={client}>
-      <TwinPage fabId="fab-a" search={{ modal: 'arch' }} />
-    </QueryClientProvider>,
-  );
-  await waitFor(() => expect(useTwinPageStore.getState().liveStatusScope?.fabId).toBe('fab-a'));
+  const lateFirstCallback = sourceA.onmessage;
+  view.unmount();
+  expect(sourceA.closed).toBe(true);
+  const remounted = render(tree);
   const sourceA2 = await streamFor('fab-a', 2);
-  expect(sourceB.onmessage).toBeNull();
-  expect(cached(client, 'fab-b')?.sequence).toBe(1);
+  expect(cached(client, 'fab-a')?.sequence).toBe(5);
+  // Only one stream is active; even a callback captured before cleanup is guarded.
+  expect(sourceA.onmessage).toBeNull();
+  expect(CapturingEventSource.instances.filter((source) => !source.closed)).toHaveLength(1);
+  act(() => lateFirstCallback?.({ data: JSON.stringify(frame('fab-a', 99, '2026-10-27T00:00:20Z')) }));
+  expect(cached(client, 'fab-a')?.sequence).toBe(5);
 
-  // Reconnect replay + older frame of the re-entered FAB: dropped by the gate.
+  // Reconnect replay + older frame of the remounted FAB: dropped by the gate.
   send(sourceA2, frame('fab-a', 5, '2026-10-27T00:00:05Z', { tools: tools({ 0: 'maint' }) }));
   send(sourceA2, frame('fab-a', 4, '2026-10-27T00:00:04Z', { tools: tools({ 0: 'maint' }) }));
   await flushProjection();
@@ -159,18 +141,20 @@ it('keeps Query cache, ordering and SSE generation isolated across A→B→A', a
   expect(useTwinPageStore.getState().liveToolStates[0]).toBe('down');
 
   // A crossed-FAB frame on A's stream marks the feed stale but never writes the cache.
-  send(sourceA2, frame('fab-b', 6, '2026-10-27T00:00:06Z', { tools: tools({ 0: 'maint' }) }));
+  send(sourceA2, frame('unknown-fab', 6, '2026-10-27T00:00:06Z', { tools: tools({ 0: 'maint' }) }));
   expect(cached(client, 'fab-a')?.sequence).toBe(5);
   expect(useTwinPageStore.getState().statusFeed?.stale).toBe(true);
 
-  // A genuinely newer A frame recovers LIVE and advances only A's cache.
+  // A genuinely newer frame recovers LIVE and advances the single cache entry.
   send(sourceA2, frame('fab-a', 6, '2026-10-27T00:00:06Z', { tools: tools({ 0: 'maint' }) }));
   await waitFor(() => expect(cached(client, 'fab-a')?.sequence).toBe(6));
   await waitFor(() => expect(useTwinPageStore.getState().liveToolStates[0]).toBe('maint'));
   expect(useTwinPageStore.getState().statusFeed?.stale).toBe(false);
-  expect(cached(client, 'fab-b')?.sequence).toBe(1);
-  expect(cached(client, 'fab-b')?.tools[0].state).toBe('idle');
+  expect(cached(client, 'unknown-fab')).toBeUndefined();
+  expect(client.getQueryCache().findAll({ queryKey: ['equipment', 'status'] })).toHaveLength(1);
   // A's accepted layout is complete: the projection never fell back to defaults.
   expect(useTwinPageStore.getState().liveToolStates).toHaveLength(FAB_TOOL_STATES.length);
+  remounted.unmount();
+  expect(sourceA2.closed).toBe(true);
   client.clear();
 });

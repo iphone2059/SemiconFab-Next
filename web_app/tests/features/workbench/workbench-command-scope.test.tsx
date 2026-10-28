@@ -21,7 +21,7 @@ interface FakeRuntime {
 
 interface RegistryFixture {
   registry: FabRuntimeRegistry;
-  runtimes: Record<'fab-a' | 'fab-b', FakeRuntime>;
+  runtime: FakeRuntime;
 }
 
 function createRegistry(): RegistryFixture {
@@ -30,9 +30,9 @@ function createRegistry(): RegistryFixture {
     subscribe: vi.fn(() => () => {}),
     getProjection: vi.fn(() => undefined),
   });
-  const runtimes = { 'fab-a': createRuntime(), 'fab-b': createRuntime() };
-  const registry = { get: (fabId: string) => runtimes[fabId as keyof typeof runtimes] } as unknown as FabRuntimeRegistry;
-  return { registry, runtimes };
+  const runtime = createRuntime();
+  const registry = { get: (fabId: string) => fabId === 'fab-a' ? runtime : undefined } as unknown as FabRuntimeRegistry;
+  return { registry, runtime };
 }
 
 interface Deferred<T> {
@@ -81,8 +81,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('ignores a previous FAB completion after an in-place scope switch', async () => {
-  const { registry, runtimes } = createRegistry();
+it('ignores a previous site-scope completion after rebinding the same FAB in place', async () => {
+  const { registry, runtime } = createRegistry();
   const pending = deferred<SubmittedEquipmentCommand>();
   submit.mockReturnValueOnce(pending.promise);
   const console = renderConsole(registry, 'site-a', 'fab-a');
@@ -92,9 +92,9 @@ it('ignores a previous FAB completion after an in-place scope switch', async () 
   expect(request).toMatchObject({ siteId: 'site-a', fabId: 'fab-a', equipmentId: 'equipment-0', action: 'START' });
   expect(console.text()).toContain('提交中…');
 
-  // In-place FAB switch (no unmount of the page) before the request resolves.
-  console.rerender({ siteId: 'site-a', fabId: 'fab-b' });
-  // The new FAB starts clean: no tracked rows, no error, no busy lock.
+  // Rebind the same FAB's composite scope before the request resolves.
+  console.rerender({ siteId: 'site-b', fabId: 'fab-a' });
+  // The new scope starts clean: no tracked rows, no error, no busy lock.
   expect(console.alert()).toBeNull();
   expect(console.button().disabled).toBe(false);
   expect(console.button().textContent).toBe('下发命令');
@@ -107,48 +107,46 @@ it('ignores a previous FAB completion after an in-place scope switch', async () 
     await Promise.resolve();
   });
 
-  // Nothing from FAB-A may enter FAB-B: no history row, no runtime tracking.
-  expect(runtimes['fab-a'].trackCommand).not.toHaveBeenCalled();
-  expect(runtimes['fab-b'].trackCommand).not.toHaveBeenCalled();
+  // Nothing from the previous scope may enter the new console lifetime.
+  expect(runtime.trackCommand).not.toHaveBeenCalled();
   expect(console.text()).not.toContain('cmd-a-1'.slice(0, 8));
   expect(console.text()).not.toContain('等待 SSE 事件…');
   expect(console.alert()).toBeNull();
   expect(console.button().disabled).toBe(false);
 });
 
-it('ignores a previous FAB failure after an in-place scope switch', async () => {
-  const { registry, runtimes } = createRegistry();
+it('ignores a previous site-scope failure after rebinding the same FAB in place', async () => {
+  const { registry, runtime } = createRegistry();
   const pending = deferred<SubmittedEquipmentCommand>();
   submit.mockReturnValueOnce(pending.promise);
   const console = renderConsole(registry, 'site-a', 'fab-a');
   fireEvent.submit(console.form());
   await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
 
-  console.rerender({ siteId: 'site-a', fabId: 'fab-b' });
+  console.rerender({ siteId: 'site-b', fabId: 'fab-a' });
   await act(async () => {
     pending.reject(new Error('late failure'));
     await Promise.resolve();
     await Promise.resolve();
   });
 
-  // The new FAB keeps a clean error/busy surface and never tracked the request.
+  // The new scope keeps a clean error/busy surface and never tracks the request.
   expect(console.alert()).toBeNull();
   expect(console.text()).not.toContain('late failure');
   expect(console.button().disabled).toBe(false);
   expect(console.button().textContent).toBe('下发命令');
-  expect(runtimes['fab-a'].trackCommand).not.toHaveBeenCalled();
-  expect(runtimes['fab-b'].trackCommand).not.toHaveBeenCalled();
+  expect(runtime.trackCommand).not.toHaveBeenCalled();
 });
 
 it('drops a completion whose console lifetime ended (keyed remount)', async () => {
-  const { registry, runtimes } = createRegistry();
+  const { registry, runtime } = createRegistry();
   const pending = deferred<SubmittedEquipmentCommand>();
   submit.mockReturnValueOnce(pending.promise);
   const console = renderConsole(registry, 'site-a', 'fab-a');
   fireEvent.submit(console.form());
   await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
 
-  // The Workbench keys the console by (siteId, fabId); a FAB switch unmounts it.
+  // Unmounting ends this console's lifetime for the configured FAB.
   console.view.unmount();
   await act(async () => {
     pending.resolve(accepted('cmd-a-1'));
@@ -157,8 +155,7 @@ it('drops a completion whose console lifetime ended (keyed remount)', async () =
   });
 
   // An unmounted console must not mutate a runtime or observable state.
-  expect(runtimes['fab-a'].trackCommand).not.toHaveBeenCalled();
-  expect(runtimes['fab-b'].trackCommand).not.toHaveBeenCalled();
+  expect(runtime.trackCommand).not.toHaveBeenCalled();
 });
 
 it('reuses the idempotency key only while retrying the same command identity', async () => {
@@ -192,31 +189,31 @@ it('reuses the idempotency key only while retrying the same command identity', a
   expect(afterAction.action).toBe('STOP');
   expect(afterAction.idempotencyKey).not.toBe(afterEquipment.idempotencyKey);
 
-  // Scope change: the old FAB's pending key must never cross into the new one.
-  console.rerender({ siteId: 'site-a', fabId: 'fab-b' });
+  // Rebinding the site's scope gives the same FAB a new logical command identity.
+  console.rerender({ siteId: 'site-b', fabId: 'fab-a' });
   fireEvent.submit(console.form());
   await waitFor(() => expect(submit).toHaveBeenCalledTimes(5));
   const afterScope = submit.mock.calls[4][0] as SubmitEquipmentCommandInput;
-  expect(afterScope.fabId).toBe('fab-b');
+  expect(afterScope).toMatchObject({ siteId: 'site-b', fabId: 'fab-a' });
   expect(afterScope.idempotencyKey).not.toBe(afterAction.idempotencyKey);
 });
 
-it('tracks a submission on the FAB that submitted it and drops the row on switch', async () => {
-  const { registry, runtimes } = createRegistry();
+it('tracks a submission on the configured FAB and drops its row when the site scope changes', async () => {
+  const { registry, runtime } = createRegistry();
   submit.mockResolvedValueOnce(accepted('cmd-a-1'));
   const console = renderConsole(registry, 'site-a', 'fab-a');
   fireEvent.submit(console.form());
 
-  await waitFor(() => expect(runtimes['fab-a'].trackCommand).toHaveBeenCalledWith('cmd-a-1'));
+  await waitFor(() => expect(runtime.trackCommand).toHaveBeenCalledWith('cmd-a-1'));
   await waitFor(() => expect(console.text()).toContain('cmd-a-1'.slice(0, 8)));
   // The projection row queries the runtime of the FAB that submitted the command.
-  await waitFor(() => expect(runtimes['fab-a'].getProjection).toHaveBeenCalledWith('cmd-a-1'));
-  expect(runtimes['fab-b'].getProjection).not.toHaveBeenCalled();
-  expect(runtimes['fab-b'].trackCommand).not.toHaveBeenCalled();
+  await waitFor(() => expect(runtime.getProjection).toHaveBeenCalledWith('cmd-a-1'));
+  runtime.getProjection.mockClear();
 
-  console.rerender({ siteId: 'site-a', fabId: 'fab-b' });
+  console.rerender({ siteId: 'site-b', fabId: 'fab-a' });
   expect(console.text()).not.toContain('cmd-a-1'.slice(0, 8));
   expect(console.text()).toContain('还没有命令');
-  // No projection row was ever queried against FAB-B's runtime for FAB-A's id.
-  expect(runtimes['fab-b'].getProjection).not.toHaveBeenCalled();
+  // The old scope's row cannot query the runtime after the console resets.
+  expect(runtime.getProjection).not.toHaveBeenCalled();
+  expect(runtime.trackCommand).toHaveBeenCalledTimes(1);
 });

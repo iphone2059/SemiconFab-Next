@@ -15,6 +15,8 @@
 
 ## 当前架构
 
+当前产品与测试范围为 **一个 FAB（FAB-01）**。多 FAB 是保留的架构扩展能力，不是当前部署或验收要求；下文历史记录中的多 FAB 验证不代表当前需要部署多个 FAB。
+
 ```text
 React 19 + Vite 8 + TS 7
 TanStack Router     URL/search/生成式路由树（canonical URL only）
@@ -51,7 +53,7 @@ Babylon Lite 1.36   WebGPU-only 渲染
 
 - **命令**：Workbench `CommandConsole` → `POST /api/v1/sites/{siteId}/commands` → `FabRuntime.trackCommand` → 后端命令 SSE → `CommandEventBridge` → XState workflow；`GET /api/v1/commands/{id}` 供核对。浏览器实测 accepted → executing → succeeded。
 - **遥测/设备状态**：FAB 级 20Hz 遥测 SSE → 每 FAB `TelemetryRuntime`（传输/解码/帧/背压）→ MessageDecoder → Worker FrameRingBuffer → 渲染 frame loop；设备槽位与 `FabToolState` 投影在纯函数 `domain/equipment/tool-state-projection.ts`；设备状态 REST/SSE 同样按 FAB 作用域；不经过 Query/Zustand/XState（ARCH-11）。
-- **多 FAB**：后端默认 FAB-01/02/03（`Fab:FabCount` 1..32），前端按 FAB 装配 Runtime/遥测/状态，Workbench 多 FAB 卡片，Scenario 可提交任意非空子集。
+- **FAB 范围**：后端默认只提供 FAB-01；测试使用一个活动 FAB。`Fab:FabCount` 的 1..32 配置范围、按 FAB 装配的 Runtime/遥测/状态、集合形式的 Scenario 和复合身份仍保留，支持将来扩展。
 - **命令可靠性**：Idempotency-Key 幂等、能力目录/前置条件、FAB 授权 seam、终态 TTL/容量保留；命令 SSE 带 epoch/sequence 与 Last-Event-ID，缺口触发 replay-gap + 权威核对。
 - **性能**：`tools/render_perf.mjs` 在 headless Chrome + 真实 WebGPU 上验证 `navigator.gpu`/adapter/canvas、renderer frames/draw calls/gpuErrors；dev 门禁 + 60Hz profile（p95/p99/heap trend/首帧，`scripts/perf-render.ps1 -Profile`）；静态结构构建期打包（`tools/pack_static_structure.mjs` → `src/generated/static-structure-packed.ts`）；`tests/performance/telemetry-load.test.ts` 覆盖 500/2000/5000 实体负载。命令见根 README。
 
@@ -70,4 +72,4 @@ Babylon Lite 1.36   WebGPU-only 渲染
 - **PostgreSQL/Outbox/生产身份认证未实现**：仓库无数据库依赖/服务与 IdP；当前命令历史/状态为内存存储 + 终态 TTL/容量限制，`DevelopmentFabAuthorization` 仅为开发 seam。
 - SharedArrayBuffer/COOP-COEP 未启用（OPEN-V21-14），Worker 走 postMessage。
 - GPU 门禁为单机 headless Chrome 基线；生产设备矩阵/显存/长时压测待补。
-- 产品默认 3 FAB；前端 Runtime/遥测/状态/UI 已按 FAB 数据驱动。
+- 当前产品默认 1 FAB，测试与验收同样只使用 1 FAB；前端 Runtime/遥测/状态/UI 继续按 FAB 数据驱动。

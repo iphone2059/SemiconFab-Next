@@ -8,8 +8,8 @@ namespace Fab.Tests;
 public sealed class SimulationTests
 {
     private const string A = "11111111-1111-4111-8111-111111111111";
-    private const string B = "22222222-2222-4222-8222-222222222222";
-    private static ScenarioDefinition Scenario() => new(1, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "INDEPENDENT", "42", "1000", "0", [new(A, "FAB-01", 12, "20"), new(B, "FAB-02", 4, "30")]);
+    private const string ForeignFabId = "22222222-2222-4222-8222-222222222222";
+    private static ScenarioDefinition Scenario() => new(1, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "INDEPENDENT", "42", "1000", "0", [new(A, "FAB-01", 12, "20")]);
 
     [Fact]
     public void EqualInputsHaveIdenticalSemanticEventsAndHash()
@@ -24,10 +24,10 @@ public sealed class SimulationTests
     }
 
     [Fact]
-    public void ChangingAnotherFabAndMemberOrderCannotChangeSelectedFab()
+    public void ChangingSiteMetadataCannotChangeSelectedFab()
     {
         var scenario = Scenario();
-        var modified = scenario with { Fabs = [scenario.Fabs[1] with { LotCount = 100, ProcessTimeUs = "99" }, scenario.Fabs[0]] };
+        var modified = scenario with { SiteId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" };
         Assert.Equal(JsonSerializer.Serialize(new FabSimulation().Execute(scenario, A)), JsonSerializer.Serialize(new FabSimulation().Execute(modified, A)));
     }
 
@@ -86,9 +86,19 @@ public sealed class SimulationTests
     {
         var engine = new FabSimulation();
         var s = Scenario();
-        foreach (var invalid in new[] { s with { Fabs = [] }, s with { Fabs = [s.Fabs[0], s.Fabs[0]] }, s with { SiteId = Guid.Empty.ToString() }, s with { Mode = "SHARED_CAPACITY" }, s with { ContractVersion = 2 }, s with { Fabs = [s.Fabs[0] with { FabId = "bad" }] }, s with { Fabs = [s.Fabs[0], s.Fabs[1] with { Code = s.Fabs[0].Code }] }, s with { Fabs = Enumerable.Range(1, 33).Select(i => new FabScenario(new Guid(i, 0, 0, new byte[8]).ToString(), "F" + i, 1, "1")).ToArray() } })
+        foreach (var invalid in new[] { s with { Fabs = [] }, s with { Fabs = [s.Fabs[0], s.Fabs[0]] }, s with { SiteId = Guid.Empty.ToString() }, s with { Mode = "SHARED_CAPACITY" }, s with { ContractVersion = 2 }, s with { Fabs = [s.Fabs[0] with { FabId = "bad" }] }, s with { Fabs = [s.Fabs[0], s.Fabs[0] with { FabId = ForeignFabId }] } })
             Assert.ThrowsAny<ArgumentException>(() => engine.Execute(invalid, A));
         Assert.ThrowsAny<ArgumentException>(() => engine.Execute(s, "33333333-3333-4333-8333-333333333333"));
+    }
+
+    [Fact]
+    public void RejectsTooManyMemberEntriesBeforeCheckingDuplicateIdentity()
+    {
+        var scenario = Scenario();
+        var tooManyEntries = scenario with { Fabs = Enumerable.Repeat(scenario.Fabs[0], 33).ToArray() };
+        var error = Assert.Throws<ArgumentException>(() => new FabSimulation().Execute(tooManyEntries, A));
+        // A duplicate-identity failure would hide a missing member-count guard.
+        Assert.Contains("Between 1 and 32 FABs are required", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -187,10 +197,11 @@ public sealed class SimulationTests
         Assert.ThrowsAny<ArgumentException>(() => engine.Resume(checkpoint with { StateJson = modified, Checksum = checksum }));
     }
 
-    // Digests frozen from the record-class baseline (fab_tests 153/153 green) before the
-    // value-type/allocation refactor: event JSON, stats and checkpoint bytes must not move.
+    // The semantic digest is frozen from the record-class baseline before the value-type
+    // refactor. Checkpoint digests use the single-FAB fixture; removing the former member
+    // changes scenario bytes only, with the event JSON and statistics unchanged.
     [Fact]
-    public void FrozenSimulationDigestsMatchPreChangeBaseline()
+    public void FrozenSingleFabSimulationAndCheckpointDigestsRemainStable()
     {
         var engine = new FabSimulation();
         var result = engine.Execute(Scenario(), A);
@@ -203,15 +214,15 @@ public sealed class SimulationTests
 
         var session = engine.Start(Scenario(), A);
         var start = session.CreateCheckpoint();
-        Assert.Equal("b84499972d471543c2f6ae334c530495965ef3ccc35b0c92c6baed99c5fec647", start.Checksum);
+        Assert.Equal("ae8fee6fc178d01b6c84cb5a90c9a506ae5ec50485e6b916087efeca9209c7cf", start.Checksum);
         session.StepOneEvent();
         var afterOne = session.CreateCheckpoint();
-        Assert.Equal("0472573da77977b8bfb3d9a11aa5b4beef62ab9cf811f29332c862beeeb4ed2a", afterOne.Checksum);
-        Assert.Equal(1818, afterOne.StateJson.Length);
+        Assert.Equal("d2851f27098c94987a9e60ecdb0e85050a27c82a3e32010c2f3742b78468515b", afterOne.Checksum);
+        Assert.Equal(1719, afterOne.StateJson.Length);
         session.StepOneEvent();
         var afterTwo = session.CreateCheckpoint();
-        Assert.Equal("7c218dc16f01190a9a67d0291a19777a751c076c256ebdf368c869c6e39e2d99", afterTwo.Checksum);
-        Assert.Equal(1868, afterTwo.StateJson.Length);
+        Assert.Equal("10283c4e444e674fe610f914ce959ac276fd9d43a9e42b28515b8378f276a508", afterTwo.Checksum);
+        Assert.Equal(1769, afterTwo.StateJson.Length);
     }
 
     [Fact]

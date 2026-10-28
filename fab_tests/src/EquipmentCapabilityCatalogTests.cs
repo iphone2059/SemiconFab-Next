@@ -14,7 +14,6 @@ public sealed class EquipmentCapabilityCatalogTests
 {
     private static readonly Guid SiteId = SiteDirectory.DemoSiteId;
     private static readonly FabUnit Fab01 = SiteDirectory.CreateFab(1);
-    private static readonly FabUnit Fab02 = SiteDirectory.CreateFab(2);
 
     [Fact]
     public void DefaultCatalogCoversSyntheticSurfaceWithStartStopPause()
@@ -25,15 +24,15 @@ public sealed class EquipmentCapabilityCatalogTests
         Assert.Equal("equipment-0", first.EquipmentId);
         Assert.Equal(new[] { "PAUSE", "START", "STOP" }, first.AllowedActions.OrderBy(action => action, StringComparer.Ordinal).ToArray());
         Assert.Empty(first.StatePreconditions);
-        Assert.True(catalog.TryGetCapability(SiteId, Fab02, "equipment-120", out _));
+        Assert.True(catalog.TryGetCapability(SiteId, Fab01, "equipment-120", out _));
 
-        Assert.False(catalog.TryGetCapability(SiteId, Fab02, "equipment-121", out _));
-        Assert.False(catalog.TryGetCapability(SiteId, Fab02, "equipment-007", out _));
-        Assert.False(catalog.TryGetCapability(SiteId, Fab02, "tool-0", out _));
+        Assert.False(catalog.TryGetCapability(SiteId, Fab01, "equipment-121", out _));
+        Assert.False(catalog.TryGetCapability(SiteId, Fab01, "equipment-007", out _));
+        Assert.False(catalog.TryGetCapability(SiteId, Fab01, "tool-0", out _));
     }
 
     [Fact]
-    public void ConfiguredFabOverridesDefaultCatalogAndOtherFabsFallBack()
+    public void ConfiguredFabOverridesDefaultCatalog()
     {
         var options = new EquipmentCapabilityCatalogOptions();
         var entry = new EquipmentCapabilityEntryOptions { Actions = ["START", "STOP"] };
@@ -49,8 +48,17 @@ public sealed class EquipmentCapabilityCatalogTests
         Assert.Equal("running", custom.StatePreconditions["STOP"]);
         // An explicitly configured FAB uses only its configured entries.
         Assert.False(catalog.TryGetCapability(SiteId, Fab01, "equipment-1", out _));
-        // Other FABs keep the generated synthetic fallback.
-        Assert.True(catalog.TryGetCapability(SiteId, Fab02, "equipment-1", out _));
+    }
+
+    [Fact]
+    public void UnmatchedFabConfigurationLeavesSingleFabFallbackAvailable()
+    {
+        var options = new EquipmentCapabilityCatalogOptions();
+        options.Fabs["FOREIGN-FAB"] = new EquipmentCapabilityFabOptions();
+        var catalog = Catalog(options);
+
+        Assert.True(catalog.TryGetCapability(SiteId, Fab01, "equipment-1", out var capability));
+        Assert.Contains("STOP", capability.AllowedActions);
     }
 
     [Fact]
@@ -124,17 +132,17 @@ public sealed class EquipmentCapabilityCatalogTests
         foreach (var equipmentId in new[] { "equipment-0", "equipment-120" })
         {
             foreach (var action in new[] { "START", "STOP", "PAUSE" })
-                Assert.True(validator.Validate(SiteId, Fab02, Request(equipmentId, action, Fab02)).IsValid);
+                Assert.True(validator.Validate(SiteId, Fab01, Request(equipmentId, action)).IsValid);
         }
-        Assert.Equal("Unknown equipment", validator.Validate(SiteId, Fab02, Request("equipment-121", "START", Fab02)).Title);
-        Assert.Equal("Unsupported action", validator.Validate(SiteId, Fab02, Request("equipment-0", "RESET", Fab02)).Title);
+        Assert.Equal("Unknown equipment", validator.Validate(SiteId, Fab01, Request("equipment-121", "START")).Title);
+        Assert.Equal("Unsupported action", validator.Validate(SiteId, Fab01, Request("equipment-0", "RESET")).Title);
     }
 
     private static EquipmentCapabilityCatalog Catalog(EquipmentCapabilityCatalogOptions options) =>
         new(Options.Create(options));
 
-    private static EquipmentCommandRequest Request(string equipmentId, string action, FabUnit? fab = null) =>
-        new((fab ?? Fab01).Id.ToString("D"), equipmentId, action);
+    private static EquipmentCommandRequest Request(string equipmentId, string action) =>
+        new(Fab01.Id.ToString("D"), equipmentId, action);
 
     private sealed class FixedStateProvider(string? state) : IEquipmentStateProvider
     {

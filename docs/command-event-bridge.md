@@ -221,7 +221,7 @@ Bridge 不直接写 Query 缓存、不 dispatch Redux、不 setState。工作流
 - **When**：Bridge/Runtime 按 FAB 分别处理。
 - **Then**：每个工作流只收到本 FAB 的事件；A/B/C 状态独立；Query key（若涉及）也包含 `fabId`；销毁 A 不影响 B/C。
 - **断言点**：A=succeeded、B=failed、C=executing；交叉调用 0 次。
-- **状态**：PASS（多 FAB 测试源 + RuntimeBootstrap）。
+- **状态**：当前使用单 FAB 测试源与 RuntimeBootstrap 回归；保留多 FAB 的复合身份架构，当前不做多 FAB 验收。
 
 ### CE-08 FAB 运行时关闭后取消订阅、停止 actor、不再回调
 

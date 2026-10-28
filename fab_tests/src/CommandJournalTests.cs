@@ -215,25 +215,25 @@ public sealed class CommandJournalTests
     }
 
     [Fact]
-    public void JournalReadsFilterToRequestedFab()
+    public void JournalReadsFilterSingleFabEventsAndExcludeForeignIdentity()
     {
         var service = Service();
-        var fab1 = SiteDirectory.CreateFab(1).Id.ToString("D");
-        var fab2 = SiteDirectory.CreateFab(2).Id.ToString("D");
-        Submit(service, "equipment-0", "key-1", fab1);
-        Submit(service, "equipment-0", "key-2", fab2);
+        var foreignFabId = Guid.NewGuid().ToString("D");
+        Submit(service, "equipment-0", "key-1");
 
         var all = service.ReadJournal(SiteId, null);
-        Assert.Contains(all.Events, envelope => envelope.Payload.FabId == fab1);
-        Assert.Contains(all.Events, envelope => envelope.Payload.FabId == fab2);
+        Assert.NotEmpty(all.Events);
+        Assert.All(all.Events, envelope => Assert.Equal(FabId, envelope.Payload.FabId));
 
-        var onlyFab2 = service.ReadJournal(SiteId, null, fab2);
-        Assert.NotEmpty(onlyFab2.Events);
-        Assert.All(onlyFab2.Events, envelope => Assert.Equal(fab2, envelope.Payload.FabId));
+        Assert.Empty(service.ReadJournal(SiteId, null, foreignFabId).Events);
+        Assert.Empty(service.ReadJournalSince(SiteId, 0, foreignFabId).Events);
 
-        var liveFab1 = service.ReadJournalSince(SiteId, 0, fab1);
-        Assert.NotEmpty(liveFab1.Events);
-        Assert.All(liveFab1.Events, envelope => Assert.Equal(fab1, envelope.Payload.FabId));
+        var replay = service.ReadJournal(SiteId, null, FabId);
+        Assert.NotEmpty(replay.Events);
+        Assert.All(replay.Events, envelope => Assert.Equal(FabId, envelope.Payload.FabId));
+        var live = service.ReadJournalSince(SiteId, 0, FabId);
+        Assert.NotEmpty(live.Events);
+        Assert.All(live.Events, envelope => Assert.Equal(FabId, envelope.Payload.FabId));
     }
 
     private static EquipmentCommandService Service(EquipmentCommandOptions? options = null) =>

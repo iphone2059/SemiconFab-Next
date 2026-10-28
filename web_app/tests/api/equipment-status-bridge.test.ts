@@ -13,15 +13,14 @@ import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-statu
 /**
  * The Query-cache projection bridge is the single acceptance boundary for REST
  * and SSE snapshots. These tests pin the cross-boundary races the plan requires:
- * FAB A→B→A isolation, a late callback from an old scope activation, duplicate
+ * same-FAB reactivation, a late callback from an old epoch, duplicate
  * epoch/sequence after an SSE reconnect, REST/SSE reordering, missing fields and
  * a large frame. The Query cache itself stays the only accepted-snapshot store.
  */
 
 const scopeA = { siteId: 'site-a', fabId: 'fab-1' };
-const scopeB = { siteId: 'site-a', fabId: 'fab-2' };
+const foreignScope = { siteId: 'site-a', fabId: 'unknown-fab' };
 const keyA = equipmentStatusQueryKey(scopeA.siteId, scopeA.fabId);
-const keyB = equipmentStatusQueryKey(scopeB.siteId, scopeB.fabId);
 const tools = (state = 'running') => FAB_LAYOUT.map(() => ({ state }));
 
 const frame = (
@@ -45,45 +44,36 @@ const jsonResponse = (value: unknown) =>
 
 afterEach(() => vi.unstubAllGlobals());
 
-it('A→B→A keeps the Query cache and the ordering high-water isolated per FAB', () => {
+it('reactivating the same FAB seeds its ordering high-water from the accepted Query cache', () => {
   const client = freshClient();
   activateEquipmentStatusScope(client, scopeA);
   expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(scopeA, 5, '2026-10-27T00:00:05Z'))?.sequence).toBe(5);
   // The scope gate resolution is stable for one activation generation.
   expect(equipmentStatusGate(client, scopeA)).toBe(equipmentStatusGate(client, scopeA));
 
-  activateEquipmentStatusScope(client, scopeB);
-  // B starts its own ordering history: a low sequence of the other FAB is fine.
-  expect(acceptEquipmentStatusSnapshot(client, scopeB, frame(scopeB, 1, '2026-10-27T00:00:01Z', { tools: tools('down') }))?.sequence).toBe(1);
-  // A frame sent to B's scope never writes B's cache nor advances A's gate.
-  expect(acceptEquipmentStatusSnapshot(client, scopeB, frame(scopeA, 9, '2026-10-27T00:00:09Z'))).toBeUndefined();
-  expect(client.getQueryData<EquipmentStatusSnapshot>(keyA)?.sequence).toBe(5);
-  expect(client.getQueryData<EquipmentStatusSnapshot>(keyB)?.sequence).toBe(1);
-
-  // Back to A: re-activation seeds the new gate from the accepted cache entry, so
-  // the return visit cannot roll the FAB back to an older frame.
+  const previousGate = equipmentStatusGate(client, scopeA);
+  // A fresh page activation keeps the cache's accepted history.
   activateEquipmentStatusScope(client, scopeA);
+  expect(equipmentStatusGate(client, scopeA)).not.toBe(previousGate);
+  expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(foreignScope, 9, '2026-10-27T00:00:09Z'))).toBeUndefined();
   expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(scopeA, 4, '2026-10-27T00:00:04Z'))).toBeUndefined();
   expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(scopeA, 6, '2026-10-27T00:00:06Z'))?.sequence).toBe(6);
   expect(client.getQueryData<EquipmentStatusSnapshot>(keyA)?.sequence).toBe(6);
-  // B's re-entry is independent of A's advance.
-  activateEquipmentStatusScope(client, scopeB);
-  expect(acceptEquipmentStatusSnapshot(client, scopeB, frame(scopeB, 2, '2026-10-27T00:00:02Z'))?.sequence).toBe(2);
-  expect(client.getQueryData<EquipmentStatusSnapshot>(keyB)?.sequence).toBe(2);
-  expect(client.getQueryData<EquipmentStatusSnapshot>(keyA)?.sequence).toBe(6);
+  expect(client.getQueryCache().getAll()).toHaveLength(1);
 });
 
-it('a late callback from the previous scope activation cannot pollute the new FAB', () => {
+it('a late callback from the previous epoch cannot pollute the reactivated FAB cache', () => {
   const client = freshClient();
   activateEquipmentStatusScope(client, scopeA);
-  activateEquipmentStatusScope(client, scopeB);
-  // The A SSE listener fires once more after the page switched to B (its abort
-  // raced with the frame); the composite scope token routes it to A's cache only.
-  const lateA = frame(scopeA, 9, '2026-10-27T00:00:09Z', { tools: tools('maint') });
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, lateA)?.sequence).toBe(9);
-  expect(client.getQueryData(keyB)).toBeUndefined();
-  // B's fresh ordering history was not advanced by A's high-water mark.
-  expect(acceptEquipmentStatusSnapshot(client, scopeB, frame(scopeB, 1, '2026-10-27T00:00:01Z'))?.sequence).toBe(1);
+  expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(scopeA, 5, '2026-10-27T00:00:05Z'))?.sequence).toBe(5);
+  activateEquipmentStatusScope(client, scopeA);
+  const restarted = frame(scopeA, 1, '2026-10-27T00:00:10Z', { epoch: 2, tools: tools('down') });
+  expect(acceptEquipmentStatusSnapshot(client, scopeA, restarted)).toEqual(restarted);
+  // A delayed callback from before the backend restart carries the old epoch.
+  const late = frame(scopeA, 9, '2026-10-27T00:00:09Z', { tools: tools('maint') });
+  expect(acceptEquipmentStatusSnapshot(client, scopeA, late)).toBeUndefined();
+  expect(client.getQueryData(keyA)).toEqual(restarted);
+  expect(client.getQueryCache().getAll()).toHaveLength(1);
 });
 
 it('a reconnected SSE stream replaying the same epoch/sequence is a duplicate, not a cache write', () => {
@@ -130,7 +120,7 @@ it('rejects missing fields, partial FAB frames and crossed identities before the
     frame(scopeA, 1, '2026-10-27T00:00:01Z', { tools: [{ state: 'UP' }] }),
     frame(scopeA, -1, '2026-10-27T00:00:01Z'),
     frame(scopeA, 1, '2026-10-27T00:00:01Z', { epoch: 1.5 }),
-    frame(scopeB, 1, '2026-10-27T00:00:01Z'), // crossed FAB
+    frame(foreignScope, 1, '2026-10-27T00:00:01Z'), // crossed FAB
     'not-an-object',
     null,
   ];

@@ -1,9 +1,9 @@
-using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using Fab.Contracts;
+using Fab.Site;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
@@ -47,35 +47,33 @@ public sealed class ApiTests
     }
 
     [Fact]
-    public async Task SiteHasThreeDefaultFabsWithStableFab01Id()
+    public async Task SiteHasOneDefaultFabWithStableFab01Id()
     {
         using var factory = Factory();
         using var client = Authorized(factory);
         var sites = await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites");
         var site = Assert.Single(sites!);
         Assert.Equal(64, site.TemplateHash.Length);
-        Assert.Equal(3, site.Fabs.Length);
-        Assert.Equal(new[] { "FAB-01", "FAB-02", "FAB-03" }, site.Fabs.Select(fab => fab.Code).ToArray());
-        Assert.Equal(3, site.Fabs.Select(fab => fab.FabId).Distinct(StringComparer.Ordinal).Count());
+        var fab = Assert.Single(site.Fabs);
+        Assert.Equal("FAB-01", fab.Code);
+        Assert.Equal(ExpectedFabId("FAB-01"), fab.FabId);
+    }
 
-        // FAB-01 keeps the historically published Guid; FAB-02/03 are derived the same deterministic way.
-        Assert.Equal(ExpectedFabId("FAB-01"), site.Fabs[0].FabId);
-        Assert.Equal(ExpectedFabId("FAB-02"), site.Fabs[1].FabId);
-        Assert.Equal(ExpectedFabId("FAB-03"), site.Fabs[2].FabId);
+    [Fact]
+    public async Task SingleFabCountCanBeConfiguredExplicitly()
+    {
+        using var factory = Factory(("Fab:FabCount", "1"));
+        using var client = Authorized(factory);
+        var site = Assert.Single((await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites"))!);
+        Assert.Equal("FAB-01", Assert.Single(site.Fabs).Code);
     }
 
     [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(5)]
-    public async Task FabCountIsConfigurable(int fabCount)
+    [InlineData(0)]
+    [InlineData(33)]
+    public void InvalidConfiguredFabCountIsRejected(int fabCount)
     {
-        using var factory = Factory(("Fab:FabCount", fabCount.ToString(CultureInfo.InvariantCulture)));
-        using var client = Authorized(factory);
-        var site = Assert.Single((await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites"))!);
-        Assert.Equal(fabCount, site.Fabs.Length);
-        for (var index = 0; index < fabCount; index++)
-            Assert.Equal("FAB-" + (index + 1).ToString("00", CultureInfo.InvariantCulture), site.Fabs[index].Code);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SiteDirectory(fabCount));
     }
 
     [Fact]
@@ -114,20 +112,19 @@ public sealed class ApiTests
     }
 
     [Fact]
-    public async Task RunSupportsArbitraryMultiFabSubset()
+    public async Task SingleFabRunPersistsExecutionResultsAndSiteKpi()
     {
         using var factory = Factory();
         using var client = Authorized(factory);
         var site = Assert.Single((await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites"))!);
-        // FAB-01 + FAB-03: a subset, with a deliberate gap in the catalog order.
+        var fab = Assert.Single(site.Fabs);
         var request = new CreateRunRequest(new ScenarioDefinition(
             1, site.SiteId, "INDEPENDENT", "42", "100000", "0",
-            new[] { site.Fabs[0], site.Fabs[2] }.Select(fab => new FabScenario(fab.FabId, fab.Code, 3, "1000")).ToArray()));
-        using var response = await Post(client, request, "multi-fab");
+            [new FabScenario(fab.FabId, fab.Code, 3, "1000")]));
+        using var response = await Post(client, request, "single-fab");
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         var created = (await response.Content.ReadFromJsonAsync<RunSummary>())!;
-        Assert.Equal(2, created.Executions.Length);
-        Assert.Equal(new[] { site.Fabs[0].FabId, site.Fabs[2].FabId }, created.Executions.Select(execution => execution.FabId).ToArray());
+        Assert.Equal(fab.FabId, Assert.Single(created.Executions).FabId);
 
         RunSummary run = created;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
@@ -139,15 +136,15 @@ public sealed class ApiTests
         Assert.Equal("COMPLETED", run.Status);
         Assert.All(run.Executions, execution => Assert.Equal("COMPLETED", execution.Status));
         var result = (await client.GetFromJsonAsync<RunResult>($"/api/v1/runs/{created.RunId}/results"))!;
-        Assert.Equal(2, result.Fabs.Length);
-        Assert.Equal(new[] { site.Fabs[0].FabId, site.Fabs[2].FabId }, result.Fabs.Select(fab => fab.FabId).ToArray());
-        Assert.Equal("6", result.Fabs.Sum(fab => int.Parse(fab.CompletedLots, CultureInfo.InvariantCulture)).ToString(CultureInfo.InvariantCulture));
+        var resultFab = Assert.Single(result.Fabs);
+        Assert.Equal(fab.FabId, resultFab.FabId);
+        Assert.Equal("3", resultFab.CompletedLots);
 
         using var kpi = await client.GetAsync($"/api/v1/sites/{site.SiteId}/kpi?runId={created.RunId}");
         Assert.Equal(HttpStatusCode.OK, kpi.StatusCode);
         using var totals = System.Text.Json.JsonDocument.Parse(await kpi.Content.ReadAsStringAsync());
-        Assert.Equal("6", totals.RootElement.GetProperty("completedLots").GetString());
-        Assert.Equal(2, totals.RootElement.GetProperty("fabCount").GetInt32());
+        Assert.Equal("3", totals.RootElement.GetProperty("completedLots").GetString());
+        Assert.Equal(1, totals.RootElement.GetProperty("fabCount").GetInt32());
     }
 
     [Fact]
@@ -166,7 +163,7 @@ public sealed class ApiTests
         using var duplicate = await Post(client, new CreateRunRequest(request.Scenario with { Fabs = [request.Scenario.Fabs[0], request.Scenario.Fabs[0]] }), "duplicate-fab");
         Assert.Equal(HttpStatusCode.BadRequest, duplicate.StatusCode);
 
-        var mismatchedCode = request.Scenario.Fabs[0] with { Code = site.Fabs[1].Code };
+        var mismatchedCode = request.Scenario.Fabs[0] with { Code = "FOREIGN-FAB" };
         using var mismatched = await Post(client, new CreateRunRequest(request.Scenario with { Fabs = [mismatchedCode] }), "mismatched-code");
         Assert.Equal(HttpStatusCode.BadRequest, mismatched.StatusCode);
 

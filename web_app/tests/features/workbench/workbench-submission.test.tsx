@@ -22,7 +22,7 @@ const site = (siteId: string): SiteDto => ({
   siteId,
   code: siteId.toUpperCase(),
   templateHash: 'hash',
-  fabs: [{ fabId: `${siteId}-fab`, code: 'FAB' }],
+  fabs: [{ fabId: 'product-fab', code: 'FAB' }],
 });
 
 const run = (runId: string, siteId = 'site-a'): RunSummary => ({

@@ -11,7 +11,7 @@ import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '../../../
  */
 
 const scopeA = { siteId: 'site-1', fabId: 'fab-a' };
-const scopeB = { siteId: 'site-1', fabId: 'fab-b' };
+const foreignScope = { siteId: 'site-1', fabId: 'unknown-fab' };
 
 const createJobTool = (index: number): FabLayoutTool => FAB_LAYOUT[index];
 
@@ -29,7 +29,7 @@ it('stores the live projection under an explicit composite scope and ignores oth
 
   // A coalesced batch from another FAB (or a late callback after a switch) must
   // never apply, even when its siteId is identical.
-  twinPageActions.liveSnapshotReceived({ scope: scopeB, states: statesWith('maint'), updatedAt: '2026-10-27T00:00:01Z' });
+  twinPageActions.liveSnapshotReceived({ scope: foreignScope, states: statesWith('maint'), updatedAt: '2026-10-27T00:00:01Z' });
   expect(useTwinPageStore.getState().liveStatusScope).toEqual(scopeA);
   expect(useTwinPageStore.getState().liveToolStates[0]).toBe('down');
   expect(useTwinPageStore.getState().statusFeed?.updatedAt).toBe('2026-10-27T00:00:00Z');
@@ -38,22 +38,22 @@ it('stores the live projection under an explicit composite scope and ignores oth
 it('marks the feed stale only for the active scope (never labels a stale stream LIVE)', () => {
   twinPageActions.liveScopeActivated(scopeA);
   twinPageActions.liveSnapshotReceived({ scope: scopeA, states: statesWith('running'), updatedAt: '2026-10-27T00:00:00Z' });
-  twinPageActions.statusFeedStale({ scope: scopeB });
+  twinPageActions.statusFeedStale({ scope: foreignScope });
   expect(useTwinPageStore.getState().statusFeed?.stale).toBe(false);
   twinPageActions.statusFeedStale({ scope: scopeA });
   expect(useTwinPageStore.getState().statusFeed?.stale).toBe(true);
 });
 
-it('clears tool states, status feed and MES demo state when the FAB scope is activated', () => {
+it('clears tool states, status feed and MES demo state when the same FAB scope is reactivated', () => {
   twinPageActions.liveScopeActivated(scopeA);
   twinPageActions.liveSnapshotReceived({ scope: scopeA, states: statesWith('down'), updatedAt: '2026-10-27T00:00:00Z' });
   twinPageActions.statusFeedStale({ scope: scopeA });
   twinPageActions.mesJobSet({ index: 3, job: createMesJob(createJobTool(3), 3, 1000) });
   twinPageActions.inspectorMesSet({ id: 'ref-tool', job: createMesJob(createJobTool(4), 4, 1000) });
 
-  twinPageActions.liveScopeActivated(scopeB);
+  twinPageActions.liveScopeActivated(scopeA);
   const state = useTwinPageStore.getState();
-  expect(state.liveStatusScope).toEqual(scopeB);
+  expect(state.liveStatusScope).toEqual(scopeA);
   expect(state.liveToolStates).toEqual([...FAB_TOOL_STATES]);
   expect(state.statusFeed).toBeUndefined();
   expect(state.mesJobs).toEqual({});

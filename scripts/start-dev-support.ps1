@@ -1,3 +1,65 @@
+function Assert-FabDevNodeVersion {
+    param(
+        [Parameter(Mandatory = $true)][string]$NodePath,
+        [Parameter(Mandatory = $true)][string]$NpmCli,
+        [Parameter(Mandatory = $true)][string]$RequiredRange
+    )
+
+    # npm ships semver; do not depend on web_app/node_modules on a fresh clone.
+    $fabSemverPath = Join-Path (Split-Path -Parent (Split-Path -Parent $NpmCli)) 'node_modules\semver'
+    $PSNativeCommandUseErrorActionPreference = $false
+    $fabNodeVersion = & $NodePath -e 'process.stdout.write(process.versions.node); process.exit(require(process.argv[1]).satisfies(process.versions.node, process.argv[2]) ? 0 : 1)' $fabSemverPath $RequiredRange
+    if ($LASTEXITCODE -ne 0) { throw "Node.js $fabNodeVersion does not satisfy web_app/package.json ($RequiredRange). Install a matching Node.js version with npm, then reopen PowerShell." }
+}
+
+function Get-FabDevPnpm {
+    param(
+        [Parameter(Mandatory = $true)][string]$NodePath,
+        [Parameter(Mandatory = $true)][string]$NpmCli,
+        [Parameter(Mandatory = $true)][string]$Version,
+        [Parameter(Mandatory = $true)][string]$ToolingDirectory,
+        [AllowEmptyCollection()][string[]]$Candidates = @()
+    )
+
+    $PSNativeCommandUseErrorActionPreference = $false
+    $fabLocalEntry = Join-Path $ToolingDirectory 'node_modules\pnpm\bin\pnpm.mjs'
+    foreach ($fabCandidate in @($fabLocalEntry) + $Candidates) {
+        if (-not (Test-Path -LiteralPath $fabCandidate -PathType Leaf)) { continue }
+        try {
+            $fabCandidateVersion = & $NodePath $fabCandidate --version 2>$null
+            if ($LASTEXITCODE -eq 0 -and $fabCandidateVersion -eq $Version) { return $fabCandidate }
+        } catch { }
+    }
+
+    # Avoid extensionless pnpm.cmd shims and leave global tooling unchanged.
+    Write-Host "Preparing pnpm $Version in $ToolingDirectory ..."
+    & $NodePath $NpmCli install --prefix $ToolingDirectory --no-save --package-lock=false --ignore-scripts --no-audit --no-fund --include=dev "pnpm@$Version" | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "pnpm $Version bootstrap failed with exit code $LASTEXITCODE. Check the npm output above and registry/network access, then rerun this script." }
+    if (-not (Test-Path -LiteralPath $fabLocalEntry -PathType Leaf)) { throw "pnpm bootstrap did not create $fabLocalEntry." }
+    $fabInstalledVersion = & $NodePath $fabLocalEntry --version
+    if ($LASTEXITCODE -ne 0 -or $fabInstalledVersion -ne $Version) { throw "Cannot run the required pnpm $Version at $fabLocalEntry." }
+    return $fabLocalEntry
+}
+
+function Install-FabDevWebDependencies {
+    param(
+        [Parameter(Mandatory = $true)][string]$NodePath,
+        [Parameter(Mandatory = $true)][string]$PnpmCli,
+        [Parameter(Mandatory = $true)][string]$WebDirectory
+    )
+
+    $PSNativeCommandUseErrorActionPreference = $false
+    Push-Location -LiteralPath $WebDirectory
+    try {
+        # Incremental install detects missing/stale dependencies using pnpm itself.
+        # Vite is a devDependency, even when the caller has NODE_ENV=production.
+        Write-Host 'Checking and installing frontend dependencies from pnpm-lock.yaml ...'
+        & $NodePath $PnpmCli install --frozen-lockfile --prod=false | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw "Frontend dependency installation failed with exit code $LASTEXITCODE. Check the pnpm output above and registry/network access, then rerun this script." }
+        if (-not (Test-Path -LiteralPath 'node_modules\vite\bin\vite.js' -PathType Leaf)) { throw 'Frontend dependency installation did not provide Vite. Check the pnpm output above.' }
+    } finally { Pop-Location }
+}
+
 function Get-FabDevelopmentKey {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -11,6 +73,22 @@ function Get-FabDevelopmentKey {
     $fabKey = [IO.File]::ReadAllText($Path).Trim()
     if ($fabKey.Length -lt 32) { throw "Development key is too short: $Path" }
     return $fabKey
+}
+
+function Set-FabDevEnvironmentState {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [AllowNull()]$Value
+    )
+
+    # [Environment]::SetEnvironmentVariable converts a PowerShell $null argument to an
+    # empty string. A blank variable still binds to configuration (for example
+    # Fab__EmbeddedWorker='' fails the API host), so an absent variable must be removed.
+    if ($null -eq $Value) {
+        Remove-Item -Path ('Env:' + $Name) -ErrorAction SilentlyContinue
+        return
+    }
+    [Environment]::SetEnvironmentVariable($Name, [string]$Value, 'Process')
 }
 
 function Assert-FabDevPortAvailable {

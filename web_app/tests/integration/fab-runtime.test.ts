@@ -14,30 +14,38 @@ function adapter(runtime: { getWorkflow(id: string): unknown }): XStateCommandWo
   return workflow;
 }
 
-describe('FabRuntime multi-FAB assembly (CE-07)', () => {
-  it('keeps the same commandId isolated per FAB with one runtime per FAB', () => {
-    const sources = new Map(['fab-a', 'fab-b', 'fab-c'].map((fabId) => [fabId, new FakeCommandEventSource()] as const));
-    const factory = new FabRuntimeFactory({ sourceFor: (fabId) => sources.get(fabId)! });
+describe('FabRuntime single-FAB assembly (CE-07)', () => {
+  it('replaces the FAB runtime without carrying its old workflow or source into the new generation', () => {
+    const oldSource = new FakeCommandEventSource();
+    const newSource = new FakeCommandEventSource();
     const registry = new FabRuntimeRegistry();
-    for (const fabId of sources.keys()) registry.register(factory.create(fabId));
-    expect(registry.size).toBe(3);
-    expect(registry.fabIds).toEqual(['fab-a', 'fab-b', 'fab-c']);
+    const first = new FabRuntimeFactory({ sourceFor: () => oldSource }).create('fab-a');
+    registry.register(first);
+    expect(registry.size).toBe(1);
+    expect(registry.fabIds).toEqual(['fab-a']);
     registry.startAll();
+    const oldWorkflow = first.trackCommand(commandId);
+    oldSource.emit(commandResult({ fabId: 'fab-a', commandId, revision: 5, outcome: 'executing' }));
+    expect(adapter(first).state).toBe('executing');
 
-    const workflows = new Map([...sources.keys()].map((fabId) => [fabId, registry.get(fabId)!.trackCommand(commandId)]));
-    for (const [fabId, source] of sources) {
-      source.emit(commandResult({ fabId, commandId, revision: 1, outcome: 'accepted' }));
-      source.emit(commandResult({ fabId, commandId, revision: 2, outcome: 'executing' }));
-    }
-    for (const fabId of sources.keys()) {
-      const workflow = workflows.get(fabId)!;
-      expect(workflow).toBeInstanceOf(XStateCommandWorkflowAdapter);
-      const state = adapter(registry.get(fabId)!);
-      expect(state.context).toMatchObject({ fabId, commandId, revision: 2, outcome: 'executing' });
-      expect(state.state).toBe('executing');
-    }
+    expect(registry.remove('fab-a')).toBe(first);
+    expect(oldSource.commandObservers).toBe(0);
+    const current = new FabRuntimeFactory({ sourceFor: () => newSource }).create('fab-a');
+    registry.register(current);
+    registry.startAll();
+    expect(current.trackCommand(commandId)).not.toBe(oldWorkflow);
+    expect(current.getProjection(commandId)).toMatchObject({ state: 'idle', revision: -1 });
+    oldSource.emit(commandResult({ fabId: 'fab-a', commandId, revision: 6, outcome: 'succeeded' }));
+    newSource.emit(commandResult({ fabId: 'unknown-fab', commandId, revision: 9, outcome: 'succeeded' }));
+    expect(current.getProjection(commandId)).toMatchObject({ state: 'idle', revision: -1 });
+    newSource.emit(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'accepted' }));
+    newSource.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'executing' }));
+    expect(adapter(current).context).toMatchObject({ fabId: 'fab-a', commandId, revision: 2, outcome: 'executing' });
+    expect(adapter(current).state).toBe('executing');
+    expect(registry.size).toBe(1);
     registry.disposeAll();
     expect(registry.size).toBe(0);
+    expect(newSource.commandObservers).toBe(0);
   });
 });
 

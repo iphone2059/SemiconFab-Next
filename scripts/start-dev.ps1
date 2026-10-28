@@ -21,12 +21,27 @@ if (-not $ApiOnly) {
     if ($ApiPort -eq $WebPort) { throw 'ApiPort and WebPort must be different.' }
     Assert-FabDevPortAvailable -Port $WebPort
 }
-$fabDotnet = (Get-Command dotnet.exe -ErrorAction Stop).Source
+$fabSdkVersion = (Get-Content -LiteralPath (Join-Path $fabProjectRoot 'global.json') -Raw | ConvertFrom-Json).sdk.version
+$fabDotnetCommand = Get-Command dotnet.exe -ErrorAction SilentlyContinue
+if ($null -eq $fabDotnetCommand) { throw "Install .NET SDK $fabSdkVersion (global.json), then reopen PowerShell." }
+$fabDotnet = $fabDotnetCommand.Source
 if (-not $ApiOnly) {
-    $fabNode = (Get-Command node.exe -ErrorAction Stop).Source
-    $fabNpmDirectory = Split-Path -Parent (Get-Command npm.cmd -ErrorAction Stop).Source
+    $fabWebDirectory = Join-Path $fabProjectRoot 'web_app'
+    $fabPackage = Get-Content -LiteralPath (Join-Path $fabWebDirectory 'package.json') -Raw | ConvertFrom-Json
+    $fabNodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
+    $fabNpmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
+    if ($null -eq $fabNodeCommand -or $null -eq $fabNpmCommand) { throw "Install Node.js $($fabPackage.engines.node) with npm (web_app/package.json), then reopen PowerShell." }
+    $fabNode = $fabNodeCommand.Source
+    $fabNpmDirectory = Split-Path -Parent $fabNpmCommand.Source
     $fabNpmCli = Join-Path $fabNpmDirectory 'node_modules\npm\bin\npm-cli.js'
     if (-not (Test-Path -LiteralPath $fabNpmCli)) { throw "Cannot find npm CLI at $fabNpmCli. Install Node.js with npm." }
+    Assert-FabDevNodeVersion -NodePath $fabNode -NpmCli $fabNpmCli -RequiredRange $fabPackage.engines.node
+    if ($fabPackage.packageManager -notmatch '^pnpm@(?<version>\d+\.\d+\.\d+)$') { throw 'web_app/package.json must pin an exact pnpm version.' }
+    $fabPnpmVersion = $Matches.version
+    $fabPnpmCandidates = @((Join-Path $fabWebDirectory 'node_modules\pnpm\bin\pnpm.mjs'))
+    foreach ($fabPnpmCommand in @(Get-Command pnpm.cmd -All -ErrorAction SilentlyContinue)) {
+        $fabPnpmCandidates += Join-Path (Split-Path -Parent $fabPnpmCommand.Source) 'node_modules\pnpm\bin\pnpm.mjs'
+    }
 }
 
 New-Item -ItemType Directory -Path $fabLocalDirectory -Force | Out-Null
@@ -40,12 +55,22 @@ $fabEnvironment = @{
     FAB_API_TARGET = $fabApiUrl
 }
 $fabEnvironment['Fab__DevelopmentKey'] = $fabEnvironment['FAB_DEVELOPMENT_KEY']
+if (-not $ApiOnly) { $fabEnvironment['NODE_ENV'] = 'development' }
 $fabPreviousEnvironment = @{}
 $fabApiProcess = $null
 $fabWebProcess = $null
 $fabExitCode = 0
 Push-Location -LiteralPath $fabProjectRoot
 try {
+    # Resolve global.json from the repository root, including when called elsewhere.
+    $PSNativeCommandUseErrorActionPreference = $false
+    $fabSelectedSdk = & $fabDotnet --version
+    if ($LASTEXITCODE -ne 0 -or $fabSelectedSdk -ne $fabSdkVersion) { throw "The required .NET SDK $fabSdkVersion could not be selected. Install the SDK specified in global.json, then reopen PowerShell." }
+    if (-not $ApiOnly) {
+        $fabPnpmTooling = Join-Path $fabProjectRoot ".local\tooling\pnpm\$fabPnpmVersion"
+        $fabPnpmCli = Get-FabDevPnpm -NodePath $fabNode -NpmCli $fabNpmCli -Version $fabPnpmVersion -ToolingDirectory $fabPnpmTooling -Candidates $fabPnpmCandidates
+        Install-FabDevWebDependencies -NodePath $fabNode -PnpmCli $fabPnpmCli -WebDirectory $fabWebDirectory
+    }
     foreach ($fabName in $fabEnvironment.Keys) {
         $fabPreviousEnvironment[$fabName] = [Environment]::GetEnvironmentVariable($fabName, 'Process')
         [Environment]::SetEnvironmentVariable($fabName, $fabEnvironment[$fabName], 'Process')
@@ -77,8 +102,9 @@ try {
         # Run the existing npm script without a .cmd shell, retaining its node child tree.
         $fabWebArguments = @($fabNpmCli, 'run', 'dev')
         if ($WebPort -ne 5173) { $fabWebArguments += @('--', '--port', [string]$WebPort) }
-        $fabWebProcess = Start-FabDevProcess -FilePath $fabNode -Arguments $fabWebArguments -WorkingDirectory (Join-Path $fabProjectRoot 'web_app') -StandardOutput $fabWebLog -StandardError $fabWebErrorLog
+        $fabWebProcess = Start-FabDevProcess -FilePath $fabNode -Arguments $fabWebArguments -WorkingDirectory $fabWebDirectory -StandardOutput $fabWebLog -StandardError $fabWebErrorLog
         $fabWebReady = $false
+        $fabWebFailure = 'No readiness response.'
         for ($fabAttempt = 0; $fabAttempt -lt 120; $fabAttempt++) {
             $fabApiProcess.Refresh()
             $fabWebProcess.Refresh()
@@ -86,12 +112,18 @@ try {
             if ($fabWebProcess.HasExited) { throw "Web exited with code $($fabWebProcess.ExitCode). Inspect $fabWebLog and $fabWebErrorLog." }
             try {
                 $fabPage = Invoke-WebRequest "$fabWebUrl/" -UseBasicParsing -TimeoutSec 1
-                if ($fabPage.StatusCode -eq 200) { $fabWebReady = $true; break }
-            } catch { }
+                if ($fabPage.StatusCode -ne 200) { throw 'Web page did not return HTTP 200.' }
+                $fabSites = Invoke-RestMethod "$fabWebUrl/api/v1/sites" -TimeoutSec 1
+                $fabCatalog = Invoke-RestMethod "$fabWebUrl/api/v1/catalog" -TimeoutSec 1
+                if ($fabSites.Count -lt 1 -or $fabCatalog.items.Count -lt 1) { throw 'The API proxy returned no sites or catalog records.' }
+                $fabWebReady = $true
+                break
+            } catch { $fabWebFailure = $_.Exception.Message }
             Start-Sleep -Milliseconds 250
         }
-        if (-not $fabWebReady) { throw "Web did not become ready. Inspect $fabWebLog and $fabWebErrorLog." }
+        if (-not $fabWebReady) { throw "Web did not become ready: $fabWebFailure. Inspect $fabWebLog and $fabWebErrorLog." }
         Write-Host "Web ready: $fabWebUrl/"
+        Write-Host "Ctrl+click to browse: $fabWebUrl/"
     }
     Write-Host "Logs: $fabLocalDirectory; press Ctrl+C to stop this invocation."
     while ($true) {
@@ -112,7 +144,7 @@ try {
         }
     } finally {
         foreach ($fabName in $fabPreviousEnvironment.Keys) {
-            [Environment]::SetEnvironmentVariable($fabName, $fabPreviousEnvironment[$fabName], 'Process')
+            Set-FabDevEnvironmentState -Name $fabName -Value $fabPreviousEnvironment[$fabName]
         }
         Pop-Location
     }
