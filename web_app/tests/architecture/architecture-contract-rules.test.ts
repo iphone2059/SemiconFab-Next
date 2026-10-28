@@ -568,18 +568,28 @@ it('R11: an unregistered generated file and a deleted registered file both fail 
 // R12: public components need verified cross-feature usage or a justified design-system role.
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Public components need a verifiable owner, not merely a cross-feature count.
+ * Plan R12 explicitly allows application-level ownership by responsibility:
+ * - design-system: a primitive any layer may compose (must still have an importer);
+ * - frozen-asset: a versioned original data inventory whose provenance is owned globally;
+ * - app-infrastructure: application-shell plumbing (e.g. ErrorBoundary) that must be
+ *   genuinely composed by app/** or main.tsx - that claim is verified against the
+ *   import graph instead of being trusted as a string.
+ * A component claimed by exactly one feature without a role is a violation: move it
+ * into that feature. Feature-local widgets are therefore not allowed to squat here.
+ */
 interface ComponentRole {
   readonly file: string;
+  readonly kind: 'design-system' | 'frozen-asset' | 'app-infrastructure';
   readonly role: string;
 }
 
-/** Explicit global design-system roles (plan R12 allows a verifiable role instead of 2 features). */
+/** Explicit component roles (plan R12 allows a provable role instead of 2 features). */
 const COMPONENT_DESIGN_SYSTEM_ALLOWLIST: readonly ComponentRole[] = [
-  { file: 'components/class-names.ts', role: 'design-system class-name utility shared by components/* primitives and the Twin feature' },
-  { file: 'components/error-boundary.tsx', role: 'application-shell fatal error boundary composed by app/providers and app/router/routes' },
-  { file: 'components/original-icons-data.ts', role: 'frozen original SVG data table, internal to original-icons.tsx; provenance docs/attribution.md' },
-  { file: 'components/original-icons.tsx', role: 'single global frozen original icon source consumed by the Twin feature' },
-  { file: 'components/ui.tsx', role: 'generic design-system primitives (Panel, StatusPill) with no feature knowledge' },
+  { file: 'components/error-boundary.tsx', kind: 'app-infrastructure', role: 'application-shell fatal error boundary composed by app/providers and app/router/routes' },
+  { file: 'components/original-icons-data.ts', kind: 'frozen-asset', role: 'frozen original SVG data table, internal to original-icons.tsx; provenance docs/attribution.md' },
+  { file: 'components/original-icons.tsx', kind: 'frozen-asset', role: 'single global frozen original icon source consumed by the Twin feature' },
 ];
 
 function r12Violations(graph: ModuleGraph, allowlist: readonly ComponentRole[]): string[] {
@@ -596,14 +606,26 @@ function r12Violations(graph: ModuleGraph, allowlist: readonly ComponentRole[]):
   for (const component of components) {
     const users = [...importers.get(component)!].sort();
     const featureOwners = users.filter((user) => user.startsWith('features/'));
+    const appOwners = users.filter((user) => user === 'main.tsx' || user.startsWith('app'));
     const role = allowlist.find((entry) => entry.file === component);
     if (users.length === 0) {
       violations.push(component + ' is a public component with no importer (dead shared UI)' + (role ? '; allowlist role: ' + role.role : ''));
-    } else if (featureOwners.length < 2 && !role) {
-      violations.push(
-        component + ' is only used by [' + featureOwners.join(', ') + ']; add cross-feature usage or a justified design-system allowlist entry',
-      );
+      continue;
     }
+    if (featureOwners.length >= 2) continue;
+    if (role?.kind === 'app-infrastructure') {
+      // App-level ownership is a claim about the import graph, not an assertion string.
+      if (appOwners.length === 0) {
+        violations.push(
+          component + ' is declared app-infrastructure but no app/** or main.tsx owner imports it (importers: [' + users.join(', ') + '])',
+        );
+      }
+      continue;
+    }
+    if (role) continue;
+    violations.push(
+      component + ' is only used by [' + featureOwners.join(', ') + ']; move it into that feature or record a verified component role',
+    );
   }
   return violations;
 }
@@ -620,8 +642,15 @@ it('R12: public components are cross-feature or carry a justified design-system 
   expect(fixtureViolations.some((violation) => violation.includes('components/UnusedWidget.tsx') && violation.includes('no importer'))).toBe(true);
   expect(fixtureViolations.some((violation) => violation.includes('components/FeatureWidget.tsx') && violation.includes('features/alpha'))).toBe(true);
   expect(fixtureViolations.some((violation) => violation.includes('components/SharedWidget.tsx')), 'two features pass').toBe(false);
-  const allowlisted = r12Violations(fixtureGraph, [{ file: 'components/FeatureWidget.tsx', role: 'fixture design-system role' }]);
-  expect(allowlisted.some((violation) => violation.includes('components/FeatureWidget.tsx'))).toBe(false);
+
+  // An explicit design-system/frozen role is justified by its recorded ownership reason.
+  for (const kind of ['design-system', 'frozen-asset'] as const) {
+    const allowlisted = r12Violations(fixtureGraph, [{ file: 'components/FeatureWidget.tsx', kind, role: 'fixture role' }]);
+    expect(allowlisted.some((violation) => violation.includes('components/FeatureWidget.tsx')), kind).toBe(false);
+  }
+  // App-infrastructure ownership is verified: a string claim without an app/owner import fails.
+  const appClaim = r12Violations(fixtureGraph, [{ file: 'components/FeatureWidget.tsx', kind: 'app-infrastructure', role: 'fixture app role' }]);
+  expect(appClaim.some((violation) => violation.includes('components/FeatureWidget.tsx') && violation.includes('app-infrastructure'))).toBe(true);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -756,16 +785,11 @@ interface EffectAllowlistEntry {
 }
 
 /**
- * Documented stable-primitive exceptions (plan R13 allows an explicit, provable exception).
- * The effect is cleanup-only and its closure reads refs/module singletons exclusively.
+ * R13 has no standing exceptions. The insertion point is kept deliberately explicit:
+ * a future exception must be documented here with a provable stable-primitive argument
+ * and the test below pins the list to be empty so it cannot grow silently.
  */
-const R13_ALLOWLIST: readonly EffectAllowlistEntry[] = [
-  {
-    file: 'features/twin/controllers/use-tour-controller.ts',
-    snippet: 'useEffect(() => () => stop(), [])',
-    reason: 'cleanup-only unmount effect: stop() reads refs and module singletons only (sessionRef/lifecycleRef/generationRef/tourHudRef, stable setState setter, twinUiActions/scheduler), so a first-render closure is behaviourally identical; covered by tests/tour-controller.',
-  },
-];
+const R13_ALLOWLIST: readonly EffectAllowlistEntry[] = [];
 
 function r13Violations(root: string, files: readonly string[], allowlist: readonly EffectAllowlistEntry[]): string[] {
   const violations: string[] = [];
@@ -813,6 +837,9 @@ function r13Violations(root: string, files: readonly string[], allowlist: readon
 
 it('R13: no empty-dependency effect captures changing props/state/callbacks', () => {
   const graph = buildGraph(webAppRoot);
+  // The mechanism supports documented exceptions, but the real tree must need none:
+  // the Tour controller now has a stable stop identity with explicit dependencies.
+  expect(R13_ALLOWLIST, 'R13 exceptions must stay empty until a proven stable-primitive case appears').toEqual([]);
   expectNoViolations('R13', 'empty-dependency effects must use useEffectEvent or refs', r13Violations(sourceRoot, graph.files.filter((file) => file.startsWith('features/')), R13_ALLOWLIST));
 
   const fixtureRoot = join(fixturesRoot, 'r13');
@@ -838,7 +865,7 @@ interface AllowlistEntry {
 
 const R14_ALLOWLIST: readonly AllowlistEntry[] = [
   // Auto-generated route tree: @ts-nocheck, never hand-edited.
-  { file: 'app/router/routeTree.gen.ts', snippet: '} as any)', reason: 'TanStack Router generated route tree (@ts-nocheck); regeneration owns this file.' },
+  { file: 'app/router/routeTree.gen.ts', snippet: '} as any)', reason: 'TanStack Router generated route tree (@ts-nocheck); tests/architecture/route-tree-generation.test.ts re-runs the official plugin in a clean worktree and requires byte-identical committed output, so this exception is scoped to a verified generated artifact.' },
   // Documented pre-existing as-unknown-as sites (each cast is the narrowest possible boundary).
   { file: 'state/createSliceStore.ts', snippet: 'actions as unknown as SliceActions<M>', reason: 'typed action factory: reducers are stored behind a never[] rest contract, SliceActions<M> is the only typed surface.' },
   { file: 'realtime/workers/telemetryWorker.ts', snippet: 'globalThis as unknown as WorkerScope', reason: 'worker entry: the app tsconfig has no DedicatedWorkerGlobalScope; WorkerScope is the locally declared structural contract.' },

@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react';
 import type { SiteDto } from '../../../contracts';
-import { Panel } from '../../../components/ui';
+import { Panel } from './panel';
 import type { WorkbenchFormState } from '../state/workbenchStore';
 
 export interface RunFormProps {

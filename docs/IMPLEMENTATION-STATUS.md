@@ -1,11 +1,11 @@
 # 实施状态（V2.1 最终）
 
-- 状态：**M0–M6 与后续 review 修复（多 FAB、SSE 游标/缺口、命令保留/幂等/能力、FAB 级遥测/设备状态、真实 GPU/Worker 压力门禁）已完成；性能优化专项（渲染热路径、遥测传输、RunStore 索引、静态资源打包、门禁加强、仿真值类型）已完成；review-2/review-3 修复已完成；PR #1 相机输入对齐已完成；**2026-10-28 递归整改 R-01…R-14（11 个职责提交，`67915c0..546647d`）已完成：键盘监听最新回调、Tour 单一 RAF、命令结果严格校验、唯一 HTTP transport、ScenePort/ViewerLifecycle、独立 GPU Effect Owner、生成物登记/校验、实时边界拆分、feature 所有权收口、镜像式测试布局、R7–R14 架构门禁与负向 fixtures**；PostgreSQL/Outbox/生产身份因基础设施缺失保留边界。**
+- 状态：**M0–M6 与后续 review 修复（多 FAB、SSE 游标/缺口、命令保留/幂等/能力、FAB 级遥测/设备状态、真实 GPU/Worker 压力门禁）已完成；性能优化专项（渲染热路径、遥测传输、RunStore 索引、静态资源打包、门禁加强、仿真值类型）已完成；review-2/review-3 修复已完成；PR #1 相机输入对齐已完成；**2026-10-28 递归整改 R-01…R-14（11 个职责提交，`67915c0..546647d`）已完成：键盘监听最新回调、Tour 单一 RAF、命令结果严格校验、唯一 HTTP transport、ScenePort/ViewerLifecycle、独立 GPU Effect Owner、生成物登记/校验、实时边界拆分、feature 所有权收口、镜像式测试布局、R7–R14 架构门禁与负向 fixtures；2026-10-28 收尾提交消除 R12/R13 例外、将 Workbench 本地组件归位并为 routeTree 增加官方生成逐字节门禁**；PostgreSQL/Outbox/生产身份因基础设施缺失保留边界。**
 - 最后验证（提交前）：
   - 契约/架构检查 PASS
   - Python 工具测试（`python -m unittest discover -s tools`）与渲染门禁 Node 单测（`node --test tools/test_render_perf_checks.mjs`）PASS
   - 3 个 .NET 项目 Release 构建 + **170/170 测试 PASS**
-  - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **103 文件 / 659 测试 PASS**（2026-10-28 递归整改后全量；含 `tests/architecture/` 的 R0–R6 与 R7–R14 门禁及负向 fixtures；默认并发全量 PASS，CPU 密集黄金向量套件统一 `testTimeout: 15s`）、`vite build` 0
+  - 前端 `pnpm install --frozen-lockfile`、`tsc --noEmit` 0、Vitest **104 文件 / 662 测试 PASS**（2026-10-28 递归整改 + 收尾后全量；含 `tests/architecture/` 的 R0–R6 与 R7–R14 门禁及负向 fixtures；默认并发全量 PASS，CPU 密集黄金向量套件统一 `testTimeout: 15s`）、`vite build` 0
   - 架构门禁：`python tools/check_architecture.py` PASS；生成物 `node tools/check_generated_artifacts.mjs --check` PASS（`tools/generated-artifacts.json` 登记 3 件生成物，generator `--check` 已并入 verify）
   - `./scripts/verify.ps1` exit 0
   - 真实 Chrome/WebGPU dev 门禁：600 帧，p95 8.5ms，114.5fps，1 个按需 Worker，heap growth 6.82MB，rendererFrames 631，drawCalls 903，gpuErrors []（`.local/render-perf-final2.json`）
@@ -45,7 +45,7 @@ Babylon Lite 1.36   WebGPU-only 渲染
 | M6 | 旧迁移文档/证据/parity 工具与测试删除、verify 收口 |
 | M6 后补 | 页面 `features/components` 归位；后端模拟命令 HTTP/SSE + 遥测 SSE；Worker → 渲染接线；真实 GPU 门禁 |
 | Review 修复 | 三 FAB 目录/场景子集；FAB 级遥测/设备状态；命令幂等/能力/授权；SSE id/Last-Event-ID/replay-gap；命令保留；前端/后端压力与 GPU 门禁 |
-| 递归整改 R-01…R-14（2026-10-28） | 键盘/Tour 单所有权；命令严格校验与唯一 transport；ScenePort+ViewerLifecycle；确定性领域时钟；GPU Effect Owner；生成物登记/校验；实时/feature 所有权收口；镜像式测试布局；R7–R14 门禁 + 负向 fixtures |
+| 递归整改 R-01…R-14（2026-10-28） | 键盘/Tour 单所有权；命令严格校验与唯一 transport；ScenePort+ViewerLifecycle；确定性领域时钟；GPU Effect Owner；生成物登记/校验；实时/feature 所有权收口；镜像式测试布局；R7–R14 门禁 + 负向 fixtures；收尾：Workbench 本地 Panel/StatusPill（删除全局 components/ui.tsx）、Tour 稳定 stop（R13 零例外）、routeTree 官方生成一致性门禁 |
 
 ## 命令/遥测/渲染链路
 
@@ -58,8 +58,8 @@ Babylon Lite 1.36   WebGPU-only 渲染
 ## 测试与门禁
 
 - RQ-01..RQ-05、CE-01..CE-08：真实运行；CE-06 已有权威状态查询端点与集成测试。
-- ARCH-01..12 与 R0–R14：`web_app/tests/architecture/` 三层门禁——`architecture-boundaries.test.ts`（正则边界）、`architecture-import-graph.test.ts`（真实 TypeScript import 图 R0–R6）、`architecture-contract-rules.test.ts`（R7–R14，含 `fixtures/r7…r14` 负向证明）；`tools/check_architecture.py` 检查终态目录/domain 分层/旧根模块缺席/generated 区域/模块档案数量（18 条）。
-- 生成物：`tools/generated-artifacts.json` 登记 3 件产物；`node tools/check_generated_artifacts.mjs --check` 校验输入/输出 sha256 与 `src/generated` 全覆盖（R11）；各生成器 `--check` 已并入 `scripts/verify.ps1`。
+- ARCH-01..12 与 R0–R14：`web_app/tests/architecture/` 三层门禁——`architecture-boundaries.test.ts`（正则边界）、`architecture-import-graph.test.ts`（真实 TypeScript import 图 R0–R6）、`architecture-contract-rules.test.ts`（R7–R14，含 `fixtures/r7…r14` 负向证明）；`route-tree-generation.test.ts` 在隔离干净 worktree 中官方重生成 `routeTree.gen.ts` 并逐字节比对（插件/生成器版本固定、`@ts-nocheck` 仅限该文件）；`tools/check_architecture.py` 检查终态目录/domain 分层/旧根模块缺席/generated 区域/模块档案数量（18 条）。
+- 生成物：`tools/generated-artifacts.json` 登记 3 件产物；`node tools/check_generated_artifacts.mjs --check` 校验输入/输出 sha256 与 `src/generated` 全覆盖（R11）；各生成器 `--check` 已并入 `scripts/verify.ps1`；`app/router/routeTree.gen.ts` 属构建期插件生成物，不进 registry，由 `route-tree-generation` 门禁验证。
 - 测试布局：`web_app/tests/{api,application,components,contract,domain,features,integration,performance,realtime,rendering,state,architecture}` + `fixtures/support/types`（历史平铺测试已迁移、golden fixtures 与断言强度不变）。
 - 高频路径：`web_app/tests/realtime/realtime-frame-buffer.test.ts`、`web_app/tests/performance/telemetry-frame-buffer.test.ts`/`telemetry-load.test.ts`（CPU/负载）+ `tools/render_perf.mjs`（真实 GPU）。
 - 传输：`web_app/tests/realtime/realtime-transport.test.ts` 覆盖 SSE 游标/replay-gap、HTTP gateway、命令幂等提交、TelemetryRuntime Worker 链路；`web_app/tests/integration/fab-runtime-batch23.test.ts` 覆盖 Runtime 保留/缺口核对。

@@ -50,12 +50,13 @@
 - `web_app/tests/architecture/architecture-boundaries.test.ts`：通用正则边界规则（分层 import、XState/工作流实现隔离等）。
 - `web_app/tests/architecture/architecture-import-graph.test.ts`：用项目自带 TypeScript Compiler API 解析真实 import 图，执行 R0（相对 import 可解析）、R0b（无路径别名）、R1（运行图无环）、R2（`app/router` 通用文件不依赖 features）、R3（domain 纯度）、R4（feature 互不依赖）、R5（生成物登记/头注释/数据化）、R6（`src` 根白名单）。
 - `web_app/tests/architecture/architecture-contract-rules.test.ts`：R7–R14（通用基础层不 import features；domain 无环境时钟/随机/DOM/定时器/网络；ScenePort 必需能力；全 import 边无环（含 type-only）；生成物登记校验；公共组件跨 feature 或设计系统角色；空依赖 effect 不捕获变化回调；无未登记 `any`/伪类型校验），每条规则都有 `tests/architecture/fixtures/**` 负向样例证明可失败。
+- `web_app/tests/architecture/route-tree-generation.test.ts`：在隔离干净 worktree 中运行官方 Vite + `@tanstack/router-plugin` 重新生成 `app/router/routeTree.gen.ts`，要求与提交版本逐字节一致；同时校验插件/生成器版本固定（精确版本 + lockfile 单解析）与 `@ts-nocheck` 仅限该文件。不一致即失败，不自动覆盖。
 - `web_app/tests/types/{store-action-types.ts,scene-port-types.ts}`：仅由 `tsc --noEmit` 校验的类型负向契约。
 - `docs/modules/M*.md` 保持恰好 18 条模块档案（`tools/check_architecture.py` 断言）。
 
 ## 生成物登记与检查
 
-`tools/generated-artifacts.json` 是全部提交生成物的机器可读登记表：每条记录输出路径、生成器命令/校验命令、输入源与 `sha256`。
+`tools/generated-artifacts.json` 是全部提交生成物的机器可读登记表：每条记录输出路径、生成器命令/校验命令、输入源与 `sha256`。`app/router/routeTree.gen.ts` 是例外：由构建期 `@tanstack/router-plugin` 生成、位置为工具链约定，不登记在本 registry，可复现性由 `route-tree-generation` 架构门禁验证。
 
 ```powershell
 node tools/check_generated_artifacts.mjs --check   # CI/verify 门禁：registry 形状、输出/输入 hash、生成器/--check 声明、src/generated 全覆盖（R11）

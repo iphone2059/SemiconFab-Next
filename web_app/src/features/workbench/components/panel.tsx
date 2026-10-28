@@ -1,5 +1,5 @@
 import type { AriaRole, PropsWithChildren, ReactNode, Ref } from 'react';
-import { classNames } from './class-names';
+import { classNames } from '../../../components/class-names';
 
 type PanelProps = PropsWithChildren<{
   title: string;
@@ -12,6 +12,11 @@ type PanelProps = PropsWithChildren<{
   'aria-label'?: string;
 }>;
 
+/**
+ * Workbench-local panel primitive. Owned by the Workbench feature because every
+ * current consumer is Workbench; it is not a global design-system component until
+ * a second feature (or an application-level owner) actually needs it.
+ */
 export function Panel({
   title,
   subtitle,
@@ -41,10 +46,4 @@ export function Panel({
       {children}
     </section>
   );
-}
-
-export function StatusPill({ status }: { status: string }) {
-  const labels: Record<string, string> = { QUEUED: '排队中', RUNNING: '运行中', COMPLETED: '已完成', FAILED: '失败', CANCELLED: '已取消', PENDING: '待执行' };
-  const normalized = status.toUpperCase();
-  return <span className={`status status-${normalized.toLowerCase()}`}><i/>{labels[normalized] ?? status}</span>;
 }

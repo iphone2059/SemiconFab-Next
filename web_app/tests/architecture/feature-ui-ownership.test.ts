@@ -60,22 +60,24 @@ it('keeps the shared design system real: no feature-local component forwarding',
     'modal.tsx',
     'original-icons-data.ts',
     'original-icons.tsx',
-    'ui.tsx',
   ]);
-  for (const removed of ['widgets.tsx', 'charting.tsx']) {
+  for (const removed of ['widgets.tsx', 'charting.tsx', 'ui.tsx']) {
     expect(componentFiles).not.toContain(removed);
   }
 
   const definitions = files
-    .filter((file) => /export function (Metric|CompletionBar)\b/.test(readFileSync(file, 'utf8')))
+    .filter((file) => /export function (Metric|CompletionBar|Panel|StatusPill)\b/.test(readFileSync(file, 'utf8')))
     .map(relativeToSource)
     .sort();
   expect(definitions).toEqual([
     'features/workbench/components/completion-bar.tsx',
     'features/workbench/components/metric.tsx',
+    'features/workbench/components/panel.tsx',
+    'features/workbench/components/status-pill.tsx',
   ]);
 
-  // class-names is shared by the design-system primitives and the Twin feature.
+  // class-names is a real cross-feature design-system utility now that both Twin
+  // and Workbench compose it (R12 passes by verified usage, not by allowlist).
   const ownerOf = (path: string): string =>
     path.startsWith('features/') ? path.split('/').slice(0, 2).join('/') : path.split('/')[0];
   const classNamesOwners = new Set(
@@ -83,7 +85,7 @@ it('keeps the shared design system real: no feature-local component forwarding',
       .filter((file) => importsOf(file).some((specifier) => specifier.endsWith('components/class-names') || specifier === './class-names'))
       .map((file) => ownerOf(relativeToSource(file))),
   );
-  expect(classNamesOwners).toEqual(new Set(['components', 'features/twin']));
+  expect(classNamesOwners).toEqual(new Set(['features/twin', 'features/workbench']));
 
   // original-icons is the frozen inventory captured from the original twin page;
   // it is the only global icon source and the Twin feature consumes it.

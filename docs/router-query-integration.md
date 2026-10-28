@@ -196,6 +196,7 @@ export const queryKeys = {
 | 校验方式 | M1 对比改动前后 `pnpm build` 的产物与分包；若插件引起 build 行为变化，退回 code-based routes |
 | 回退方案 | 手写 `routeTree`/`createRoute`（code-based），功能等价，仅失去文件式生成便利 |
 | 当前现状 | 文件式路由插件已启用：`routesDirectory: './src/app/router/routes'`、`generatedRouteTree: './src/app/router/routeTree.gen.ts'` 并提交生成树；server/build 参数未变（见 `vite.config.ts` 与 [架构基线](architecture.md) G-01） |
+| 生成一致性校验 | `tests/architecture/route-tree-generation.test.ts` 在隔离干净 worktree 中执行官方 Vite 构建重生成 `routeTree.gen.ts` 并逐字节比对；插件/生成器版本固定（精确版本 + lockfile 单解析）；不一致即失败且不自动覆盖；`@ts-nocheck` 仅允许该生成物 |
 
 ## 9. 迁移映射（RTK Query -> Query Options，历史记录）
 

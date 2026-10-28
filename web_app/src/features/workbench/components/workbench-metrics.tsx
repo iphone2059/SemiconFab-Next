@@ -1,5 +1,5 @@
 import type { RunSummary, SiteDto } from '../../../contracts';
-import { StatusPill } from '../../../components/ui';
+import { StatusPill } from './status-pill';
 import { Metric } from './metric';
 
 /** Top KPI row; values derive from the Query snapshots passed by the dashboard. */

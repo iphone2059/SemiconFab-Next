@@ -1,5 +1,5 @@
 import type { RunResult, RunSummary, SiteDto } from '../../../contracts';
-import { StatusPill } from '../../../components/ui';
+import { StatusPill } from './status-pill';
 import { formatCount } from '../format';
 import { CompletionBar } from './completion-bar';
 

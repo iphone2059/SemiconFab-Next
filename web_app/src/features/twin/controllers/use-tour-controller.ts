@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '../../../domain/simulation/original-tour';
 import { buildTourScenario, TOUR_INITIAL_CAMERA, TOUR_INITIAL_TARGET } from '../../../domain/simulation/tour-scenario';
@@ -108,8 +108,13 @@ export function useTourController({
    * Unified teardown for every termination path. Idempotent: it invalidates the
    * current generation first, then cancels the owned RAF, stops the owned
    * timeline, clears the HUD and drops the session reference.
+   *
+   * Identity contract: teardown is captured together with its scheduler. The
+   * callback identity only changes when the scheduler changes, so effects may
+   * depend on it without rerunning every render, and a replaced scheduler always
+   * tears down the session it actually owns (never a late first-render closure).
    */
-  function stop(): void {
+  const stop = useCallback((): void => {
     if (lifecycleRef.current === 'IDLE') return;
     lifecycleRef.current = 'STOPPING';
     generationRef.current += 1;
@@ -125,7 +130,7 @@ export function useTourController({
     setTourHudSeed(null);
     twinUiActions.tourStop();
     lifecycleRef.current = 'IDLE';
-  }
+  }, [scheduler]);
 
   /** A frame may run only while its generation owns the running session. */
   function isCurrent(session: TourSession): boolean {
@@ -217,12 +222,15 @@ export function useTourController({
     session.timeline.prev();
   }
 
-  function cancelTourIfRunning(): void {
+  /** Manual camera input stops the tour; identity follows the owned stop(). */
+  const cancelTourIfRunning = useCallback((): void => {
     if (lifecycleRef.current !== 'IDLE') stop();
-  }
+  }, [stop]);
 
-  // Page unmount releases the loop/timeline/HUD through the same stop().
-  useEffect(() => () => stop(), []);
+  // Page unmount releases the loop/timeline/HUD through the same stop(). The
+  // cleanup captures the stop identity (and therefore the scheduler) of the
+  // render it belongs to; replacing the scheduler terminates the old session.
+  useEffect(() => () => stop(), [stop]);
 
   // FAB switch or viewer recreation invalidates every frame the old scene owns.
   useEffect(() => {

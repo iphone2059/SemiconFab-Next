@@ -82,5 +82,8 @@ export function useTwinSceneSync({
     // Escape/mode/level actions can stop Tour through the store without clicking
     // its Stop button. Cancel the controller too, or its next waypoint revives UI.
     if (!tourActive) cancelTourIfRunning();
-  }, [lifecycle, tourActive]);
+    // cancelTourIfRunning is stable (identity follows the owned scheduler), so
+    // listing it cannot re-run this effect per render while the closure can never
+    // be stale.
+  }, [lifecycle, tourActive, cancelTourIfRunning]);
 }

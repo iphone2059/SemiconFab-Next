@@ -50,8 +50,8 @@ web_app/
 │  │  ├─ twin/                 # twin-page + controllers/（10 个控制器）+ state/ + twin-search.ts + wafer-session.ts
 │  │  │                        #   + equipment-status-pipeline.tsx + HUD/侧栏/对话框子组件
 │  │  ├─ catalog/              # catalog-page/data/search/labels/types + components/ + controllers/ + export/ + state/
-│  │  └─ workbench/            # workbench / command-console + components/ + controllers/ + state/
-│  ├─ components/              # 共享设计系统：ui / modal / error-boundary / class-names / original-icons(+original-icons-data)
+│  │  └─ workbench/            # workbench / command-console + components/（含本地 panel/status-pill 原语）+ controllers/ + state/
+│  ├─ components/              # 共享设计系统：modal / error-boundary / class-names / original-icons(+original-icons-data)（无单 feature 组件）
 │  ├─ rendering/
 │  │  ├─ lite-backend.ts       # 实现 application/ports/scene 的 ScenePort（Lite runtime/world、设备丢失恢复）
 │  │  ├─ contracts/            # static-structure-data.ts：生成物 payload 的手写类型合同（仅 type-only 被生成物引用）
@@ -94,7 +94,8 @@ npm run dev                  # Vite 127.0.0.1:5173
 tests/
 ├─ api/ application/ components/ contract/ domain/ features/ integration/ performance/ realtime/ rendering/ state/
 ├─ architecture/            # 门禁：architecture-boundaries（正则）、architecture-import-graph（R0–R6）、
-│                           # architecture-contract-rules（R7–R14）、feature-ui-ownership、static-structure-pack 等
+│                           # architecture-contract-rules（R7–R14）、route-tree-generation（官方重生成逐字节一致）、
+│                           # feature-ui-ownership、static-structure-pack 等
 │                           # fixtures/r7…r14：每条门禁的负向/正向样例
 ├─ fixtures/                # 黄金向量、原版参考清单与几何/动作 fixture
 ├─ support/                 # 测试专用工具（native-dialog polyfill、scene-port-stub、png、perf-metrics…）
@@ -118,3 +119,4 @@ npm run build
 - 生成物由 `node tools/check_generated_artifacts.mjs --check` 按 `tools/generated-artifacts.json` 校验（R11）；生成器各自的 `--check` 由根目录 `scripts/verify.ps1` 统一执行。
 - 类型负向用例由 `tests/types/{store-action-types.ts,scene-port-types.ts}` 提供（仅 `tsc --noEmit` 校验，Vitest 不执行）。
 - 真实浏览器/GPU 门禁见 `scripts/perf-render.ps1` 与 `scripts/perf-telemetry.ps1`；最近一次架构清理证据见 `docs/evidence/architecture-cleanup-2026-10-28.json`。
+- 路由生成物 `src/app/router/routeTree.gen.ts` 不进入 `tools/generated-artifacts.json`（位置由 @tanstack/router-plugin 工具链约定）；`tests/architecture/route-tree-generation.test.ts` 在隔离干净 worktree 执行官方 Vite 构建重生成并逐字节比对，同时固定 plugin/generator 版本并保证 `@ts-nocheck` 只出现在该文件。

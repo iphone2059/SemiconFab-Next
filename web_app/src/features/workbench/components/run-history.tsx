@@ -1,5 +1,6 @@
 import type { RunSummary } from '../../../contracts';
-import { Panel, StatusPill } from '../../../components/ui';
+import { Panel } from './panel';
+import { StatusPill } from './status-pill';
 
 /** Persisted runs for the active site; selection stays in the Workbench store. */
 export function RunHistory({

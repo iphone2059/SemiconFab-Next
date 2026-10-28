@@ -1,5 +1,5 @@
 import { useCommandProjection } from '../../app/providers/RuntimeProvider';
-import { Panel } from '../../components/ui';
+import { Panel } from './components/panel';
 import {
   COMMAND_ACTIONS,
   EQUIPMENT_IDS,

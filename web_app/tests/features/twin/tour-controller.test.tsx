@@ -221,3 +221,34 @@ it('mounts one controller under StrictMode and releases the loop on unmount', ()
   act(() => staleFrame());
   expect(scheduler.pendingCount).toBe(0);
 });
+
+it('tears the old session down with the old scheduler when the scheduler identity changes', () => {
+  const { result, scheduler, rerender, props } = renderTour();
+  act(() => result.current.startTour());
+  expect(scheduler.pendingCount).toBe(1);
+  const oldFrame = scheduler.frames()[0];
+  const cancelledBefore = scheduler.cancelled;
+
+  const nextScheduler = new VirtualFrames();
+  act(() => rerender({ ...props, scheduler: nextScheduler }));
+
+  // The unmount cleanup captured stop() together with the OLD scheduler: the
+  // running session is released through that scheduler, not the new one.
+  expect(scheduler.cancelled).toBe(cancelledBefore + 1);
+  expect(scheduler.pendingCount).toBe(0);
+  expect(nextScheduler.pendingCount).toBe(0);
+  expect(tourActive()).toBe(false);
+  expect(result.current.tourHudSeed).toBeNull();
+
+  // A frame that was already delivered cannot revive the old session or leak it
+  // into the new scheduler.
+  act(() => oldFrame());
+  expect(scheduler.pendingCount).toBe(0);
+  expect(nextScheduler.pendingCount).toBe(0);
+  expect(tourActive()).toBe(false);
+
+  // A subsequent start binds to the scheduler that is current now.
+  act(() => result.current.startTour());
+  expect(nextScheduler.pendingCount).toBe(1);
+  expect(scheduler.pendingCount).toBe(0);
+});
