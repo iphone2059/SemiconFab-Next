@@ -10,9 +10,7 @@ const equipmentStatusSchema = z.object({
   fabId: z.string().min(1),
   generatedAt: z.string().min(1),
   sequence: z.number().int().nonnegative(),
-  // A03: zod strips unknown keys, so the additive server generation must be part
-  // of the schema or REST frames would silently lose the ordering epoch.
-  epoch: z.number().optional(),
+  epoch: z.number().int().nonnegative(),
   tools: z.array(z.object({ state: z.string().min(1) })).min(1),
 });
 

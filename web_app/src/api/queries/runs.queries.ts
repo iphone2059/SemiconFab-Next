@@ -1,6 +1,5 @@
 import { queryOptions } from '@tanstack/react-query';
-import { z } from 'zod';
-import type { RunResult, RunSummary } from '../../contracts';
+import { runListSchema, runResultSchema, runSummarySchema } from '../schemas/runs.schema';
 import { httpTransport } from '../transport/http';
 import { queryKeys } from './queryKeys';
 
