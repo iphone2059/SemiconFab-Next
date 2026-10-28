@@ -1,4 +1,4 @@
-import type { HoveredTool } from '../fab-scene';
+import type { HoveredTool } from '../rendering/fab-scene';
 import { createSliceStore } from './createSliceStore';
 
 export interface RuntimeState {
@@ -12,35 +12,25 @@ export const initialRuntimeState: RuntimeState = { viewer: { generation: 0, stat
 const clearedViewer = (generation: number): RuntimeState['viewer'] => ({ generation, status: PREPARING_STATUS });
 
 const runtime = createSliceStore(initialRuntimeState, {
-  viewerMounted: (state, action) => ({ ...state, viewer: { ...clearedViewer(state.viewer.generation), epoch: action.payload } }),
-  viewerStatusReceived: (state, action) => state.viewer.epoch !== action.payload.epoch
+  viewerMounted: (state, epoch: string) => ({ ...state, viewer: { ...clearedViewer(state.viewer.generation), epoch } }),
+  viewerStatusReceived: (state, payload: { epoch: string; status: string }) => state.viewer.epoch !== payload.epoch
     ? state
-    : { ...state, viewer: { ...state.viewer, status: action.payload.status } },
-  viewerHoverReceived: (state, action) => state.viewer.epoch !== action.payload.epoch
+    : { ...state, viewer: { ...state.viewer, status: payload.status } },
+  viewerHoverReceived: (state, payload: { epoch: string; hover?: HoveredTool }) => state.viewer.epoch !== payload.epoch
     ? state
-    : { ...state, viewer: { ...state.viewer, hover: action.payload.hover } },
+    : { ...state, viewer: { ...state.viewer, hover: payload.hover } },
   viewerHoverCleared: (state) => ({ ...state, viewer: { ...state.viewer, hover: undefined } }),
-  viewerSelectionSyncStarted: (state, action) => ({ ...state, viewer: { ...state.viewer, selectionSync: action.payload } }),
-  viewerSelectionSyncFinished: (state, action) => state.viewer.selectionSync !== action.payload
+  viewerSelectionSyncStarted: (state, epoch: string) => ({ ...state, viewer: { ...state.viewer, selectionSync: epoch } }),
+  viewerSelectionSyncFinished: (state, epoch: string) => state.viewer.selectionSync !== epoch
     ? state
     : { ...state, viewer: { ...state.viewer, selectionSync: undefined } },
   viewerReloadRequested: (state) => ({ ...state, viewer: { ...clearedViewer(state.viewer.generation + 1) } }),
-  viewerUnmounted: (state, action) => state.viewer.epoch !== action.payload
+  viewerUnmounted: (state, epoch: string) => state.viewer.epoch !== epoch
     ? state
     : { ...state, viewer: { ...clearedViewer(state.viewer.generation) } },
-  fatalErrorSet: (state, action) => ({ ...state, fatalError: action.payload }),
+  fatalErrorSet: (state, fatalError: string) => ({ ...state, fatalError }),
 });
 
 export const useRuntimeStore = runtime.useStore;
-export const runtimeActions = runtime.actions as {
-  viewerMounted: (epoch: string) => void;
-  viewerStatusReceived: (payload: { epoch: string; status: string }) => void;
-  viewerHoverReceived: (payload: { epoch: string; hover?: HoveredTool }) => void;
-  viewerHoverCleared: () => void;
-  viewerSelectionSyncStarted: (epoch: string) => void;
-  viewerSelectionSyncFinished: (epoch: string) => void;
-  viewerReloadRequested: () => void;
-  viewerUnmounted: (epoch: string) => void;
-  fatalErrorSet: (error: string) => void;
-};
+export const runtimeActions = runtime.actions;
 export const resetRuntimeStore = runtime.reset;
