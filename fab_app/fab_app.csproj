@@ -10,6 +10,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
     <ProjectReference Include="../fab_shared/fab_shared.csproj" />
     <Content Include="../assets/legacy/**/*" Link="assets/legacy/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

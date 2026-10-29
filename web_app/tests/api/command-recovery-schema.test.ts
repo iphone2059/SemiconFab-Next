@@ -4,6 +4,8 @@ import {
   COMMAND_DIRTY_REASONS,
   COMMAND_STATUS_FILTERS,
   DEFAULT_COMMAND_JOURNAL_LIMIT,
+  JOURNAL_CURSOR_INVALID_CODE,
+  JOURNAL_EPOCH_MISMATCH_CODE,
   MAX_COMMAND_JOURNAL_LIMIT,
   commandDirtySchema,
   commandJournalPageSchema,
@@ -14,14 +16,18 @@ import {
   decodeCommandDirty,
   decodeCommandJournalPage,
   decodeCommandRecoveryList,
+  decodeJournalEpochMismatch,
+  journalEpochMismatchSchema,
   type CommandDirtyWireAligned,
   type CommandJournalPageWireAligned,
   type CommandRecoveryListWireAligned,
+  type JournalEpochMismatchWireAligned,
 } from '@/api/command-recovery.schema';
 import type {
   CommandDirtyDto,
   CommandJournalPageDto,
   CommandRecoveryListDto,
+  JournalEpochMismatchDto,
 } from '@/generated/contracts.generated';
 
 /**
@@ -58,7 +64,14 @@ const journalPage = {
   hasGap: false,
   firstRetainedSequence: 1,
   latestSequence: 3,
+  nextAfterSequence: 3,
   events: [journalEvent],
+};
+const epochMismatch = {
+  code: 'journal-epoch-mismatch',
+  currentEpoch: '33333333-3333-4333-8333-333333333333',
+  firstRetainedSequence: 1,
+  latestSequence: 3,
 };
 const dirty = {
   reason: 'retention-trim',
@@ -74,12 +87,15 @@ const decodePageEffect = (value: unknown) => Effect.runPromise(decodeCommandJour
 const decodeDirtyEffect = (value: unknown) => Effect.runPromise(decodeCommandDirty(value));
 const decodePage = (value: unknown) => Schema.decodeUnknownSync(commandJournalPageSchema)(value);
 const decodeDirty = (value: unknown) => Schema.decodeUnknownSync(commandDirtySchema)(value);
+const decodeMismatch = (value: unknown) => Schema.decodeUnknownSync(journalEpochMismatchSchema)(value);
+const decodeMismatchEffect = (value: unknown) => Effect.runPromise(decodeJournalEpochMismatch(value));
 
 describe('command recovery wire contracts', () => {
   it('decodes every authoritative recovery DTO without changing the payload', () => {
     expect(decodeList(recoveryList)).toEqual(recoveryList);
     expect(decodePage(journalPage)).toEqual(journalPage);
     expect(decodeDirty(dirty)).toEqual(dirty);
+    expect(decodeMismatch(epochMismatch)).toEqual(epochMismatch);
     expect(Schema.decodeUnknownSync(commandRecoverySchema)(recovery)).toEqual(recovery);
   });
 
@@ -92,13 +108,18 @@ describe('command recovery wire contracts', () => {
     const alignedPage: CommandJournalPageDto = { ...decodedPage, events: [...decodedPage.events] };
     const decodedDirty = decodeDirty(dirty);
     const alignedDirty: CommandDirtyDto = { ...decodedDirty };
+    const decodedMismatch = decodeMismatch(epochMismatch);
+    const alignedMismatch: JournalEpochMismatchDto = { ...decodedMismatch };
     const listAlignment: CommandRecoveryListWireAligned = true;
     const pageAlignment: CommandJournalPageWireAligned = true;
     const dirtyAlignment: CommandDirtyWireAligned = true;
-    expect([listAlignment, pageAlignment, dirtyAlignment]).toEqual([true, true, true]);
+    const mismatchAlignment: JournalEpochMismatchWireAligned = true;
+    expect([listAlignment, pageAlignment, dirtyAlignment, mismatchAlignment]).toEqual([true, true, true, true]);
     expect(alignedList.commands[0].terminal).toBe(true);
     expect(alignedPage.events[0].sequence).toBe(3);
+    expect(alignedPage.nextAfterSequence).toBe(3);
     expect(alignedDirty.reason).toBe('retention-trim');
+    expect(alignedMismatch.currentEpoch).toBe('33333333-3333-4333-8333-333333333333');
   });
 
   it('rejects a recovery entry with a missing or wrongly typed field', () => {
@@ -135,6 +156,20 @@ describe('command recovery wire contracts', () => {
     expect(() => decodePage({ ...journalPage, hasGap: 'no' })).toThrow();
     expect(() => decodePage({ ...journalPage, firstRetainedSequence: -1 })).toThrow();
     expect(() => decodePage({ ...journalPage, latestSequence: '3' })).toThrow();
+    expect(() => decodePage({ ...journalPage, nextAfterSequence: -1 })).toThrow();
+    const withoutNext: Record<string, unknown> = { ...journalPage };
+    delete withoutNext.nextAfterSequence;
+    expect(() => decodePage(withoutNext)).toThrow();
+  });
+
+  it('maps the journal epoch-mismatch problem body and error codes', () => {
+    expect(JOURNAL_CURSOR_INVALID_CODE).toBe('journal-cursor-invalid');
+    expect(JOURNAL_EPOCH_MISMATCH_CODE).toBe('journal-epoch-mismatch');
+    expect(decodeMismatch(epochMismatch).code).toBe(JOURNAL_EPOCH_MISMATCH_CODE);
+    expect(() => decodeMismatch({ ...epochMismatch, code: 'stale-cursor' })).toThrow();
+    expect(() => decodeMismatch({ ...epochMismatch, currentEpoch: '' })).toThrow();
+    expect(() => decodeMismatch({ ...epochMismatch, firstRetainedSequence: -1 })).toThrow();
+    expect(() => decodeMismatch({ ...epochMismatch, latestSequence: '3' })).toThrow();
   });
 
   it('accepts terminal failed/cancelled outcomes and rejects unknown dirty reasons', () => {
@@ -158,13 +193,19 @@ describe('command recovery wire contracts', () => {
     expect(() => Schema.decodeUnknownSync(commandListQuerySchema)({ status: 'finished' })).toThrow();
     expect(() => Schema.decodeUnknownSync(commandListQuerySchema)({ afterRevision: -2 })).toThrow();
 
-    expect(Schema.decodeUnknownSync(commandJournalQuerySchema)({}).limit).toBeUndefined();
-    expect(Schema.decodeUnknownSync(commandJournalQuerySchema)({ afterSequence: 0, limit: 1 }).limit).toBe(1);
-    expect(Schema.decodeUnknownSync(commandJournalQuerySchema)({ limit: MAX_COMMAND_JOURNAL_LIMIT }).limit)
+    const journalEpoch = '22222222-2222-4222-8222-222222222222';
+    const journalQuery = (value: Record<string, unknown>) => Schema.decodeUnknownSync(commandJournalQuerySchema)(value);
+    expect(journalQuery({ epoch: journalEpoch }).epoch).toBe(journalEpoch);
+    expect(journalQuery({ epoch: journalEpoch }).limit).toBeUndefined();
+    expect(journalQuery({ epoch: journalEpoch, afterSequence: 0, limit: 1 }).limit).toBe(1);
+    expect(journalQuery({ epoch: journalEpoch, limit: MAX_COMMAND_JOURNAL_LIMIT }).limit)
       .toBe(MAX_COMMAND_JOURNAL_LIMIT);
     expect(DEFAULT_COMMAND_JOURNAL_LIMIT).toBe(100);
+    expect(() => journalQuery({})).toThrow();
+    expect(() => journalQuery({ epoch: '' })).toThrow();
+    expect(() => journalQuery({ afterSequence: 0, limit: 1 })).toThrow();
     for (const limit of [0, -1, MAX_COMMAND_JOURNAL_LIMIT + 1, 1.5]) {
-      expect(() => Schema.decodeUnknownSync(commandJournalQuerySchema)({ limit }), String(limit)).toThrow();
+      expect(() => journalQuery({ epoch: journalEpoch, limit }), String(limit)).toThrow();
     }
   });
 
@@ -172,8 +213,10 @@ describe('command recovery wire contracts', () => {
     await expect(decodeListEffect(recoveryList)).resolves.toEqual(recoveryList);
     await expect(decodePageEffect(journalPage)).resolves.toEqual(journalPage);
     await expect(decodeDirtyEffect(dirty)).resolves.toEqual(dirty);
+    await expect(decodeMismatchEffect(epochMismatch)).resolves.toEqual(epochMismatch);
     await expect(decodeListEffect({ ...recoveryList, commands: [{}] })).rejects.toBeDefined();
     await expect(decodePageEffect({ ...journalPage, events: null })).rejects.toBeDefined();
     await expect(decodeDirtyEffect({ ...dirty, epoch: '' })).rejects.toBeDefined();
+    await expect(decodeMismatchEffect({ ...epochMismatch, code: 'journal-cursor-invalid' })).rejects.toBeDefined();
   });
 });

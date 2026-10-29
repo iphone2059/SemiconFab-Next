@@ -1,10 +1,13 @@
 using Fab.App;
+using Microsoft.Data.Sqlite;
 
 namespace Fab.Tests;
 
 /// <summary>
-/// Temporary on-disk command-store roots for tests. Every directory lives under the OS temp
+/// Temporary on-disk command-store directories for tests. Every directory lives under the OS temp
 /// directory (never the repository <c>.local/data</c>) and is removed when the test process exits.
+/// SQLite connection pools are cleared before deletion because pooled WAL connections keep file
+/// handles open on Windows.
 /// </summary>
 internal static class TestDataDirectory
 {
@@ -30,17 +33,39 @@ internal static class TestDataDirectory
         }
     }
 
-    public static ICommandStore Store() => new FileCommandStore(Create());
+    public static string DatabasePath(string root) => Path.Combine(root, "commands.db");
+
+    public static ICommandStore Store(ICommandStoreFaultInjector? faultInjector = null) =>
+        new SqliteCommandStore(DatabasePath(Create()), faultInjector);
+
+    /// <summary>Closes pooled SQLite connections so a test can inspect or delete the database file on Windows.</summary>
+    public static void ResetDatabasePools() => SqliteConnection.ClearAllPools();
+
+    /// <summary>Deletes <c>commands.db</c> (and its WAL side files) to simulate a Development store reset.</summary>
+    public static void ResetDatabase(string root)
+    {
+        SqliteConnection.ClearAllPools();
+        foreach (var suffix in new[] { "", "-wal", "-shm" })
+        {
+            var path = DatabasePath(root) + suffix;
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
 
     public static void Delete(string root)
     {
-        try
+        SqliteConnection.ClearAllPools();
+        for (var attempt = 0; attempt < 5; attempt++)
         {
-            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort cleanup only; the OS temp directory owns the remainder.
+            try
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+                return;
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(50);
+            }
         }
     }
 

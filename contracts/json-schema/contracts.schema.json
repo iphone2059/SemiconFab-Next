@@ -639,6 +639,7 @@
         "hasGap",
         "firstRetainedSequence",
         "latestSequence",
+        "nextAfterSequence",
         "events"
       ],
       "properties": {
@@ -659,6 +660,11 @@
           "format": "int64",
           "minimum": 0
         },
+        "nextAfterSequence": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0
+        },
         "events": {
           "type": "array",
           "items": {
@@ -666,7 +672,7 @@
           }
         }
       },
-      "description": "A paged journal replay window. hasGap=true means the requested afterSequence cannot be served exactly (retention trim, epoch replacement or cursor ahead of the journal); clients must reconcile authoritative command state via the commands listing. Events outside the retention window are never replayed."
+      "description": "A paged journal replay window for one requested epoch (ADR-010 3). A stale epoch is answered with HTTP 409 journal-epoch-mismatch, never with this page. Events are strictly increasing and greater than afterSequence; nextAfterSequence is the next page cursor (last event sequence, or the authoritative watermark when a FAB filter yields an empty page) and always makes progress. hasGap=true means retained sequences are missing (retention trim or cursor ahead of the journal); clients must reconcile authoritative command state via the commands listing. Events outside the retention window are never replayed."
     },
     "CommandDirtyDto": {
       "type": "object",
@@ -701,6 +707,37 @@
         }
       },
       "description": "SSE event: dirty control frame (no id line, not journaled). The retained journal may be incomplete (reason retention-trim|epoch-replaced|store-fault): the client MUST reconcile authoritative command state and must not guess."
+    },
+    "JournalEpochMismatchDto": {
+      "description": "HTTP 409 application/problem+json body when a journal request carries an epoch that is no longer the store's current epoch. The client must fall back to the authoritative command listing; it must not continue by sequence alone.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "currentEpoch",
+        "firstRetainedSequence",
+        "latestSequence"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "const": "journal-epoch-mismatch"
+        },
+        "currentEpoch": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "firstRetainedSequence": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0
+        },
+        "latestSequence": {
+          "type": "integer",
+          "format": "int64",
+          "minimum": 0
+        }
+      }
     }
   }
 }

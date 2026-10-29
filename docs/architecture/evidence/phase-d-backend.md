@@ -1,6 +1,7 @@
 # Phase D 证据：后端持久命令恢复（ADR-008）
 
 - 状态：实现完成，后端门禁全部执行；前端全量 typecheck 由其他 phase 在途文件阻塞（本 phase 新文件未被报错，见 §7）。
+- **Round 2 F3 superseding note（2026-10-30）**：本文件描述的 `FileCommandStore` 三文件协议已被 ADR-012 的 SQLite WAL 事务化存储（`fab_app/src/SqliteCommandStore.cs`）取代并删除；Phase D 的 FileCommandStore 结论仅作历史记录，当前契约见 `contracts/json-schema/README.md` 与 `docs/architecture/evidence/round2-f3-store.md`。
 - 阶段：Phase D（task-3）
 - 基线提交：`1fb25ff`（Phase A 文档提交 `9dc793f`）
 - 本步工作树 SHA：**pending**（由 Lead 在提交后绑定；本文件不手写 PASS，只引用可重跑命令与原始输出）

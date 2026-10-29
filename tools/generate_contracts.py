@@ -71,13 +71,18 @@ paths['/api/v1/sites/{siteId}/fabs/{fabId}/commands'] = {"get": {
         {"name": "afterRevision", "in": "query", "schema": {"type": "integer", "minimum": -1}}],
     "responses": {"200": response('CommandRecoveryListDto'), "default": problem_response()}}}
 paths['/api/v1/sites/{siteId}/fabs/{fabId}/command-journal'] = {"get": {
-    "description": "Journal replay page for one FAB, including the durable epoch and explicit gap information for slow consumers and reconnects.",
+    "description": "Journal replay page for one FAB and one epoch (ADR-010 3). epoch is mandatory: a missing/invalid epoch is a 400 journal-cursor-invalid ProblemDetails; a stale epoch is a 409 journal-epoch-mismatch ProblemDetails that forces the client to reconcile authoritative command state. nextAfterSequence is the next page cursor (last event sequence, or the authoritative watermark when a FAB filter yields an empty page).",
     "parameters": [
         {"name": "siteId", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}},
         {"name": "fabId", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}},
+        {"name": "epoch", "in": "query", "required": True, "schema": {"type": "string", "format": "uuid"}},
         {"name": "afterSequence", "in": "query", "schema": {"type": "integer", "format": "int64", "minimum": 0}},
         {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 1000}}],
-    "responses": {"200": response('CommandJournalPageDto'), "default": problem_response()}}}
+    "responses": {
+        "200": response('CommandJournalPageDto'),
+        "400": {"description": "ProblemDetails error with code journal-cursor-invalid", "content": {"application/problem+json": {"schema": {"type": "object", "additionalProperties": True}}}},
+        "409": {"description": "Stale journal epoch", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/JournalEpochMismatchDto"}}}},
+        "default": problem_response()}}}
 
 openapi = {"openapi": "3.1.0", "info": {"title": "SemiconFab Next Development API", "version": "0.1.0", "description": "Loopback Development identity and local file store only; production and OT are unavailable."}, "paths": paths, "security": [{"LocalDevelopment": []}], "components": {"securitySchemes": {"LocalDevelopment": {"type": "apiKey", "in": "header", "name": "X-Fab-Dev-Key"}}, "schemas": json.loads(json.dumps(schema['$defs']).replace('#/$defs/', '#/components/schemas/'))}}
 targets = {ROOT / "fab_shared/src/Generated/Contracts.g.cs": "\n".join(cs) + "\n", ROOT / "web_app/src/generated/contracts.generated.ts": "\n".join(ts) + "\n", ROOT / "contracts/openapi/openapi.json": json.dumps(openapi, ensure_ascii=False, indent=2) + "\n"}

@@ -36,8 +36,8 @@ internal static class ApiHost
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton(commandOptions);
         builder.Services.AddSingleton(_ => new EquipmentStatusService(Path.Combine(data, "equipment-status")));
-        // Durable command recovery (ADR-008): one local-disk store under the same Fab:DataDirectory.
-        builder.Services.AddSingleton<ICommandStore>(_ => new FileCommandStore(Path.Combine(data, "commands")));
+        // Durable command recovery (ADR-012): one transactional SQLite WAL database under Fab:DataDirectory.
+        builder.Services.AddSingleton<ICommandStore>(_ => new SqliteCommandStore(Path.Combine(data, "commands.db")));
         builder.Services.AddSingleton(provider => new EquipmentCommandService(
             provider.GetRequiredService<ICommandStore>(),
             provider.GetRequiredService<SiteDirectory>(),
@@ -232,24 +232,41 @@ internal static class ApiHost
             if (commands.StoreUnavailable) return StoreUnavailableProblem();
             return Results.Ok(commands.ListFabCommands(siteId, fab.Id, normalizedStatus, revision));
         });
-        // Durable journal replay page with explicit gap information for slow consumers and reconnects.
-        api.MapGet("/sites/{siteId:guid}/fabs/{fabId:guid}/command-journal", (Guid siteId, Guid fabId, long? afterSequence, int? limit,
-            EquipmentCommandService commands, SiteDirectory directory, IFabAuthorization authorization, HttpContext context) =>
+        // Epoch-aware durable journal replay page (ADR-010 3): epoch is mandatory; a stale epoch is a
+        // 409 journal-epoch-mismatch that forces authoritative reconciliation, never sequence guessing.
+        api.MapGet("/sites/{siteId:guid}/fabs/{fabId:guid}/command-journal", (Guid siteId, Guid fabId, string? epoch,
+            long? afterSequence, int? limit, EquipmentCommandService commands, SiteDirectory directory,
+            IFabAuthorization authorization, HttpContext context) =>
         {
             if (!directory.TryGetFab(siteId, fabId, out var fab) || !authorization.IsAuthorized(siteId, fab.Id, context.User))
                 return Results.Problem(statusCode: 404, title: "Site or FAB not found");
+            if (string.IsNullOrWhiteSpace(epoch) || !Guid.TryParse(epoch, out var requestedEpoch))
+                return Results.Problem(statusCode: 400, title: "Invalid journal cursor",
+                    detail: "The epoch query parameter is required and must be a UUID.",
+                    extensions: new Dictionary<string, object?> { ["code"] = "journal-cursor-invalid" });
             var cursor = afterSequence ?? 0;
             var pageLimit = limit ?? EquipmentCommandService.DefaultJournalPageLimit;
             if (cursor < 0)
-                return Results.Problem(statusCode: 400, title: "Invalid afterSequence filter",
+                return Results.Problem(statusCode: 400, title: "Invalid journal cursor",
                     detail: "afterSequence must be 0 or greater.",
-                    extensions: new Dictionary<string, object?> { ["errorCode"] = "INVALID_QUERY" });
+                    extensions: new Dictionary<string, object?> { ["code"] = "journal-cursor-invalid" });
             if (pageLimit is < 1 or > EquipmentCommandService.MaxJournalPageLimit)
-                return Results.Problem(statusCode: 400, title: "Invalid limit filter",
+                return Results.Problem(statusCode: 400, title: "Invalid journal cursor",
                     detail: $"limit must be 1..{EquipmentCommandService.MaxJournalPageLimit}.",
-                    extensions: new Dictionary<string, object?> { ["errorCode"] = "INVALID_QUERY" });
+                    extensions: new Dictionary<string, object?> { ["code"] = "journal-cursor-invalid" });
             if (commands.StoreUnavailable) return StoreUnavailableProblem();
-            return Results.Ok(commands.ReadCommandJournalPage(siteId, fab.Id, cursor, pageLimit));
+            var result = commands.ReadCommandJournalPage(siteId, fab.Id, requestedEpoch, cursor, pageLimit);
+            if (result.EpochMismatch is { } mismatch)
+                return Results.Problem(statusCode: 409, title: "Journal epoch mismatch",
+                    detail: "The requested journal epoch is no longer current; reconcile authoritative command state.",
+                    extensions: new Dictionary<string, object?>
+                    {
+                        ["code"] = "journal-epoch-mismatch",
+                        ["currentEpoch"] = mismatch.CurrentEpoch.ToString("D"),
+                        ["firstRetainedSequence"] = mismatch.FirstRetainedSequence,
+                        ["latestSequence"] = mismatch.LatestSequence
+                    });
+            return Results.Ok(result.Page!);
         });
         api.MapGet("/sites/{siteId:guid}/commands/stream", async (Guid siteId, string? fabId, EquipmentCommandService commands,
             SiteDirectory directory, IFabAuthorization authorization, HttpContext context, CancellationToken cancellationToken) =>

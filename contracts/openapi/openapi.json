@@ -329,7 +329,7 @@
     },
     "/api/v1/sites/{siteId}/fabs/{fabId}/command-journal": {
       "get": {
-        "description": "Journal replay page for one FAB, including the durable epoch and explicit gap information for slow consumers and reconnects.",
+        "description": "Journal replay page for one FAB and one epoch (ADR-010 3). epoch is mandatory: a missing/invalid epoch is a 400 journal-cursor-invalid ProblemDetails; a stale epoch is a 409 journal-epoch-mismatch ProblemDetails that forces the client to reconcile authoritative command state. nextAfterSequence is the next page cursor (last event sequence, or the authoritative watermark when a FAB filter yields an empty page).",
         "parameters": [
           {
             "name": "siteId",
@@ -343,6 +343,15 @@
           {
             "name": "fabId",
             "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "epoch",
+            "in": "query",
             "required": true,
             "schema": {
               "type": "string",
@@ -375,6 +384,27 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CommandJournalPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ProblemDetails error with code journal-cursor-invalid",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale journal epoch",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalEpochMismatchDto"
                 }
               }
             }
@@ -1030,6 +1060,7 @@
           "hasGap",
           "firstRetainedSequence",
           "latestSequence",
+          "nextAfterSequence",
           "events"
         ],
         "properties": {
@@ -1050,6 +1081,11 @@
             "format": "int64",
             "minimum": 0
           },
+          "nextAfterSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
           "events": {
             "type": "array",
             "items": {
@@ -1057,7 +1093,7 @@
             }
           }
         },
-        "description": "A paged journal replay window. hasGap=true means the requested afterSequence cannot be served exactly (retention trim, epoch replacement or cursor ahead of the journal); clients must reconcile authoritative command state via the commands listing. Events outside the retention window are never replayed."
+        "description": "A paged journal replay window for one requested epoch (ADR-010 3). A stale epoch is answered with HTTP 409 journal-epoch-mismatch, never with this page. Events are strictly increasing and greater than afterSequence; nextAfterSequence is the next page cursor (last event sequence, or the authoritative watermark when a FAB filter yields an empty page) and always makes progress. hasGap=true means retained sequences are missing (retention trim or cursor ahead of the journal); clients must reconcile authoritative command state via the commands listing. Events outside the retention window are never replayed."
       },
       "CommandDirtyDto": {
         "type": "object",
@@ -1092,6 +1128,37 @@
           }
         },
         "description": "SSE event: dirty control frame (no id line, not journaled). The retained journal may be incomplete (reason retention-trim|epoch-replaced|store-fault): the client MUST reconcile authoritative command state and must not guess."
+      },
+      "JournalEpochMismatchDto": {
+        "description": "HTTP 409 application/problem+json body when a journal request carries an epoch that is no longer the store's current epoch. The client must fall back to the authoritative command listing; it must not continue by sequence alone.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "currentEpoch",
+          "firstRetainedSequence",
+          "latestSequence"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "const": "journal-epoch-mismatch"
+          },
+          "currentEpoch": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstRetainedSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "latestSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
       }
     }
   }

@@ -1,31 +1,22 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 
 namespace Fab.App;
 
 /// <summary>
-/// One durable command-journal event. This is the internal persisted representation; the SSE
-/// payload exposes only fabId/commandId/revision/outcome/occurredAt. Site and command target
-/// fields are persisted so a lost command record can be rebuilt from the journal (outbox
-/// semantics, ADR-008 2.3 step 5) without resurrecting terminal commands that were pruned.
+/// One durable command-journal event (SQLite <c>journal</c> row). The SSE payload exposes only
+/// fabId/commandId/revision/outcome/occurredAt; the command target lives in the transactional
+/// command record (ADR-012 2.1). Sequence is assigned inside the submit/advance transaction.
 /// </summary>
 public sealed record CommandJournalEvent(
     long Sequence,
-    string SiteId,
     string FabId,
     string CommandId,
-    string EquipmentId,
-    string Action,
     int Revision,
     string Outcome,
     string OccurredAt);
 
-/// <summary>
-/// Durable authoritative command record (ADR-008 2.1). <see cref="Events"/> is the record's
-/// own bounded journal history so the journal can be rebuilt after a crash between the record
-/// write and the journal append.
-/// </summary>
+/// <summary>Durable authoritative command record (ADR-012 2.1, SQLite <c>commands</c> row).</summary>
 public sealed record CommandPersistedRecord(
     string SiteId,
     string FabId,
@@ -36,34 +27,49 @@ public sealed record CommandPersistedRecord(
     string Outcome,
     string CreatedAt,
     string OccurredAt,
-    string? TerminalAt,
-    CommandJournalEvent[] Events);
+    string? TerminalAt);
 
 /// <summary>
-/// Durable idempotency mapping: the scope hash identifies (site, FAB, principal, key) and the
-/// entry carries the original accepted response so a replay after a restart returns exactly the
-/// same commandId/revision/outcome/occurredAt.
+/// Durable idempotency/outbox entry (ADR-012 2.1, SQLite <c>idempotency</c> row). The primary key
+/// is (site, FAB, principal, key); <see cref="ResponseJson"/> is the original accepted response so
+/// a replay after a restart returns exactly the same commandId/revision/outcome/occurredAt.
 /// </summary>
 public sealed record CommandIdempotencyRecord(
-    string Scope,
     string SiteId,
     string FabId,
-    string EquipmentId,
-    string Action,
+    string Principal,
+    string Key,
+    string RequestHash,
     string CommandId,
-    int Revision,
-    string Outcome,
-    string OccurredAt,
+    string ResponseJson,
     string CreatedAt);
 
-/// <summary>Pruning result persisted together with the durable journal rewrite (ADR-008 2.3 step 3).</summary>
-public sealed record CommandRetentionUpdate(
-    long FirstRetainedSequence,
-    CommandJournalEvent[] RetainedEvents,
-    string[] PrunedCommandIds,
-    string[] PrunedIdempotencyScopes);
+/// <summary>Outcome of one transactional submit attempt (ADR-012 2.2).</summary>
+public enum CommandStoreSubmitStatus
+{
+    /// <summary>The command/idempotency/journal/site-state transaction committed.</summary>
+    Accepted,
+    /// <summary>The same idempotency key + payload already committed; the stored response must be replayed.</summary>
+    Replayed,
+    /// <summary>The same idempotency key was used with a different payload (HTTP 409).</summary>
+    PayloadMismatch
+}
 
-/// <summary>Fully recovered durable state of one Site. <see cref="Diagnostics"/> names every repair performed.</summary>
+/// <summary>Result of a transactional submit: <see cref="Event"/> is set when a new command committed.</summary>
+public sealed record CommandStoreSubmitResult(
+    CommandStoreSubmitStatus Status,
+    CommandJournalEvent? Event = null,
+    CommandPersistedRecord? Command = null,
+    CommandIdempotencyRecord? Idempotency = null);
+
+/// <summary>
+/// Retention transaction input (ADR-012 2.2): delete the pruned commands together with their
+/// idempotency/outbox rows and journal events, and drop retained-window journal rows below
+/// <see cref="FirstRetainedSequence"/>. All deletions and the cursor advance commit atomically.
+/// </summary>
+public sealed record CommandRetentionUpdate(long FirstRetainedSequence, string[] PrunedCommandIds);
+
+/// <summary>Fully recovered durable state of one Site. <see cref="Diagnostics"/> names recovery actions.</summary>
 public sealed record CommandStoreRecovery(
     Guid Epoch,
     long FirstRetainedSequence,
@@ -73,26 +79,36 @@ public sealed record CommandStoreRecovery(
     CommandIdempotencyRecord[] Idempotency,
     string[] Diagnostics);
 
-/// <summary>Durable command store. Every mutating call is flushed to disk before it returns.</summary>
+/// <summary>
+/// Transactional durable command store (ADR-012). Every mutation commits as exactly one database
+/// transaction; there is no window in which a command exists without its idempotency entry and
+/// accepted journal event. Reads may return the last committed state only.
+/// </summary>
 public interface ICommandStore
 {
     /// <summary>
-    /// Loads and repairs one Site's durable state. Throws <see cref="CommandStoreException"/>
-    /// when the store cannot be read (startup must fail; there is no memory fallback).
+    /// Loads one Site's committed durable state (single transaction snapshot). Throws
+    /// <see cref="CommandStoreException"/> when the store is unavailable, inconsistent or
+    /// unreadable: startup must fail, there is no memory fallback.
     /// </summary>
     CommandStoreRecovery Recover(Guid siteId);
 
-    /// <summary>Durably commits an accepted command (record + idempotency + journal line) and returns the assigned event.</summary>
-    CommandJournalEvent CommitAccepted(Guid siteId, CommandPersistedRecord record, CommandIdempotencyRecord idempotency);
+    /// <summary>
+    /// Atomically commits one accepted command: unique idempotency insert (or replay/conflict
+    /// lookup) + command row + accepted journal event + site-state epoch/latest advance.
+    /// </summary>
+    CommandStoreSubmitResult CommitSubmit(Guid siteId, CommandPersistedRecord command, CommandIdempotencyRecord idempotency);
 
-    /// <summary>Durably commits an advanced command record and its journal line.</summary>
-    CommandJournalEvent CommitAdvance(Guid siteId, CommandPersistedRecord record);
+    /// <summary>
+    /// Atomically advances a command revision: revision guard + command update + journal event +
+    /// site-state latest advance. Returns null when the command is unknown or already at/past the
+    /// requested revision (idempotent no-op).
+    /// </summary>
+    CommandJournalEvent? CommitAdvance(Guid siteId, string commandId, int expectedRevision, int revision,
+        string outcome, string occurredAt, string? terminalAt);
 
-    /// <summary>Persists retention cursors, rewrites the retained journal window and deletes pruned records/idempotency entries.</summary>
+    /// <summary>Atomically prunes commands/idempotency/journal events and persists the retention cursor.</summary>
     void CommitRetention(Guid siteId, CommandRetentionUpdate update);
-
-    /// <summary>Deletes bounded idempotency entries that were evicted from the in-memory window.</summary>
-    void DeleteIdempotency(Guid siteId, IReadOnlyCollection<string> scopes);
 }
 
 /// <summary>Durable command storage failure. Always surfaced; never silently degraded to memory.</summary>
@@ -103,43 +119,10 @@ public sealed class CommandStoreException : Exception
     }
 }
 
-/// <summary>Stable idempotency scope hashing shared by the store and the conversation service.</summary>
-public static class CommandIdempotencyScope
+/// <summary>Stable request-payload hash for idempotency conflict detection (same key + different payload).</summary>
+public static class CommandRequestHash
 {
-    public static string Hash(Guid siteId, Guid fabId, string principal, string idempotencyKey) =>
+    public static string Compute(Guid siteId, Guid fabId, string equipmentId, string action) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
-            string.Join("\n", "command-idempotency-v1", siteId.ToString("D"), fabId.ToString("D"), principal, idempotencyKey))));
-}
-
-/// <summary>Structural validation of a recovered command record; failures are diagnosed and never trusted.</summary>
-internal static class CommandRecordValidation
-{
-    public static string? Error(CommandPersistedRecord record, Guid siteId)
-    {
-        if (!string.Equals(record.SiteId, siteId.ToString("D"), StringComparison.Ordinal)) return "siteId";
-        if (!Guid.TryParse(record.FabId, out _)) return "fabId";
-        if (!Guid.TryParse(record.CommandId, out _)) return "commandId";
-        if (string.IsNullOrWhiteSpace(record.EquipmentId)) return "equipmentId";
-        if (string.IsNullOrWhiteSpace(record.Action)) return "action";
-        if (record.Revision is < 0 or > 2) return "revision";
-        if (string.IsNullOrWhiteSpace(record.Outcome)) return "outcome";
-        if (!DateTimeOffset.TryParse(record.CreatedAt, out _)) return "createdAt";
-        if (!DateTimeOffset.TryParse(record.OccurredAt, out _)) return "occurredAt";
-        if (record.TerminalAt is not null && !DateTimeOffset.TryParse(record.TerminalAt, out _)) return "terminalAt";
-        if (record.Events is null) return "events";
-        foreach (var journalEvent in record.Events)
-        {
-            if (journalEvent is null || journalEvent.Revision is < 0 or > 2 || journalEvent.Sequence < 0 ||
-                !Guid.TryParse(journalEvent.FabId, out _) || !Guid.TryParse(journalEvent.CommandId, out _) ||
-                !DateTimeOffset.TryParse(journalEvent.OccurredAt, out _) || string.IsNullOrWhiteSpace(journalEvent.Outcome))
-                return "events";
-        }
-        return null;
-    }
-}
-
-/// <summary>Shared internal JSON format of the durable command store.</summary>
-internal static class CommandStoreJson
-{
-    public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+            string.Join("\n", "command-idempotency-payload-v1", siteId.ToString("D"), fabId.ToString("D"), equipmentId, action))));
 }

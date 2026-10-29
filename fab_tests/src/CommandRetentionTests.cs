@@ -99,8 +99,7 @@ public sealed class CommandRetentionTests
         SucceededDelay = TimeSpan.FromMilliseconds(20),
         TerminalTtl = options.TerminalTtl,
         MaxTerminalCommands = options.MaxTerminalCommands,
-        MaxJournalEventsPerSite = options.MaxJournalEventsPerSite,
-        MaxIdempotencyEntries = options.MaxIdempotencyEntries
+        MaxJournalEventsPerSite = options.MaxJournalEventsPerSite
     };
 
     private static EquipmentCommandStatus Submit(EquipmentCommandService service, string equipmentId, string key)

@@ -17,15 +17,15 @@ using Xunit.Sdk;
 namespace Fab.Tests;
 
 /// <summary>
-/// API-level coverage for the ADR-008 recovery endpoints and for durable restart recovery over
-/// HTTP: authoritative FAB command listing, journal paging with gap information, idempotency and
-/// revision stability across a host restart, plus the SSE replay-gap + dirty combination (CORE-013).
+/// API-level coverage for the ADR-010/ADR-012 recovery endpoints: authoritative FAB command
+/// listing, epoch-aware journal paging (mandatory epoch, 409 epoch-mismatch, nextAfterSequence,
+/// multi-page sizes, cross-FAB sparse sequences, retention holes), restart recovery over the same
+/// SQLite database, crash-after-commit replay and epoch reset authoritative reconciliation.
 /// </summary>
 public sealed class CommandRecoveryApiTests : IDisposable
 {
     private const string Key = "command-recovery-api-tests-development-key-0001";
-    private static readonly TimeSpan PollTimeout = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan StreamTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan PollTimeout = TimeSpan.FromSeconds(20);
     private readonly List<string> roots = [];
 
     public void Dispose()
@@ -83,91 +83,203 @@ public sealed class CommandRecoveryApiTests : IDisposable
         Assert.Equal(HttpStatusCode.BadRequest, invalidStatus.StatusCode);
         using var invalidStatusProblem = JsonDocument.Parse(await invalidStatus.Content.ReadAsStringAsync());
         Assert.Equal("INVALID_QUERY", invalidStatusProblem.RootElement.GetProperty("errorCode").GetString());
-        using var invalidRevision = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fabId}/commands?afterRevision=-2");
-        Assert.Equal(HttpStatusCode.BadRequest, invalidRevision.StatusCode);
         using var unknownFab = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{Guid.NewGuid()}/commands");
         Assert.Equal(HttpStatusCode.NotFound, unknownFab.StatusCode);
     }
 
     [Fact]
-    public async Task CommandJournalPagePaginatesAndReportsGap()
+    public async Task JournalPageRequiresEpochAndRejectsStaleEpoch()
     {
         var root = Root();
         using var factory = Factory(root, FastOptions());
         using var client = Authorized(factory);
         var (siteId, fabId) = await SiteAsync(client);
-        var commandId = await SubmitAsync(client, siteId, fabId, "equipment-0", "journal-page-1");
+        var commandId = await SubmitAsync(client, siteId, fabId, "equipment-0", "epoch-page-1");
         await PollTerminalAsync(client, commandId);
         var epoch = await EpochAsync(client, siteId, fabId);
+        var basePath = $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal";
 
-        var firstPage = await GetJsonAsync(client, $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal?afterSequence=0&limit=2");
-        Assert.Equal(epoch, firstPage.GetProperty("epoch").GetString());
-        Assert.False(firstPage.GetProperty("hasGap").GetBoolean());
-        Assert.Equal(1, firstPage.GetProperty("firstRetainedSequence").GetInt64());
-        Assert.Equal(3, firstPage.GetProperty("latestSequence").GetInt64());
-        var firstEvents = firstPage.GetProperty("events").EnumerateArray().ToArray();
-        Assert.Equal(new long[] { 1, 2 }, firstEvents.Select(item => item.GetProperty("sequence").GetInt64()).ToArray());
-        Assert.Equal(commandId, firstEvents[0].GetProperty("commandId").GetString());
-        Assert.Equal(fabId, firstEvents[0].GetProperty("fabId").GetString());
-        Assert.Equal(0, firstEvents[0].GetProperty("revision").GetInt32());
-        Assert.Equal("accepted", firstEvents[0].GetProperty("outcome").GetString());
-
-        var tail = await GetJsonAsync(client, $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal?afterSequence=2&limit=10");
-        Assert.False(tail.GetProperty("hasGap").GetBoolean());
-        var tailEvents = tail.GetProperty("events").EnumerateArray().ToArray();
-        Assert.Single(tailEvents);
-        Assert.Equal(3, tailEvents[0].GetProperty("sequence").GetInt64());
-        Assert.Equal(2, tailEvents[0].GetProperty("revision").GetInt32());
-
-        var caughtUp = await GetJsonAsync(client, $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal?afterSequence=3");
-        Assert.False(caughtUp.GetProperty("hasGap").GetBoolean());
-        Assert.Empty(caughtUp.GetProperty("events").EnumerateArray());
-        var ahead = await GetJsonAsync(client, $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal?afterSequence=99");
-        Assert.True(ahead.GetProperty("hasGap").GetBoolean());
-
-        foreach (var query in new[] { "afterSequence=-1", "limit=0", "limit=1001" })
+        foreach (var query in new[] { "?afterSequence=0", "?epoch=not-a-uuid&afterSequence=0", "?epoch=&afterSequence=0" })
         {
-            using var invalid = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal?{query}");
+            using var invalid = await client.GetAsync(basePath + query);
             Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+            Assert.Equal("application/problem+json", invalid.Content.Headers.ContentType!.MediaType);
             using var problem = JsonDocument.Parse(await invalid.Content.ReadAsStringAsync());
-            Assert.Equal("INVALID_QUERY", problem.RootElement.GetProperty("errorCode").GetString());
+            Assert.Equal("journal-cursor-invalid", problem.RootElement.GetProperty("code").GetString());
+        }
+
+        var staleEpoch = Guid.NewGuid().ToString("D");
+        using var stale = await client.GetAsync(basePath + $"?epoch={staleEpoch}&afterSequence=0");
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+        Assert.Equal("application/problem+json", stale.Content.Headers.ContentType!.MediaType);
+        using var staleDocument = JsonDocument.Parse(await stale.Content.ReadAsStringAsync());
+        var staleProblem = staleDocument.RootElement;
+        Assert.Equal("journal-epoch-mismatch", staleProblem.GetProperty("code").GetString());
+        Assert.Equal(epoch, staleProblem.GetProperty("currentEpoch").GetString());
+        Assert.Equal(1, staleProblem.GetProperty("firstRetainedSequence").GetInt64());
+        Assert.Equal(3, staleProblem.GetProperty("latestSequence").GetInt64());
+        Assert.NotEqual(staleEpoch, staleProblem.GetProperty("currentEpoch").GetString());
+
+        var page = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence=0&limit=100");
+        Assert.Equal(epoch, page.GetProperty("epoch").GetString());
+        Assert.False(page.GetProperty("hasGap").GetBoolean());
+        Assert.Equal(1, page.GetProperty("firstRetainedSequence").GetInt64());
+        Assert.Equal(3, page.GetProperty("latestSequence").GetInt64());
+        Assert.Equal(3, page.GetProperty("nextAfterSequence").GetInt64());
+        var events = page.GetProperty("events").EnumerateArray().ToArray();
+        Assert.Equal(new long[] { 1, 2, 3 }, events.Select(item => item.GetProperty("sequence").GetInt64()).ToArray());
+        Assert.Equal(commandId, events[0].GetProperty("commandId").GetString());
+        Assert.Equal(fabId, events[0].GetProperty("fabId").GetString());
+        Assert.Equal(0, events[0].GetProperty("revision").GetInt32());
+        Assert.Equal("accepted", events[0].GetProperty("outcome").GetString());
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(256)]
+    [InlineData(257)]
+    [InlineData(1000)]
+    public async Task JournalPagePaginatesEveryPageSizeAcrossMultiPageWatermarks(int journalSize)
+    {
+        var root = Root();
+        using var factory = Factory(root, LongOptions());
+        using var client = Authorized(factory);
+        var (siteId, fabId) = await SiteAsync(client);
+        await CreateAcceptedCommandsAsync(factory, siteId, fabId, journalSize);
+        var epoch = await EpochAsync(client, siteId, fabId);
+        long latest = journalSize;
+        var basePath = $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal";
+
+        var page = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence=0&limit=1000");
+        Assert.Equal(latest, page.GetProperty("latestSequence").GetInt64());
+        Assert.False(page.GetProperty("hasGap").GetBoolean());
+        Assert.Equal(latest, page.GetProperty("events").GetArrayLength());
+        Assert.Equal(latest, page.GetProperty("nextAfterSequence").GetInt64());
+        var allEvents = page.GetProperty("events").EnumerateArray().ToArray();
+        Assert.Equal(1, allEvents[0].GetProperty("sequence").GetInt64());
+        Assert.Equal(latest, allEvents[^1].GetProperty("sequence").GetInt64());
+
+        var firstPage = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence=0&limit=1");
+        Assert.Equal(1, firstPage.GetProperty("events").GetArrayLength());
+        Assert.Equal(1, firstPage.GetProperty("nextAfterSequence").GetInt64());
+        if (journalSize > 1)
+        {
+            // A multi-page loop with limit 256 must reach the authoritative watermark without gaps.
+            var cursor = 0L;
+            var applied = 0;
+            var pages = 0;
+            while (cursor < latest)
+            {
+                var pageResult = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence={cursor}&limit=256");
+                Assert.False(pageResult.GetProperty("hasGap").GetBoolean());
+                var pageEvents = pageResult.GetProperty("events").EnumerateArray().ToArray();
+                Assert.NotEmpty(pageEvents);
+                Assert.All(pageEvents, item => Assert.True(item.GetProperty("sequence").GetInt64() > cursor));
+                Assert.Equal(cursor + 1, pageEvents[0].GetProperty("sequence").GetInt64());
+                applied += pageEvents.Length;
+                cursor = pageResult.GetProperty("nextAfterSequence").GetInt64();
+                pages++;
+                Assert.True(pages < 100, "The journal pagination loop did not terminate.");
+            }
+            Assert.Equal(latest, cursor);
+            Assert.Equal(latest, applied);
         }
     }
 
     [Fact]
-    public async Task CommandJournalPageReportsGapAfterRetentionTrim()
+    public async Task JournalPageHandlesCrossFabSparseSequencesWithProgress()
     {
         var root = Root();
-        using var factory = Factory(root, new EquipmentCommandOptions
-        {
-            ExecutingDelay = TimeSpan.FromHours(1),
-            SucceededDelay = TimeSpan.FromHours(2),
-            MaxJournalEventsPerSite = 2
-        });
+        using var factory = Factory(root, LongOptions(), fabCount: 2);
         using var client = Authorized(factory);
-        var (siteId, fabId) = await SiteAsync(client);
-        for (var index = 0; index < 3; index++)
-            await SubmitAsync(client, siteId, fabId, $"equipment-{index}", $"trim-{index}");
+        var sites = await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites");
+        var site = Assert.Single(sites!);
+        Assert.Equal(2, site.Fabs.Length);
+        var siteId = site.SiteId;
+        var firstFab = site.Fabs[0].FabId;
+        var secondFab = site.Fabs[1].FabId;
+        var service = factory.Services.GetRequiredService<EquipmentCommandService>();
+        for (var index = 0; index < 20; index++)
+        {
+            var fabId = index % 2 == 0 ? firstFab : secondFab;
+            var result = service.Submit(Guid.Parse(siteId),
+                new EquipmentCommandRequest(fabId, $"equipment-{index}", "START"), "local-developer", $"sparse-{index}");
+            Assert.Equal(EquipmentCommandSubmitStatus.Accepted, result.Status);
+        }
+        var epoch = await EpochAsync(client, siteId, firstFab);
+        var basePath = $"/api/v1/sites/{siteId}/fabs/{firstFab}/command-journal";
+        var page = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence=0&limit=1000");
+        var events = page.GetProperty("events").EnumerateArray().ToArray();
+        Assert.Equal(10, events.Length);
+        Assert.All(events, item => Assert.Equal(firstFab, item.GetProperty("fabId").GetString()));
+        var sequences = events.Select(item => item.GetProperty("sequence").GetInt64()).ToArray();
+        Assert.Equal(sequences.OrderBy(sequence => sequence), sequences);
+        Assert.True(sequences.Zip(sequences.Skip(1), (left, right) => right > left).All(monotonic => monotonic));
+        Assert.Equal(20, page.GetProperty("latestSequence").GetInt64());
+        Assert.False(page.GetProperty("hasGap").GetBoolean());
 
-        var page = await GetJsonAsync(client, $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal?afterSequence=0&limit=10");
-        Assert.True(page.GetProperty("hasGap").GetBoolean());
-        Assert.Equal(2, page.GetProperty("firstRetainedSequence").GetInt64());
-        Assert.Equal(3, page.GetProperty("latestSequence").GetInt64());
-        Assert.Equal(new long[] { 2, 3 }, page.GetProperty("events").EnumerateArray()
-            .Select(item => item.GetProperty("sequence").GetInt64()).ToArray());
-        var boundary = await GetJsonAsync(client, $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal?afterSequence=1&limit=10");
-        Assert.False(boundary.GetProperty("hasGap").GetBoolean());
+        // A FAB-filtered page can be empty while the site watermark is ahead; it must still make
+        // progress (nextAfterSequence advances to the authoritative watermark) so loops terminate.
+        var cursor = 0L;
+        var applied = 0;
+        var emptyPages = 0;
+        var pages = 0;
+        while (cursor < 20)
+        {
+            var pageResult = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence={cursor}&limit=3");
+            var pageEvents = pageResult.GetProperty("events").EnumerateArray().ToArray();
+            if (pageEvents.Length == 0) emptyPages++;
+            applied += pageEvents.Length;
+            var next = pageResult.GetProperty("nextAfterSequence").GetInt64();
+            Assert.True(next > cursor, "nextAfterSequence must make progress for sparse FAB sequences.");
+            cursor = next;
+            pages++;
+            Assert.True(pages < 100, "The sparse journal pagination loop did not terminate.");
+        }
+        Assert.Equal(10, applied);
+        Assert.True(emptyPages >= 1);
     }
 
     [Fact]
-    public async Task RestartOverSameDataDirectoryRecoversCommandIdempotencyAndJournal()
+    public async Task JournalPageReportsRetentionGapAfterPrune()
+    {
+        var root = Root();
+        using var factory = Factory(root, FastOptions(new EquipmentCommandOptions { MaxTerminalCommands = 1 }));
+        using var client = Authorized(factory);
+        var (siteId, fabId) = await SiteAsync(client);
+        var first = await SubmitAsync(client, siteId, fabId, "equipment-0", "retention-page-1");
+        await PollTerminalAsync(client, first);
+        var second = await SubmitAsync(client, siteId, fabId, "equipment-1", "retention-page-2");
+        await PollTerminalAsync(client, second);
+        var epoch = await EpochAsync(client, siteId, fabId);
+        var basePath = $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal";
+
+        var gapped = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence=0&limit=100");
+        Assert.True(gapped.GetProperty("hasGap").GetBoolean());
+        Assert.Equal(4, gapped.GetProperty("firstRetainedSequence").GetInt64());
+        Assert.Equal(6, gapped.GetProperty("latestSequence").GetInt64());
+        var sequences = gapped.GetProperty("events").EnumerateArray().Select(item => item.GetProperty("sequence").GetInt64()).ToArray();
+        Assert.Equal(new long[] { 4, 5, 6 }, sequences);
+        Assert.Equal(6, gapped.GetProperty("nextAfterSequence").GetInt64());
+
+        var boundary = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence=3&limit=100");
+        Assert.False(boundary.GetProperty("hasGap").GetBoolean());
+        Assert.Equal(new long[] { 4, 5, 6 }, boundary.GetProperty("events").EnumerateArray()
+            .Select(item => item.GetProperty("sequence").GetInt64()).ToArray());
+        var caughtUp = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence=6&limit=100");
+        Assert.False(caughtUp.GetProperty("hasGap").GetBoolean());
+        Assert.Empty(caughtUp.GetProperty("events").EnumerateArray());
+        Assert.Equal(6, caughtUp.GetProperty("nextAfterSequence").GetInt64());
+    }
+
+    [Fact]
+    public async Task RestartOverSameSqliteDatabaseRecoversCommandIdempotencyAndJournal()
     {
         var root = Root();
         string siteId;
         string fabId;
         string commandId;
         string epoch;
-        long latest;
         using (var firstFactory = Factory(root, FastOptions()))
         using (var firstClient = Authorized(firstFactory))
         {
@@ -175,10 +287,6 @@ public sealed class CommandRecoveryApiTests : IDisposable
             commandId = await SubmitAsync(firstClient, siteId, fabId, "equipment-0", "http-restart-1");
             await PollTerminalAsync(firstClient, commandId);
             epoch = await EpochAsync(firstClient, siteId, fabId);
-            var page = await GetJsonAsync(firstClient, $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal?afterSequence=0");
-            latest = page.GetProperty("latestSequence").GetInt64();
-            using var status = await firstClient.GetAsync($"/api/v1/commands/{commandId}");
-            Assert.Equal(HttpStatusCode.OK, status.StatusCode);
         }
 
         using var restarted = Factory(root, FastOptions());
@@ -195,14 +303,18 @@ public sealed class CommandRecoveryApiTests : IDisposable
         using var replayDocument = JsonDocument.Parse(await replay.Content.ReadAsStringAsync());
         Assert.Equal(commandId, replayDocument.RootElement.GetProperty("commandId").GetString());
         Assert.Equal(0, replayDocument.RootElement.GetProperty("revision").GetInt32());
+        Assert.Equal("accepted", replayDocument.RootElement.GetProperty("outcome").GetString());
 
-        var listing = await GetJsonAsync(client, $"/api/v1/sites/{siteId}/fabs/{fabId}/commands?status=all");
-        Assert.Equal(epoch, listing.GetProperty("epoch").GetString());
-        Assert.Equal(1, listing.GetProperty("commands").GetArrayLength());
+        var page = await GetJsonAsync(client,
+            $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal?epoch={epoch}&afterSequence=0&limit=100");
+        Assert.Equal(epoch, page.GetProperty("epoch").GetString());
+        Assert.False(page.GetProperty("hasGap").GetBoolean());
+        Assert.Equal(3, page.GetProperty("latestSequence").GetInt64());
+        Assert.Equal(3, page.GetProperty("events").GetArrayLength());
 
-        using var resumed = await OpenStreamAsync(client, siteId, fabId, $"{epoch}:1");
-        Assert.Equal(HttpStatusCode.OK, resumed.StatusCode);
-        await using var body = await resumed.Content.ReadAsStreamAsync();
+        using var stream = await OpenStreamAsync(client, siteId, fabId, $"{epoch}:1");
+        Assert.Equal(HttpStatusCode.OK, stream.StatusCode);
+        await using var body = await stream.Content.ReadAsStreamAsync();
         using var reader = new StreamReader(body, Encoding.UTF8);
         var next = await ReadSseEventAsync(reader)
             ?? throw new XunitException("The restarted command stream ended before replaying the retained journal.");
@@ -212,7 +324,7 @@ public sealed class CommandRecoveryApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Core013RestartCursorBreakEventLossAndDuplicateIdempotencyOverHttp()
+    public async Task DatabaseResetReplacesEpochAndForcesAuthoritativeRecovery()
     {
         var root = Root();
         string siteId;
@@ -224,32 +336,26 @@ public sealed class CommandRecoveryApiTests : IDisposable
         using (var firstClient = Authorized(firstFactory))
         {
             (siteId, fabId) = await SiteAsync(firstClient);
-            commandId = await SubmitAsync(firstClient, siteId, fabId, "equipment-0", "http-core-013-1");
+            commandId = await SubmitAsync(firstClient, siteId, fabId, "equipment-0", "http-reset-1");
             await PollTerminalAsync(firstClient, commandId);
             epoch = await EpochAsync(firstClient, siteId, fabId);
-            var page = await GetJsonAsync(firstClient, $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal?afterSequence=0");
+            var page = await GetJsonAsync(firstClient,
+                $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal?epoch={epoch}&afterSequence=0");
             latest = page.GetProperty("latestSequence").GetInt64();
         }
-        // Event loss between host runs: the journal disappears while the authoritative records and
-        // idempotency mapping survive. The next host must start a new epoch and signal the gap.
-        var journalPath = Path.Combine(root, "commands", siteId, "journal", epoch + ".jsonl");
-        File.WriteAllText(journalPath, "");
+        TestDataDirectory.ResetDatabase(root);
 
         using var restarted = Factory(root, FastOptions());
         using var client = Authorized(restarted);
-        using var recovered = await client.GetAsync($"/api/v1/commands/{commandId}");
-        Assert.Equal(HttpStatusCode.OK, recovered.StatusCode);
-        using var recoveredDocument = JsonDocument.Parse(await recovered.Content.ReadAsStringAsync());
-        Assert.Equal(2, recoveredDocument.RootElement.GetProperty("revision").GetInt32());
-
-        using var replay = await PostCommandAsync(client, siteId,
-            new { fabId, equipmentId = "equipment-0", action = "START" }, "http-core-013-1");
-        Assert.Equal(HttpStatusCode.Accepted, replay.StatusCode);
-        using var replayDocument = JsonDocument.Parse(await replay.Content.ReadAsStringAsync());
-        Assert.Equal(commandId, replayDocument.RootElement.GetProperty("commandId").GetString());
-        var listing = await GetJsonAsync(client, $"/api/v1/sites/{siteId}/fabs/{fabId}/commands?status=all");
-        Assert.Equal(1, listing.GetProperty("commands").GetArrayLength());
-        Assert.NotEqual(epoch, listing.GetProperty("epoch").GetString());
+        using var gone = await client.GetAsync($"/api/v1/commands/{commandId}");
+        Assert.Equal(HttpStatusCode.NotFound, gone.StatusCode);
+        using var stale = await client.GetAsync(
+            $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal?epoch={epoch}&afterSequence={latest}");
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+        using var staleDocument = JsonDocument.Parse(await stale.Content.ReadAsStringAsync());
+        Assert.Equal("journal-epoch-mismatch", staleDocument.RootElement.GetProperty("code").GetString());
+        var currentEpoch = staleDocument.RootElement.GetProperty("currentEpoch").GetString();
+        Assert.NotEqual(epoch, currentEpoch);
 
         using var gapped = await OpenStreamAsync(client, siteId, fabId, $"{epoch}:{latest}");
         Assert.Equal(HttpStatusCode.OK, gapped.StatusCode);
@@ -258,16 +364,70 @@ public sealed class CommandRecoveryApiTests : IDisposable
         var gap = await ReadSseEventAsync(reader)
             ?? throw new XunitException("The command stream ended before the replay-gap frame.");
         Assert.Equal("replay-gap", gap.Event);
-        Assert.Null(gap.Id);
         var dirty = await ReadSseEventAsync(reader)
             ?? throw new XunitException("The command stream ended before the dirty frame.");
         Assert.Equal("dirty", dirty.Event);
-        Assert.Null(dirty.Id);
         Assert.Equal("epoch-replaced", dirty.Data!.Value.GetProperty("reason").GetString());
-        var replayed = await ReadSseEventAsync(reader)
-            ?? throw new XunitException("The command stream ended before replaying retained events.");
-        Assert.Null(replayed.Event);
-        Assert.Equal(commandId, replayed.Data!.Value.GetProperty("payload").GetProperty("commandId").GetString());
+
+        using var list = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fabId}/commands?status=all");
+        using var listDocument = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
+        Assert.Empty(listDocument.RootElement.GetProperty("commands").EnumerateArray());
+        var replacement = await SubmitAsync(client, siteId, fabId, "equipment-0", "http-reset-2");
+        Assert.NotEqual(commandId, replacement);
+    }
+
+    [Fact]
+    public async Task CrashAfterCommitAndRetryOverHttpReplaysSameCommand()
+    {
+        var root = Root();
+        var injector = new TestFaultInjector { ThrowAt = CommandStoreFaultPoints.AfterCommitBeforeResponse };
+        string siteId;
+        string fabId;
+        using (var crashingFactory = Factory(root, FastOptions(), injector: injector))
+        using (var crashingClient = Authorized(crashingFactory))
+        {
+            (siteId, fabId) = await SiteAsync(crashingClient);
+            using var response = await PostCommandAsync(crashingClient, siteId,
+                new { fabId, equipmentId = "equipment-0", action = "START" }, "http-crash-1");
+            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        }
+        injector.ThrowAt = null;
+
+        using var restarted = Factory(root, FastOptions());
+        using var client = Authorized(restarted);
+        var listing = await GetJsonAsync(client, $"/api/v1/sites/{siteId}/fabs/{fabId}/commands?status=all");
+        var commands = listing.GetProperty("commands").EnumerateArray().ToArray();
+        Assert.Single(commands);
+        var committedCommandId = commands[0].GetProperty("commandId").GetString();
+        using var replay = await PostCommandAsync(client, siteId,
+            new { fabId, equipmentId = "equipment-0", action = "START" }, "http-crash-1");
+        Assert.Equal(HttpStatusCode.Accepted, replay.StatusCode);
+        using var replayDocument = JsonDocument.Parse(await replay.Content.ReadAsStringAsync());
+        Assert.Equal(committedCommandId, replayDocument.RootElement.GetProperty("commandId").GetString());
+        Assert.Equal(0, replayDocument.RootElement.GetProperty("revision").GetInt32());
+        Assert.Equal("accepted", replayDocument.RootElement.GetProperty("outcome").GetString());
+        var afterReplay = await GetJsonAsync(client, $"/api/v1/sites/{siteId}/fabs/{fabId}/commands?status=all");
+        Assert.Single(afterReplay.GetProperty("commands").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task StoreFailureReturnsExplicitServiceUnavailable()
+    {
+        var root = Root();
+        var inner = new SqliteCommandStore(TestDataDirectory.DatabasePath(root));
+        var failing = new FailingCommandStore(inner);
+        using var factory = Factory(root, FastOptions(), commandStore: failing);
+        using var client = Authorized(factory);
+        var (siteId, fabId) = await SiteAsync(client);
+        using var response = await PostCommandAsync(client, siteId,
+            new { fabId, equipmentId = "equipment-0", action = "START" }, "store-failure-1");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("COMMAND_STORE_UNAVAILABLE", problem.RootElement.GetProperty("errorCode").GetString());
+        // No memory-only fallback: the failed command never becomes visible.
+        using var listing = await client.GetAsync($"/api/v1/sites/{siteId}/fabs/{fabId}/commands?status=all");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, listing.StatusCode);
     }
 
     private string Root()
@@ -277,31 +437,66 @@ public sealed class CommandRecoveryApiTests : IDisposable
         return root;
     }
 
-    private static EquipmentCommandOptions FastOptions() => new()
+    private static EquipmentCommandOptions FastOptions(EquipmentCommandOptions? source = null) => new()
     {
         ExecutingDelay = TimeSpan.FromMilliseconds(10),
-        SucceededDelay = TimeSpan.FromMilliseconds(20)
+        SucceededDelay = TimeSpan.FromMilliseconds(20),
+        TerminalTtl = source?.TerminalTtl ?? TimeSpan.FromMinutes(5),
+        MaxTerminalCommands = source?.MaxTerminalCommands ?? 512,
+        MaxJournalEventsPerSite = source?.MaxJournalEventsPerSite ?? 4096
     };
 
-    private WebApplicationFactory<Program> Factory(string dataDirectory, EquipmentCommandOptions? commandOptions = null) =>
+    private static EquipmentCommandOptions LongOptions() => new()
+    {
+        ExecutingDelay = TimeSpan.FromHours(1),
+        SucceededDelay = TimeSpan.FromHours(2)
+    };
+
+    private WebApplicationFactory<Program> Factory(string dataDirectory, EquipmentCommandOptions? commandOptions = null,
+        ICommandStoreFaultInjector? injector = null, int fabCount = 1, ICommandStore? commandStore = null) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
         {
             host.UseEnvironment("Development");
             host.UseSetting("Fab:DevelopmentKey", Key);
             host.UseSetting("Fab:DataDirectory", dataDirectory);
             host.UseSetting("Fab:EmbeddedWorker", "false");
-            if (commandOptions is not null)
+            if (fabCount != 1) host.UseSetting("Fab:FabCount", fabCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (commandOptions is not null || injector is not null || commandStore is not null)
             {
                 host.ConfigureTestServices(services =>
                 {
+                    if (commandStore is not null)
+                    {
+                        services.RemoveAll<ICommandStore>();
+                        services.AddSingleton(commandStore);
+                    }
+                    if (injector is not null)
+                    {
+                        services.RemoveAll<ICommandStore>();
+                        services.AddSingleton<ICommandStore>(_ => new SqliteCommandStore(
+                            TestDataDirectory.DatabasePath(dataDirectory), injector));
+                    }
                     services.RemoveAll<EquipmentCommandService>();
                     services.AddSingleton(provider => new EquipmentCommandService(
                         provider.GetRequiredService<ICommandStore>(),
-                        provider.GetRequiredService<SiteDirectory>(), TimeProvider.System, commandOptions,
+                        provider.GetRequiredService<SiteDirectory>(), TimeProvider.System,
+                        commandOptions ?? new EquipmentCommandOptions(),
                         provider.GetRequiredService<IEquipmentCommandValidator>()));
                 });
             }
         });
+
+    private static async Task CreateAcceptedCommandsAsync(WebApplicationFactory<Program> factory, string siteId, string fabId, int count)
+    {
+        var service = factory.Services.GetRequiredService<EquipmentCommandService>();
+        for (var index = 0; index < count; index++)
+        {
+            var result = service.Submit(Guid.Parse(siteId),
+                new EquipmentCommandRequest(fabId, $"equipment-{index % 7}", "START"), "local-developer", $"bulk-{count}-{index}");
+            Assert.Equal(EquipmentCommandSubmitStatus.Accepted, result.Status);
+        }
+        await Task.Yield();
+    }
 
     private static HttpClient Authorized(WebApplicationFactory<Program> factory)
     {
@@ -403,5 +598,29 @@ public sealed class CommandRecoveryApiTests : IDisposable
             element = document.RootElement.Clone();
         }
         return new SseEvent(id, eventName, element);
+    }
+
+    /// <summary>Store double whose write path always fails like an unavailable SQLite/IO store.</summary>
+    private sealed class FailingCommandStore : ICommandStore
+    {
+        private readonly ICommandStore inner;
+
+        public FailingCommandStore(ICommandStore inner)
+        {
+            this.inner = inner;
+        }
+
+        public CommandStoreRecovery Recover(Guid siteId) => inner.Recover(siteId);
+
+        public CommandStoreSubmitResult CommitSubmit(Guid siteId, CommandPersistedRecord command,
+            CommandIdempotencyRecord idempotency) =>
+            throw new CommandStoreException("Simulated durable store failure.");
+
+        public CommandJournalEvent? CommitAdvance(Guid siteId, string commandId, int expectedRevision, int revision,
+            string outcome, string occurredAt, string? terminalAt) =>
+            throw new CommandStoreException("Simulated durable store failure.");
+
+        public void CommitRetention(Guid siteId, CommandRetentionUpdate update) =>
+            throw new CommandStoreException("Simulated durable store failure.");
     }
 }

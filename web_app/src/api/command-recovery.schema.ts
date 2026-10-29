@@ -3,8 +3,9 @@
  *
  *  - `GET /api/v1/sites/{siteId}/fabs/{fabId}/commands?status=&afterRevision=` — authoritative
  *    command listing for browser refresh / severe-gap resync (epoch + latestSequence included).
- *  - `GET /api/v1/sites/{siteId}/fabs/{fabId}/command-journal?afterSequence=&limit=` — durable
- *    journal replay page with explicit gap information.
+ *  - `GET /api/v1/sites/{siteId}/fabs/{fabId}/command-journal?epoch=&afterSequence=&limit=` — durable
+ *    journal replay page with explicit gap information. `epoch` is mandatory (ADR-010 3); a stale
+ *    epoch is a 409 `journal-epoch-mismatch` that forces authoritative reconciliation.
  *  - `event: dirty` SSE control frame (no id line, not journaled) — the retained journal may be
  *    incomplete (retention trim / epoch replacement / store fault); the client must reconcile
  *    authoritative command state instead of guessing.
@@ -23,6 +24,7 @@ import type {
   CommandJournalPageDto,
   CommandRecoveryDto,
   CommandRecoveryListDto,
+  JournalEpochMismatchDto,
 } from '@/generated/contracts.generated';
 
 /** Outcomes the command protocol may carry; the development backend emits accepted/executing/succeeded. */
@@ -44,6 +46,10 @@ export const MAX_COMMAND_JOURNAL_LIMIT = 1000;
  * missing; `store-fault` means the durable journal can no longer be trusted at all.
  */
 export const COMMAND_DIRTY_REASONS = ['retention-trim', 'epoch-replaced', 'store-fault'] as const;
+/** ProblemDetails code returned by the journal endpoint for a missing/invalid epoch or cursor. */
+export const JOURNAL_CURSOR_INVALID_CODE = 'journal-cursor-invalid' as const;
+/** HTTP 409 code returned when the requested journal epoch is no longer current. */
+export const JOURNAL_EPOCH_MISMATCH_CODE = 'journal-epoch-mismatch' as const;
 
 const commandOutcomeSchema = Schema.Literals(COMMAND_RECOVERY_OUTCOMES);
 const commandStatusFilterSchema = Schema.Literals(COMMAND_STATUS_FILTERS);
@@ -87,7 +93,19 @@ export const commandJournalPageSchema = Schema.Struct({
   hasGap: Schema.Boolean,
   firstRetainedSequence: nonNegativeInteger,
   latestSequence: nonNegativeInteger,
+  nextAfterSequence: nonNegativeInteger,
   events: Schema.Array(commandJournalEventSchema).pipe(Schema.mutable),
+});
+
+/**
+ * HTTP 409 application/problem+json body: the requested epoch is stale. The client must fall back
+ * to the authoritative command listing (epoch + latestSequence) instead of continuing by sequence.
+ */
+export const journalEpochMismatchSchema = Schema.Struct({
+  code: Schema.Literals([JOURNAL_EPOCH_MISMATCH_CODE]),
+  currentEpoch: nonEmptyString,
+  firstRetainedSequence: nonNegativeInteger,
+  latestSequence: nonNegativeInteger,
 });
 
 /** SSE `event: dirty` control frame payload (CommandDirtyDto). */
@@ -107,8 +125,12 @@ export const commandListQuerySchema = Schema.Struct({
   ),
 });
 
-/** Query parameters of the journal page endpoint (limit defaults to 100, maximum 1000). */
+/**
+ * Query parameters of the journal page endpoint (ADR-010 3): epoch is mandatory; afterSequence is
+ * exclusive and defaults to 0; limit defaults to 100 with a 1..1000 bound.
+ */
 export const commandJournalQuerySchema = Schema.Struct({
+  epoch: nonEmptyString,
   afterSequence: Schema.optional(nonNegativeInteger),
   limit: Schema.optional(journalLimitSchema),
 });
@@ -120,6 +142,7 @@ export type CommandRecoveryList = typeof commandRecoveryListSchema.Type;
 export type CommandJournalEvent = typeof commandJournalEventSchema.Type;
 export type CommandJournalPage = typeof commandJournalPageSchema.Type;
 export type CommandDirty = typeof commandDirtySchema.Type;
+export type JournalEpochMismatch = typeof journalEpochMismatchSchema.Type;
 export type CommandListQuery = typeof commandListQuerySchema.Type;
 export type CommandJournalQuery = typeof commandJournalQuerySchema.Type;
 
@@ -127,6 +150,7 @@ export const decodeCommandRecoveryList = Schema.decodeUnknownEffect(commandRecov
 export const decodeCommandJournalEvent = Schema.decodeUnknownEffect(commandJournalEventSchema);
 export const decodeCommandJournalPage = Schema.decodeUnknownEffect(commandJournalPageSchema);
 export const decodeCommandDirty = Schema.decodeUnknownEffect(commandDirtySchema);
+export const decodeJournalEpochMismatch = Schema.decodeUnknownEffect(journalEpochMismatchSchema);
 
 /**
  * Compile-time bridge to the generated wire contracts: this only type-checks when the decoded
@@ -143,3 +167,4 @@ export type CommandJournalPageWireAligned = CommandJournalPage extends Omit<Comm
     : never
   : never;
 export type CommandDirtyWireAligned = CommandDirty extends CommandDirtyDto ? true : never;
+export type JournalEpochMismatchWireAligned = JournalEpochMismatch extends JournalEpochMismatchDto ? true : never;

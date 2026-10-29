@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text.Json;
 using Fab.Contracts;
 using Fab.Site;
 
@@ -43,7 +44,7 @@ public sealed record EquipmentCommandSubmitResult(
 
 /// <summary>
 /// Result of reading the command journal for one SSE connection. <see cref="HasGap"/> is true
-/// when the client cursor cannot be served exactly (foreign/malformed epoch, a pruned sequence,
+/// when the client cursor cannot be served exactly (foreign/malformed epoch, a pruned cursor,
 /// a missing sequence inside the retained window or a cursor ahead of the journal) and a
 /// replay-gap signal must be emitted before the retained events. Events are already filtered to
 /// the requested FAB when a scope is supplied. <see cref="DroppedCount"/> reports how many
@@ -69,6 +70,16 @@ public sealed record CommandReplayGapDto(
     long LatestSequence,
     string OccurredAt);
 
+/// <summary>
+/// Result of one epoch-aware journal page request (ADR-010 3). Either a page is returned or the
+/// requested epoch is stale, in which case the API must answer 409 journal-epoch-mismatch and the
+/// client must reconcile authoritative command state instead of continuing by sequence alone.
+/// </summary>
+public sealed record CommandJournalPageResult(CommandJournalPageDto? Page, JournalEpochMismatch? EpochMismatch);
+
+/// <summary>Body of the HTTP 409 <c>journal-epoch-mismatch</c> response.</summary>
+public sealed record JournalEpochMismatch(Guid CurrentEpoch, long FirstRetainedSequence, long LatestSequence);
+
 /// <summary>Deterministic knobs for the development command simulation and its durable retention.</summary>
 public sealed class EquipmentCommandOptions
 {
@@ -81,21 +92,21 @@ public sealed class EquipmentCommandOptions
     public int MaxTerminalCommands { get; init; } = 512;
 
     public int MaxJournalEventsPerSite { get; init; } = 4096;
-
-    public int MaxIdempotencyEntries { get; init; } = 4096;
 }
 
 /// <summary>
-/// Development equipment command simulation with durable recovery (ADR-008). It keeps an
-/// authoritative accepted -> executing -> succeeded lifecycle, deduplicates submissions by
-/// (Site, FAB, principal, Idempotency-Key), journals every event with a durable per-Site epoch
-/// and sequence, and persists terminal retention. All durable writes complete (fsync) before
-/// the caller sees an accepted/advanced state; a failed write raises the store fault and fails
-/// subsequent submissions instead of silently degrading to memory.
+/// Development equipment command simulation backed by the transactional durable store (ADR-012).
+/// It keeps an authoritative accepted -> executing -> succeeded lifecycle, deduplicates
+/// submissions by (Site, FAB, principal, Idempotency-Key) through the store's unique constraint,
+/// journals every event with a durable per-Site epoch/sequence, and persists terminal retention.
+///
+/// Every durable mutation the service performs is exactly one store transaction; the service only
+/// mirrors committed state. A failed transaction raises the store fault and fails subsequent
+/// submissions instead of silently degrading to memory.
 ///
 /// Terminal commands are pruned after the configured TTL and/or beyond the terminal capacity;
-/// their records, idempotency entries and journal events leave the retained window together, so
-/// their cursors report an explicit gap instead of a silent hole.
+/// their records, idempotency rows and journal events leave the retained window in the same
+/// transaction, so their cursors report an explicit gap instead of a silent hole.
 /// </summary>
 public sealed class EquipmentCommandService
 {
@@ -112,6 +123,8 @@ public sealed class EquipmentCommandService
     public const string StatusActive = "active";
     public const string StatusTerminal = "terminal";
     public const string StatusAll = "all";
+
+    private static readonly JsonSerializerOptions StoreJson = new(JsonSerializerDefaults.Web);
 
     private readonly ICommandStore store;
     private readonly SiteDirectory directory;
@@ -138,10 +151,10 @@ public sealed class EquipmentCommandService
         if (this.options.ExecutingDelay <= TimeSpan.Zero || this.options.SucceededDelay <= this.options.ExecutingDelay)
             throw new ArgumentOutOfRangeException(nameof(options), "ExecutingDelay must be positive and SucceededDelay must be greater than ExecutingDelay.");
         if (this.options.TerminalTtl <= TimeSpan.Zero || this.options.MaxTerminalCommands < 1 ||
-            this.options.MaxJournalEventsPerSite < 1 || this.options.MaxIdempotencyEntries < 1)
+            this.options.MaxJournalEventsPerSite < 1)
             throw new ArgumentOutOfRangeException(nameof(options), "Retention options must be positive.");
         // Fail fast: every configured Site is recovered before the API can serve a request, so an
-        // unwritable/corrupt store stops the process instead of silently degrading to memory.
+        // unwritable/inconsistent store stops the process instead of silently degrading to memory.
         foreach (var site in directory.GetSites())
         {
             var siteId = Guid.Parse(site.SiteId);
@@ -154,7 +167,7 @@ public sealed class EquipmentCommandService
     /// <summary>True when a durable write failed; every subsequent write is refused explicitly.</summary>
     public bool StoreUnavailable => Volatile.Read(ref storeFault) is not null;
 
-    /// <summary>Diagnostics collected by durable recovery (journal repairs, epoch replacement, ...).</summary>
+    /// <summary>Diagnostics collected by durable recovery (site-state creation, ...).</summary>
     public IReadOnlyDictionary<Guid, IReadOnlyList<string>> RecoveryDiagnostics =>
         recoveryDiagnostics.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<string>)pair.Value.ToArray());
 
@@ -166,12 +179,13 @@ public sealed class EquipmentCommandService
         public long LatestSequence { get; set; }
         public List<CommandJournalEvent> Journal { get; } = [];
         public Dictionary<Guid, EquipmentCommandStatus> Commands { get; } = [];
-        public Dictionary<Guid, CommandPersistedRecord> Records { get; } = [];
-        public Dictionary<string, IdempotencyEntry> Idempotency { get; } = new(StringComparer.Ordinal);
-        public Queue<string> IdempotencyOrder { get; set; } = new();
+        public Dictionary<IdempotencyScope, IdempotencyEntry> Idempotency { get; } = [];
         public Dictionary<Guid, DateTimeOffset> TerminalSince { get; } = [];
         public Queue<Guid> TerminalOrder { get; set; } = new();
     }
+
+    /// <summary>One logical command per (Site, FAB, principal, Idempotency-Key) — the store's primary key.</summary>
+    private readonly record struct IdempotencyScope(Guid SiteId, Guid FabId, string Principal, string Key);
 
     private sealed record IdempotencyEntry(string EquipmentId, string Action, EquipmentCommandStatus Accepted);
 
@@ -236,7 +250,7 @@ public sealed class EquipmentCommandService
         return long.TryParse(value[(separator + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out sequence) && sequence >= 0;
     }
 
-    /// <summary>Current durable journal epoch of one Site (the <c>epoch</c> half of SSE ids).</summary>
+    /// <summary>Current durable journal epoch of one Site (the <c>epoch</c> half of SSE ids and journal requests).</summary>
     public Guid GetJournalEpoch(Guid siteId)
     {
         if (!sites.TryGetValue(siteId, out var site)) throw new ArgumentException("Unknown Site.", nameof(siteId));
@@ -266,9 +280,9 @@ public sealed class EquipmentCommandService
     /// decides, in order: (1) idempotency replay for the same key+payload (returns the original
     /// stored accepted snapshot without consulting current capability/state), (2) idempotency
     /// conflict for a different payload, (3) capability/state validation for a brand-new command,
-    /// (4) durable record + idempotency + journal commit before 202. Concurrent retries of one key
-    /// therefore create exactly one durable command and cannot fail on state that changed after
-    /// the original submission.
+    /// (4) one durable store transaction (command + idempotency/outbox + journal + cursor) before
+    /// 202. Concurrent retries of one key therefore create exactly one durable command and cannot
+    /// fail on state that changed after the original submission.
     /// </summary>
     public EquipmentCommandSubmitResult Submit(Guid siteId, EquipmentCommandRequest request, string principal, string idempotencyKey)
     {
@@ -280,7 +294,7 @@ public sealed class EquipmentCommandService
         if (!Guid.TryParse(request.FabId, out var fabId) || !directory.TryGetFab(siteId, fabId, out var fab))
             return new(EquipmentCommandSubmitStatus.UnknownFab, null);
         if (!sites.TryGetValue(siteId, out var site)) return new(EquipmentCommandSubmitStatus.UnknownSite, null);
-        var scope = CommandIdempotencyScope.Hash(siteId, fab.Id, principal, idempotencyKey);
+        var scope = new IdempotencyScope(siteId, fab.Id, principal, idempotencyKey);
         site.Gate.Wait();
         try
         {
@@ -310,31 +324,40 @@ public sealed class EquipmentCommandService
             var commandText = commandId.ToString("D");
             var accepted = new EquipmentCommandStatus(siteText, fabText, request.EquipmentId, request.Action,
                 commandText, 0, AcceptedOutcome, occurredAt);
-            var record = new CommandPersistedRecord(siteText, fabText, request.EquipmentId, request.Action,
-                commandText, 0, AcceptedOutcome, occurredAt, occurredAt, null, []);
-            var idempotency = new CommandIdempotencyRecord(scope, siteText, fabText, request.EquipmentId,
-                request.Action, commandText, 0, AcceptedOutcome, occurredAt, occurredAt);
-            CommandJournalEvent journalEvent;
+            var command = new CommandPersistedRecord(siteText, fabText, request.EquipmentId, request.Action,
+                commandText, 0, AcceptedOutcome, occurredAt, occurredAt, null);
+            var idempotency = new CommandIdempotencyRecord(siteText, fabText, principal, idempotencyKey,
+                CommandRequestHash.Compute(siteId, fab.Id, request.EquipmentId, request.Action),
+                commandText, JsonSerializer.Serialize(accepted, StoreJson), occurredAt);
+            CommandStoreSubmitResult result;
             try
             {
-                journalEvent = store.CommitAccepted(siteId, record, idempotency);
+                result = store.CommitSubmit(siteId, command, idempotency);
             }
             catch (CommandStoreException error)
             {
                 RecordFault(error);
                 return new(EquipmentCommandSubmitStatus.StoreUnavailable, null);
             }
-            site.LatestSequence = journalEvent.Sequence;
-            site.Commands[commandId] = accepted;
-            site.Records[commandId] = record with { Events = [journalEvent] };
-            commandSites[commandId] = siteId;
-            site.Journal.Add(journalEvent);
-            site.Idempotency[scope] = new IdempotencyEntry(request.EquipmentId, request.Action, accepted);
-            site.IdempotencyOrder.Enqueue(scope);
-            EvictIdempotencyLocked(site);
-            PruneTerminalCommandsLocked(site);
-            _ = SimulateAsync(siteId, commandId, 0);
-            return new(EquipmentCommandSubmitStatus.Accepted, accepted);
+            switch (result.Status)
+            {
+                case CommandStoreSubmitStatus.PayloadMismatch:
+                    return new(EquipmentCommandSubmitStatus.IdempotencyConflict, null);
+                case CommandStoreSubmitStatus.Replayed:
+                    var replayed = DeserializeResponse(result.Idempotency ?? throw new CommandStoreException("Replayed submit has no idempotency entry."));
+                    site.Idempotency[scope] = new IdempotencyEntry(replayed.EquipmentId, replayed.Action, replayed);
+                    return new(EquipmentCommandSubmitStatus.Accepted, replayed);
+                default:
+                    var journalEvent = result.Event ?? throw new CommandStoreException("Accepted submit has no journal event.");
+                    site.LatestSequence = journalEvent.Sequence;
+                    site.Commands[commandId] = accepted;
+                    commandSites[commandId] = siteId;
+                    site.Journal.Add(journalEvent);
+                    site.Idempotency[scope] = new IdempotencyEntry(request.EquipmentId, request.Action, accepted);
+                    PruneTerminalCommandsLocked(site);
+                    _ = SimulateAsync(siteId, commandId, 0);
+                    return new(EquipmentCommandSubmitStatus.Accepted, accepted);
+            }
         }
         finally
         {
@@ -433,11 +456,14 @@ public sealed class EquipmentCommandService
     }
 
     /// <summary>
-    /// Durable journal replay page for one FAB (ADR-008 2.2). <paramref name="afterSequence"/> is
-    /// exclusive; <see cref="CommandJournalPageDto.HasGap"/> is true when the requested cursor
-    /// cannot be served exactly (pruned window, retention holes or cursor ahead of the journal).
+    /// Durable journal replay page for one FAB (ADR-008 2.2 / ADR-010 3). The requested epoch is
+    /// mandatory and must equal the Site's current epoch; otherwise the caller must answer
+    /// 409 journal-epoch-mismatch and reconcile authoritatively. Events are strictly increasing
+    /// and greater than <paramref name="afterSequence"/>; <c>nextAfterSequence</c> is the cursor for
+    /// the next page and always makes progress (the authoritative watermark when a FAB filter
+    /// produces an empty page). <c>hasGap</c> is true when retained sequences are missing.
     /// </summary>
-    public CommandJournalPageDto ReadCommandJournalPage(Guid siteId, Guid fabId, long afterSequence, int limit)
+    public CommandJournalPageResult ReadCommandJournalPage(Guid siteId, Guid fabId, Guid requestedEpoch, long afterSequence, int limit)
     {
         if (afterSequence < 0) throw new ArgumentOutOfRangeException(nameof(afterSequence));
         if (limit is < 1 or > MaxJournalPageLimit) throw new ArgumentOutOfRangeException(nameof(limit));
@@ -446,9 +472,11 @@ public sealed class EquipmentCommandService
         try
         {
             if (!StoreUnavailable) PruneTerminalCommandsLocked(site);
-            var first = EffectiveFirstRetained(site);
+            var epoch = site.Epoch;
             var latest = site.LatestSequence;
-            long dropped = 0;
+            var first = EffectiveFirstRetained(site);
+            if (requestedEpoch != epoch) return new CommandJournalPageResult(null, new JournalEpochMismatch(epoch, first, latest));
+            var dropped = 0L;
             var expected = afterSequence + 1;
             foreach (var journalEvent in site.Journal.Where(journalEvent => journalEvent.Sequence > afterSequence))
             {
@@ -464,7 +492,11 @@ public sealed class EquipmentCommandService
                 .Select(journalEvent => new CommandJournalEventDto(journalEvent.Sequence, journalEvent.FabId,
                     journalEvent.CommandId, journalEvent.Revision, journalEvent.Outcome, journalEvent.OccurredAt))
                 .ToArray();
-            return new CommandJournalPageDto(site.Epoch.ToString("D"), hasGap, first, latest, events);
+            var nextAfterSequence = events.Length > 0
+                ? events[^1].Sequence
+                : afterSequence < latest ? latest : afterSequence;
+            return new CommandJournalPageResult(new CommandJournalPageDto(epoch.ToString("D"), hasGap, first, latest,
+                nextAfterSequence, events), null);
         }
         finally
         {
@@ -474,10 +506,11 @@ public sealed class EquipmentCommandService
 
     /// <summary>
     /// Prunes terminal commands past the configured TTL or beyond the configured terminal count
-    /// and applies the journal retention cap. The durable retention cursor and journal rewrite are
-    /// committed before the in-memory window changes, so a failed store write never reports a
-    /// prune that was not persisted. Pruning is also applied lazily on <see cref="Get"/>,
-    /// <see cref="Submit"/> and both recovery endpoints; this entry point is deterministic for tests.
+    /// and applies the journal retention cap. The durable retention transaction (command +
+    /// idempotency + journal deletion and cursor advance) commits before the in-memory window
+    /// changes, so a failed transaction never reports a prune that was not persisted. Pruning is
+    /// also applied lazily on <see cref="Get"/>, <see cref="Submit"/> and the recovery endpoints;
+    /// this entry point is deterministic for tests.
     /// </summary>
     public int PruneTerminalCommands()
     {
@@ -518,7 +551,6 @@ public sealed class EquipmentCommandService
                 record.CommandId, record.Revision, record.Outcome, record.OccurredAt);
             var commandId = Guid.Parse(record.CommandId);
             site.Commands[commandId] = status;
-            site.Records[commandId] = record;
             commandSites[commandId] = siteId;
             if (record.Revision >= 2)
             {
@@ -530,18 +562,32 @@ public sealed class EquipmentCommandService
         }
         foreach (var entry in recovery.Idempotency)
         {
-            var accepted = new EquipmentCommandStatus(entry.SiteId, entry.FabId, entry.EquipmentId, entry.Action,
-                entry.CommandId, entry.Revision, entry.Outcome, entry.OccurredAt);
-            site.Idempotency[entry.Scope] = new IdempotencyEntry(entry.EquipmentId, entry.Action, accepted);
-            site.IdempotencyOrder.Enqueue(entry.Scope);
+            var accepted = DeserializeResponse(entry);
+            var scope = new IdempotencyScope(Guid.Parse(entry.SiteId), Guid.Parse(entry.FabId), entry.Principal, entry.Key);
+            site.Idempotency[scope] = new IdempotencyEntry(accepted.EquipmentId, accepted.Action, accepted);
         }
         // Retention is re-applied at startup so a restart is observationally equivalent: expired
-        // terminal commands leave the window, and evicted idempotency entries leave the durable index.
+        // terminal commands leave the window in one durable retention transaction.
         PruneTerminalCommandsLocked(site);
-        EvictIdempotencyLocked(site);
         foreach (var command in site.Commands.Values.Where(command => command.Revision < 2).ToArray())
             _ = SimulateAsync(siteId, Guid.Parse(command.CommandId), command.Revision);
         return site;
+    }
+
+    private static EquipmentCommandStatus DeserializeResponse(CommandIdempotencyRecord entry)
+    {
+        EquipmentCommandStatus? accepted;
+        try
+        {
+            accepted = JsonSerializer.Deserialize<EquipmentCommandStatus>(entry.ResponseJson, StoreJson);
+        }
+        catch (JsonException error)
+        {
+            throw new CommandStoreException($"The committed idempotency response for command {entry.CommandId} is unreadable.", error);
+        }
+        if (accepted is null || !string.Equals(accepted.CommandId, entry.CommandId, StringComparison.Ordinal))
+            throw new CommandStoreException($"The committed idempotency response for command {entry.CommandId} is inconsistent.");
+        return accepted;
     }
 
     private JournalReadResult ReadJournalCore(Guid siteId, string? lastEventId, string? fabId, bool fresh)
@@ -554,7 +600,7 @@ public sealed class EquipmentCommandService
             var first = EffectiveFirstRetained(site);
             var epoch = site.Epoch;
             if (fresh && string.IsNullOrWhiteSpace(lastEventId))
-                return new(Filter(journal: site.Journal, fabId: fabId, afterSequence: null).Events, false, false, 0, first, latest, epoch);
+                return new(Filter(site.Journal, fabId, null).Events, false, false, 0, first, latest, epoch);
             if (!TryParseLastEventId(lastEventId, out var cursorEpoch, out var requested))
                 return new(Filter(site.Journal, fabId, null).Events, true, false, 0, first, latest, epoch);
             if (cursorEpoch != epoch)
@@ -596,7 +642,7 @@ public sealed class EquipmentCommandService
 
     /// <summary>
     /// Applies terminal TTL/capacity pruning and the journal retention cap, committing the durable
-    /// retention update first and mutating the in-memory window only after it succeeded.
+    /// retention transaction first and mutating the in-memory window only after it succeeded.
     /// </summary>
     private int PruneTerminalCommandsLocked(SiteState site)
     {
@@ -616,7 +662,7 @@ public sealed class EquipmentCommandService
             pending.Dequeue();
             if (site.Commands.ContainsKey(commandId)) pruned.Add(commandId);
         }
-        var prunedSet = pruned.Count == 0 ? new HashSet<Guid>() : new HashSet<Guid>(pruned);
+        var prunedSet = pruned.Count == 0 ? [] : new HashSet<Guid>(pruned);
         var retained = site.Journal.Where(journalEvent => !prunedSet.Contains(Guid.Parse(journalEvent.CommandId))).ToList();
         var journalTrimmed = retained.Count > options.MaxJournalEventsPerSite;
         if (journalTrimmed) retained.RemoveRange(0, retained.Count - options.MaxJournalEventsPerSite);
@@ -625,15 +671,11 @@ public sealed class EquipmentCommandService
             site.TerminalOrder = pending;
             return 0;
         }
-        var prunedScopes = site.Idempotency
-            .Where(pair => prunedSet.Contains(Guid.Parse(pair.Value.Accepted.CommandId)))
-            .Select(pair => pair.Key).ToArray();
         var first = retained.Count == 0 ? site.LatestSequence + 1 : retained[0].Sequence;
-        var update = new CommandRetentionUpdate(first, retained.ToArray(),
-            pruned.Select(commandId => commandId.ToString("D")).ToArray(), prunedScopes);
         try
         {
-            store.CommitRetention(site.SiteId, update);
+            store.CommitRetention(site.SiteId, new CommandRetentionUpdate(first,
+                pruned.Select(commandId => commandId.ToString("D")).ToArray()));
         }
         catch (CommandStoreException error)
         {
@@ -647,31 +689,17 @@ public sealed class EquipmentCommandService
         {
             site.TerminalSince.Remove(commandId);
             site.Commands.Remove(commandId);
-            site.Records.Remove(commandId);
             commandSites.TryRemove(commandId, out _);
         }
-        foreach (var scope in prunedScopes) site.Idempotency.Remove(scope);
-        site.IdempotencyOrder = new Queue<string>(site.IdempotencyOrder.Where(scope => site.Idempotency.ContainsKey(scope)));
+        if (pruned.Count > 0)
+        {
+            var removedCommandIds = new HashSet<string>(pruned.Select(commandId => commandId.ToString("D")), StringComparer.Ordinal);
+            foreach (var scope in site.Idempotency
+                         .Where(pair => removedCommandIds.Contains(pair.Value.Accepted.CommandId))
+                         .Select(pair => pair.Key).ToArray())
+                site.Idempotency.Remove(scope);
+        }
         return pruned.Count;
-    }
-
-    private void EvictIdempotencyLocked(SiteState site)
-    {
-        var evicted = new List<string>();
-        while (site.IdempotencyOrder.Count > options.MaxIdempotencyEntries)
-        {
-            var scope = site.IdempotencyOrder.Dequeue();
-            if (site.Idempotency.Remove(scope)) evicted.Add(scope);
-        }
-        if (evicted.Count == 0) return;
-        try
-        {
-            store.DeleteIdempotency(site.SiteId, evicted);
-        }
-        catch (CommandStoreException error)
-        {
-            RecordFault(error);
-        }
     }
 
     private SiteState GetSite(Guid siteId) =>
@@ -709,32 +737,21 @@ public sealed class EquipmentCommandService
             if (StoreUnavailable) return;
             if (!site.Commands.TryGetValue(commandId, out var current)) return;
             if (current.Revision >= revision) return;
-            var next = current with
-            {
-                Revision = revision,
-                Outcome = outcome,
-                OccurredAt = clock.GetUtcNow().ToString("O")
-            };
-            var record = site.Records[commandId] with
-            {
-                Revision = revision,
-                Outcome = outcome,
-                OccurredAt = next.OccurredAt,
-                TerminalAt = revision >= 2 ? next.OccurredAt : null
-            };
-            CommandJournalEvent journalEvent;
+            var occurredAt = clock.GetUtcNow().ToString("O");
+            CommandJournalEvent? journalEvent;
             try
             {
-                journalEvent = store.CommitAdvance(siteId, record);
+                journalEvent = store.CommitAdvance(siteId, commandId.ToString("D"), current.Revision, revision,
+                    outcome, occurredAt, revision >= 2 ? occurredAt : null);
             }
             catch (CommandStoreException error)
             {
                 RecordFault(error);
                 return;
             }
+            if (journalEvent is null) return;
             site.LatestSequence = journalEvent.Sequence;
-            site.Commands[commandId] = next;
-            site.Records[commandId] = record with { Events = [.. record.Events, journalEvent] };
+            site.Commands[commandId] = current with { Revision = revision, Outcome = outcome, OccurredAt = occurredAt };
             site.Journal.Add(journalEvent);
             if (revision >= 2)
             {

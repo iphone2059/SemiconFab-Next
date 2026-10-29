@@ -1,16 +1,17 @@
 using System.Diagnostics;
-using System.Text.Json.Nodes;
 using Fab.App;
 using Fab.Site;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace Fab.Tests;
 
 /// <summary>
-/// ADR-008 durable command recovery coverage: restart over the same data directory, idempotency
-/// replay, exact journal cursor replay, retention gaps, journal truncation/deletion (new epoch),
-/// the record→journal outbox repair window, concurrent sequence monotonicity and explicit IO
-/// failure. Every test uses an OS temporary directory, never the repository .local/data.
+/// ADR-012 transactional durable store coverage: restart over the same SQLite database,
+/// idempotency replay, exact journal cursor replay, retention gaps, epoch replacement after a
+/// Development store reset, concurrent sequence monotonicity, WAL/atomic-commit invariants and
+/// explicit IO failure. The crash-boundary matrix lives in <see cref="CommandFaultInjectionTests"/>.
+/// Every test uses an OS temporary directory, never the repository .local/data.
 /// </summary>
 public sealed class CommandPersistenceTests : IDisposable
 {
@@ -64,7 +65,7 @@ public sealed class CommandPersistenceTests : IDisposable
         var snapshot = first.ReadJournal(SiteId, null, FabId);
         Assert.Equal(new long[] { 1, 2, 3 }, snapshot.Events.Select(envelope => envelope.Sequence).ToArray());
         var epoch = first.GetJournalEpoch(SiteId);
-        var cursor = 1L;
+        const long cursor = 1;
         var expected = snapshot.Events.Where(envelope => envelope.Sequence > cursor)
             .Select(envelope => (envelope.Sequence, envelope.Payload.Revision, envelope.Payload.Outcome)).ToArray();
 
@@ -96,93 +97,41 @@ public sealed class CommandPersistenceTests : IDisposable
         var result = restarted.ReadJournal(SiteId, $"{epoch:D}:0", FabId);
         Assert.True(result.HasGap);
         Assert.True(result.CursorAccepted);
-        Assert.Equal(1, result.FirstRetainedSequence - 3);
-        Assert.True(result.DroppedCount >= 1);
+        Assert.Equal(4, result.FirstRetainedSequence);
+        Assert.True(result.DroppedCount >= 3);
         var dirty = restarted.CreateDirty(result, $"{epoch:D}:0");
         Assert.NotNull(dirty);
         Assert.Equal("retention-trim", dirty!.Reason);
-        Assert.True(dirty.DroppedCount >= 1);
+        Assert.True(dirty.DroppedCount >= 3);
         Assert.Equal(epoch, restarted.GetJournalEpoch(SiteId));
     }
 
     [Fact]
-    public async Task TruncatedJournalStartsNewEpochAndKeepsAuthoritativeRecords()
+    public async Task DatabaseResetReplacesEpochAndRejectsOldCursor()
     {
         var root = Root();
         var options = FastOptions();
         var first = Service(root, options);
-        var command = Submit(first, "equipment-0", "truncate-1");
+        var command = Submit(first, "equipment-0", "reset-epoch-1");
         await WaitTerminalAsync(first, command.CommandId);
         var epochBefore = first.GetJournalEpoch(SiteId);
-        var journalPath = JournalPath(root, epochBefore);
-        var lines = File.ReadAllText(journalPath).Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        File.WriteAllText(journalPath, lines[0] + "\n");
+        var latestBefore = first.ReadJournal(SiteId, null).LatestSequence;
+        TestDataDirectory.ResetDatabase(root);
 
         var restarted = Service(root, options);
         var epochAfter = restarted.GetJournalEpoch(SiteId);
         Assert.NotEqual(epochBefore, epochAfter);
-        var diagnostics = restarted.RecoveryDiagnostics[SiteId];
-        Assert.Contains(diagnostics, diagnostic => diagnostic.Contains("journal", StringComparison.Ordinal));
-        var recovered = restarted.Get(Guid.Parse(command.CommandId));
-        Assert.NotNull(recovered);
-        Assert.Equal(2, recovered!.Revision);
-        var oldCursor = restarted.ReadJournal(SiteId, $"{epochBefore:D}:1", FabId);
+        Assert.Null(restarted.Get(Guid.Parse(command.CommandId)));
+        Assert.Empty(restarted.ListFabCommands(SiteId, Guid.Parse(FabId), EquipmentCommandService.StatusAll, -1).Commands);
+        var oldCursor = restarted.ReadJournal(SiteId, $"{epochBefore:D}:{latestBefore}", FabId);
         Assert.True(oldCursor.HasGap);
         Assert.False(oldCursor.CursorAccepted);
-        Assert.Equal("epoch-replaced", restarted.CreateDirty(oldCursor, $"{epochBefore:D}:1")!.Reason);
+        Assert.Equal("epoch-replaced", restarted.CreateDirty(oldCursor, $"{epochBefore:D}:{latestBefore}")!.Reason);
         Assert.False(restarted.ReadJournal(SiteId, null, FabId).HasGap);
-    }
 
-    [Fact]
-    public async Task DeletedJournalStartsNewEpochAndKeepsAuthoritativeRecords()
-    {
-        var root = Root();
-        var options = FastOptions();
-        var first = Service(root, options);
-        var command = Submit(first, "equipment-0", "delete-journal-1");
-        await WaitTerminalAsync(first, command.CommandId);
-        var epochBefore = first.GetJournalEpoch(SiteId);
-        File.Delete(JournalPath(root, epochBefore));
-
-        var restarted = Service(root, options);
-        Assert.NotEqual(epochBefore, restarted.GetJournalEpoch(SiteId));
-        Assert.NotNull(restarted.Get(Guid.Parse(command.CommandId)));
-        var oldCursor = restarted.ReadJournal(SiteId, $"{epochBefore:D}:1", FabId);
-        Assert.True(oldCursor.HasGap);
-        Assert.Equal("epoch-replaced", restarted.CreateDirty(oldCursor, $"{epochBefore:D}:1")!.Reason);
-    }
-
-    [Fact]
-    public async Task RecordNewerThanJournalIsRepairedIntoTheExistingEpoch()
-    {
-        var root = Root();
-        var options = FastOptions();
-        var first = Service(root, options);
-        var command = Submit(first, "equipment-0", "outbox-1");
-        await WaitTerminalAsync(first, command.CommandId);
-        var epochBefore = first.GetJournalEpoch(SiteId);
-        var journalPath = JournalPath(root, epochBefore);
-        var lines = File.ReadAllText(journalPath).Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal(3, lines.Length);
-        // Simulate a crash between the durable record write and the journal append: the record has
-        // three events, but the epoch/journal only acknowledge the first two.
-        File.WriteAllText(journalPath, string.Join("\n", lines.Take(2)) + "\n");
-        var epochPath = Path.Combine(root, SiteId.ToString("D"), "epoch.json");
-        var epoch = JsonNode.Parse(File.ReadAllText(epochPath))!.AsObject();
-        epoch["latestSequence"] = 2;
-        epoch["journalLastSequence"] = 2;
-        File.WriteAllText(epochPath, epoch.ToJsonString());
-
-        var restarted = Service(root, options);
-        Assert.Equal(epochBefore, restarted.GetJournalEpoch(SiteId));
-        var journal = restarted.ReadJournal(SiteId, null, FabId);
-        Assert.False(journal.HasGap);
-        Assert.Equal(new long[] { 1, 2, 3 }, journal.Events.Select(envelope => envelope.Sequence).ToArray());
-        Assert.Equal(2, restarted.Get(Guid.Parse(command.CommandId))!.Revision);
-        Assert.Contains(restarted.RecoveryDiagnostics[SiteId], diagnostic => diagnostic == "journal-repaired-from-records");
-        var resumed = RestartService(root, options).ReadJournal(SiteId, $"{epochBefore:D}:1", FabId);
-        Assert.False(resumed.HasGap);
-        Assert.Equal(new long[] { 2, 3 }, resumed.Events.Select(envelope => envelope.Sequence).ToArray());
+        var fresh = Submit(restarted, "equipment-0", "reset-epoch-2");
+        Assert.NotEqual(command.CommandId, fresh.CommandId);
+        Assert.Single(restarted.ListFabCommands(SiteId, Guid.Parse(FabId), EquipmentCommandService.StatusAll, -1).Commands);
     }
 
     [Fact]
@@ -205,15 +154,19 @@ public sealed class CommandPersistenceTests : IDisposable
         var snapshot = service.ReadJournal(SiteId, null, FabId);
         var sequences = snapshot.Events.Select(envelope => envelope.Sequence).ToArray();
         Assert.Equal(sequences.Length, sequences.Distinct().Count());
-        Assert.True(sequences.Zip(sequences.Skip(1), (left, right) => right > left).All(monotonic => monotonic));
+        Assert.Equal(count * 3, sequences.Length);
+        Assert.Equal(sequences.OrderBy(sequence => sequence), sequences);
         var latest = snapshot.LatestSequence;
 
         var restarted = Service(root, options);
         Assert.Equal(latest, restarted.ReadJournal(SiteId, null, FabId).LatestSequence);
-        var page = restarted.ReadCommandJournalPage(SiteId, Guid.Parse(FabId), 0, EquipmentCommandService.MaxJournalPageLimit);
-        Assert.False(page.HasGap);
-        Assert.Equal(latest, page.Events.Length);
-        Assert.Equal(1, page.Events[0].Sequence);
+        var page = restarted.ReadCommandJournalPage(SiteId, Guid.Parse(FabId), restarted.GetJournalEpoch(SiteId), 0,
+            EquipmentCommandService.MaxJournalPageLimit);
+        Assert.NotNull(page.Page);
+        Assert.False(page.Page!.HasGap);
+        Assert.Equal(latest, page.Page.Events.Length);
+        Assert.Equal(1, page.Page.Events[0].Sequence);
+        Assert.Equal(latest, page.Page.NextAfterSequence);
     }
 
     [Fact]
@@ -221,114 +174,110 @@ public sealed class CommandPersistenceTests : IDisposable
     {
         var root = Root();
         Directory.CreateDirectory(root);
-        var filePath = Path.Combine(root, "not-a-directory");
-        File.WriteAllText(filePath, "occupied");
-        var error = Assert.Throws<CommandStoreException>(() => new FileCommandStore(filePath));
-        Assert.Contains("durable command store", error.Message, StringComparison.OrdinalIgnoreCase);
+        var databasePath = TestDataDirectory.DatabasePath(root);
+        Directory.CreateDirectory(databasePath);
+        var error = Assert.Throws<CommandStoreException>(() => new SqliteCommandStore(databasePath));
+        Assert.Contains("command store", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task IoFailureOnSubmitIsExplicitAndNeverFallsBackToMemory()
+    public void IoFailureOnSubmitIsExplicitAndNeverFallsBackToMemory()
     {
         var root = Root();
         var options = FastOptions();
         var service = Service(root, options);
-        var epoch = service.GetJournalEpoch(SiteId);
-        var journalPath = JournalPath(root, epoch);
-        File.Delete(journalPath);
-        Directory.CreateDirectory(journalPath);
+        TestDataDirectory.ResetDatabase(root);
+        Directory.CreateDirectory(TestDataDirectory.DatabasePath(root));
 
         var failed = service.Submit(SiteId, new EquipmentCommandRequest(FabId, "equipment-0", "START"),
             "local-developer", "io-failure-1");
         Assert.Equal(EquipmentCommandSubmitStatus.StoreUnavailable, failed.Status);
         Assert.Null(failed.Command);
         Assert.True(service.StoreUnavailable);
-        Assert.Contains(service.RecoveryDiagnostics[SiteId], diagnostic => diagnostic is not null);
+        Assert.NotEmpty(service.RecoveryDiagnostics[SiteId]);
 
-        // Restarting over a data directory whose epoch slot is no longer writable must fail loudly
-        // instead of serving memory.
-        var epochPath = Path.Combine(root, SiteId.ToString("D"), "epoch.json");
-        File.Delete(epochPath);
-        Directory.CreateDirectory(epochPath);
+        // Restarting over the broken database path must fail loudly instead of serving memory.
         Assert.Throws<CommandStoreException>(() => Service(root, options));
     }
 
     [Fact]
-    public async Task Core013CombinationRestartCursorBreakEventLossAndDuplicateIdempotency()
+    public async Task SqliteDatabaseUsesWalAndCommitsCommandIdempotencyJournalTogether()
     {
         var root = Root();
-        var options = FastOptions();
-        var first = Service(root, options);
-        var command = Submit(first, "equipment-0", "core-013-1");
-        await WaitTerminalAsync(first, command.CommandId);
-        var epochBefore = first.GetJournalEpoch(SiteId);
-        var latestBefore = first.ReadJournal(SiteId, null).LatestSequence;
-        // Event loss: the journal is emptied while the authoritative records and idempotency remain.
-        File.WriteAllText(JournalPath(root, epochBefore), "");
+        var options = FastOptionsLong();
+        var service = Service(root, options);
+        var first = Submit(service, "equipment-0", "wal-1");
+        var second = Submit(service, "equipment-1", "wal-2");
+        await Task.Yield();
+
+        Assert.Equal(2, CountRows(root, "commands"));
+        Assert.Equal(2, CountRows(root, "idempotency"));
+        Assert.Equal(2, CountRows(root, "journal"));
+        Assert.Equal("wal", Scalar(root, "PRAGMA journal_mode;"));
+        Assert.Equal("2", Scalar(root, "SELECT COUNT(*) FROM commands WHERE terminal = 0;"));
 
         var restarted = Service(root, options);
-        Assert.NotEqual(epochBefore, restarted.GetJournalEpoch(SiteId));
-        var broken = restarted.ReadJournal(SiteId, $"{epochBefore:D}:{latestBefore}", FabId);
-        Assert.True(broken.HasGap);
-        Assert.False(broken.CursorAccepted);
-        var dirty = restarted.CreateDirty(broken, $"{epochBefore:D}:{latestBefore}");
-        Assert.NotNull(dirty);
-        Assert.Equal("epoch-replaced", dirty!.Reason);
-        // The idempotency mapping survived the cursor break: no duplicate execution.
-        var replay = Submit(restarted, "equipment-0", "core-013-1");
-        Assert.Equal(command.CommandId, replay.CommandId);
+        var replayFirst = Submit(restarted, "equipment-0", "wal-1");
+        var replaySecond = Submit(restarted, "equipment-1", "wal-2");
+        Assert.Equal(first.CommandId, replayFirst.CommandId);
+        Assert.Equal(second.CommandId, replaySecond.CommandId);
+        Assert.Equal(2, CountRows(root, "commands"));
+    }
+
+    [Fact]
+    public async Task TamperedInvariantFailsStartupExplicitly()
+    {
+        var root = Root();
+        var options = FastOptionsLong();
+        var service = Service(root, options);
+        Submit(service, "equipment-0", "tamper-1");
+        await Task.Yield();
+        SqliteConnection.ClearAllPools();
+        using (var connection = new SqliteConnection($"Data Source={TestDataDirectory.DatabasePath(root)}"))
+        {
+            connection.Open();
+            using var delete = connection.CreateCommand();
+            delete.CommandText = "DELETE FROM idempotency;";
+            Assert.Equal(1, delete.ExecuteNonQuery());
+        }
+        var error = Assert.Throws<CommandStoreException>(() => Service(root, options));
+        Assert.Contains("inconsistent", error.InnerException?.Message ?? error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Core013CrashCommitRetryAndEpochResetCombination()
+    {
+        var root = Root();
+        var options = FastOptionsLong();
+        var injector = new TestFaultInjector { ThrowAt = CommandStoreFaultPoints.AfterCommitBeforeResponse };
+        var first = new EquipmentCommandService(new SqliteCommandStore(TestDataDirectory.DatabasePath(root), injector),
+            new SiteDirectory(), TimeProvider.System, options);
+        // The transaction commits but the simulated crash prevents the 202 response from reaching
+        // the client. A retry with the same key + payload must replay the same commandId.
+        Assert.Throws<InjectedCommandStoreFaultException>(() =>
+            Submit(first, "equipment-0", "core-013-crash-1"));
+        injector.ThrowAt = null;
+        var restarted = Service(root, options);
+        var replay = Submit(restarted, "equipment-0", "core-013-crash-1");
         Assert.Equal(0, replay.Revision);
         Assert.Equal(EquipmentCommandService.AcceptedOutcome, replay.Outcome);
         Assert.Single(restarted.ListFabCommands(SiteId, Guid.Parse(FabId), EquipmentCommandService.StatusAll, -1).Commands);
-        // The authoritative record is not reset by the replay.
-        Assert.Equal(2, restarted.Get(Guid.Parse(command.CommandId))!.Revision);
-        // A brand-new command receives a fresh identity in the new epoch.
-        var fresh = Submit(restarted, "equipment-1", "core-013-2");
-        Assert.NotEqual(command.CommandId, fresh.CommandId);
-        var all = restarted.ListFabCommands(SiteId, Guid.Parse(FabId), EquipmentCommandService.StatusAll, -1).Commands;
-        Assert.Equal(2, all.Length);
-        Assert.Equal(2, all.Select(candidate => candidate.CommandId).Distinct(StringComparer.Ordinal).Count());
-    }
+        Assert.NotNull(restarted.Get(Guid.Parse(replay.CommandId)));
 
-    [Fact]
-    public async Task MissingRecordIsRebuiltFromJournal()
-    {
-        var root = Root();
-        var options = FastOptions();
-        var first = Service(root, options);
-        var command = Submit(first, "equipment-0", "rebuild-record-1");
-        await WaitTerminalAsync(first, command.CommandId);
-        var recordPath = Path.Combine(root, SiteId.ToString("D"), "commands", command.CommandId + ".json");
-        Assert.True(File.Exists(recordPath));
-        File.Delete(recordPath);
-
-        var restarted = Service(root, options);
-        var rebuilt = restarted.Get(Guid.Parse(command.CommandId));
-        Assert.NotNull(rebuilt);
-        Assert.Equal(2, rebuilt!.Revision);
-        Assert.Equal(EquipmentCommandService.SucceededOutcome, rebuilt.Outcome);
-        Assert.Contains(restarted.RecoveryDiagnostics[SiteId], diagnostic => diagnostic == "record-rebuilt-from-journal");
-    }
-
-    [Fact]
-    public async Task CorruptIdempotencyEntryIsDroppedWithoutBlockingStartup()
-    {
-        var root = Root();
-        var options = FastOptions();
-        var first = Service(root, options);
-        var command = Submit(first, "equipment-0", "corrupt-idempotency-1");
-        await WaitTerminalAsync(first, command.CommandId);
-        var idempotencyDirectory = Path.Combine(root, SiteId.ToString("D"), "idempotency");
-        var entry = Assert.Single(Directory.EnumerateFiles(idempotencyDirectory, "*.json", SearchOption.AllDirectories));
-        File.WriteAllText(entry, "{ not json");
-
-        var restarted = Service(root, options);
-        Assert.Contains(restarted.RecoveryDiagnostics[SiteId], diagnostic => diagnostic.StartsWith("idempotency-", StringComparison.Ordinal));
-        // The authoritative command record is untouched; only the damaged idempotency mapping is gone,
-        // so a retry with the same key creates a fresh command instead of failing startup.
-        Assert.NotNull(restarted.Get(Guid.Parse(command.CommandId)));
-        var retry = Submit(restarted, "equipment-0", "corrupt-idempotency-1");
-        Assert.NotEqual(command.CommandId, retry.CommandId);
+        // A Development store reset replaces the epoch: old cursors must be rejected explicitly and
+        // the old idempotency guarantee does not apply outside the (reset) retention window.
+        var epochBefore = restarted.GetJournalEpoch(SiteId);
+        var latestBefore = restarted.ReadJournal(SiteId, null).LatestSequence;
+        TestDataDirectory.ResetDatabase(root);
+        var reset = Service(root, options);
+        Assert.NotEqual(epochBefore, reset.GetJournalEpoch(SiteId));
+        var broken = reset.ReadJournal(SiteId, $"{epochBefore:D}:{latestBefore}", FabId);
+        Assert.True(broken.HasGap);
+        Assert.Equal("epoch-replaced", reset.CreateDirty(broken, $"{epochBefore:D}:{latestBefore}")!.Reason);
+        Assert.Null(reset.Get(Guid.Parse(replay.CommandId)));
+        var fresh = Submit(reset, "equipment-0", "core-013-crash-1");
+        Assert.Equal(0, fresh.Revision);
+        Assert.Single(reset.ListFabCommands(SiteId, Guid.Parse(FabId), EquipmentCommandService.StatusAll, -1).Commands);
     }
 
     private string Root()
@@ -339,9 +288,7 @@ public sealed class CommandPersistenceTests : IDisposable
     }
 
     private static EquipmentCommandService Service(string root, EquipmentCommandOptions options, TimeProvider? clock = null) =>
-        new(new FileCommandStore(root), new SiteDirectory(), clock ?? TimeProvider.System, options);
-
-    private static EquipmentCommandService RestartService(string root, EquipmentCommandOptions options) => Service(root, options);
+        new(new SqliteCommandStore(TestDataDirectory.DatabasePath(root)), new SiteDirectory(), clock ?? TimeProvider.System, options);
 
     private static EquipmentCommandStatus Submit(EquipmentCommandService service, string equipmentId, string key)
     {
@@ -363,8 +310,23 @@ public sealed class CommandPersistenceTests : IDisposable
         }
     }
 
-    private static string JournalPath(string root, Guid epoch) =>
-        Path.Combine(root, SiteId.ToString("D"), "journal", epoch.ToString("D") + ".jsonl");
+    private static int CountRows(string root, string table)
+    {
+        using var connection = new SqliteConnection($"Data Source={TestDataDirectory.DatabasePath(root)}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT(*) FROM {table};";
+        return Convert.ToInt32(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static string Scalar(string root, string sql)
+    {
+        using var connection = new SqliteConnection($"Data Source={TestDataDirectory.DatabasePath(root)}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        return Convert.ToString(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) ?? "";
+    }
 
     private static EquipmentCommandOptions FastOptions(EquipmentCommandOptions? source = null) => new()
     {
@@ -372,7 +334,16 @@ public sealed class CommandPersistenceTests : IDisposable
         SucceededDelay = TimeSpan.FromMilliseconds(10),
         TerminalTtl = source?.TerminalTtl ?? TimeSpan.FromMinutes(5),
         MaxTerminalCommands = source?.MaxTerminalCommands ?? 512,
-        MaxJournalEventsPerSite = source?.MaxJournalEventsPerSite ?? 4096,
-        MaxIdempotencyEntries = source?.MaxIdempotencyEntries ?? 4096
+        MaxJournalEventsPerSite = source?.MaxJournalEventsPerSite ?? 4096
+    };
+
+    /// <summary>Long simulated delays keep commands at revision 0 so tests can inspect the accepted transaction.</summary>
+    private static EquipmentCommandOptions FastOptionsLong(EquipmentCommandOptions? source = null) => new()
+    {
+        ExecutingDelay = TimeSpan.FromHours(1),
+        SucceededDelay = TimeSpan.FromHours(2),
+        TerminalTtl = source?.TerminalTtl ?? TimeSpan.FromMinutes(5),
+        MaxTerminalCommands = source?.MaxTerminalCommands ?? 512,
+        MaxJournalEventsPerSite = source?.MaxJournalEventsPerSite ?? 4096
     };
 }

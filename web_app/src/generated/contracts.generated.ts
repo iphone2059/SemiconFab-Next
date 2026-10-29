@@ -133,6 +133,7 @@ export interface CommandJournalPageDto {
   readonly hasGap: boolean;
   readonly firstRetainedSequence: number;
   readonly latestSequence: number;
+  readonly nextAfterSequence: number;
   readonly events: CommandJournalEventDto[];
 }
 export interface CommandDirtyDto {
@@ -141,4 +142,10 @@ export interface CommandDirtyDto {
   readonly epoch: string;
   readonly sequence: number;
   readonly occurredAt: string;
+}
+export interface JournalEpochMismatchDto {
+  readonly code: string;
+  readonly currentEpoch: string;
+  readonly firstRetainedSequence: number;
+  readonly latestSequence: number;
 }

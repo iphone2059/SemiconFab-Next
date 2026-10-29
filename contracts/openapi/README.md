@@ -4,17 +4,30 @@
 `contracts/json-schema/contracts.schema.json`; do not hand-edit it. The Development API is
 loopback-only and uses the `X-Fab-Dev-Key` header (`LocalDevelopment` security scheme).
 
-## Phase D command recovery paths
+## Command recovery paths (Round 2, ADR-010/ADR-012)
 
 | Path | Semantics |
 | --- | --- |
 | `GET /api/v1/sites/{siteId}/fabs/{fabId}/commands?status=active\|terminal\|all&afterRevision=` | authoritative FAB command listing (epoch/latestSequence + commands) for browser refresh and severe-gap resync; `afterRevision` keeps commands with a higher current revision |
-| `GET /api/v1/sites/{siteId}/fabs/{fabId}/command-journal?afterSequence=&limit=` | paged durable journal replay (`limit` 1..1000, default 100) with `hasGap`, `firstRetainedSequence`, `latestSequence`, `epoch` and `events` |
+| `GET /api/v1/sites/{siteId}/fabs/{fabId}/command-journal?epoch=&afterSequence=&limit=` | epoch-aware durable journal replay (`limit` 1..1000, default 100) with `hasGap`, `firstRetainedSequence`, `latestSequence`, `nextAfterSequence` and `events` |
 
-Both return 404 for an unknown/unauthorized Site or FAB (no existence leak) and 400
-`INVALID_QUERY` for invalid filters. The command SSE stream (`text/event-stream`) is not part of
-this JSON document; its `epoch:sequence` ids, `replay-gap` and `dirty` control frames are
-specified in ADR-008 and validated by `fab_tests/src/CommandRecoveryApiTests.cs`.
+Journal cursor contract (ADR-010 3):
+
+- `epoch` is mandatory. Missing/invalid → HTTP 400 `application/problem+json` with
+  `code: "journal-cursor-invalid"`; invalid `afterSequence`/`limit` → the same 400.
+- `epoch` not equal to the store's current epoch → HTTP 409 `application/problem+json` with
+  `code: "journal-epoch-mismatch"`, `currentEpoch`, `firstRetainedSequence`, `latestSequence`.
+  The client must fall back to the authoritative command listing.
+- 200 responses contain events strictly increasing and greater than `afterSequence`;
+  `nextAfterSequence` is the next page cursor (the last event sequence, or the authoritative
+  watermark when a FAB filter yields an empty page) and always progresses. Loop pages until
+  `nextAfterSequence >= latestSequence`; `hasGap=true` requires authoritative reconciliation.
+
+Both recovery paths return 404 for an unknown/unauthorized Site or FAB (no existence leak) and 503
+`COMMAND_STORE_UNAVAILABLE` when the transactional store fails. The command SSE stream
+(`text/event-stream`) is not part of this JSON document; its `epoch:sequence` ids,
+`replay-gap` and `dirty` control frames are specified in ADR-008/ADR-010 and validated by
+`fab_tests/src/CommandRecoveryApiTests.cs`.
 
 The API is Development-only: no production identity, OT gateway or PostgreSQL is implemented.
 Retention-window semantics (terminal TTL 5 minutes, 512 terminal commands, 4096 journal events

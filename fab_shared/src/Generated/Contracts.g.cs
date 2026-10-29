@@ -20,5 +20,6 @@ public sealed record CatalogPageDto(string ImportId, int TotalCount, int Matched
 public sealed record CommandRecoveryDto(string SiteId, string FabId, string CommandId, int Revision, string Outcome, string OccurredAt, bool Terminal);
 public sealed record CommandRecoveryListDto(string Epoch, long LatestSequence, CommandRecoveryDto[] Commands);
 public sealed record CommandJournalEventDto(long Sequence, string FabId, string CommandId, int Revision, string Outcome, string OccurredAt);
-public sealed record CommandJournalPageDto(string Epoch, bool HasGap, long FirstRetainedSequence, long LatestSequence, CommandJournalEventDto[] Events);
+public sealed record CommandJournalPageDto(string Epoch, bool HasGap, long FirstRetainedSequence, long LatestSequence, long NextAfterSequence, CommandJournalEventDto[] Events);
 public sealed record CommandDirtyDto(string Reason, long DroppedCount, string Epoch, long Sequence, string OccurredAt);
+public sealed record JournalEpochMismatchDto(string Code, string CurrentEpoch, long FirstRetainedSequence, long LatestSequence);
