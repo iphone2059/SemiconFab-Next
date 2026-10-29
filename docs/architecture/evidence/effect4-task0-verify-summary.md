@@ -1,0 +1,11 @@
+# Task 0 baseline verify summary (raw log unavailable)
+- Date: 2026-10-29 Asia/Singapore
+- Baseline commit: 4fc8a94a3f10d185c8bef7929349ac6ccb2b8792
+- Command: ./scripts/verify.ps1 (full)
+- Exit code: 0 (VERIFY_EXIT=0)
+- Frontend: pnpm install --frozen-lockfile PASS; tsc --noEmit PASS; Vitest 106 files / 664 tests PASS; vite build PASS
+- Backend: 3 projects Release build PASS; fab_tests PASS
+- Generated/frozen/architecture/startup/tooling gates: PASS
+- Build artifact sizes (gzip): index 300.81kB (91.89), react 322.78kB (102.67), gpu 392.64kB (128.36), twin-page 405.31kB (106.16), lite-backend 1795.20kB (179.04), telemetryWorker 2.60kB
+- pnpm: pinned 12.15.0 provisioned from npx cache at web_app/node_modules/pnpm (node_modules untracked)
+- .NET SDK: global.json updated to installed 11.0.100-rc.3.26522.148
