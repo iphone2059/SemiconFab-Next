@@ -87,8 +87,10 @@ async function mountBackend(
 ) {
   const firstWorld = queueWorld(pose, selection);
   const controller = new AbortController();
-  const mount = mountOptions(controller);
-  if (options.events) mount.callbacks.onLifecycle = event => options.events!.push(event);
+  const baseMount = mountOptions(controller);
+  const mount: SceneMountOptions = options.events
+    ? { ...baseMount, callbacks: { ...baseMount.callbacks, onLifecycle: (event) => options.events!.push(event) } }
+    : baseMount;
   const backend = createLiteBackend(options.recoveryBudget === undefined ? {} : { recoveryBudget: options.recoveryBudget });
   await backend.mount(mount);
   return { backend, controller, firstWorld };

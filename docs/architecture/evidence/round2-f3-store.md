@@ -149,7 +149,7 @@ Found 0 warnings and 0 errors.
 - 新增常量 `JOURNAL_CURSOR_INVALID_CODE = 'journal-cursor-invalid'`、`JOURNAL_EPOCH_MISMATCH_CODE = 'journal-epoch-mismatch'`。
 - 编译期桥接类型新增 `JournalEpochMismatchWireAligned`；测试从 7 条增至 8 条（含 epoch 必填、409 body、nextAfterSequence 拒绝缺失/负数）。
 
-全量 `pnpm typecheck` 在本次收尾时仍有 5 处错误，全部属于其他并行 phase 的在途文件（`job` 输出中与 `command-recovery`/`contracts.generated` 相关的错误为 0）；本 phase 两个前端文件 oxlint 0、目标 vitest 8/8 通过。全量 typecheck 需待并行 phase 结束后由 Lead/最终门禁复跑。
+收尾首次复核时全量 `pnpm typecheck` 有 5 处错误，全部属于其他并行 phase 的在途文件，本 phase 两个文件 `command-recovery`/`contracts.generated` 相关错误为 0（grep 验证）。并行 phase 完成后二次复核：`pnpm typecheck` exit 0（`tsc --noEmit` 无输出）、`pnpm lint` exit 0（209 files / 88 rules，0 warnings 0 errors）；本 phase 两个前端文件 oxlint 0、目标 vitest 8/8 通过。F3 不再依赖任何 typecheck 豁免。
 
 ## 9. 限制与未验证（如实记录）
 
