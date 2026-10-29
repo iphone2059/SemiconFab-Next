@@ -15,7 +15,7 @@
  * module against the committed JSON asset so drift cannot land unnoticed.
  *
  * The emitted module carries data only: it imports the hand-written payload contract from
- * web_app/src/rendering/contracts/static-structure-data.ts (type-only, erased at emit) and the
+ * web_app/src/rendering/static-structure-data.contract.ts (type-only, erased at emit) and the
  * renderer imports the same contract, so generated data never points at a rendering consumer.
  * validateContract() fails the run if that contract module or any expected export disappears.
  *
@@ -33,9 +33,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SOURCE_JSON = join(ROOT, 'web_app', 'assets', 'lite-static-structure.json');
-const DEFAULT_OUTPUT_TS = join(ROOT, 'web_app', 'src', 'generated', 'static-structure-packed.ts');
-const CONTRACT_TS = join(ROOT, 'web_app', 'src', 'rendering', 'contracts', 'static-structure-data.ts');
-const CONTRACT_IMPORT = '../rendering/contracts/static-structure-data';
+const DEFAULT_OUTPUT_TS = join(ROOT, 'web_app', 'src', 'generated', 'static-structure-packed.generated.ts');
+const CONTRACT_TS = join(ROOT, 'web_app', 'src', 'rendering', 'static-structure-data.contract.ts');
+const CONTRACT_IMPORT = '../rendering/static-structure-data.contract';
 /** Every identifier the emitted module imports from the hand-written data contract. */
 const CONTRACT_EXPORTS = ['StaticLayer', 'StaticSurfaceDefinition', 'PackedGeometry', 'PackedLightDefinition', 'PackedSourceEntity', 'PackedStaticStructure'];
 const USAGE = 'usage: node tools/pack_static_structure.mjs [--check|--measure] [--output <path>]';
@@ -50,11 +50,11 @@ function validateContract() {
   try {
     text = readFileSync(CONTRACT_TS, 'utf8');
   } catch {
-    fail('data contract is missing: web_app/src/rendering/contracts/static-structure-data.ts');
+    fail('data contract is missing: web_app/src/rendering/static-structure-data.contract.ts');
   }
   for (const name of CONTRACT_EXPORTS) {
     if (!new RegExp('export\\s+(?:type|interface)\\s+' + name + '\\b').test(text)) {
-      fail('data contract must export ' + name + ' from web_app/src/rendering/contracts/static-structure-data.ts');
+      fail('data contract must export ' + name + ' from web_app/src/rendering/static-structure-data.contract.ts');
     }
   }
 }
@@ -185,7 +185,7 @@ function renderModule(sourceText, payloads) {
     '// AUTO-GENERATED FILE - DO NOT EDIT BY HAND.',
     '// Source: web_app/assets/lite-static-structure.json (sha256 ' + sha256 + ')',
     '// Generator: node tools/pack_static_structure.mjs',
-    '// Data contract: web_app/src/rendering/contracts/static-structure-data.ts (type-only import)',
+    '// Data contract: web_app/src/rendering/static-structure-data.contract.ts (type-only import)',
     '// Freshness check: node tools/pack_static_structure.mjs --check',
     '//',
     '// Vertex data is stored as little-endian Float32/Uint32 base64 payloads decoded synchronously at',
@@ -359,7 +359,7 @@ async function main() {
   const renderStarted = performance.now();
   const content = renderModule(sourceText, payloads);
   const renderMs = performance.now() - renderStarted;
-  const outputLabel = options.output === DEFAULT_OUTPUT_TS ? 'static-structure-packed.ts' : options.output;
+  const outputLabel = options.output === DEFAULT_OUTPUT_TS ? 'static-structure-packed.generated.ts' : options.output;
   if (options.mode === 'check') {
     let existing = '';
     try {

@@ -1,6 +1,6 @@
 import { Subject } from 'rxjs';
-import type { CommandEventSource, CommandOutcome, CommandResultEvent, CommandStreamGap } from '../../src/application/contracts/CommandEvents';
-import type { CommandWorkflow, CommandWorkflowRegistry } from '../../src/application/contracts/CommandWorkflow';
+import type { CommandEventSource, CommandOutcome, CommandResultEvent, CommandStreamGap } from '@/contracts/command-events.contract';
+import type { CommandWorkflow, CommandWorkflowRegistry } from '@/contracts/command-workflow.contract';
 
 export class FakeCommandWorkflow implements CommandWorkflow {
   readonly events: CommandResultEvent[] = [];

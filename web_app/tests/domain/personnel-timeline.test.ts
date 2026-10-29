@@ -16,7 +16,7 @@ import {
   type PersonnelFrame,
   type PersonnelScenario,
   type PersonnelTimeline,
-} from '../../src/domain/personnel/personnel-timeline';
+} from '@/domain/personnel-timeline';
 
 const fixture = JSON.parse(
   readFileSync(new URL('../fixtures/original-personnel-vectors.json', import.meta.url), 'utf8'),

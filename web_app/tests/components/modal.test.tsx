@@ -2,8 +2,8 @@
 import { useState, type ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { Modal, ModalTitle } from '../../src/components/modal';
-import { installNativeDialogPolyfill } from '../support/native-dialog';
+import { Modal, ModalTitle } from '@/components/modal';
+import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
 
 installNativeDialogPolyfill();
 

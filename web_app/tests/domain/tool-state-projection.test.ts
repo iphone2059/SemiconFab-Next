@@ -13,7 +13,7 @@ import {
   toolStatesFromValues,
   type TelemetryProjectionFrame,
   type TelemetryProjectionSample,
-} from '../../src/domain/equipment/tool-state-projection';
+} from '@/domain/equipment-tool-state-projection';
 
 const sample = (entityId: string, state: number, utilization?: number): TelemetryProjectionSample => ({
   entityId,
@@ -166,7 +166,7 @@ it('drops unknown entity ids while merging so the pending frame stays bounded', 
 
 it('stays a pure domain module: no UI, state container, router or transport imports', () => {
   const source = readFileSync(
-    fileURLToPath(new URL('../../src/domain/equipment/tool-state-projection.ts', import.meta.url)),
+    fileURLToPath(new URL('../../src/domain/equipment-tool-state-projection.ts', import.meta.url)),
     'utf8',
   );
   const specifiers = [...source.matchAll(/(?:from\s+|import\s*\(\s*)['"]([^'"]+)['"]/g)].map((match) => match[1]);

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandGateway } from '../../src/application/contracts/CommandGateway';
-import type { CommandOutcome, CommandResultEvent } from '../../src/application/contracts/CommandEvents';
-import type { CommandWorkflow, CommandWorkflowProjection } from '../../src/application/contracts/CommandWorkflow';
-import { FabRuntimeFactory } from '../../src/runtime/FabRuntimeFactory';
-import { FakeCommandEventSource, commandResult } from '../support/command-fakes';
+import type { CommandGateway } from '@/contracts/command-gateway.contract';
+import type { CommandOutcome, CommandResultEvent } from '@/contracts/command-events.contract';
+import type { CommandWorkflow, CommandWorkflowProjection } from '@/contracts/command-workflow.contract';
+import { FabRuntimeFactory } from '@/runtime/fab-runtime-factory';
+import { FakeCommandEventSource, commandResult } from '../support/command-fakes.ts';
 
 const fabId = 'fab-a';
 
@@ -275,7 +275,7 @@ describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => 
   });
 
   it('bounds the correlation watermark registry without evicting active commands', async () => {
-    const { CommandCorrelationRegistry } = await import('../../src/application/coordination/CommandCorrelationRegistry');
+    const { CommandCorrelationRegistry } = await import('@/runtime/command-correlation-registry');
     let now = 0;
     const registry = new CommandCorrelationRegistry({ maxTerminalEntries: 2, terminalTtlMs: 100, now: () => now });
     expect(registry.observe(commandResult({ fabId, commandId: 'active', revision: 1, outcome: 'executing' }))).toBe('new');

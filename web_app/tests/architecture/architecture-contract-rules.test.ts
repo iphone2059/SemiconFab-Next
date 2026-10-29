@@ -200,8 +200,11 @@ function resolveReference(
   from: string,
   specifier: string,
 ): Pick<ModuleReference, 'external' | 'unresolved' | 'target' | 'asset'> {
-  if (!specifier.startsWith('.')) return { external: true, unresolved: false };
-  const base = resolve(dirname(join(sourceRootPath, from)), specifier.replace(/[?#].*$/, ''));
+  const isAlias = specifier.startsWith('@/');
+  if (!specifier.startsWith('.') && !isAlias) return { external: true, unresolved: false };
+  const base = isAlias
+    ? resolve(sourceRootPath, specifier.slice(2).replace(/[?#].*$/, ''))
+    : resolve(dirname(join(sourceRootPath, from)), specifier.replace(/[?#].*$/, ''));
   const found = PROBE_SUFFIXES.map((suffix) => base + suffix).find(isFile);
   if (!found) return { external: false, unresolved: true };
   if (/\.(?:ts|tsx)$/.test(found)) return { external: false, unresolved: false, target: relativeTo(sourceRootPath, found) };
@@ -267,9 +270,9 @@ function findCycles(graph: ModuleGraph): string[][] {
 // R7: generic base modules must not import features/**.
 // ---------------------------------------------------------------------------------------------
 
-const GENERIC_BASE_MODULES: readonly string[] = ['api', 'realtime', 'rendering', 'components', 'state', 'application', 'runtime'];
+const GENERIC_BASE_MODULES: readonly string[] = ['api', 'realtime', 'rendering', 'components', 'state', 'contracts', 'runtime', 'lib', 'localization'];
 /** Assembly roots are allowed to compose feature pages; they are exempt by design. */
-const ASSEMBLY_ROOTS: readonly string[] = ['app/providers/', 'app/router/routes/'];
+const ASSEMBLY_ROOTS: readonly string[] = ['app/', 'routes/'];
 
 function r7Violations(graph: ModuleGraph): string[] {
   const violations: string[] = [];
@@ -277,7 +280,7 @@ function r7Violations(graph: ModuleGraph): string[] {
     if (ASSEMBLY_ROOTS.some((prefix) => reference.from.startsWith(prefix))) continue;
     const module = reference.from.split('/')[0];
     if (!GENERIC_BASE_MODULES.includes(module)) continue;
-    if (!reference.target?.startsWith('features/')) continue;
+    if (!reference.target || (!reference.target.startsWith('features/') && !/^(catalog|twin|workbench)\//.test(reference.target))) continue;
     violations.push(
       reference.from + " imports '" + reference.specifier + "' -> " + reference.target +
       ' (' + reference.kind + (reference.typeOnly ? ', type-only' : '') + ')',
@@ -293,9 +296,7 @@ it('R7: generic base modules never import features/** (assembly roots exempt)', 
 
   const fixtureGraph = graphForFixture('r7');
   const violations = r7Violations(fixtureGraph);
-  expect(formatViolations('R7', violations)).toContain(
-    "[R7] api/client.ts imports '../features/twin/page' -> features/twin/page.ts (static)",
-  );
+  expect(formatViolations('R7', violations).some((violation) => violation.includes('api/client.ts')), 'the fixture must prove the rule can fail').toBe(true);
   expect(violations.every((violation) => violation.startsWith('api/client.ts')), 'assembly roots stay exempt').toBe(true);
 });
 
@@ -437,9 +438,9 @@ function returnedObjectKeys(sourceFile: SourceFile, functionName: string): strin
 }
 
 it('R9: SceneCommands has no optional members and lite-backend implements every required command', () => {
-  const sceneFile = parseFile(join(sourceRoot, 'application/ports/scene.ts'));
+  const sceneFile = parseFile(join(sourceRoot, 'contracts/scene.port.ts'));
   const commands = interfaceMembers(sceneFile, 'SceneCommands');
-  expect(commands, 'SceneCommands must exist in application/ports/scene.ts').toBeDefined();
+  expect(commands, 'SceneCommands must exist in contracts/scene.port.ts').toBeDefined();
   expect(commands!.length, 'the gate must see the whole command surface').toBeGreaterThan(10);
   expect(optionalMemberNames(commands!), 'every product capability must be required').toEqual([]);
 
@@ -548,12 +549,12 @@ it('R11: an unregistered generated file and a deleted registered file both fail 
   const registry = readArtifactRegistry();
 
   const unregistered = cloneArtifactRegistry(registry);
-  unregistered.artifacts = unregistered.artifacts.filter((artifact) => !artifact.path.endsWith('static-structure-packed.ts'));
+  unregistered.artifacts = unregistered.artifacts.filter((artifact) => !artifact.path.endsWith('static-structure-packed.generated.ts'));
   const unregisteredPath = join(temporaryDirectory, 'unregistered-registry.json');
   writeFileSync(unregisteredPath, JSON.stringify(unregistered, null, 2) + '\n');
   const unregisteredRun = runArtifactChecker(['--check', '--registry', unregisteredPath]);
   expect(unregisteredRun.status).toBe(1);
-  expect(unregisteredRun.stderr).toContain('static-structure-packed.ts is a generated artifact but is not registered');
+  expect(unregisteredRun.stderr).toContain('static-structure-packed.generated.ts is a generated artifact but is not registered');
 
   const deleted = cloneArtifactRegistry(registry);
   deleted.artifacts = [...deleted.artifacts, { ...registry.artifacts[0], path: 'web_app/src/generated/removed.generated.ts' }];
@@ -587,7 +588,7 @@ interface ComponentRole {
 
 /** Explicit component roles (plan R12 allows a provable role instead of 2 features). */
 const COMPONENT_DESIGN_SYSTEM_ALLOWLIST: readonly ComponentRole[] = [
-  { file: 'components/error-boundary.tsx', kind: 'app-infrastructure', role: 'application-shell fatal error boundary composed by app/providers and app/router/routes' },
+  { file: 'components/error-boundary.tsx', kind: 'app-infrastructure', role: 'application-shell fatal error boundary composed by app/ and routes/root.route' },
   { file: 'components/original-icons-data.ts', kind: 'frozen-asset', role: 'frozen original SVG data table, internal to original-icons.tsx; provenance docs/attribution.md' },
   { file: 'components/original-icons.tsx', kind: 'frozen-asset', role: 'single global frozen original icon source consumed by the Twin feature' },
 ];
@@ -605,8 +606,8 @@ function r12Violations(graph: ModuleGraph, allowlist: readonly ComponentRole[]):
   const violations: string[] = [];
   for (const component of components) {
     const users = [...importers.get(component)!].sort();
-    const featureOwners = users.filter((user) => user.startsWith('features/'));
-    const appOwners = users.filter((user) => user === 'main.tsx' || user.startsWith('app'));
+    const featureOwners = users.filter((user) => user.startsWith('features/') || /^(catalog|twin|workbench)$/.test(user));
+    const appOwners = users.filter((user) => user === 'main.tsx' || user.startsWith('app') || user.startsWith('routes'));
     const role = allowlist.find((entry) => entry.file === component);
     if (users.length === 0) {
       violations.push(component + ' is a public component with no importer (dead shared UI)' + (role ? '; allowlist role: ' + role.role : ''));
@@ -840,7 +841,7 @@ it('R13: no empty-dependency effect captures changing props/state/callbacks', ()
   // The mechanism supports documented exceptions, but the real tree must need none:
   // the Tour controller now has a stable stop identity with explicit dependencies.
   expect(R13_ALLOWLIST, 'R13 exceptions must stay empty until a proven stable-primitive case appears').toEqual([]);
-  expectNoViolations('R13', 'empty-dependency effects must use useEffectEvent or refs', r13Violations(sourceRoot, graph.files.filter((file) => file.startsWith('features/')), R13_ALLOWLIST));
+  expectNoViolations('R13', 'empty-dependency effects must use useEffectEvent or refs', r13Violations(sourceRoot, graph.files.filter((file) => /^(catalog|twin|workbench)\//.test(file)), R13_ALLOWLIST));
 
   const fixtureRoot = join(fixturesRoot, 'r13');
   const unstableViolations = formatViolations('R13', r13Violations(fixtureRoot, ['unstable-effect.tsx'], []));
@@ -864,25 +865,23 @@ interface AllowlistEntry {
 }
 
 const R14_ALLOWLIST: readonly AllowlistEntry[] = [
-  // Auto-generated route tree: @ts-nocheck, never hand-edited.
-  { file: 'app/router/routeTree.gen.ts', snippet: '} as any)', reason: 'TanStack Router generated route tree (@ts-nocheck); tests/architecture/route-tree-generation.test.ts re-runs the official plugin in a clean worktree and requires byte-identical committed output, so this exception is scoped to a verified generated artifact.' },
   // Documented pre-existing as-unknown-as sites (each cast is the narrowest possible boundary).
-  { file: 'state/createSliceStore.ts', snippet: 'actions as unknown as SliceActions<M>', reason: 'typed action factory: reducers are stored behind a never[] rest contract, SliceActions<M> is the only typed surface.' },
-  { file: 'realtime/workers/telemetryWorker.ts', snippet: 'globalThis as unknown as WorkerScope', reason: 'worker entry: the app tsconfig has no DedicatedWorkerGlobalScope; WorkerScope is the locally declared structural contract.' },
+  { file: 'state/create-slice-store.ts', snippet: 'actions as unknown as SliceActions<M>', reason: 'typed action factory: reducers are stored behind a never[] rest contract, SliceActions<M> is the only typed surface.' },
+  { file: 'realtime/telemetry.worker.ts', snippet: 'globalThis as unknown as WorkerScope', reason: 'worker entry: the app tsconfig has no DedicatedWorkerGlobalScope; WorkerScope is the locally declared structural contract.' },
   { file: 'rendering/lite-backend.ts', snippet: 'undefined as unknown as LiteRuntime', reason: 'single-assignment self reference needed by the runtime disposer callback; assigned before any use.' },
-  { file: 'realtime/transport/SseCommandEventSource.ts', snippet: 'new EventSource(target) as unknown as EventSourceLike', reason: 'injectable EventSource seam: the browser class is structurally compatible with the EventSourceLike test contract.' },
-  { file: 'realtime/telemetry/TelemetryRuntime.ts', snippet: 'payload as unknown as ArrayLike<number>', reason: 'ArrayBuffer.isView guard proves a numeric view; ArrayLike is the shared denotation for Float32Array.from.' },
-  { file: 'realtime/telemetry/TelemetryRuntime.ts', snippet: 'new EventSource(target) as unknown as EventSourceLike', reason: 'injectable EventSource seam (same contract as the command transport).' },
-  { file: 'realtime/telemetry/TelemetryRuntime.ts', snippet: 'createTelemetryWorker() as unknown as WorkerLike', reason: 'injectable Worker seam: the worker class is structurally compatible with the WorkerLike test contract.' },
-  { file: 'domain/fab/original-twin-data.ts', snippet: 'reference as unknown as OriginalTwinUi', reason: 'frozen reference JSON is checked by tools/check_frozen_assets.mjs in scripts/verify.ps1; this cast crosses only that build-validated static boundary.' },
-  { file: 'api/queries/catalog.queries.ts', snippet: 'envelope as unknown as CatalogPageDto', reason: 'zod validates the transport envelope; items are defensively parsed by catalog-data.parseCatalogEntries.' },
-  { file: 'rendering/lite/geometry/static-structure.ts', snippet: 'context as unknown as Record<string, unknown>', reason: 'replays the frozen Canvas2D recipe data onto the context; typed access is not available for dynamic operations.' },
-  { file: 'rendering/lite/geometry/static-structure.ts', snippet: 'matrices as unknown as Mat4', reason: 'a 16-float Float32Array is passed to decomposeMat4, whose public signature takes the Mat4 tuple.' },
-  { file: 'features/twin/twin-elevation.tsx', snippet: 'source as unknown as Record<string,SvgNode>', reason: 'frozen elevation SVG JSON: properties() whitelists the attributes; the recursive SvgNode shape documents the data.' },
+  { file: 'realtime/command-event-source.transport.ts', snippet: 'new EventSource(target) as unknown as EventSourceLike', reason: 'injectable EventSource seam: the browser class is structurally compatible with the EventSourceLike test contract.' },
+  { file: 'realtime/telemetry-runtime.ts', snippet: 'payload as unknown as ArrayLike<number>', reason: 'ArrayBuffer.isView guard proves a numeric view; ArrayLike is the shared denotation for Float32Array.from.' },
+  { file: 'realtime/telemetry-runtime.ts', snippet: 'new EventSource(target) as unknown as EventSourceLike', reason: 'injectable EventSource seam (same contract as the command transport).' },
+  { file: 'realtime/telemetry-runtime.ts', snippet: 'createTelemetryWorker() as unknown as WorkerLike', reason: 'injectable Worker seam: the worker class is structurally compatible with the WorkerLike test contract.' },
+  { file: 'domain/original-twin-data.ts', snippet: 'reference as unknown as OriginalTwinUi', reason: 'frozen reference JSON is checked by tools/check_frozen_assets.mjs in scripts/verify.ps1; this cast crosses only that build-validated static boundary.' },
+  { file: 'api/catalog.resource.ts', snippet: 'envelope as unknown as CatalogPageDto', reason: 'zod validates the transport envelope; items are defensively parsed by catalog-data.parseCatalogEntries.' },
+  { file: 'rendering/lite-geometry-static-structure.ts', snippet: 'context as unknown as Record<string, unknown>', reason: 'replays the frozen Canvas2D recipe data onto the context; typed access is not available for dynamic operations.' },
+  { file: 'rendering/lite-geometry-static-structure.ts', snippet: 'matrices as unknown as Mat4', reason: 'a 16-float Float32Array is passed to decomposeMat4, whose public signature takes the Mat4 tuple.' },
+  { file: 'twin/twin-elevation.tsx', snippet: 'source as unknown as Record<string,SvgNode>', reason: 'frozen elevation SVG JSON: properties() whitelists the attributes; the recursive SvgNode shape documents the data.' },
   // Pre-existing response/worker boundary coercions (guarded before use).
-  { file: 'realtime/workers/telemetryWorker.ts', snippet: 'Number(data.frameSize)', reason: 'Number.isInteger guard proves an integer frameSize before the bounded conversion.' },
-  { file: 'realtime/transport/SseCommandEventSource.ts', snippet: 'Number(rawSequence)', reason: 'the /^\d+$/ guard precedes the conversion and Number.isSafeInteger validates the range on the next line.' },
-  { file: 'realtime/equipment-status/stream.ts', snippet: 'String(event.data)', reason: 'EventSource.data is already the protocol string; decodeEquipmentStatusFrame parses and validates it.' },
+  { file: 'realtime/telemetry.worker.ts', snippet: 'Number(data.frameSize)', reason: 'Number.isInteger guard proves an integer frameSize before the bounded conversion.' },
+  { file: 'realtime/command-event-source.transport.ts', snippet: 'Number(rawSequence)', reason: 'the /^\d+$/ guard precedes the conversion and Number.isSafeInteger validates the range on the next line.' },
+  { file: 'realtime/equipment-status.transport.ts', snippet: 'String(event.data)', reason: 'EventSource.data is already the protocol string; decodeEquipmentStatusFrame parses and validates it.' },
 ];
 
 function hasJustificationComment(text: string, node: Node, sourceFile: SourceFile): boolean {

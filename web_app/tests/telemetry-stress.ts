@@ -1,4 +1,4 @@
-import { createTelemetryWorker } from '../src/realtime/workers/createTelemetryWorker';
+import { createTelemetryWorker } from '@/realtime/telemetry-worker-factory';
 
 interface StressCase {
   readonly entities: number;

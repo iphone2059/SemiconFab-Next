@@ -8,7 +8,7 @@ import {
   createBox, createPbrMaterial, createShaderMaterial, createStandardMaterial,
   type EngineContext, type MaterialPlugin,
 } from '@babylonjs/lite';
-import { createLiteCutPlane, type LiteCutPlane } from '../../src/rendering/lite/cut-plane';
+import { createLiteCutPlane, type LiteCutPlane } from '@/rendering/lite-cut-plane';
 
 /** Minimal device surface: material plugins never touch the GPU until a scene is built. */
 function harness() {
@@ -117,7 +117,7 @@ it('injects the family world position and plane/active uniforms at CUSTOM_FRAGME
 });
 
 it('stays on public native Lite APIs (no @babylonjs/core and no three)', () => {
-  const source = readFileSync(new URL('../../src/rendering/lite/cut-plane.ts', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../../src/rendering/lite-cut-plane.ts', import.meta.url), 'utf8');
   expect(source).not.toContain('@babylonjs/core');
   expect(source).not.toContain("from 'three'");
   expect(source).toContain("from '@babylonjs/lite'");

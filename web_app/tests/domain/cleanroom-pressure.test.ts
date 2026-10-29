@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { advanceLaminarParticle, classifyCleanroomPressure, cleanroomPressureField } from '../../src/domain/fab/cleanroom-pressure';
+import { advanceLaminarParticle, classifyCleanroomPressure, cleanroomPressureField } from '@/domain/fab-cleanroom-pressure';
 
 it('preserves the original pressure regions, airlock gradient and branch precedence', () => {
   expect(cleanroomPressureField(0, 0)).toMatchObject({ pressure: 15.15, gradZ: 0, isLitho: false });

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { CommandGateway } from '../../src/application/contracts/CommandGateway';
-import { XStateCommandWorkflowAdapter } from '../../src/runtime/commands/XStateCommandWorkflowAdapter';
-import { FabLifecycleCoordinator } from '../../src/runtime/FabLifecycleCoordinator';
-import { FabRuntimeFactory } from '../../src/runtime/FabRuntimeFactory';
-import { FabRuntimeRegistry } from '../../src/runtime/FabRuntimeRegistry';
-import { FakeCommandEventSource, commandResult } from '../support/command-fakes';
+import type { CommandGateway } from '@/contracts/command-gateway.contract';
+import { XStateCommandWorkflowAdapter } from '@/runtime/xstate-command-workflow-adapter';
+import { FabLifecycleCoordinator } from '@/runtime/fab-lifecycle-coordinator';
+import { FabRuntimeFactory } from '@/runtime/fab-runtime-factory';
+import { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
+import { FakeCommandEventSource, commandResult } from '../support/command-fakes.ts';
 
 const commandId = 'cmd-1';
 

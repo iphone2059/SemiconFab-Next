@@ -2,20 +2,20 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import type { CatalogEntryDto } from '../../../src/contracts';
-import { CatalogPage } from '../../../src/features/catalog/catalog-page';
-import { catalogQueryOptions } from '../../../src/api/queries/catalog.queries';
-import { resetCatalogStore } from '../../../src/features/catalog/state/catalogStore';
-import { resetLocaleStore } from '../../../src/state/localeStore';
+import type { CatalogEntryDto } from '@/contracts/app-contracts';
+import { CatalogPage } from '@/catalog/catalog-page';
+import { catalogQueryOptions } from '@/api/catalog.resource';
+import { resetCatalogStore } from '@/catalog/catalog.atom';
+import { resetLocaleStore } from '@/state/locale.atom';
 import {
   CATALOG_EXPORT_FILENAME,
   catalogExportDocument,
   catalogRecordFilename,
-} from '../../../src/features/catalog/export/catalog-export';
+} from '@/catalog/catalog-export';
 import {
   createDownloadLifecycle,
   type DownloadEnvironment,
-} from '../../../src/features/catalog/export/download-lifecycle';
+} from '@/catalog/download-lifecycle';
 
 /** Injectable platform boundary: no browser timer/URL/anchor is used directly. */
 function lifecycleFixture() {

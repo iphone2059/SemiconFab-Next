@@ -1,18 +1,18 @@
 // @vitest-environment jsdom
-import { installNativeDialogPolyfill } from '../support/native-dialog';
+import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
 installNativeDialogPolyfill();
-import { TwinPage } from '../../src/features/twin/twin-page';
-import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import { ResearchReplay } from '../../src/domain/simulation/research-replay';
-import { useLocaleStore } from '../../src/state/localeStore';
-import { resetTwinUiStore } from '../../src/features/twin/state/twinUiStore';
-import { resetTwinPageStore } from '../../src/features/twin/state/twinPageStore';
-import { resetRuntimeStore } from '../../src/state/runtimeStore';
-import { resetTwinDemoStore } from '../../src/features/twin/state/twinDemoStore';
+import { TwinPage } from '@/twin/twin-page';
+import { sitesQueryOptions } from '@/api/sites.resource';
+import { ResearchReplay } from '@/domain/simulation-research-replay';
+import { useLocaleStore } from '@/state/locale.atom';
+import { resetTwinUiStore } from '@/twin/twin-ui.atom';
+import { resetTwinPageStore } from '@/twin/twin-page.atom';
+import { resetRuntimeStore } from '@/state/runtime-store';
+import { resetTwinDemoStore } from '@/twin/twin-demo.atom';
 
 /**
  * A16 (twin-page portion): a ResearchReplay.parse exception must surface a

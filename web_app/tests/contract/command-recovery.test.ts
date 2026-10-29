@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
-import { CommandEventRecovery } from '../../src/application/coordination/CommandEventRecovery';
-import type { CommandGateway } from '../../src/application/contracts/CommandGateway';
-import { commandResult } from '../support/command-fakes';
+import { CommandEventRecovery } from '@/runtime/command-event-recovery';
+import type { CommandGateway } from '@/contracts/command-gateway.contract';
+import { commandResult } from '../support/command-fakes.ts';
 
 const event = (fabId: string, commandId: string, revision: number) =>
   commandResult({ fabId, commandId, revision, outcome: 'executing' });

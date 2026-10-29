@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { classNames } from '../../src/components/class-names';
+import { classNames } from '@/components/class-names';
 
 it('omits falsy and boolean values while keeping string and numeric tokens', () => {
   expect(classNames('', null, undefined, false, true, 0, NaN, 'panel', -2, 3)).toBe('panel -2 3');

@@ -2,15 +2,15 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
-import { RuntimeProvider } from '../../../src/app/providers/RuntimeProvider';
-import { CommandConsole } from '../../../src/features/workbench/command-console';
-import type { FabRuntimeRegistry } from '../../../src/runtime/FabRuntimeRegistry';
-import type { SubmitEquipmentCommandInput, SubmittedEquipmentCommand } from '../../../src/api/mutations/commands.mutations';
+import { RuntimeProvider } from '@/app/runtime-provider';
+import { CommandConsole } from '@/workbench/command-console';
+import type { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
+import type { SubmitEquipmentCommandInput, SubmittedEquipmentCommand } from '@/api/commands.mutation';
 
 // The HTTP boundary is deferred so each case can decide when (and for which
 // console lifetime) a submission resolves.
 const mutation = vi.hoisted(() => ({ submitEquipmentCommand: vi.fn() }));
-vi.mock('../../../src/api/mutations/commands.mutations', () => ({ submitEquipmentCommand: mutation.submitEquipmentCommand }));
+vi.mock('../../../src/api/commands.mutation', () => ({ submitEquipmentCommand: mutation.submitEquipmentCommand }));
 const submit = mutation.submitEquipmentCommand;
 
 interface FakeRuntime {

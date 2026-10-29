@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createCoalescedDispatcher } from '../../src/shared/scheduling/coalesced-dispatcher';
+import { createCoalescedDispatcher } from '@/lib/coalesced-dispatcher';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());

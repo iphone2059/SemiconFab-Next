@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
-import { createHttpCommandGateway } from '../../src/api/transport/HttpCommandGateway';
-import { submitEquipmentCommand } from '../../src/api/mutations/commands.mutations';
+import { createHttpCommandGateway } from '@/api/http-command-gateway';
+import { submitEquipmentCommand } from '@/api/commands.mutation';
 
 /** HTTP command submission and authoritative status response are API-owned. */
 

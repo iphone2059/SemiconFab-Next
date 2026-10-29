@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { canonicalViewForPathname, fab3dPath } from '../../src/app/router/url-mapping';
+import { canonicalViewForPathname, fab3dPath } from '@/routes/route-url-mapping';
 
 it('maps only the canonical V2.1 URLs', () => {
   expect(canonicalViewForPathname('/')).toBe('workbench');

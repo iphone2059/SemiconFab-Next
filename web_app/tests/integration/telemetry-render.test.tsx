@@ -1,28 +1,28 @@
 // @vitest-environment jsdom
-import { installNativeDialogPolyfill } from '../support/native-dialog';
+import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
 installNativeDialogPolyfill();
-import { FabViewport } from '../../src/features/twin/fab-viewer';
-import { TwinPage } from '../../src/features/twin/twin-page';
-import { TelemetryProvider } from '../../src/app/providers/TelemetryProvider';
-import { FabTelemetryRegistry } from '../../src/realtime/telemetry/FabTelemetryRegistry';
-import { TelemetryRuntime } from '../../src/realtime/telemetry/TelemetryRuntime';
-import { createTelemetryWorkerHandler } from '../../src/realtime/workers/telemetryWorker.logic';
-import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import { resetTwinUiStore } from '../../src/features/twin/state/twinUiStore';
-import { resetTwinPageStore } from '../../src/features/twin/state/twinPageStore';
-import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '../../src/state/runtimeStore';
-import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '../../src/features/twin/state/twinDemoStore';
-import { twinUiActions } from '../../src/features/twin/state/twinUiStore';
-import type { FabToolState } from '../../src/domain/fab/fab-layout';
-import type { ScenePortStub } from '../support/scene-port-stub';
+import { FabViewport } from '@/twin/twin-viewer';
+import { TwinPage } from '@/twin/twin-page';
+import { TelemetryProvider } from '@/app/telemetry-provider';
+import { FabTelemetryRegistry } from '@/realtime/telemetry-registry';
+import { TelemetryRuntime } from '@/realtime/telemetry-runtime';
+import { createTelemetryWorkerHandler } from '@/realtime/telemetry-worker.logic';
+import { sitesQueryOptions } from '@/api/sites.resource';
+import { resetTwinUiStore } from '@/twin/twin-ui.atom';
+import { resetTwinPageStore } from '@/twin/twin-page.atom';
+import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '@/state/runtime-store';
+import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '@/twin/twin-demo.atom';
+import { twinUiActions } from '@/twin/twin-ui.atom';
+import type { FabToolState } from '@/domain/fab-layout';
+import type { ScenePortStub } from '../support/scene-port-stub.ts';
 
 const backend = vi.hoisted(() => ({ instances: [] as ScenePortStub[] }));
 vi.mock('../../src/rendering/lite-backend', async () => {
-  const { createScenePortStub } = await import('../support/scene-port-stub');
+  const { createScenePortStub } = await import('../support/scene-port-stub.ts');
   return {
     createLiteBackend: () => {
       const stub = createScenePortStub();

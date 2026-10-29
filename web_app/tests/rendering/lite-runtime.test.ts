@@ -31,7 +31,7 @@ vi.mock('@babylonjs/lite', () => ({
   disposeEngine: () => { gpu.events.push('engine'); gpu.live.delete('engine'); },
 }));
 
-const native = await import('../../src/rendering/lite/runtime');
+const native = await import('@/rendering/lite-runtime');
 function createLiteRuntime(...args: Parameters<typeof native.createLiteRuntime>) {
   const runtime = native.createLiteRuntime(...args);
   // A mount can be canceled before its owner reaches the await below.

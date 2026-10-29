@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import type { FabToolState } from '../../../src/domain/fab/fab-layout';
-import { createToolStateMerger, type ToolStateMerger } from '../../../src/features/twin/tool-state-merge';
+import type { FabToolState } from '@/domain/fab-layout';
+import { createToolStateMerger, type ToolStateMerger } from '@/twin/tool-state-merge';
 
 const BASE: readonly FabToolState[] = ['running', 'idle', 'down', 'maint', 'running'];
 const LIVE: readonly FabToolState[] = ['idle', 'down', 'running', 'running', 'maint'];

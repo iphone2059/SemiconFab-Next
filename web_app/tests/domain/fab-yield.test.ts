@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { computeFabYield, scenarioStates, YIELD_SCENARIOS } from '../../src/domain/fab/fab-yield';
-import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
-import { ORIGINAL_TWIN_UI } from '../../src/domain/fab/original-twin-data';
+import { computeFabYield, scenarioStates, YIELD_SCENARIOS } from '@/domain/fab-yield';
+import { FAB_LAYOUT } from '@/domain/fab-layout';
+import { ORIGINAL_TWIN_UI } from '@/domain/original-twin-data';
 
 describe('cascading fab yield', () => {
   it('calculates eight module yields, bottleneck and WPM from live states', () => {

@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
 import { createSceneContext, createPbrMaterial, createPointLight, createTransformNode, setParent,
   createStandardMaterial, type EngineContext } from '@babylonjs/lite';
-import { createLiteLighting, packLiteLocalLights, packLiteLocalLightsInto } from '../../src/rendering/lite/lighting';
-import { attachNextCoordinateFrame } from '../../src/rendering/lite/next-coordinate-frame';
+import { createLiteLighting, packLiteLocalLights, packLiteLocalLightsInto } from '@/rendering/lite-lighting';
+import { attachNextCoordinateFrame } from '@/rendering/lite-next-coordinate-frame';
 
 it('uses the source key/fill/ambient and all five amber points plus the source spotlight', () => {
   const scene = createSceneContext({} as EngineContext, { defaultRenderTask: false });

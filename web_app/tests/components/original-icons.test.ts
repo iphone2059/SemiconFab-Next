@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { ORIGINAL_ICONS } from '../../src/components/original-icons-data';
-import { OriginalIcon } from '../../src/components/original-icons';
+import { ORIGINAL_ICONS } from '@/components/original-icons-data';
+import { OriginalIcon } from '@/components/original-icons';
 
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
 

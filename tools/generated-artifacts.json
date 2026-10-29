@@ -47,7 +47,7 @@
       "sha256": "6cfd292a5015b47f62c74d31bdc9f96d48331a3ebde1914d987e339d3bfc73a7"
     },
     {
-      "path": "web_app/src/generated/static-structure-packed.ts",
+      "path": "web_app/src/generated/static-structure-packed.generated.ts",
       "generator": {
         "tool": "tools/pack_static_structure.mjs",
         "command": [
@@ -66,7 +66,7 @@
           "sha256": "a0e86d228c33cc599d10de180d06aade45ee2541c122e0f7ad22b15982b37a03"
         }
       ],
-      "sha256": "f0bb8379f714eca31942a7f9ddf4a255c6c23619dd0d54379811d21fa5509197"
+      "sha256": "fc6678175436e3771ef245fa37ae631024e2634c39f1663d4486b2f77d6f98b2"
     }
   ]
 }

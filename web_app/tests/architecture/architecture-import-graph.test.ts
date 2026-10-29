@@ -20,9 +20,9 @@
  * offending specifier/module):
  *   R0  every relative import resolves (otherwise lenient resolution would hide edges)
  *   R1  the module graph is acyclic, value and type-only edges included (cycle path is reported)
- *   R2  generic router utilities (files directly under app/router/) never import features/**
+ *   R2  generic router utilities (non-assembly files under routes/) never import feature modules
  *   R3  domain purity: domain/** only depends on domain/**, contracts, assets and no packages
- *   R4  features/catalog, features/twin and features/workbench never import each other
+ *   R4  top-level catalog/, twin/ and workbench/ never import each other
  *   R5  generated artifacts are registered, self-describing and data-only
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -56,11 +56,6 @@ const APPROVED_CROSS_FEATURE_IMPORTS: readonly string[] = [];
 const toPosix = (value: string): string => value.replaceAll('\\', '/');
 const relativeToWebApp = (file: string): string => toPosix(relative(webAppRoot, file));
 const relativeToSource = (file: string): string => toPosix(relative(sourceRoot, file));
-const directoryOf = (file: string): string => {
-  const separator = file.lastIndexOf('/');
-  return separator === -1 ? '' : file.slice(0, separator);
-};
-
 function isFile(file: string): boolean {
   try {
     return statSync(file).isFile();
@@ -140,8 +135,12 @@ interface Graph {
 }
 
 function resolveReference(from: string, specifier: string): Pick<GraphReference, 'external' | 'target' | 'asset' | 'unresolved'> {
-  if (!specifier.startsWith('.')) return { external: true, unresolved: false };
-  const absolute = resolve(dirname(join(sourceRoot, from)), specifier.replace(/[?#].*$/, ''));
+  const isRelative = specifier.startsWith('.');
+  const isAlias = specifier.startsWith('@/');
+  if (!isRelative && !isAlias) return { external: true, unresolved: false };
+  const absolute = isAlias
+    ? resolve(sourceRoot, specifier.slice(2).replace(/[?#].*$/, ''))
+    : resolve(dirname(join(sourceRoot, from)), specifier.replace(/[?#].*$/, ''));
   const candidates = [absolute, absolute + '.ts', absolute + '.tsx', join(absolute, 'index.ts'), join(absolute, 'index.tsx')];
   const found = candidates.find(isFile);
   if (!found) return { external: false, unresolved: true };
@@ -254,20 +253,21 @@ describe('architecture: real import graph', () => {
     expectNoViolations('R0', 'every relative import must resolve to a source module or a known asset', unresolved);
   });
 
-  it('R0b: the project tsconfig uses no path aliases the graph resolver would silently miss', () => {
-    // The resolver above handles relative imports only (plus index/extension probes).
-    // If compilerOptions.paths/baseUrl are ever added, every alias edge must be added
-    // to the gate first; otherwise an unverified alias could hide a dependency.
+  it('R0b: the only project alias is @/ -> src and the graph resolver must resolve it', () => {
     const tsconfig = JSON.parse(readFileSync(tsconfigPath, 'utf8')) as {
-      compilerOptions?: { paths?: unknown; baseUrl?: unknown };
+      compilerOptions?: { paths?: Record<string, string[]>; baseUrl?: unknown };
     };
-    expect(tsconfig.compilerOptions?.paths, 'add alias resolution to this gate before adding compilerOptions.paths').toBeUndefined();
-    expect(tsconfig.compilerOptions?.baseUrl, 'add alias resolution to this gate before adding compilerOptions.baseUrl').toBeUndefined();
+    expect(tsconfig.compilerOptions?.paths, 'R0b: declare the single @/ alias in tsconfig paths').toEqual({ '@/*': ['./src/*'] });
+    expect(tsconfig.compilerOptions?.baseUrl, 'R0b: TS 7 removed baseUrl; paths are tsconfig-relative').toBeUndefined();
+    const aliasReferences = graph.references.filter((reference) => reference.specifier.startsWith('@/'));
+    expect(aliasReferences.length, 'R0b: alias imports must be visible to the graph resolver').toBeGreaterThan(0);
+    const unresolvedAliases = aliasReferences.filter((reference) => reference.unresolved).map((reference) => reference.from + " -> '" + reference.specifier + "'");
+    expectNoViolations('R0b', 'every @/ alias must resolve to a src module', unresolvedAliases);
   });
 
   it('R1: the module graph is acyclic, type-only edges included', () => {
     // The packed static-structure payload used to import its entity type from the lite renderer
-    // (generated/static-structure-packed.ts -> rendering/lite/geometry/static-structure.ts), a
+    // (generated/static-structure-packed.generated.ts -> rendering/lite/geometry/static-structure.ts), a
     // type-level cycle that 'import type' hid from a value-only check. It now imports the
     // hand-written data contract (rendering/contracts/static-structure-data.ts), which is a leaf.
     // Check every edge so a new back-reference cannot hide behind 'import type' again.
@@ -275,25 +275,23 @@ describe('architecture: real import graph', () => {
     expect(cycles.map((cycle) => cycle.join(' -> ')), 'R1: break the cycle by extracting a shared module').toEqual([]);
   });
 
-  it('R2: generic router utilities must not import features/** (app/router/routes/** is the assembly entry and exempt)', () => {
-    // Files directly under app/router/ are router infrastructure (search/url-mapping/route-data/router/
-    // generated route tree). Feature-specific route wiring belongs in app/router/routes/**, which imports
-    // pages by design.
+  it('R2: generic router utilities must not import feature modules (route assembly files are exempt)', () => {
     const violations: string[] = [];
+    const isRouteAssembly = (file: string): boolean => /^routes\/[^/]+\.route\.tsx$/.test(file);
     for (const reference of graph.references) {
-      if (directoryOf(reference.from) !== 'app/router') continue;
-      if (reference.target?.startsWith('features/')) {
+      if (!reference.from.startsWith('routes/') || isRouteAssembly(reference.from)) continue;
+      if (reference.target && /^(catalog|twin|workbench)\//.test(reference.target)) {
         violations.push(
           reference.from + " imports '" + reference.specifier + "' -> " + reference.target + ' (' + reference.kind + ')',
         );
       }
     }
-    expectNoViolations('R2', 'router utilities must stay feature-agnostic', violations);
+    expectNoViolations('R2', 'router utilities must stay feature-agnostic; only *.route.tsx assembly may import pages', violations);
   });
 
   it('R3: domain purity (no packages, no app/features/state/rendering/realtime/runtime/application/components/api imports)', () => {
     const isAllowedDomainTarget = (target: string): boolean =>
-      target.startsWith('domain/') || target === 'contracts.ts' || target === 'generated/contracts.generated.ts';
+      target.startsWith('domain/') || target.startsWith('contracts/') || target === 'generated/contracts.generated.ts';
     const violations: string[] = [];
     let domainReferenceCount = 0;
     for (const reference of graph.references) {
@@ -320,7 +318,7 @@ describe('architecture: real import graph', () => {
   });
 
   it('R4: features stay isolated unless a cross-feature contract is explicitly approved', () => {
-    const featureOf = (file: string): string | undefined => /^features\/(catalog|twin|workbench)\//.exec(file)?.[1];
+    const featureOf = (file: string): string | undefined => /^(catalog|twin|workbench)\//.exec(file)?.[1];
     const violations: string[] = [];
     for (const reference of graph.references) {
       const owner = featureOf(reference.from);
@@ -337,7 +335,7 @@ describe('architecture: real import graph', () => {
   });
 
   it('R6: src root is assembly-only (main.tsx + contracts.ts); every other module belongs to a layer', () => {
-    const allowedRootFiles = new Set(['main.tsx', 'contracts.ts']);
+    const allowedRootFiles = new Set(['main.tsx']);
     const violations = graph.sourceFiles
       .filter((file) => !file.includes('/') && !allowedRootFiles.has(file))
       .map((file) => file + ' is a root-level module; move it into app/features/domain/rendering/state/realtime/components/application');
@@ -358,13 +356,13 @@ describe('architecture: real import graph', () => {
       { file: 'generated/contracts.generated.ts', allowedImports: [] },
       { file: 'generated/twin-translations.generated.ts', allowedImports: [] },
       {
-        file: 'generated/static-structure-packed.ts',
+        file: 'generated/static-structure-packed.generated.ts',
         // The hand-written payload data contract (a leaf module, not a rendering consumer);
         // type-only so generated data stays runtime-free.
         allowedImports: [
           {
-            specifier: '../rendering/contracts/static-structure-data',
-            target: 'rendering/contracts/static-structure-data.ts',
+            specifier: '../rendering/static-structure-data.contract',
+            target: 'rendering/static-structure-data.contract.ts',
             typeOnly: true,
           },
         ],

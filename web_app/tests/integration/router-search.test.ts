@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
-import { searchToQueryString } from '../../src/app/router/search';
-import { catalogSearchFrom, catalogSearchPatch } from '../../src/features/catalog/search';
-import { twinModalFrom, twinModeFrom, twinSiteIdFrom } from '../../src/features/twin/twin-search';
+import { searchToQueryString } from '@/routes/route-search';
+import { catalogSearchFrom, catalogSearchPatch } from '@/catalog/catalog-search';
+import { twinModalFrom, twinModeFrom, twinSiteIdFrom } from '@/twin/twin-search';
 
 it('parses catalog filters and bounded, deduplicated comparison ids from search', () => {
   const first = '3acd7b05-e6e8-5312-bb5b-045e7dd3074b';

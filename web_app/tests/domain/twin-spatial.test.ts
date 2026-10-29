@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advanceExplodeFactor, clampExplodeFactor, explodedPlacement, originalFloorOpacity } from '../../src/domain/fab/twin-spatial';
+import { advanceExplodeFactor, clampExplodeFactor, explodedPlacement, originalFloorOpacity } from '@/domain/fab-twin-spatial';
 
 describe('frozen original exploded placement', () => {
   it('clamps factors and rejects nonfinite values', () => {

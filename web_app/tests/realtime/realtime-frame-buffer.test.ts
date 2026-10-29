@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
-import { FrameRingBuffer } from '../../src/realtime/buffers/FrameRingBuffer';
-import type { TelemetryWorkerEvent } from '../../src/realtime/workers/telemetryWorker.logic';
-import { TELEMETRY_RING_CAPACITY, createTelemetryWorkerHandler } from '../../src/realtime/workers/telemetryWorker.logic';
+import { FrameRingBuffer } from '@/realtime/frame-ring-buffer';
+import type { TelemetryWorkerEvent } from '@/realtime/telemetry-worker.logic';
+import { TELEMETRY_RING_CAPACITY, createTelemetryWorkerHandler } from '@/realtime/telemetry-worker.logic';
 
 type FrameWrittenEvent = Extract<TelemetryWorkerEvent, { type: 'frame-written' }>;
 type SnapshotEvent = Extract<TelemetryWorkerEvent, { type: 'snapshot' }>;

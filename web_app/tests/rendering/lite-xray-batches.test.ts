@@ -19,9 +19,9 @@ vi.mock('@babylonjs/lite', async importOriginal => ({
 
 import { createSceneContext, disposeScene, getShaderUniform,
   type EngineContext, type Mesh, type ShaderMaterial } from '@babylonjs/lite';
-import { createLiteStaticStructure } from '../../src/rendering/lite/geometry/static-structure';
-import { createLiteEffects } from '../../src/rendering/lite/effects/index';
-import { liteXraySystemMatches } from '../../src/rendering/lite/effects-xray-state';
+import { createLiteStaticStructure } from '@/rendering/lite-geometry-static-structure';
+import { createLiteEffects } from '@/rendering/lite-effects';
+import { liteXraySystemMatches } from '@/rendering/lite-effects-xray-state';
 
 /**
  * A06 cross-system acceptance: build the real packed static structure and the real X-Ray

@@ -6,13 +6,13 @@
 // backs the Cinematic Tour suite in tour-timeline.test.ts.
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import type { Vec3 } from '../../src/domain/math/vec3';
+import type { Vec3 } from '@/domain/math-vec3';
 import {
   createWaferTimeline,
   type WaferFrame,
   type WaferScenario,
   type WaferTimeline,
-} from '../../src/domain/wafer/wafer-timeline';
+} from '@/domain/wafer-timeline';
 
 const fixture = JSON.parse(
   readFileSync(new URL('../fixtures/original-tour-wafer-vectors.json', import.meta.url), 'utf8'),

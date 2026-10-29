@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { CommandCorrelationRegistry } from '../../src/application/coordination/CommandCorrelationRegistry';
-import { commandResult } from '../support/command-fakes';
+import { CommandCorrelationRegistry } from '@/runtime/command-correlation-registry';
+import { commandResult } from '../support/command-fakes.ts';
 
 const fabId = 'fab-a';
 const result = (commandId: string, revision: number, outcome: Parameters<typeof commandResult>[0]['outcome']) =>

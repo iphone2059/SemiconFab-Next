@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
-import { OriginalInspector } from '../../../src/features/twin/twin-inspector';
-import { ORIGINAL_TWIN_UI } from '../../../src/domain/fab/original-twin-data';
-import { TwinLocaleProvider } from '../../../src/features/twin/twin-i18n';
-import { localeActions, resetLocaleStore } from '../../../src/state/localeStore';
-import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '../../../src/features/twin/state/twinDemoStore';
-import { createProcessMesJob } from '../../../src/domain/fab/process-control';
+import { OriginalInspector } from '@/twin/twin-inspector';
+import { ORIGINAL_TWIN_UI } from '@/domain/original-twin-data';
+import { TwinLocaleProvider } from '@/twin/twin-i18n';
+import { localeActions, resetLocaleStore } from '@/state/locale.atom';
+import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '@/twin/twin-demo.atom';
+import { createProcessMesJob } from '@/domain/fab-process-control';
 
 beforeEach(() => {
   resetTwinDemoStore();

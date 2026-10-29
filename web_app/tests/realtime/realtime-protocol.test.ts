@@ -5,7 +5,7 @@ import {
   MessageDecoder,
   RealtimeDecodeError,
   TELEMETRY_TOPIC,
-} from '../../src/realtime/protocol/MessageDecoder';
+} from '@/realtime/message-decoder';
 
 const commandFrame = JSON.stringify({
   topic: COMMAND_RESULT_TOPIC,

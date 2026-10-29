@@ -1,23 +1,23 @@
 // @vitest-environment jsdom
-import { installNativeDialogPolyfill } from '../support/native-dialog';
+import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 installNativeDialogPolyfill();
-import { TwinPage } from '../../src/features/twin/twin-page';
-import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
-import { buildTelemetry, computeSpc } from '../../src/domain/fab/process-control';
-import { resetTwinUiStore } from '../../src/features/twin/state/twinUiStore';
-import { resetTwinPageStore, twinPageActions } from '../../src/features/twin/state/twinPageStore';
-import { resetTwinDemoStore, twinDemoActions } from '../../src/features/twin/state/twinDemoStore';
-import { resetRuntimeStore } from '../../src/state/runtimeStore';
-import { useLocaleStore } from '../../src/state/localeStore';
+import { TwinPage } from '@/twin/twin-page';
+import { sitesQueryOptions } from '@/api/sites.resource';
+import { FAB_LAYOUT } from '@/domain/fab-layout';
+import { buildTelemetry, computeSpc } from '@/domain/fab-process-control';
+import { resetTwinUiStore } from '@/twin/twin-ui.atom';
+import { resetTwinPageStore, twinPageActions } from '@/twin/twin-page.atom';
+import { resetTwinDemoStore, twinDemoActions } from '@/twin/twin-demo.atom';
+import { resetRuntimeStore } from '@/state/runtime-store';
+import { useLocaleStore } from '@/state/locale.atom';
 
 // The hardware boundary stays out of this render test: only the inline layout
 // SPC strip is measured.
-vi.mock('../../src/features/twin/fab-viewer', async () => {
+vi.mock('../../src/twin/twin-viewer', async () => {
   const React = await import('react');
   return {
     FabViewport: React.forwardRef(function MockFabViewport(_props: unknown, _ref: unknown) {

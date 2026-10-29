@@ -1,9 +1,9 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
-import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from '../../src/api/queries/equipment.queries';
-import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
-import { runsQueryOptions, runQueryOptions, runResultsQueryOptions } from '../../src/api/queries/runs.queries';
-import { createRun } from '../../src/api/mutations/runs.mutations';
+import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from '@/api/equipment.resource';
+import { FAB_LAYOUT } from '@/domain/fab-layout';
+import { runsQueryOptions, runQueryOptions, runResultsQueryOptions } from '@/api/runs.resource';
+import { createRun } from '@/api/runs.mutation';
 
 /**
  * Transport parity for the M2 Query modules: the RTK fetchBaseQuery contract

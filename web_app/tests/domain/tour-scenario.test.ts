@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { ORIGINAL_TOUR_STOPS } from '../../src/domain/simulation/original-tour';
-import { buildTourScenario, TOUR_COUNTDOWN_MS, TOUR_FRAME_MS } from '../../src/domain/simulation/tour-scenario';
+import { ORIGINAL_TOUR_STOPS } from '@/domain/simulation-original-tour';
+import { buildTourScenario, TOUR_COUNTDOWN_MS, TOUR_FRAME_MS } from '@/domain/simulation-tour-scenario';
 
 const fixture = JSON.parse(readFileSync(new URL('../fixtures/original-tour-wafer-vectors.json', import.meta.url), 'utf8'));
 const firstFrame = fixture.tour.frames[0];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTwinUiState, projectTwinSceneState, twinUiReducer, type SpatialMode } from '../../../src/features/twin/state/twin-state';
+import { createTwinUiState, projectTwinSceneState, twinUiReducer, type SpatialMode } from '@/twin/twin-state';
 
 const spatial: Exclude<SpatialMode, null>[] = ['aerodynamics', 'exploded', 'cut', 'xray'];
 describe('single Twin UI state', () => {

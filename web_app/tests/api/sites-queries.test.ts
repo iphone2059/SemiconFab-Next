@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { fetchSites, findSiteByFabId, sitesQueryOptions } from '../../src/api/queries/sites.queries';
+import { fetchSites, findSiteByFabId, sitesQueryOptions } from '@/api/sites.resource';
 
 const sites = [
   { siteId: 'site-1', code: 'SITE-1', templateHash: 'hash-1', fabs: [{ fabId: 'FAB-01', code: 'FAB-01' }] },

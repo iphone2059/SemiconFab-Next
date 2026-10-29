@@ -10,7 +10,7 @@ import {
   createTourTimeline,
   type TourFrame,
   type TourScenario,
-} from '../../src/domain/simulation/tour-timeline';
+} from '@/domain/simulation-tour-timeline';
 
 const fixture = JSON.parse(
   readFileSync(new URL('../fixtures/original-tour-wafer-vectors.json', import.meta.url), 'utf8'),

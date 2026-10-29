@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { useRuntimeStore, runtimeActions } from '../state/runtimeStore';
+import { useRuntimeStore, runtimeActions } from '@/state/runtime-store';
 
 function FatalError() {
   const error = useRuntimeStore(state => state.fatalError);

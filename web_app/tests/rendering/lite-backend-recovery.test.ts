@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   timers: [] as { id: number; delay: number; run: () => void; cleared: boolean }[],
   nextTimer: 1,
 }));
-vi.mock('../../src/rendering/lite/runtime', () => ({
+vi.mock('../../src/rendering/lite-runtime', () => ({
   createLiteRuntime: vi.fn((_canvas: unknown, options: any) => {
     const scene = { shadowGenerators: [], lights: [] };
     let resolveReady!: (value: unknown) => void;
@@ -30,7 +30,7 @@ vi.mock('../../src/rendering/lite/runtime', () => ({
     return instance;
   }),
 }));
-vi.mock('../../src/rendering/lite/world', () => ({
+vi.mock('../../src/rendering/lite-world', () => ({
   createLiteWorld: vi.fn(async () => {
     const world = mocks.worlds.shift();
     mocks.created.push(world);
@@ -38,8 +38,8 @@ vi.mock('../../src/rendering/lite/world', () => ({
   }),
 }));
 
-import { createLiteBackend } from '../../src/rendering/lite-backend';
-import type { SceneMountOptions } from '../../src/application/ports/scene';
+import { createLiteBackend } from '@/rendering/lite-backend';
+import type { SceneMountOptions } from '@/contracts/scene.port';
 
 type Point = readonly [number, number, number];
 function fakeWorld(pose: { position: Point; target: Point } | null, selection: number | null) {

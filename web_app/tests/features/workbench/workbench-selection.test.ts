@@ -3,14 +3,14 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import WorkbenchApp from '../../../src/features/workbench/workbench';
-import { sitesQueryOptions } from '../../../src/api/queries/sites.queries';
-import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from '../../../src/api/queries/runs.queries';
+import WorkbenchApp from '@/workbench/workbench';
+import { sitesQueryOptions } from '@/api/sites.resource';
+import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from '@/api/runs.resource';
 import {
   resetWorkbenchStore,
   useWorkbenchStore,
   workbenchActions,
-} from '../../../src/features/workbench/state/workbenchStore';
+} from '@/workbench/workbench.atom';
 
 // Server state for sites/runs/run/results is owned by TanStack Query (ARCH G-02);
 // every test that renders gets its own isolated Query cache. Client UI state lives

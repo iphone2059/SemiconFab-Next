@@ -3,7 +3,7 @@
 //
 // Render entry only; the frozen geometry lives in original-icons-data.ts.
 import { createElement, type ReactNode } from 'react';
-import { ORIGINAL_ICONS, type IconShape } from './original-icons-data';
+import { ORIGINAL_ICONS, type IconShape } from '@/components/original-icons-data';
 
 const attrs = (values: Record<string, string>) => Object.fromEntries(Object.entries(values).map(([key, value]) => [key.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), value]));
 function shapeNode(shape: IconShape, key: number): ReactNode {

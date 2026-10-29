@@ -8,7 +8,7 @@ import {
   AMHS_TRAFFIC_SEED,
   type AmhsLoopId,
   type AmhsTask,
-} from '../../src/domain/amhs/amhs-timeline';
+} from '@/domain/amhs-timeline';
 
 const fixture = JSON.parse(readFileSync(new URL('../fixtures/original-dynamics-vectors.json', import.meta.url), 'utf8'));
 

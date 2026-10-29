@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { AMHS_STATS_INTERVAL_MS, createAmhsStatsGate } from '../../src/rendering/lite/amhs-stats';
+import { AMHS_STATS_INTERVAL_MS, createAmhsStatsGate } from '@/rendering/lite-amhs-stats';
 
 it('accepts the first sample and then at most one per interval', () => {
   const due = createAmhsStatsGate();

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { advanceAmhsState, createAmhsRandom, createAmhsState, AMHS_LED_COLORS, type AmhsState, type AmhsVehicle } from '../../src/domain/amhs/amhs-timeline';
+import { advanceAmhsState, createAmhsRandom, createAmhsState, AMHS_LED_COLORS, type AmhsState, type AmhsVehicle } from '@/domain/amhs-timeline';
 
 const fixture = JSON.parse(readFileSync(new URL('../fixtures/original-dynamics-vectors.json', import.meta.url), 'utf8'));
 

@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
-import { COMMAND_RESULT_TOPIC, TELEMETRY_TOPIC } from '../../src/realtime/protocol/MessageDecoder';
-import { createSseCommandEventSource, parseCommandCursor, parseCommandReplayGap } from '../../src/realtime/transport/SseCommandEventSource';
-import { TelemetryRuntime, flattenTelemetryFrame, toolStatesFromValues } from '../../src/realtime/telemetry/TelemetryRuntime';
+import { COMMAND_RESULT_TOPIC, TELEMETRY_TOPIC } from '@/realtime/message-decoder';
+import { createSseCommandEventSource, parseCommandCursor, parseCommandReplayGap } from '@/realtime/command-event-source.transport';
+import { TelemetryRuntime, flattenTelemetryFrame, toolStatesFromValues } from '@/realtime/telemetry-runtime';
 
 class FakeEventSource {
   onopen: (() => void) | null = null;

@@ -1,8 +1,8 @@
 import { expect, it, vi } from 'vitest';
-import type { TelemetryFrame, TelemetrySample } from '../../src/application/contracts/CommandEvents';
-import type { TelemetryWorkerEvent } from '../../src/realtime/workers/telemetryWorker.logic';
-import { TelemetryRuntime, mergeTelemetryFrames } from '../../src/realtime/telemetry/TelemetryRuntime';
-import { createTelemetryWorkerHandler } from '../../src/realtime/workers/telemetryWorker.logic';
+import type { TelemetryFrame, TelemetrySample } from '@/contracts/command-events.contract';
+import type { TelemetryWorkerEvent } from '@/realtime/telemetry-worker.logic';
+import { TelemetryRuntime, mergeTelemetryFrames } from '@/realtime/telemetry-runtime';
+import { createTelemetryWorkerHandler } from '@/realtime/telemetry-worker.logic';
 
 interface PostedCommand {
   readonly type?: string;

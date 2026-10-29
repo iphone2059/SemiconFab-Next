@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { summarizeFrames, summarizeLongTasks } from './perf-metrics';
+import { summarizeFrames, summarizeLongTasks } from './perf-metrics.ts';
 
 it('summarizes frame-time distribution without hiding long-tail stalls', () => {
   const stats = summarizeFrames([8, 10, 12, 16, 20, 40, 80]);

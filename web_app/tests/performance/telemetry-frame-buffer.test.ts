@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { FrameRingBuffer } from '../../src/realtime/buffers/FrameRingBuffer';
+import { FrameRingBuffer } from '@/realtime/frame-ring-buffer';
 
 /**
  * Desktop CPU regression guard for the typed-array high-frequency path. This is

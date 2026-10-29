@@ -3,17 +3,17 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { RunSummary, SiteDto } from '../../../src/contracts';
-import { useRunSubmission } from '../../../src/features/workbench/controllers/use-run-submission';
+import type { RunSummary, SiteDto } from '@/contracts/app-contracts';
+import { useRunSubmission } from '@/workbench/use-run-submission';
 import {
   resetWorkbenchStore,
   useWorkbenchStore,
   workbenchActions,
-} from '../../../src/features/workbench/state/workbenchStore';
+} from '@/workbench/workbench.atom';
 
 // The HTTP boundary is mocked so each case controls when a submission resolves.
 const api = vi.hoisted(() => ({ createRun: vi.fn(), invalidateRuns: vi.fn() }));
-vi.mock('../../../src/api/mutations/runs.mutations', () => ({
+vi.mock('../../../src/api/runs.mutation', () => ({
   createRun: api.createRun,
   invalidateRuns: api.invalidateRuns,
 }));

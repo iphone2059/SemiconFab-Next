@@ -7,9 +7,9 @@ import {
   type TwinTourController,
   type TwinTourControllerParams,
   type TwinTourScheduler,
-} from '../../../src/features/twin/controllers/use-tour-controller';
-import type { FabViewportHandle } from '../../../src/features/twin/fab-viewer';
-import { resetTwinUiStore, useTwinUiStore } from '../../../src/features/twin/state/twinUiStore';
+} from '@/twin/use-tour-controller';
+import type { FabViewportHandle } from '@/twin/twin-viewer';
+import { resetTwinUiStore, useTwinUiStore } from '@/twin/twin-ui.atom';
 
 /** Deterministic frame queue + clock: no wall-clock/RAF timing leaks into the assertions. */
 class VirtualFrames implements TwinTourScheduler {

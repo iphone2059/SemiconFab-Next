@@ -4,7 +4,7 @@ import {
   httpTransport,
   problemDetail,
   type FetchLike,
-} from '../../src/api/transport/http';
+} from '@/api/http.transport';
 
 /**
  * R-10 contract for the single API transport shared by every query/mutation module.

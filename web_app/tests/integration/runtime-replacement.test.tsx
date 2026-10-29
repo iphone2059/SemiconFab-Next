@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it } from 'vitest';
-import { RuntimeProvider, useCommandProjection } from '../../src/app/providers/RuntimeProvider';
-import { FabRuntimeFactory } from '../../src/runtime/FabRuntimeFactory';
-import { FabRuntimeRegistry } from '../../src/runtime/FabRuntimeRegistry';
-import type { FabRuntime } from '../../src/runtime/FabRuntime';
-import { FakeCommandEventSource, commandResult } from '../support/command-fakes';
+import { RuntimeProvider, useCommandProjection } from '@/app/runtime-provider';
+import { FabRuntimeFactory } from '@/runtime/fab-runtime-factory';
+import { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
+import type { FabRuntime } from '@/runtime/fab-runtime';
+import { FakeCommandEventSource, commandResult } from '../support/command-fakes.ts';
 
 const fabId = 'fab-a';
 const commandId = 'cmd-1';

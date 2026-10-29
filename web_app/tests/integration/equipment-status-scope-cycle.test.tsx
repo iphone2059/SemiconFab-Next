@@ -1,19 +1,19 @@
 // @vitest-environment jsdom
-import { installNativeDialogPolyfill } from '../support/native-dialog';
+import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
 installNativeDialogPolyfill();
-import { TwinPage } from '../../src/features/twin/twin-page';
-import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import { equipmentStatusQueryKey } from '../../src/api/queries/equipment.queries';
-import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from '../../src/domain/fab/fab-layout';
-import { resetTwinUiStore, twinUiActions } from '../../src/features/twin/state/twinUiStore';
-import { resetTwinPageStore, useTwinPageStore } from '../../src/features/twin/state/twinPageStore';
-import { resetRuntimeStore } from '../../src/state/runtimeStore';
-import { resetTwinDemoStore } from '../../src/features/twin/state/twinDemoStore';
-import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-status/protocol';
+import { TwinPage } from '@/twin/twin-page';
+import { sitesQueryOptions } from '@/api/sites.resource';
+import { equipmentStatusQueryKey } from '@/api/equipment.resource';
+import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from '@/domain/fab-layout';
+import { resetTwinUiStore, twinUiActions } from '@/twin/twin-ui.atom';
+import { resetTwinPageStore, useTwinPageStore } from '@/twin/twin-page.atom';
+import { resetRuntimeStore } from '@/state/runtime-store';
+import { resetTwinDemoStore } from '@/twin/twin-demo.atom';
+import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
 
 /**
  * Same-FAB mount/unmount/remount cycle across the real TwinPage pipeline: the
@@ -24,7 +24,7 @@ import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-statu
  */
 
 const viewport = vi.hoisted(() => ({ renders: 0 }));
-vi.mock('../../src/features/twin/fab-viewer', async () => {
+vi.mock('../../src/twin/twin-viewer', async () => {
   const React = await import('react');
   return {
     FabViewport: React.forwardRef(function MockFabViewport() {

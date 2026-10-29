@@ -5,8 +5,8 @@ import {
   filterCatalog,
   parseCatalogEntries,
   safeExternalUrl,
-} from '../../../src/features/catalog/catalog-data';
-import { catalogSearchFrom } from '../../../src/features/catalog/search';
+} from '@/catalog/catalog-data';
+import { catalogSearchFrom } from '@/catalog/catalog-search';
 
 const pointer = JSON.parse(
   readFileSync(new URL('../../../../assets/legacy/current.json', import.meta.url), 'utf8'),

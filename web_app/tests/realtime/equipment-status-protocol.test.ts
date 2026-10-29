@@ -1,13 +1,13 @@
 import { expect, it, vi } from 'vitest';
-import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
-import { createEquipmentStatusGate } from '../../src/realtime/equipment-status/gate';
+import { FAB_LAYOUT } from '@/domain/fab-layout';
+import { createEquipmentStatusGate } from '@/realtime/equipment-status.gate';
 import {
   decodeEquipmentStatusFrame,
   isEquipmentStateCode,
   isInScope,
   isValidEquipmentStatusSnapshot,
   type EquipmentStatusSnapshot,
-} from '../../src/realtime/equipment-status/protocol';
+} from '@/realtime/equipment-status.protocol';
 
 /**
  * Wire protocol of the FAB-scoped status feed. protocol.ts is the only place

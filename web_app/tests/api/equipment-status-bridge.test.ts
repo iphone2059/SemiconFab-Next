@@ -5,10 +5,10 @@ import {
   activateEquipmentStatusScope,
   equipmentStatusGate,
   resetEquipmentStatusGates,
-} from '../../src/api/cache/equipment-status-bridge';
-import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from '../../src/api/queries/equipment.queries';
-import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
-import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-status/protocol';
+} from '@/api/equipment-status-bridge';
+import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from '@/api/equipment.resource';
+import { FAB_LAYOUT } from '@/domain/fab-layout';
+import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
 
 /**
  * The Query-cache projection bridge is the single acceptance boundary for REST

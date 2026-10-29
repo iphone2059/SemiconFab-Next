@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { bindSourceOrbitInput, createSourceOrbitMotion, type OrbitPose } from '../../src/rendering/lite/source-orbit-input';
+import { bindSourceOrbitInput, createSourceOrbitMotion, type OrbitPose } from '@/rendering/lite-source-orbit-input';
 
 function motionFixture(position: readonly [number, number, number] = [0, 0, 10]) {
   let pose: OrbitPose = { position, target: [0, 0, 0] };

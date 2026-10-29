@@ -11,8 +11,8 @@
  */
 import type {
   SceneCallbacks, SceneCommands, SceneLifecycleEvent, SceneMountOptions, SceneMountOutcome, ScenePort,
-} from '../../src/application/ports/scene';
-import { createLiteBackend } from '../../src/rendering/lite-backend';
+} from '@/contracts/scene.port';
+import { createLiteBackend } from '@/rendering/lite-backend';
 
 // Positive control: the production Lite backend is a complete ScenePort implementation
 // (checked by the compiler, not by a runtime list only).
@@ -166,5 +166,5 @@ productionPort.acceptance.forceDeviceLoss();
 
 // Negative: rendering/fab-scene.ts was replaced (no forwarding module, no compatibility path).
 // @ts-expect-error the scene contract lives in application/ports/scene.ts only
-import { SceneFacade } from '../../src/rendering/fab-scene';
+import { SceneFacade } from '@/rendering/fab-scene';
 void SceneFacade;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ResearchReplay, researchClock } from '../../src/domain/simulation/research-replay';
+import { ResearchReplay, researchClock } from '@/domain/simulation-research-replay';
 
 const stream = [
   { timestamp_sec: 0, event_type: 'wip_sample', payload: { wip_count: 5 } },

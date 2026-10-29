@@ -2,8 +2,8 @@
 import { createMemoryHistory, createRootRouteWithContext, createRoute, createRouter, Outlet } from '@tanstack/react-router';
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
-import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import { routerSearchSchema } from '../../src/app/router/search';
+import { sitesQueryOptions } from '@/api/sites.resource';
+import { routerSearchSchema } from '@/routes/route-search';
 
 /**
  * RQ-01/RQ-05 acceptance coverage on a synthetic route tree. The product route

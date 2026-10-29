@@ -1,6 +1,6 @@
 import type {
   CameraPose, SceneLifecycleEvent, SceneMountOptions, SceneMountOutcome, ScenePort, SceneViewPreset,
-} from '../../src/application/ports/scene';
+} from '@/contracts/scene.port';
 
 /**
  * Typed test double for the rendering backend returned by `createLiteBackend()`.

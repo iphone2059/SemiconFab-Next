@@ -1,14 +1,14 @@
 import { beforeEach, expect, it } from 'vitest';
-import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '../../src/state/runtimeStore';
-import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '../../src/features/twin/state/twinPageStore';
-import { resetTwinUiStore, twinUiActions, useTwinUiStore } from '../../src/features/twin/state/twinUiStore';
-import { catalogActions, resetCatalogStore, useCatalogStore } from '../../src/features/catalog/state/catalogStore';
-import { resetWorkbenchStore, useWorkbenchStore, workbenchActions } from '../../src/features/workbench/state/workbenchStore';
-import { localeActions, resetLocaleStore, useLocaleStore } from '../../src/state/localeStore';
-import { createWaferTimeline } from '../../src/domain/wafer/wafer-timeline';
-import { buildWaferScenario } from '../../src/domain/wafer/wafer-scenario';
-import { parseWaferRoutes } from '../../src/domain/wafer/wafer-route';
-import { closeWaferSession } from '../../src/features/twin/wafer-session';
+import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '@/state/runtime-store';
+import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '@/twin/twin-page.atom';
+import { resetTwinUiStore, twinUiActions, useTwinUiStore } from '@/twin/twin-ui.atom';
+import { catalogActions, resetCatalogStore, useCatalogStore } from '@/catalog/catalog.atom';
+import { resetWorkbenchStore, useWorkbenchStore, workbenchActions } from '@/workbench/workbench.atom';
+import { localeActions, resetLocaleStore, useLocaleStore } from '@/state/locale.atom';
+import { createWaferTimeline } from '@/domain/wafer-timeline';
+import { buildWaferScenario } from '@/domain/wafer-scenario';
+import { parseWaferRoutes } from '@/domain/wafer-route';
+import { closeWaferSession } from '@/twin/twin-wafer-session';
 import { readFileSync } from 'node:fs';
 
 beforeEach(() => {

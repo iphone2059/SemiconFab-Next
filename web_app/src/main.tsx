@@ -1,8 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from '@tanstack/react-router';
-import { AppProviders } from './app/providers/AppProviders';
-import { router } from './app/router/router';
+import { AppProviders } from '@/app/app-providers';
+import { router } from '@/routes/router';
 import '../assets/styles.css';
 import '../assets/twin.css';
 import '../assets/original-twin-hud.css';

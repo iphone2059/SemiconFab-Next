@@ -2,12 +2,12 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
-import { AppProviders } from '../../src/app/providers/AppProviders';
-import { useCommandProjection, useFabRuntimeRegistry } from '../../src/app/providers/RuntimeProvider';
-import { useFabTelemetry } from '../../src/app/providers/TelemetryProvider';
-import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import WorkbenchApp from '../../src/features/workbench/workbench';
-import type { FabRuntimeRegistry } from '../../src/runtime/FabRuntimeRegistry';
+import { AppProviders } from '@/app/app-providers';
+import { useCommandProjection, useFabRuntimeRegistry } from '@/app/runtime-provider';
+import { useFabTelemetry } from '@/app/telemetry-provider';
+import { sitesQueryOptions } from '@/api/sites.resource';
+import WorkbenchApp from '@/workbench/workbench';
+import type { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
 
 const sites = [{
   siteId: 'site-1',

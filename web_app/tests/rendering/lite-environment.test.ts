@@ -9,10 +9,10 @@ vi.mock('@babylonjs/lite', async importOriginal => {
   };
 });
 import { addFacingBillboardSystem, createSceneContext, getMeshGeometry, releaseTexture, updateBillboardSpriteIndex, updateDynamicTexture, type EngineContext } from '@babylonjs/lite';
-import { createLiteEnvironment } from '../../src/rendering/lite/environment';
-import { advanceLaminarParticle, cleanroomPressureField } from '../../src/domain/fab/cleanroom-pressure';
-import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
-import { ORIGINAL_EXPLODED_LINKS, explodedLinkFrame } from '../../src/rendering/lite/geometry/original-exploded-link-data';
+import { createLiteEnvironment } from '@/rendering/lite-environment';
+import { advanceLaminarParticle, cleanroomPressureField } from '@/domain/fab-cleanroom-pressure';
+import { FAB_LAYOUT } from '@/domain/fab-layout';
+import { ORIGINAL_EXPLODED_LINKS, explodedLinkFrame } from '@/rendering/lite-geometry-original-exploded-link-data';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.clearAllMocks(); });
 function fixture() {

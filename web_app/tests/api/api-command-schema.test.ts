@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
-import { submitEquipmentCommand } from '../../src/api/mutations/commands.mutations';
-import type { CommandOutcome } from '../../src/application/contracts/CommandEvents';
+import { submitEquipmentCommand } from '@/api/commands.mutation';
+import type { CommandOutcome } from '@/contracts/command-events.contract';
 import {
   MAX_ACTION_LENGTH,
   MAX_EQUIPMENT_ID_LENGTH,
@@ -10,7 +10,7 @@ import {
   submitEquipmentCommandInputSchema,
   submittedEquipmentCommandSchema,
   type SubmitEquipmentCommandInput,
-} from '../../src/api/schemas/command.schema';
+} from '@/api/command.schema';
 
 /**
  * R-03 boundary contract for `POST /api/v1/sites/{siteId:guid}/commands`.

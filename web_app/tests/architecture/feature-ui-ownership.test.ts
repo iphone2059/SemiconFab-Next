@@ -23,12 +23,12 @@ function importsOf(file: string): string[] {
 const files = sourceFiles(sourceRoot);
 const relativeToSource = (file: string): string => relative(sourceRoot, file).replaceAll('\\', '/');
 
-/** Feature owners importing a shared component module (module path suffix). */
+/** Top-level feature owners importing a shared component module (module path suffix). */
 function featureImporters(moduleSuffix: string): string[] {
   const owners = new Set<string>();
   for (const file of files) {
     const path = relativeToSource(file);
-    const feature = /^features\/([^/]+)\//.exec(path)?.[1];
+    const feature = /^(catalog|twin|workbench)\//.exec(path)?.[1];
     if (!feature) continue;
     if (importsOf(file).some((specifier) => specifier.replaceAll('\\', '/').endsWith(moduleSuffix))) {
       owners.add(feature);
@@ -44,15 +44,10 @@ it('keeps components/modal.tsx as the single native Dialog implementation', () =
   expect(dialogImplementations, 'features must compose components/modal.tsx, never copy a Dialog').toEqual([
     'components/modal.tsx',
   ]);
-
-  // The one Dialog is genuinely cross-feature: the catalog detail view and the
-  // Twin dialogs both compose it (R12), so it is not a feature-local widget.
   expect(featureImporters('components/modal')).toEqual(['catalog', 'twin']);
 });
 
 it('keeps the shared design system real: no feature-local component forwarding', () => {
-  // The Workbench-only pieces live in their feature; the global forwarding files
-  // are deleted rather than re-exported.
   const componentFiles = readdirSync(join(sourceRoot, 'components')).sort();
   expect(componentFiles).toEqual([
     'class-names.ts',
@@ -70,43 +65,33 @@ it('keeps the shared design system real: no feature-local component forwarding',
     .map(relativeToSource)
     .sort();
   expect(definitions).toEqual([
-    'features/workbench/components/completion-bar.tsx',
-    'features/workbench/components/metric.tsx',
-    'features/workbench/components/panel.tsx',
-    'features/workbench/components/status-pill.tsx',
+    'workbench/completion-bar.tsx',
+    'workbench/metric.tsx',
+    'workbench/panel.tsx',
+    'workbench/status-pill.tsx',
   ]);
 
-  // class-names is a real cross-feature design-system utility now that both Twin
-  // and Workbench compose it (R12 passes by verified usage, not by allowlist).
-  const ownerOf = (path: string): string =>
-    path.startsWith('features/') ? path.split('/').slice(0, 2).join('/') : path.split('/')[0];
   const classNamesOwners = new Set(
     files
-      .filter((file) => importsOf(file).some((specifier) => specifier.endsWith('components/class-names') || specifier === './class-names'))
-      .map((file) => ownerOf(relativeToSource(file))),
+      .filter((file) => importsOf(file).some((specifier) => specifier.endsWith('components/class-names')))
+      .map((file) => relativeToSource(file).split('/')[0]),
   );
-  expect(classNamesOwners).toEqual(new Set(['features/twin', 'features/workbench']));
+  expect(classNamesOwners).toEqual(new Set(['twin', 'workbench']));
 
-  // original-icons is the frozen inventory captured from the original twin page;
-  // it is the only global icon source and the Twin feature consumes it.
   expect(featureImporters('components/original-icons')).toEqual(['twin']);
 });
 
 it('keeps the Workbench command/data ownership split explicit', () => {
-  const workbench = readFileSync(join(sourceRoot, 'features/workbench/workbench.tsx'), 'utf8');
-  // The page is a composition root; the submission lifecycle and views are local.
-  expect(workbench).toContain('./controllers/use-run-submission');
-  expect(workbench).toContain('./components/run-form');
-  expect(workbench).toContain('./components/fab-overview');
-  expect(workbench).toContain('./components/run-history');
-  expect(workbench).toContain('./components/workbench-metrics');
-  // No Query payload may be copied into the client store: the store module must
-  // not mention run/result payload fields or command projections.
-  const store = readFileSync(join(sourceRoot, 'features/workbench/state/workbenchStore.ts'), 'utf8');
+  const workbench = readFileSync(join(sourceRoot, 'workbench/workbench.tsx'), 'utf8');
+  expect(workbench).toContain("@/workbench/use-run-submission");
+  expect(workbench).toContain("@/workbench/run-form");
+  expect(workbench).toContain("@/workbench/fab-overview");
+  expect(workbench).toContain("@/workbench/run-history");
+  expect(workbench).toContain("@/workbench/workbench-metrics");
+  const store = readFileSync(join(sourceRoot, 'workbench/workbench.atom.ts'), 'utf8');
   expect(store).not.toMatch(/pendingSubmission|submissionPrepared|submissionCompleted/);
   expect(store).not.toMatch(/RunSummary|RunResult|CommandWorkflowProjection/);
-  const consoleView = readFileSync(join(sourceRoot, 'features/workbench/command-console.tsx'), 'utf8');
-  // The console reads projections from the runtime hook only; it never stores one.
+  const consoleView = readFileSync(join(sourceRoot, 'workbench/command-console.tsx'), 'utf8');
   expect(consoleView).toContain('useCommandProjection');
   expect(consoleView).not.toMatch(/useState|useRef/);
 });

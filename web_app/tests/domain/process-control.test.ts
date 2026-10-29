@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { applyMesAction, buildTelemetry, computeSpc, createMesJob, createProcessMesJob } from '../../src/domain/fab/process-control';
-import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
+import { applyMesAction, buildTelemetry, computeSpc, createMesJob, createProcessMesJob } from '@/domain/fab-process-control';
+import { FAB_LAYOUT } from '@/domain/fab-layout';
 
 describe('MES job execution', () => {
   /** Caller-owned authoritative epoch-ms time: the domain never reads Date.now(). */

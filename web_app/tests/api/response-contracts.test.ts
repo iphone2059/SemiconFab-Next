@@ -1,8 +1,8 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createRunRequestSchema, runSummarySchema, runResultSchema } from '../../src/api/schemas/runs.schema';
-import { catalogPageSchema } from '../../src/api/schemas/catalog.schema';
-import { catalogQueryOptions } from '../../src/api/queries/catalog.queries';
+import { createRunRequestSchema, runSummarySchema, runResultSchema } from '@/api/runs.schema';
+import { catalogPageSchema } from '@/api/catalog.schema';
+import { catalogQueryOptions } from '@/api/catalog.resource';
 
 const uuid = '3acd7b05-e6e8-5312-bb5b-045e7dd3074b';
 const entry = {

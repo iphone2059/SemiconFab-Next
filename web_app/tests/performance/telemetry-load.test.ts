@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { expect, it } from 'vitest';
-import { createTelemetryWorkerHandler } from '../../src/realtime/workers/telemetryWorker.logic';
+import { createTelemetryWorkerHandler } from '@/realtime/telemetry-worker.logic';
 
 /**
  * CPU/heap load benchmark for the Worker-side telemetry path at the sizes the

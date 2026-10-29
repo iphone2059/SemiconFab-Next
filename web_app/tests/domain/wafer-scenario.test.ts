@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { parseWaferRoutes } from '../../src/domain/wafer/wafer-route';
-import { buildWaferScenario } from '../../src/domain/wafer/wafer-scenario';
-import { createWaferTimeline } from '../../src/domain/wafer/wafer-timeline';
+import { parseWaferRoutes } from '@/domain/wafer-route';
+import { buildWaferScenario } from '@/domain/wafer-scenario';
+import { createWaferTimeline } from '@/domain/wafer-timeline';
 
 const fixture = JSON.parse(readFileSync(new URL('../fixtures/original-tour-wafer-vectors.json', import.meta.url), 'utf8'));
 const routes = parseWaferRoutes(JSON.parse(readFileSync(new URL('../../public/twin/routes.json', import.meta.url), 'utf8')));

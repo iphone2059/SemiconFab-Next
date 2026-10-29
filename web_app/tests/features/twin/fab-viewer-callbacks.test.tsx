@@ -2,19 +2,19 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
-import { FabViewport } from '../../../src/features/twin/fab-viewer';
-import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '../../../src/state/runtimeStore';
-import type { SiteDto, FabDto } from '../../../src/contracts';
-import type { FabToolState } from '../../../src/domain/fab/fab-layout';
-import type { AmhsStats, PickedTool } from '../../../src/application/ports/scene';
-import type { ScenePortStub } from '../../support/scene-port-stub';
-import { configureScenePortStub, resetScenePortStub, resolveScenePortMount } from '../../support/scene-port-stub';
+import { FabViewport } from '@/twin/twin-viewer';
+import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '@/state/runtime-store';
+import type { SiteDto, FabDto } from '@/contracts/app-contracts';
+import type { FabToolState } from '@/domain/fab-layout';
+import type { AmhsStats, PickedTool } from '@/contracts/scene.port';
+import type { ScenePortStub } from '../../support/scene-port-stub.ts';
+import { configureScenePortStub, resetScenePortStub, resolveScenePortMount } from '../../support/scene-port-stub.ts';
 
 // Only the GPU backend boundary is doubled by a full ScenePort stub: mount() keeps the
 // readonly callbacks for the scene lifetime, so a test can invoke them after later renders.
 const backend = vi.hoisted(() => ({ instances: [] as ScenePortStub[] }));
 vi.mock('../../../src/rendering/lite-backend', async () => {
-  const { createScenePortStub } = await import('../../support/scene-port-stub');
+  const { createScenePortStub } = await import('../../support/scene-port-stub.ts');
   return {
     createLiteBackend: () => {
       const stub = createScenePortStub();

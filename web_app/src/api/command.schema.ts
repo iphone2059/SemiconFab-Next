@@ -1,0 +1,139 @@
+/**
+ * Runtime contract for the equipment-command HTTP endpoint (R-03).
+ *
+ * Verified against the authoritative backend sources:
+ *  - fab_app/src/ApiHost.cs maps POST /api/v1/sites/{siteId:guid}/commands and returns
+ *    202 Accepted with an EquipmentCommandStatus on success; failures are
+ *    ProblemDetails 400/404/409 (invalid command, unknown site/FAB, idempotency
+ *    conflict) or a non-JSON proxy/gateway body.
+ *  - fab_app/src/EquipmentCommandService.cs defines the status record and its values:
+ *    SiteId/FabId/CommandId are Guid.ToString("D"), Revision is an int
+ *    (0 accepted / 1 executing / 2 succeeded), Outcome is a command-protocol outcome
+ *    and OccurredAt is DateTimeOffset.ToString("O") — a round-trip ISO-8601 value that
+ *    always carries an offset.
+ *  - fab_shared/src/Generated/Contracts.g.cs does not contain this dev-only endpoint
+ *    contract, so the record above is the authority.
+ *
+ * This module never coerces server data: a malformed payload raises instead of becoming
+ * a 'undefined'-style string or a NaN revision, and the parsed response is returned with
+ * the precise protocol types.
+ */
+import { z } from 'zod';
+import type { CommandOutcome } from '@/contracts/command-events.contract';
+
+/** Limits enforced by EquipmentCommandService.TryValidate/TryValidateIdempotencyKey. */
+export const MAX_EQUIPMENT_ID_LENGTH = 128;
+export const MAX_ACTION_LENGTH = 64;
+export const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
+
+/**
+ * Authoritative wire outcomes. The development service only emits
+ * accepted/executing/succeeded today, but failed/cancelled are terminal outcomes of the
+ * shared command protocol (application/contracts/CommandEvents.ts, MessageDecoder and the
+ * XState command machine), so they are valid wire values rather than unknown strings.
+ */
+const COMMAND_OUTCOMES = [
+  'accepted',
+  'executing',
+  'succeeded',
+  'failed',
+  'cancelled',
+] as const satisfies readonly CommandOutcome[];
+
+/** .NET Guid.TryParse accepts the "D" layout and its hyphenless/braced equivalents. */
+const GUID_HEX = /^[0-9a-f]{32}$/i;
+/** char.IsControl equivalent used by EquipmentCommandService.TryValidateIdempotencyKey. */
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/;
+
+/** One logical equipment command submission. Retries must reuse idempotencyKey. */
+export interface SubmitEquipmentCommandInput {
+  readonly siteId: string;
+  readonly fabId: string;
+  readonly equipmentId: string;
+  readonly action: string;
+  /** Stable key for one logical command; retries must reuse it. */
+  readonly idempotencyKey: string;
+}
+
+/** Authoritative accepted command state returned by the backend. */
+export interface SubmittedEquipmentCommand {
+  readonly commandId: string;
+  readonly siteId: string;
+  readonly fabId: string;
+  readonly equipmentId: string;
+  readonly action: string;
+  readonly revision: number;
+  readonly outcome: CommandOutcome;
+  readonly occurredAt: string;
+}
+
+export const submitEquipmentCommandInputSchema: z.ZodType<SubmitEquipmentCommandInput> = z.object({
+  siteId: z.string().min(1),
+  fabId: z.string().min(1),
+  equipmentId: z.string().min(1).max(MAX_EQUIPMENT_ID_LENGTH),
+  action: z.string().min(1).max(MAX_ACTION_LENGTH),
+  idempotencyKey: z
+    .string()
+    .min(1)
+    .max(MAX_IDEMPOTENCY_KEY_LENGTH)
+    .refine((key) => !CONTROL_CHARACTERS.test(key), {
+      message: 'idempotencyKey must not contain control characters',
+    }),
+});
+
+export const submittedEquipmentCommandSchema: z.ZodType<SubmittedEquipmentCommand> = z.object({
+  commandId: z.string().min(1),
+  siteId: z.string().min(1),
+  fabId: z.string().min(1),
+  equipmentId: z.string().min(1),
+  action: z.string().min(1),
+  revision: z.number().int().nonnegative(),
+  outcome: z.enum(COMMAND_OUTCOMES),
+  occurredAt: z.iso.datetime({ offset: true }),
+});
+
+/** Identity fields that bind a response to the submission it answers. */
+export type CommandIdentityField = 'siteId' | 'fabId' | 'equipmentId' | 'action';
+
+/** Canonical comparable form for GUID-shaped identity tokens, otherwise undefined. */
+function canonicalGuid(value: string): string | undefined {
+  const bare = value.trim().replace(/^\{([^}]*)\}$/, '$1').replace(/^\(([^)]*)\)$/, '$1');
+  const compact = bare.replaceAll('-', '');
+  return GUID_HEX.test(compact) ? compact.toLowerCase() : undefined;
+}
+
+/**
+ * Protocol normalization: the backend parses Guid request identities and serializes them
+ * with Guid.ToString("D"), so a GUID-shaped identity may come back re-cased/relaid out.
+ * Any other identity token is opaque and must match byte for byte.
+ */
+export function commandIdentityMatches(submitted: string, returned: string): boolean {
+  if (submitted === returned) return true;
+  const canonical = canonicalGuid(submitted);
+  return canonical !== undefined && canonical === canonicalGuid(returned);
+}
+
+/**
+ * Cross-FAB guard: a response may only update the console/runtime of the FAB it was
+ * submitted for. The service echoes equipmentId/action verbatim, so they must match
+ * exactly; site/FAB identity follows the documented GUID normalization above.
+ */
+export function commandIdentityMismatches(
+  submitted: SubmitEquipmentCommandInput,
+  returned: SubmittedEquipmentCommand,
+): CommandIdentityField[] {
+  const mismatches: CommandIdentityField[] = [];
+  if (!commandIdentityMatches(submitted.siteId, returned.siteId)) mismatches.push('siteId');
+  if (!commandIdentityMatches(submitted.fabId, returned.fabId)) mismatches.push('fabId');
+  if (submitted.equipmentId !== returned.equipmentId) mismatches.push('equipmentId');
+  if (submitted.action !== returned.action) mismatches.push('action');
+  return mismatches;
+}
+
+/**
+ * Mints the idempotency key for one logical command submission. Retries of the same
+ * logical command reuse the key; a different command mints a new one.
+ */
+export function createEquipmentCommandIdempotencyKey(): string {
+  return crypto.randomUUID();
+}

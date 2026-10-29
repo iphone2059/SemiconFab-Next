@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
-import { FabTelemetryRegistry } from '../../src/realtime/telemetry/FabTelemetryRegistry';
-import type { TelemetryRuntime } from '../../src/realtime/telemetry/TelemetryRuntime';
+import { FabTelemetryRegistry } from '@/realtime/telemetry-registry';
+import type { TelemetryRuntime } from '@/realtime/telemetry-runtime';
 
 type FakeRuntime = TelemetryRuntime & { start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> };
 

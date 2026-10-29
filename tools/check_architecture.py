@@ -129,47 +129,37 @@ assert (web / 'pnpm-lock.yaml').exists(), 'web_app must commit its own pnpm lock
 other = [p.name for p in ROOT.glob('web_*') if p.is_dir() and p.name != 'web_app']
 assert not other, f'Only one frontend project is allowed: {other}'
 
-# P3 directory tidiness: web_app/src root is assembly-only (entry + public contracts),
-# feature-specific state lives next to its feature and shared client state stays in state/.
-SRC_ROOT_ALLOWED = {'main.tsx', 'contracts.ts'}
-root_modules = sorted(p.name for p in (web / 'src').iterdir() if p.is_file())
-assert set(root_modules) == SRC_ROOT_ALLOWED, f'web_app/src root must only contain {sorted(SRC_ROOT_ALLOWED)}, found: {root_modules}'
-for feature_store in (
-    'features/twin/state/twinUiStore.ts',
-    'features/twin/state/twinPageStore.ts',
-    'features/twin/state/twinDemoStore.ts',
-    'features/catalog/state/catalogStore.ts',
-    'features/workbench/state/workbenchStore.ts',
-):
-    assert (web / 'src' / feature_store).exists(), f'Feature state must live next to its feature: {feature_store}'
-assert (web / 'src' / 'state' / 'runtimeStore.ts').exists(), 'Shared viewer/runtime state stays under src/state'
-assert (web / 'src' / 'state' / 'localeStore.ts').exists(), 'Shared locale/theme state stays under src/state'
+# Task 1 flat-layout contract: src is exactly src/<module>/<file> (or main.tsx).
+SRC_ROOT_ALLOWED = {'main.tsx'}
+root_files = sorted(entry.name for entry in (web / 'src').iterdir() if entry.is_file())
+assert set(root_files) == SRC_ROOT_ALLOWED, f'web_app/src root must only contain main.tsx, found: {root_files}'
+FLAT_MODULES = {
+    'app', 'api', 'assets', 'catalog', 'components', 'contracts', 'domain', 'generated', 'lib',
+    'localization', 'realtime', 'rendering', 'routes', 'runtime', 'state', 'twin', 'workbench',
+}
+for entry in (web / 'src').iterdir():
+    if entry.is_dir():
+        assert entry.name in FLAT_MODULES, f'Unexpected top-level src module: {entry.name}'
+for source in (web / 'src').rglob('*'):
+    if source.is_dir():
+        depth = len(source.relative_to(web / 'src').parts)
+        assert depth == 1, f'Nested src directory is forbidden: {source.relative_to(web / "src")}'
+        continue
+    assert source.suffix in {'.ts', '.tsx'}, f'Only TS/TSX belongs in web_app/src: {source}'
 
-# P2 domain extraction: pure domain modules live under web_app/src/domain/<area>/ and
-# must not leak back into the flat web_app/src root.
-DOMAIN_LAYERS = ('fab', 'amhs', 'personnel', 'wafer', 'simulation', 'math')
-for layer in DOMAIN_LAYERS:
-    layer_path = web / 'src' / 'domain' / layer
-    assert layer_path.is_dir(), f'web_app/src/domain/{layer}/ must exist'
-    assert list(layer_path.glob('*.ts')), f'web_app/src/domain/{layer}/ must contain pure domain modules'
-RELOCATED_ROOT_MODULES = (
-    'fab-layout', 'process-control', 'fab-yield', 'cleanroom-pressure', 'layout-identities',
-    'original-twin-data', 'twin-spatial', 'amhs-timeline', 'personnel-timeline', 'wafer-route',
-    'wafer-map', 'wafer-scenario', 'tour-timeline', 'wafer-timeline', 'research-replay', 'original-tour',
-    'tour-scenario', 'twin-equipment', 'scenario',
-)
-for module in RELOCATED_ROOT_MODULES:
-    assert not (web / 'src' / f'{module}.ts').exists(), f'Relocated domain module must live under src/domain/: {module}.ts'
+# Pure domain modules are flat under domain/ and must not leak back into the src root.
+assert (web / 'src' / 'domain').is_dir(), 'web_app/src/domain/ must exist'
+assert list((web / 'src' / 'domain').glob('*.ts')), 'web_app/src/domain/ must contain pure domain modules'
 
 # Generated artifacts are a real region: generators write under src/generated/ and the old
 # in-place paths must stay deleted (see the R5 import-graph gate for the exhaustive checks).
-GENERATED_ARTIFACTS = ('contracts.generated.ts', 'twin-translations.generated.ts', 'static-structure-packed.ts')
+GENERATED_ARTIFACTS = ('contracts.generated.ts', 'twin-translations.generated.ts', 'static-structure-packed.generated.ts')
 for artifact in GENERATED_ARTIFACTS:
     artifact_path = web / 'src' / 'generated' / artifact
     assert artifact_path.is_file(), f'Generated artifact must live under web_app/src/generated/: {artifact}'
     header = '\n'.join(artifact_path.read_text(encoding='utf-8').splitlines()[:5]).lower()
     assert 'do not edit' in header, f'Generated artifact is missing its do-not-edit header: {artifact}'
-for old_artifact in ('contracts.generated.ts', 'twin-translations.generated.ts', 'rendering/lite/geometry/static-structure-packed.ts'):
+for old_artifact in ('contracts.generated.ts', 'twin-translations.generated.ts', 'rendering/lite/geometry/static-structure-packed.ts', 'generated/static-structure-packed.ts'):
     assert not (web / 'src' / old_artifact).exists(), f'Generated artifact must live under src/generated/: {old_artifact}'
 
 for source in (web / 'src').rglob('*'):
@@ -178,6 +168,7 @@ for source in (web / 'src').rglob('*'):
     text = source.read_text(encoding='utf-8')
     assert not re.search(r'getContext\(\s*[\'\"](?:webgl2?|experimental-webgl)[\'\"]', text), f'Forbidden WebGL context: {source}'
     assert not re.search(r"from ['\"]@fab/", text), f'Internal package import must be relative: {source}'
+    assert '@ts-nocheck' not in text, f'Production source may not suppress type checking: {source}'
 assert len(list((ROOT / 'docs/modules').glob('M*.md'))) == 18, 'Module record count changed'
 
 # V2.1 final-state checks (M6): legacy containers/evidence must be gone, and the
@@ -191,8 +182,8 @@ for deprecated in ('react-redux', '@reduxjs/toolkit', 'immer', '@babylonjs/core'
 for source in (web / 'src').rglob('*.ts*'):
     relative = source.relative_to(web / 'src').as_posix()
     text = source.read_text(encoding='utf-8')
-    if relative.startswith(('rendering/', 'realtime/buffers/', 'realtime/workers/')):
+    if relative.startswith('rendering/') or re.match(r'realtime/(telemetry\.worker|telemetry-worker\.logic|frame-ring-buffer|message-decoder)', relative):
         assert not re.search(r"from ['\"](?:react|@tanstack/react-query|zustand|xstate)", text), f'State container import in high-frequency/rendering layer: {relative}'
-print('PASS: V2.1 final-state checks (legacy paths absent, domain layers + relocated modules, assembly-only src root + feature state ownership, generated-artifact region, deprecated dependencies, ARCH-11 high-frequency boundaries).')
+print('PASS: Task 1 final-state checks (flat src layout, generated-artifact region, deprecated dependencies, ARCH-11 high-frequency boundaries).')
 
 print(f'PASS: {len(projects)} independent .NET projects (fab_shared + fab_app + fab_tests) / 1 self-contained frontend project; flat layout, reference rules, DAG and module records.')

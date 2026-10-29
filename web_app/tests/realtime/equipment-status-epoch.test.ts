@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
-import { createEquipmentStatusGate, createOrderedEquipmentStatusConsumer } from '../../src/realtime/equipment-status/gate';
-import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-status/protocol';
+import { createEquipmentStatusGate, createOrderedEquipmentStatusConsumer } from '@/realtime/equipment-status.gate';
+import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
 
 const scope = { siteId: 'site-1', fabId: 'fab-a' };
 const base = (patch: Partial<EquipmentStatusSnapshot> = {}): EquipmentStatusSnapshot => ({

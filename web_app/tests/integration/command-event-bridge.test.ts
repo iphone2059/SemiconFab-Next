@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { CommandEventBridge } from '../../src/application/coordination/CommandEventBridge';
-import type { CommandGateway } from '../../src/application/contracts/CommandGateway';
+import { CommandEventBridge } from '@/runtime/command-event-bridge';
+import type { CommandGateway } from '@/contracts/command-gateway.contract';
 import {
   FakeCommandEventSource,
   FakeCommandWorkflow,
   FakeWorkflowRegistry,
   commandResult,
-} from '../support/command-fakes';
+} from '../support/command-fakes.ts';
 
 const fabId = 'fab-a';
 const commandId = 'cmd-1';

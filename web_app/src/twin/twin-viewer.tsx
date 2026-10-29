@@ -1,0 +1,187 @@
+import { useTwinLocale } from '@/twin/twin-i18n';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { useRuntimeStore, runtimeActions } from '@/state/runtime-store';
+import { createCoalescedDispatcher } from '@/lib/coalesced-dispatcher';
+import type { FabDto, SiteDto } from '@/contracts/app-contracts';
+import type {
+  AmhsStats, HoveredTool, PickedTool, SceneCommands, SceneLayer, SceneLifecycleEvent, SceneMountOptions, ScenePort,
+} from '@/contracts/scene.port';
+import { FAB_TOOL_STATE_META, type FabToolState } from '@/domain/fab-layout';
+
+export interface FabViewportProps {
+  site: SiteDto;
+  fab: FabDto;
+  toolStates: readonly FabToolState[];
+  onToolChange?: (tool?: PickedTool) => void;
+  layers: Record<SceneLayer, boolean>;
+  explodeFactor: number;
+  explodeMode?: boolean;
+  basement: boolean;
+  dual: boolean;
+  onStatusChange?: (status: string) => void;
+  onAmhsStatsChange?: (stats: AmhsStats) => void;
+  /** Match source OrbitControls start: stop guided camera ownership on user input. */
+  onCameraInteraction?: () => void;
+  /** Optional frame-loop source read directly from the store without a React prop pass. */
+  getToolStates?: () => readonly FabToolState[];
+}
+
+/**
+ * Imperative handle exposed to the twin page/controllers: the application ScenePort command
+ * surface plus the viewer-level reload action. There are no optional capabilities here.
+ */
+export interface FabViewportHandle extends SceneCommands {
+  reload(): void;
+}
+
+export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(function FabViewport(
+  { site, fab, toolStates, onToolChange, layers, explodeFactor, explodeMode, basement, dual, onStatusChange, onAmhsStatsChange, onCameraInteraction, getToolStates },
+  ref,
+) {
+  const { t } = useTwinLocale();
+  // The GPU scene and its mount effect outlive individual renders. Route every
+  // scene callback through a ref so the current props handlers are invoked
+  // instead of the first render's closures (which capture a stale selection).
+  const callbacks = useRef({ onToolChange, onStatusChange, onAmhsStatsChange });
+  callbacks.current = { onToolChange, onStatusChange, onAmhsStatsChange };
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const facade = useRef<ScenePort | undefined>(undefined);
+  const frameSource = useRef({ getToolStates, toolStates });
+  frameSource.current = { getToolStates, toolStates };
+  const status = useRuntimeStore(state => state.viewer.status);
+  // Control flow uses the discrete lifecycle only; `status` is display copy for the HUD.
+  const lifecycle = useRuntimeStore(state => state.viewer.lifecycle);
+  const generation = useRuntimeStore(state => state.viewer.generation);
+  const hoveredTool = useRuntimeStore(state => state.viewer.hover);
+  const ready = lifecycle === 'ready';
+
+  useEffect(() => {
+    const element = canvas.current;
+    if (!element) return;
+    const controller = new AbortController();
+    // Stable viewer identity across the whole mount/abort lifetime; lifecycle events carry
+    // display copy separately so the store can keep epoch-guarded control state.
+    const epoch = crypto.randomUUID();
+    runtimeActions.viewerMounted(epoch);
+    const reportLifecycle = (event: SceneLifecycleEvent) => {
+      if (controller.signal.aborted) return;
+      if (event.type === 'failed') failedReported = true;
+      runtimeActions.viewerLifecycleReceived({ epoch, event });
+      callbacks.current.onStatusChange?.(event.message);
+    };
+    let scene: ScenePort | undefined;
+    let failedReported = false;
+    const hoverBatcher = createCoalescedDispatcher<HoveredTool | undefined>(hover => {
+      runtimeActions.viewerHoverReceived({ epoch, hover });
+    }, 50);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      hoverBatcher.cancel();
+      facade.current?.clearSelection();
+      runtimeActions.viewerHoverCleared();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    const mountOptions = (): SceneMountOptions => ({
+      viewerId: epoch,
+      canvas: element,
+      fabs: [{ fabId: fab.fabId, code: fab.code, position: [0, 0, 0] }],
+      signal: controller.signal,
+      callbacks: {
+        onLifecycle: reportLifecycle,
+        onToolPick: tool => { if (!controller.signal.aborted) callbacks.current.onToolChange?.(tool ?? undefined); },
+        onAmhsStats: stats => { if (!controller.signal.aborted) callbacks.current.onAmhsStatsChange?.(stats); },
+        onToolHover: hover => { if (!controller.signal.aborted) hoverBatcher.push(hover ?? undefined); },
+        getToolStates: () => frameSource.current.getToolStates?.() ?? frameSource.current.toolStates,
+      },
+    });
+    void import('@/rendering/lite-backend')
+      .then(async ({ createLiteBackend }) => {
+        if (controller.signal.aborted) return;
+        scene = createLiteBackend();
+        facade.current = scene;
+        callbacks.current.onToolChange?.(undefined);
+        const outcome = await scene.mount(mountOptions());
+        // Defense in depth: a port implementation that reports a failed mount without a
+        // lifecycle event must not leave the viewer silently initializing forever.
+        if (outcome.status === 'failed' && !failedReported) {
+          const error = outcome.error;
+          reportLifecycle({ type: 'failed', message: error instanceof Error ? error.message : t("场景初始化失败"), error });
+        }
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          reportLifecycle({ type: 'failed', message: error instanceof Error ? error.message : t("场景初始化失败"), error });
+        }
+      });
+    return () => {
+      controller.abort();
+      hoverBatcher.cancel();
+      window.removeEventListener('keydown', onKeyDown);
+      runtimeActions.viewerUnmounted(epoch);
+      if (facade.current === scene) facade.current = undefined;
+      scene?.dispose();
+    };
+  }, [site.siteId, fab.fabId, generation]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      setView: (preset) => facade.current?.setView(preset),
+      setCameraPose: (position, target, durationMs) => facade.current?.setCameraPose(position, target, durationMs),
+      getCameraPose: () => facade.current?.getCameraPose() ?? null,
+      zoom: (deltaY) => facade.current?.zoom(deltaY),
+      resize: () => facade.current?.resize(),
+      reload: () => { runtimeActions.viewerReloadRequested(); },
+      selectTool: (index, focus) => facade.current?.selectTool(index, focus),
+      clearSelection: () => facade.current?.clearSelection(),
+      setLayer: (layer, visible) => facade.current?.setLayer(layer, visible),
+      setToolState: (index, state) => facade.current?.setToolState(index, state),
+      setTour: (active) => facade.current?.setTour(active),
+      setExplodeFactor: (factor, modeActive) => facade.current?.setExplodeFactor(factor, modeActive),
+      setBasement: (active) => facade.current?.setBasement(active),
+      setDual: (active) => facade.current?.setDual(active),
+      setCutPlane: (active, axis, position, invert) => facade.current?.setCutPlane(active, axis, position, invert),
+      setXRayFilter: (filter) => facade.current?.setXRayFilter(filter),
+      setWaferPoint: (x, y, z, visible, focus, rotationY) => facade.current?.setWaferPoint(x, y, z, visible, focus, rotationY),
+      setWaferTrail: (points) => facade.current?.setWaferTrail(points),
+      focusPatrol: () => facade.current?.focusPatrol(),
+      setLanguage: (language) => facade.current?.setLanguage(language),
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    facade.current?.clearSelection();
+    callbacks.current.onToolChange?.(undefined);
+  }, [fab.fabId]);
+
+  useEffect(() => {
+    if (!ready || getToolStates) return;
+    toolStates.forEach((state, index) => facade.current?.setToolState(index, state));
+  }, [toolStates, ready, getToolStates]);
+
+  useEffect(() => {
+    if (!ready) return;
+    for (const [layer, visible] of Object.entries(layers)) facade.current?.setLayer(layer as SceneLayer, visible);
+  }, [layers, ready]);
+  useEffect(() => {
+    if (!ready) return;
+    facade.current?.setExplodeFactor(explodeFactor, explodeMode);
+  }, [explodeFactor, explodeMode, ready]);
+  useEffect(() => { if (ready) facade.current?.setBasement(basement); }, [basement, ready]);
+  useEffect(() => { if (ready) facade.current?.setDual(dual); }, [dual, ready]);
+  const hovered = hoveredTool?.tool;
+  return (
+    <div className="scene twin-canvas">
+      <canvas ref={canvas} aria-label={t("FAB WebGPU 场景")}
+        onPointerDownCapture={event => { if (event.pointerType !== "touch" && event.button >= 0 && event.button <= 2) onCameraInteraction?.(); }}
+        onTouchStartCapture={() => onCameraInteraction?.()}
+        onWheelCapture={() => onCameraInteraction?.()} />
+      {hovered && <div className="twin-hovercard" style={{ left: hoveredTool.x + 12, top: hoveredTool.y + 12 }}>
+        <strong>{hovered.vendor} {hovered.model}</strong>
+        <span>{t(FAB_TOOL_STATE_META[toolStates[hovered.index] ?? hovered.state].label)} · #{hovered.index + 1}</span>
+      </div>}
+      {!ready && <div className="twin-render-status" role="status">{status}<button type="button" onClick={() => runtimeActions.viewerReloadRequested()}>{t("重新加载")}</button></div>}
+    </div>
+  );
+});

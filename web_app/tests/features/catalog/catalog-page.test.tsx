@@ -1,14 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, expect, it } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { CatalogEntryDto } from '../../../src/contracts';
-import { CatalogPage } from '../../../src/features/catalog/catalog-page';
-import { CatalogComparison } from '../../../src/features/catalog/components/catalog-comparison';
-import { FieldValue, RecordFields } from '../../../src/features/catalog/components/catalog-fields';
-import { ExternalLink } from '../../../src/features/catalog/components/external-link';
-import { catalogQueryOptions } from '../../../src/api/queries/catalog.queries';
-import { resetCatalogStore } from '../../../src/features/catalog/state/catalogStore';
-import { resetLocaleStore } from '../../../src/state/localeStore';
+import type { CatalogEntryDto } from '@/contracts/app-contracts';
+import { CatalogPage } from '@/catalog/catalog-page';
+import { CatalogComparison } from '@/catalog/catalog-comparison';
+import { FieldValue, RecordFields } from '@/catalog/catalog-fields';
+import { ExternalLink } from '@/catalog/external-link';
+import { catalogQueryOptions } from '@/api/catalog.resource';
+import { resetCatalogStore } from '@/catalog/catalog.atom';
+import { resetLocaleStore } from '@/state/locale.atom';
 
 beforeEach(() => {
   resetCatalogStore();

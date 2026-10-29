@@ -2,15 +2,15 @@
 import { StrictMode, type RefObject } from 'react';
 import { cleanup, fireEvent, render, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { Modal } from '../../../src/components/modal';
-import type { FabToolState } from '../../../src/domain/fab/fab-layout';
-import type { SceneLayer } from '../../../src/application/ports/scene';
-import { useTwinActions } from '../../../src/features/twin/controllers/use-twin-actions';
-import { useTwinKeyboard } from '../../../src/features/twin/controllers/use-twin-keyboard';
-import type { FabViewportHandle } from '../../../src/features/twin/fab-viewer';
-import type { TwinView } from '../../../src/features/twin/state/twin-state';
-import { resetTwinUiStore, useTwinUiStore } from '../../../src/features/twin/state/twinUiStore';
-import { installNativeDialogPolyfill } from '../../support/native-dialog';
+import { Modal } from '@/components/modal';
+import type { FabToolState } from '@/domain/fab-layout';
+import type { SceneLayer } from '@/contracts/scene.port';
+import { useTwinActions } from '@/twin/use-twin-actions';
+import { useTwinKeyboard } from '@/twin/use-twin-keyboard';
+import type { FabViewportHandle } from '@/twin/twin-viewer';
+import type { TwinView } from '@/twin/twin-state';
+import { resetTwinUiStore, useTwinUiStore } from '@/twin/twin-ui.atom';
+import { installNativeDialogPolyfill } from '../../support/native-dialog.ts';
 
 installNativeDialogPolyfill();
 

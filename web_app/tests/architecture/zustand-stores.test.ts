@@ -1,11 +1,11 @@
 import { beforeEach, expect, it } from 'vitest';
-import { resetTwinUiStore, twinUiActions, useTwinUiStore } from '../../src/features/twin/state/twinUiStore';
-import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '../../src/features/twin/state/twinPageStore';
-import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '../../src/features/twin/state/twinDemoStore';
-import { catalogActions, resetCatalogStore, useCatalogStore } from '../../src/features/catalog/state/catalogStore';
-import { resetWorkbenchStore, useWorkbenchStore, workbenchActions } from '../../src/features/workbench/state/workbenchStore';
-import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '../../src/state/runtimeStore';
-import { resetLocaleStore, useLocaleStore } from '../../src/state/localeStore';
+import { resetTwinUiStore, twinUiActions, useTwinUiStore } from '@/twin/twin-ui.atom';
+import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '@/twin/twin-page.atom';
+import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '@/twin/twin-demo.atom';
+import { catalogActions, resetCatalogStore, useCatalogStore } from '@/catalog/catalog.atom';
+import { resetWorkbenchStore, useWorkbenchStore, workbenchActions } from '@/workbench/workbench.atom';
+import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '@/state/runtime-store';
+import { resetLocaleStore, useLocaleStore } from '@/state/locale.atom';
 
 /**
  * M2b replaced the Redux Toolkit store with seven independent Zustand stores.

@@ -1,9 +1,9 @@
 import type {
   CameraPose, CutAxis, SceneAcceptanceCapabilities, SceneLanguage, SceneLayer, SceneLifecycleEvent,
   SceneMountOptions, SceneMountOutcome, ScenePort, SceneViewPreset, XRayFilter,
-} from '../application/ports/scene';
-import { createLiteRuntime, type LiteRuntime } from './lite/runtime';
-import { createLiteWorld, type LiteWorld } from './lite/world';
+} from '@/contracts/scene.port';
+import { createLiteRuntime, type LiteRuntime } from '@/rendering/lite-runtime';
+import { createLiteWorld, type LiteWorld } from '@/rendering/lite-world';
 
 type PerfBridge = { dispose(): void };
 

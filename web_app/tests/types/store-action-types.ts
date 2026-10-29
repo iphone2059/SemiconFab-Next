@@ -7,9 +7,9 @@
  * If any @ts-expect-error line starts compiling, TypeScript reports the unused
  * directive and fails the typecheck.
  */
-import { runtimeActions } from '../../src/state/runtimeStore';
-import { twinPageActions } from '../../src/features/twin/state/twinPageStore';
-import { workbenchActions } from '../../src/features/workbench/state/workbenchStore';
+import { runtimeActions } from '@/state/runtime-store';
+import { twinPageActions } from '@/twin/twin-page.atom';
+import { workbenchActions } from '@/workbench/workbench.atom';
 
 // Positive controls: the intended shape keeps compiling.
 workbenchActions.formFieldSet({ field: 'lotCount', value: '12' });

@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
-import { buildLayoutIdentities, projectReplayStates, createDemoState, demoReducer, resolveScenario } from '../../src/domain/simulation/twin-equipment';
-import { ResearchReplay } from '../../src/domain/simulation/research-replay';
-import { YIELD_SCENARIOS } from '../../src/domain/fab/fab-yield';
+import { FAB_LAYOUT } from '@/domain/fab-layout';
+import { buildLayoutIdentities, projectReplayStates, createDemoState, demoReducer, resolveScenario } from '@/domain/simulation-twin-equipment';
+import { ResearchReplay } from '@/domain/simulation-research-replay';
+import { YIELD_SCENARIOS } from '@/domain/fab-yield';
 
 it('reproduces all original instance aliases and last-writer collision targets', () => {
   const reference = JSON.parse(readFileSync(new URL('../fixtures/twin-layout-identities.json', import.meta.url), 'utf8'));

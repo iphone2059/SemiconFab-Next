@@ -7,13 +7,13 @@ import {
   addToScene, createArcRotateCamera, createBox, createSceneContext, disposeScene, getMeshGeometry,
   type EngineContext, type LineMaterial, type Mesh,
 } from '@babylonjs/lite';
-import { FAB_LAYOUT, FAB_TOOL_STATES } from '../../src/domain/fab/fab-layout';
-import { createLiteEquipment, type LiteEquipment } from '../../src/rendering/lite/geometry/tool-families';
+import { FAB_LAYOUT, FAB_TOOL_STATES } from '@/domain/fab-layout';
+import { createLiteEquipment, type LiteEquipment } from '@/rendering/lite-geometry-tool-families';
 import {
   createLiteSelection, createSelectionPickResolver,
   type LiteSelection, type LiteSelectionCallbacks, type SelectionPickSeam,
-} from '../../src/rendering/lite/selection';
-import type { HoveredTool, PickedTool } from '../../src/application/ports/scene';
+} from '@/rendering/lite-selection';
+import type { HoveredTool, PickedTool } from '@/contracts/scene.port';
 
 type Triple = [number, number, number];
 interface PickCall { x: number; y: number; resolve(value: { toolIndex: number; x: number; y: number } | null): void }

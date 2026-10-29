@@ -7,9 +7,9 @@ import {
   createSceneContext, disposeScene, getPbrEmissiveColor,
   type EngineContext, type Mesh, type PbrMaterialProps,
 } from '@babylonjs/lite';
-import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from '../../src/domain/fab/fab-layout';
-import { createLiteEquipment, type LiteEquipment } from '../../src/rendering/lite/geometry/tool-families';
-import { createLiteToolStates } from '../../src/rendering/lite/tool-states';
+import { FAB_LAYOUT, FAB_TOOL_STATE_META, FAB_TOOL_STATES, type FabToolState } from '@/domain/fab-layout';
+import { createLiteEquipment, type LiteEquipment } from '@/rendering/lite-geometry-tool-families';
+import { createLiteToolStates } from '@/rendering/lite-tool-states';
 
 const STATE_COLORS: Record<FabToolState, readonly [number, number, number]> = {
   running: [16 / 255, 185 / 255, 129 / 255],

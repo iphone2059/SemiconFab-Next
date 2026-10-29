@@ -1,24 +1,24 @@
 // @vitest-environment jsdom
-import { installNativeDialogPolyfill } from '../support/native-dialog';
+import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 installNativeDialogPolyfill();
-import { CatalogPage } from '../../src/features/catalog/catalog-page';
-import { TwinPage } from '../../src/features/twin/twin-page';
-import { resetCatalogStore } from '../../src/features/catalog/state/catalogStore';
-import { useLocaleStore } from '../../src/state/localeStore';
-import { resetTwinUiStore, useTwinUiStore } from '../../src/features/twin/state/twinUiStore';
-import { resetTwinPageStore } from '../../src/features/twin/state/twinPageStore';
-import { resetRuntimeStore } from '../../src/state/runtimeStore';
-import { catalogQueryOptions } from '../../src/api/queries/catalog.queries';
-import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import type { RouterSearch } from '../../src/app/router/search';
+import { CatalogPage } from '@/catalog/catalog-page';
+import { TwinPage } from '@/twin/twin-page';
+import { resetCatalogStore } from '@/catalog/catalog.atom';
+import { useLocaleStore } from '@/state/locale.atom';
+import { resetTwinUiStore, useTwinUiStore } from '@/twin/twin-ui.atom';
+import { resetTwinPageStore } from '@/twin/twin-page.atom';
+import { resetRuntimeStore } from '@/state/runtime-store';
+import { catalogQueryOptions } from '@/api/catalog.resource';
+import { sitesQueryOptions } from '@/api/sites.resource';
+import type { RouterSearch } from '@/routes/route-search';
 
 // Only replace the hardware boundary; pages, stores and effects remain real.
 vi.mock('../../src/rendering/lite-backend', async () => {
-  const { createScenePortStub } = await import('../support/scene-port-stub');
+  const { createScenePortStub } = await import('../support/scene-port-stub.ts');
   return { createLiteBackend: () => createScenePortStub() };
 });
 

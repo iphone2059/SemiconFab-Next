@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, expect, it } from 'vitest';
-import { staticStructure } from '../../src/generated/static-structure-packed';
+import { staticStructure } from '@/generated/static-structure-packed.generated';
 
 interface CommittedGeometry {
   positions: number[];
@@ -71,8 +71,8 @@ it('decodes every light and keeps the frozen structure counts', () => {
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const generatedDirectory = join(repoRoot, 'web_app/src/generated');
-const packedPath = join(generatedDirectory, 'static-structure-packed.ts');
-const contractPath = join(repoRoot, 'web_app/src/rendering/contracts/static-structure-data.ts');
+const packedPath = join(generatedDirectory, 'static-structure-packed.generated.ts');
+const contractPath = join(repoRoot, 'web_app/src/rendering/static-structure-data.contract.ts');
 const registryPath = join(repoRoot, 'tools/generated-artifacts.json');
 const checkerPath = join(repoRoot, 'tools/check_generated_artifacts.mjs');
 const temporaryDirectory = mkdtempSync(join(tmpdir(), 'semiconfab-generated-artifacts-'));
@@ -137,7 +137,7 @@ it('reports the committed generated tree as up to date and fails a stale registr
 
 it('fails the registry checker when a committed generated artifact is not registered', () => {
   const incomplete = cloneRegistry(readRegistry());
-  incomplete.artifacts = incomplete.artifacts.filter((artifact) => !artifact.path.endsWith('static-structure-packed.ts'));
+  incomplete.artifacts = incomplete.artifacts.filter((artifact) => !artifact.path.endsWith('static-structure-packed.generated.ts'));
   const incompleteRegistryPath = temporaryPath('incomplete-registry.json');
   writeFileSync(incompleteRegistryPath, JSON.stringify(incomplete, null, 2) + '\n');
   const result = runNode([checkerPath, '--check', '--registry', incompleteRegistryPath]);
@@ -171,7 +171,7 @@ it('detects a hand-edited (stale) packed artifact with --check', () => {
 it('binds the generated data to the hand-written contract instead of a rendering consumer', () => {
   const packed = readFileSync(packedPath, 'utf8');
   expect(packed).toContain('import type {');
-  expect(packed).toContain("from '../rendering/contracts/static-structure-data';");
+  expect(packed).toContain("from '../rendering/static-structure-data.contract';");
   expect(packed).not.toContain('rendering/lite/geometry/static-structure');
   const contract = readFileSync(contractPath, 'utf8');
   for (const name of ['PackedGeometry', 'PackedLightDefinition', 'PackedSourceEntity', 'PackedStaticStructure', 'StaticSurfaceDefinition']) {

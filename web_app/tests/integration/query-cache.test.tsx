@@ -3,13 +3,13 @@ import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-quer
 import type { ReactNode } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import { equipmentStatusQueryOptions, equipmentStatusQueryKey } from '../../src/api/queries/equipment.queries';
-import { acceptEquipmentStatusSnapshot } from '../../src/api/cache/equipment-status-bridge';
-import { runsQueryOptions } from '../../src/api/queries/runs.queries';
-import { createRun, invalidateRuns } from '../../src/api/mutations/runs.mutations';
-import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
-import type { EquipmentStatusSnapshot } from '../../src/realtime/equipment-status/protocol';
+import { sitesQueryOptions } from '@/api/sites.resource';
+import { equipmentStatusQueryOptions, equipmentStatusQueryKey } from '@/api/equipment.resource';
+import { acceptEquipmentStatusSnapshot } from '@/api/equipment-status-bridge';
+import { runsQueryOptions } from '@/api/runs.resource';
+import { createRun, invalidateRuns } from '@/api/runs.mutation';
+import { FAB_LAYOUT } from '@/domain/fab-layout';
+import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
 
 /**
  * RQ-02/RQ-03/RQ-04 on the real TanStack Query modules (no RTK Query involved).

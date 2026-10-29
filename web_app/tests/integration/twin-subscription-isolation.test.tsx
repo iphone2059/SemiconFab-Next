@@ -1,29 +1,29 @@
 // @vitest-environment jsdom
-import { installNativeDialogPolyfill } from '../support/native-dialog';
+import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 installNativeDialogPolyfill();
-import { TwinPage } from '../../src/features/twin/twin-page';
-import { AmhsOhtReadout, AmhsResearchBadge } from '../../src/features/twin/twin-amhs-hud';
-import { TwinWaferHud } from '../../src/features/twin/twin-wafer-hud';
-import { TwinYmsPanel } from '../../src/features/twin/twin-yms';
-import { FAB_LAYOUT } from '../../src/domain/fab/fab-layout';
-import { createMesJob } from '../../src/domain/fab/process-control';
-import { TwinLocaleProvider } from '../../src/features/twin/twin-i18n';
-import { sitesQueryOptions } from '../../src/api/queries/sites.queries';
-import { resetTwinUiStore, twinUiActions } from '../../src/features/twin/state/twinUiStore';
-import { resetTwinPageStore, twinPageActions } from '../../src/features/twin/state/twinPageStore';
-import { resetTwinDemoStore, twinDemoActions } from '../../src/features/twin/state/twinDemoStore';
-import { resetRuntimeStore } from '../../src/state/runtimeStore';
-import { useLocaleStore } from '../../src/state/localeStore';
-import type { AmhsStats } from '../../src/application/ports/scene';
+import { TwinPage } from '@/twin/twin-page';
+import { AmhsOhtReadout, AmhsResearchBadge } from '@/twin/twin-amhs-hud';
+import { TwinWaferHud } from '@/twin/twin-wafer-hud';
+import { TwinYmsPanel } from '@/twin/twin-yms';
+import { FAB_LAYOUT } from '@/domain/fab-layout';
+import { createMesJob } from '@/domain/fab-process-control';
+import { TwinLocaleProvider } from '@/twin/twin-i18n';
+import { sitesQueryOptions } from '@/api/sites.resource';
+import { resetTwinUiStore, twinUiActions } from '@/twin/twin-ui.atom';
+import { resetTwinPageStore, twinPageActions } from '@/twin/twin-page.atom';
+import { resetTwinDemoStore, twinDemoActions } from '@/twin/twin-demo.atom';
+import { resetRuntimeStore } from '@/state/runtime-store';
+import { useLocaleStore } from '@/state/locale.atom';
+import type { AmhsStats } from '@/contracts/scene.port';
 
 // The hardware boundary stays out of these subscription tests: a render counter
 // stands in for FabViewport so "did TwinContent rerender?" becomes measurable.
 const viewport = vi.hoisted(() => ({ renders: 0 }));
-vi.mock('../../src/features/twin/fab-viewer', async () => {
+vi.mock('../../src/twin/twin-viewer', async () => {
   const React = await import('react');
   return {
     FabViewport: React.forwardRef(function MockFabViewport(_props: unknown, _ref: unknown) {

@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import type { PickedTool, SceneLifecycleEvent, SceneMountOptions, ScenePort } from '../../src/application/ports/scene';
+import type { PickedTool, SceneLifecycleEvent, SceneMountOptions, ScenePort } from '@/contracts/scene.port';
 
 /**
  * Product ScenePort lifecycle tests (R-04).
@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('../../src/rendering/lite/runtime', () => ({
+vi.mock('../../src/rendering/lite-runtime', () => ({
   createLiteRuntime: vi.fn((_canvas: unknown, options: any) => {
     const scene = { shadowGenerators: [], lights: [] };
     let resolveReady!: (value: unknown) => void;
@@ -60,7 +60,7 @@ vi.mock('../../src/rendering/lite/runtime', () => ({
   }),
 }));
 
-vi.mock('../../src/rendering/lite/world', () => ({
+vi.mock('../../src/rendering/lite-world', () => ({
   createLiteWorld: vi.fn(async (_scene: unknown, _engine: unknown, _canvas: unknown, callbacks: any) => {
     mocks.worldCallbacks.push(callbacks);
     const world = await mocks.worldFactory!();
@@ -69,7 +69,7 @@ vi.mock('../../src/rendering/lite/world', () => ({
   }),
 }));
 
-import { createLiteBackend } from '../../src/rendering/lite-backend';
+import { createLiteBackend } from '@/rendering/lite-backend';
 
 let canvas: HTMLCanvasElement;
 const flush = async (steps = 80) => { for (let index = 0; index < steps; index++) await Promise.resolve(); };

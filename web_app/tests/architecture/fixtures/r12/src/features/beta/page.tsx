@@ -1,4 +1,4 @@
-import { SharedWidget } from '../../components/SharedWidget';
+import { SharedWidget } from '../../components/SharedWidget.tsx';
 
 export function BetaPage() {
   return <div><SharedWidget /></div>;
