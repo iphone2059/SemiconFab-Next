@@ -10,7 +10,7 @@
 
 | Task | 状态 | 提交 / 证据 |
 |---|---|---|
-| Task 0 基线与文件归属冻结 | 完成（性能/浏览器基线待补） | `b946996`；`docs/architecture/evidence/effect4-task0-*.md` |
+| Task 0 基线与文件归属冻结 | 完成（含 4fc8a94 真实性能基线；浏览器功能基线仍待 Task 6 e2e） | `b946996`；`effect4-task0-baseline.md` / `effect4-task0-performance-baseline.md` / `evidence/perf/` |
 | Task 1 单层目录 + code-based routing | 完成，全量门禁通过 | `0d6ff12`；`docs/architecture/evidence/effect4-task1-flat-layout.md` |
 | Task 2 Effect AppRuntime / 单一 AtomRegistry | 完成 | Task 2 evidence；全量 verify.ps1 PASS（109 文件/675 测试） |
 | Task 3 Effect Schema + HTTP transport | 下一任务 | 旧分支 `refactor/effect-consolidation-20261029` @ be1da31 有可复用实现，需移植到扁平路径 |

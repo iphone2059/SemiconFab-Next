@@ -29,6 +29,9 @@ const entities = arg('entities', '500,2000,5000');
 const chrome = arg('chrome', 'C:/Program Files/Google/Chrome/Application/chrome.exe');
 const out = arg('out', path.join(root, '.local/telemetry-stress.json'));
 const target = new URL(baseUrl);
+// scripts/perf-telemetry.ps1 documents the app root as -Url; the stress page is
+// a dedicated fixture under tests/, so append it when only the root is supplied.
+if (target.pathname === '/' || target.pathname === '') target.pathname = '/tests/telemetry-stress.html';
 target.searchParams.set('seconds', String(seconds));
 target.searchParams.set('rate', String(rate));
 target.searchParams.set('entities', entities);
@@ -58,7 +61,7 @@ try {
   }
   if (!version) throw new Error('Chrome DevTools endpoint did not start');
   const pages = await (await fetch('http://127.0.0.1:' + port + '/json/list')).json();
-  const page = pages.find((entry) => entry.type === 'page' && entry.url.startsWith('http'));
+  const page = pages.find((entry) => entry.type === 'page');
   if (!page) throw new Error('Chrome page target not found');
   ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
@@ -82,6 +85,10 @@ try {
     return result.result?.result?.value;
   };
   await send('Runtime.enable');
+  // Navigate after attaching: a freshly launched headless Chrome may still be on
+  // about:blank when /json/list is first polled, so relying on the launch URL is racy.
+  await send('Page.enable');
+  await send('Page.navigate', { url });
   const deadline = Date.now() + 120000;
   let report;
   while (Date.now() < deadline) {

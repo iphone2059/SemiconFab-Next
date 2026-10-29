@@ -115,7 +115,7 @@
 
 ## 7. 尚未完成的 Task 0 项
 
-- 真实性能基线（dev + 60Hz profile）运行与原始 JSON 归档（需要启动 dev server + 真实 Chrome/WebGPU）。
+- ~~真实性能基线（dev + 60Hz profile）运行与原始 JSON 归档~~：已完成，见 `effect4-task0-performance-baseline.md` 与 `evidence/perf/`（基线 4fc8a94 + Task 2 后对照）。
 - 路由/资源/命令行为的可执行基线测试清单与现有 142 个测试文件的 Task 1 更新映射（在 Task 1 中随目录迁移完成）。
 - 基线连接数与 React render 次数测量（当前工具不覆盖，按新验收文档 §8.2 在实现测量工具后补齐；记录为已知缺口）。
 - 基线浏览器功能场景（A3）目前无 harness；按新验收文档 §7 在实现 e2e 脚本后执行，Task 0 记录缺口。

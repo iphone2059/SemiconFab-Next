@@ -1,0 +1,58 @@
+{
+  "measuredAt": "2026-10-29T12:46:45.645Z",
+  "browser": "Chrome/155.0.8059.86",
+  "url": "http://127.0.0.1:5180/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?perf=1",
+  "profile": "60hz",
+  "thresholds": {
+    "profile": "60hz",
+    "p95Ms": 16.7,
+    "p99Ms": 33,
+    "heapGrowthMb": 32,
+    "readyMs": null,
+    "firstFrameMs": null,
+    "maxFrames": null
+  },
+  "frames": 180,
+  "averageFrameMs": 8.56,
+  "p95FrameMs": 8.5,
+  "p99FrameMs": 25,
+  "averageFps": 116.8,
+  "minFrameMs": 8,
+  "maxFrameMs": 25.1,
+  "secure": true,
+  "gpu": true,
+  "adapter": true,
+  "adapterInfo": {},
+  "canvas": true,
+  "canvasSize": {
+    "width": 754,
+    "height": 424
+  },
+  "rendererFrames": 211,
+  "drawCalls": 905,
+  "workerTargets": 1,
+  "readyMs": 3185.2,
+  "firstFrameMs": 3190.7,
+  "stageTimings": null,
+  "heapSamples": 17,
+  "heapGrowthMb": 6.79,
+  "jsHeapUsedMb": 64.21,
+  "jsHeapDeltaMb": -1.56,
+  "taskDurationMs": 514.61,
+  "scriptDurationMs": 422.15,
+  "gpuErrors": [],
+  "failures": [],
+  "bodyText": "ion Bay\nRunning\nEbara\nEbara F-REX300\nF-REX300\n2.7×4.1m\nIon Implantation Bay\nRunning\nSRII\nSRII SRII-4.5M\nSRII-4.5M\n8.9×4.2m\nAdvanced 2.5D/3D Packaging Bay\nRunning\nBESI\nBESI Datacon 2200 EVO\nDatacon 2200 EVO\n1.6×1.2m\nAdvanced 2.5D/3D Packaging Bay\nRunning\nACMR\nACMR Ultra ECP 3d\nUltra ECP 3d\n2.2×3.6m\nCatalog Tools: 121 (4 L1 · 117 Drafts)\nOpen Arch\n·\nFull Database\nGrid: 6m × 6m · Subfab: -7.0m\nWebGPU\nAMHS OHT 01/24\n121 RUN · 0 IDLE · 0 DOWN · 0 MAINT\nFirst visit ·1/3\n×\nOne single-FAB cleanroom\n\n121 tools, dual-loop OHT, ceiling FFUs and Subfab share one scene.\n\nDon't show again\nSkip\nPrevious\nNext",
+  "readiness": {
+    "ready": "complete",
+    "pageNow": 3185.2000000001863,
+    "text": "0 EVO\n1.6×1.2m\nAdvanced 2.5D/3D Packaging Bay\nRunning\nACMR\nACMR Ultra ECP 3d\nUltra ECP 3d\n2.2×3.6m\nCatalog Tools: 121 (4 L1 · 117 Drafts)\nOpen Arch\n·\nFull Database\nGrid: 6m × 6m · Subfab: -7.0m\nWebGPU\nAMHS OHT 00/24\n121 RUN · 0 IDLE · 0 DOWN · 0 MAINT\nFirst visit ·1/3\n×\nOne single-FAB cleanroom\n\n121 tools, dual-loop OHT, ceiling FFUs and Subfab share one scene.\n\nDon't show again\nSkip\nPrevious\nNext",
+    "canvas": true,
+    "renderer": {
+      "status": "ready",
+      "frames": 37,
+      "drawCalls": 905
+    },
+    "gpuErrors": []
+  }
+}
