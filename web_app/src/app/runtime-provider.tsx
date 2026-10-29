@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAtomValue } from '@effect/atom-react';
 import type { CommandWorkflowProjection } from '@/contracts/command-workflow.contract';
 import { commandProjectionAtom, commandProjectionKey } from '@/runtime/command-projection.atom';
@@ -13,7 +13,7 @@ interface RuntimeContextValue {
 const FabRuntimeContext = createContext<RuntimeContextValue | null>(null);
 
 export function RuntimeProvider({ registry, version = 0, children }: { registry: FabRuntimeRegistry; version?: number; children: ReactNode }) {
-  const value = useMemo(() => ({ registry, version }), [registry, version]);
+  const value = (({ registry, version }));
   return <FabRuntimeContext.Provider value={value}>{children}</FabRuntimeContext.Provider>;
 }
 

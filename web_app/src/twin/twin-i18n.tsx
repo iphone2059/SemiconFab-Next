@@ -1,6 +1,6 @@
 import { useAtomValue } from '@effect/atom-react';
 import { RegistryContext } from '@effect/atom-react';
-import { createContext, useContext, useEffect, useMemo, type PropsWithChildren } from 'react';
+import { createContext, useContext, useEffect, type PropsWithChildren } from 'react';
 import { localeAtom, localeActions } from '@/state/locale.atom';
 import { TWIN_EN } from '@/twin/twin-translations';
 import { GENERATED_TWIN_EN } from '@/generated/twin-translations.generated';
@@ -39,6 +39,6 @@ export function TwinLocaleProvider({ children }: PropsWithChildren) {
     // The Twin page writes lang through TanStack Router search; this provider
     // only persists the preference and mirrors the document/attributes.
   }, [language, registry]);
-  const value = useMemo(() => ({ language, t: twinTranslator(language), toggleLanguage: () => localeActions.languageToggled(registry) }), [language, registry]);
+  const value = (({ language, t: twinTranslator(language), toggleLanguage: () => localeActions.languageToggled(registry) }));
   return <TwinLocale.Provider value={value}>{children}</TwinLocale.Provider>;
 }

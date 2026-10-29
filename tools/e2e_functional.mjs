@@ -323,6 +323,7 @@ try {
   // S2: Equipment catalog filters/search/view switch.
   await runScenario('S2', 'Equipment catalog filter/search/view', '/equipment', async ({ step }) => {
     await navigate('/equipment?lang=en', 'document.querySelector(".catalog-list, .catalog-empty")');
+    await waitFor('document.querySelectorAll(".catalog-list tbody tr").length > 0', 20000, 'initial catalog rows');
     const initialRows = await count('.catalog-list tbody tr');
     await setValue('input[type="search"]', 'Canon');
     await waitFor('document.querySelectorAll(".catalog-list tbody tr").length < ' + Math.max(initialRows, 1), 10000, 'filtered rows');

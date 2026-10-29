@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+
 import { createRoute } from '@tanstack/react-router';
 import { CatalogPage } from '@/catalog/catalog-page';
 import type { RouterSearch } from './route-search';
@@ -16,14 +16,14 @@ export const equipmentCompareRoute = createRoute({
 function EquipmentCompareRoute() {
   const search = equipmentCompareRoute.useSearch();
   const navigate = equipmentCompareRoute.useNavigate();
-  const updateSearch = useCallback((patch: Partial<RouterSearch>, replace = true) => {
+  const updateSearch = (patch: Partial<RouterSearch>, replace = true) => {
     void navigate({ search: (prev: RouterSearch) => ({ ...prev, ...patch }), replace });
-  }, [navigate]);
-  const changeView = useCallback((next: 'catalog' | 'compare', patch: Partial<RouterSearch>) => {
+  };
+  const changeView = (next: 'catalog' | 'compare', patch: Partial<RouterSearch>) => {
     void navigate({
       to: next === 'compare' ? '/equipment/compare' : '/equipment',
       search: (prev: RouterSearch) => ({ ...prev, ...patch }),
     });
-  }, [navigate]);
+  };
   return <CatalogPage view="compare" search={search} onSearchChange={updateSearch} onViewChange={changeView} />;
 }

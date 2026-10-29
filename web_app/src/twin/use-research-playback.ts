@@ -82,11 +82,8 @@ export function useResearchPlayback({
     return () => window.clearInterval(timer);
   }, [researchPlaying, research, researchSpeed, registry]);
 
-  const researchSnapshot = useMemo(() => research?.snapshot(researchTime), [research, researchTime]);
-  const replayProjection = useMemo(
-    () => researchSnapshot ? projectReplayStates(researchSnapshot, replayBase) : undefined,
-    [researchSnapshot, replayBase],
-  );
+  const researchSnapshot = (research?.snapshot(researchTime));
+  const replayProjection = (researchSnapshot ? projectReplayStates(researchSnapshot, replayBase) : undefined);
 
   function setResearchPlaying(playing: boolean): void {
     twinUiActions.researchPlay(registry, playing);

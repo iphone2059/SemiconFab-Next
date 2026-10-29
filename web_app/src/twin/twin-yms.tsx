@@ -1,7 +1,7 @@
 import { useAtomValue } from '@effect/atom-react';
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
-import { memo, useMemo } from 'react';
+
 import * as Atom from 'effect/reactivity/Atom';
 import { shallowRecordEqual } from '@/state/atom-equality';
 import type { FabToolState } from '@/domain/fab-layout';
@@ -31,31 +31,21 @@ function useFabYieldProjection(toolStates: readonly FabToolState[]) {
 
   const { yieldInput, yieldScenario } = useAtomValue(yieldPreferencesAtom);
   const { referenceLights, scenarioId, yieldJitter } = useAtomValue(yieldDemoAtom);
-  const yieldStates = useMemo(() => {
-    if (yieldScenario === 'live') return toolStates;
-    const scenario = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
-    return scenario ? scenarioStates(scenario) : toolStates;
-  }, [toolStates, yieldScenario]);
-  const yieldDirectoryStates = useMemo(() => {
-    const scenario = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
-    const states: Record<string, FabToolState> = {};
-    for (const row of ORIGINAL_TWIN_UI.equipment) {
-      const override = scenario?.overrides[row.id];
-      states[row.id] = override
-        ? override.toLowerCase() as FabToolState
-        : yieldScenario === 'live' ? (referenceLights[row.id] ?? 'running') : 'running';
-    }
-    return states;
-  }, [yieldScenario, referenceLights]);
-  const yieldUnresolved = useMemo(() => {
-    const scenario = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
-    return scenario ? resolveScenario(scenario).unresolvedIds : [];
-  }, [yieldScenario]);
-  const fabYield = useMemo(() => computeFabYield(yieldStates, yieldInput, {
+  const yieldScenarioDef = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
+  const yieldStates = yieldScenario === 'live' ? toolStates : (yieldScenarioDef ? scenarioStates(yieldScenarioDef) : toolStates);
+  const yieldDirectoryStates: Record<string, FabToolState> = {};
+  for (const row of ORIGINAL_TWIN_UI.equipment) {
+    const override = yieldScenarioDef?.overrides[row.id];
+    yieldDirectoryStates[row.id] = override
+      ? override.toLowerCase() as FabToolState
+      : yieldScenario === 'live' ? (referenceLights[row.id] ?? 'running') : 'running';
+  }
+  const yieldUnresolved = yieldScenarioDef ? resolveScenario(yieldScenarioDef).unresolvedIds : [];
+  const fabYield = (computeFabYield(yieldStates, yieldInput, {
     directoryStates: yieldDirectoryStates,
     scenarioId: yieldScenario === 'live' ? scenarioId : yieldScenario,
     jitter: yieldJitter,
-  }), [yieldStates, yieldInput, yieldDirectoryStates, yieldScenario, scenarioId, yieldJitter]);
+  }));
   return { fabYield, yieldInput, yieldScenario, yieldUnresolved };
 }
 
@@ -77,11 +67,10 @@ export function TwinYieldPill({ toolStates }: YmsProjectionProps) {
 }
 
 /**
- * Static die grid. Hover/readout state lives one level up, so memoising this
- * keeps the ~460 rects and their event closures from being rebuilt on every
- * cross-die hover; the DOM is byte-for-byte the former inline markup.
+ * Static die grid. Hover/readout state lives one level up; React Compiler
+ * memoizes the component body, so the former React.memo wrapper is unnecessary.
  */
-const WaferDieMap = memo(function WaferDieMap({ dies }: { dies: readonly WaferDie[] }) {
+const WaferDieMap = function WaferDieMap({ dies }: { dies: readonly WaferDie[] }) {
   const registry = useContext(RegistryContext);
   return (
     <>
@@ -90,7 +79,7 @@ const WaferDieMap = memo(function WaferDieMap({ dies }: { dies: readonly WaferDi
       ))}
     </>
   );
-});
+};
 
 /**
  * YMS wafer-map / yield-waterfall dialog. Every store branch this dialog renders
@@ -104,10 +93,10 @@ export function TwinYmsPanel({ toolStates }: YmsProjectionProps) {
   const { t } = useTwinLocale();
   const { tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, stdfCopied } = useAtomValue(waferMapPreferencesAtom);
   const { fabYield, yieldInput, yieldScenario, yieldUnresolved } = useFabYieldProjection(toolStates);
-  const waferDies = useMemo(() => generateWaferMap(waferPattern, waferSeed), [waferPattern, waferSeed]);
-  const waferAnalytics = useMemo(() => waferMetrics(waferDies), [waferDies]);
-  const yieldModels = useMemo(() => theoreticalYieldModels(dieArea, defectD0, clusterAlpha), [dieArea, defectD0, clusterAlpha]);
-  const stdf = useMemo(() => stdfSummary(waferDies, waferPattern), [waferDies, waferPattern]);
+  const waferDies = (generateWaferMap(waferPattern, waferSeed));
+  const waferAnalytics = (waferMetrics(waferDies));
+  const yieldModels = (theoreticalYieldModels(dieArea, defectD0, clusterAlpha));
+  const stdf = (stdfSummary(waferDies, waferPattern));
 
   const selectWaferPattern = (value: DefectPattern) => twinPageActions.ymsRandomize(registry, value);
   const setDieArea = (value: number) => twinPageActions.ymsDieAreaSet(registry, value);

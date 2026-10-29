@@ -1,7 +1,7 @@
 import { useAtomValue } from '@effect/atom-react';
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
-import { useMemo } from 'react';
+
 import { classNames } from '@/components/class-names';
 import { useTwinLocale } from '@/twin/twin-i18n';
 import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
@@ -38,9 +38,10 @@ export function TwinSidebar({selection,states,badgeCount=67,onSelect,onArchitect
   const setCategory=(value:string)=>twinPageActions.sidebarCategorySet(registry, value);
   const setSegment=(value:string)=>twinPageActions.sidebarSegmentSet(registry, value);
   const setStateFilter=(value:string)=>twinPageActions.sidebarStateFilterToggle(registry, value);
-  const equipment=useMemo(()=>filterReferenceEquipment({query,category,state:stateFilter,language,states}),[query,category,stateFilter,language,states]);
-  const oem=useMemo(()=>filterOriginalOem(query,segment),[query,segment]);
-  const counts=useMemo(()=>{const result={running:0,idle:0,down:0,maint:0};for(const row of ORIGINAL_TWIN_UI.equipment)result[states[row.id]??'running']++;return result},[states]);
+  const equipment=(filterReferenceEquipment({query,category,state:stateFilter,language,states}));
+  const oem=(filterOriginalOem(query,segment));
+  const counts: Record<FabToolState, number> = { running: 0, idle: 0, down: 0, maint: 0 };
+  for (const row of ORIGINAL_TWIN_UI.equipment) counts[states[row.id] ?? 'running'] += 1;
   const chooseTab=(value:'fab'|'oem')=>setTab(value);
   return <aside id="left-sidebar" className="fixed top-12 left-2.5 bottom-2.5 glass-panel rounded-xl z-20 flex flex-col shadow-lg border border-slate-200/90 overflow-hidden" style={{width:315,top:48,bottom:10,height:'calc(100vh - 58px)',maxHeight:'calc(100vh - 58px)'}}>
     <div className="p-2 border-b border-slate-200/70 shrink-0 space-y-1.5">

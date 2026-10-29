@@ -1,6 +1,6 @@
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import type { FabDto, SiteDto } from '@/contracts/app-contracts';
 import { sitesResource } from '@/api/sites.resource';
 import { useResource } from '@/api/use-resource';
@@ -139,17 +139,14 @@ export function useTwinRouteState({
     }
   }, [routeModal, registry]);
 
-  const site = useMemo(() => {
-    const sites = sitesView.data;
-    if (!sites) return undefined;
-    if (fabId) return sites.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
-    return sites.find((value) => value.siteId === siteId) ?? sites[0];
-  }, [sitesView.data, siteId, fabId]);
-  const selectedFabId = useMemo(() => fabId ?? site?.fabs[0]?.fabId, [fabId, site]);
-  const fab = useMemo(
-    () => site ? site.fabs.find((value) => value.fabId === selectedFabId) ?? site.fabs[0] : undefined,
-    [site, selectedFabId],
-  );
+  const sitesData = sitesView.data;
+  const site = !sitesData
+    ? undefined
+    : fabId
+      ? sitesData.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId))
+      : sitesData.find((value) => value.siteId === siteId) ?? sitesData[0];
+  const selectedFabId = (fabId ?? site?.fabs[0]?.fabId);
+  const fab = (site ? site.fabs.find((value) => value.fabId === selectedFabId) ?? site.fabs[0] : undefined);
 
   useEffect(() => {
     if (site) document.title = `${site.code} / ${fab?.code ?? 'FAB'} · 3D FAB`;

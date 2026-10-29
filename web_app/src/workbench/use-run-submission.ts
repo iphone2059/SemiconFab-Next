@@ -37,6 +37,7 @@ export function useRunSubmission(site: SiteDto, form: WorkbenchFormState): RunSu
   const registry = useContext(RegistryContext);
   const appRuntime = useAppRuntime();
   const [submitting, setSubmitting] = useState(false);
+  // Owner object: token scope lives for the whole hook lifetime.
   const submissionScope = useMemo(() => new ScopeGate(), []);
   const pending = useRef<PendingSubmission | undefined>(undefined);
   useEffect(() => () => submissionScope.dispose(), [submissionScope, registry]);

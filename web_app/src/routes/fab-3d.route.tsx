@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback } from 'react';
+import { lazy, Suspense } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import { requireFabSites } from '@/routes/route-data';
 import type { RouterSearch } from './route-search';
@@ -33,9 +33,9 @@ function FabSceneRoute() {
   const { fabId } = fab3dRoute.useParams();
   const search = fab3dRoute.useSearch();
   const navigate = fab3dRoute.useNavigate();
-  const updateSearch = useCallback((patch: Partial<RouterSearch>, replace = true) => {
+  const updateSearch = (patch: Partial<RouterSearch>, replace = true) => {
     void navigate({ search: (prev: RouterSearch) => ({ ...prev, ...patch }), replace });
-  }, [navigate]);
+  };
   return (
     <Suspense fallback={<FabSceneLoading />}>
       <TwinPage fabId={fabId} search={search} onSearchChange={updateSearch} />

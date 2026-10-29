@@ -148,3 +148,36 @@ plugins: [react({ compiler: { target: '19', compilationMode: 'infer', reportDiag
 - e2e TaskDuration 单轮波动大，严格结论以 3 轮中位数与区间为准；线程/GC 噪声无法完全消除。
 - 真实 GPU 设备丢失、分钟级长稳内存不在本任务范围（沿用 Task 6 边界）。
 - 本次未删除现有手写 useMemo/useCallback/memo；后续可在单独任务中按测量逐处移除。
+## 11. 手写 memoization 清理（Task 7 后续，2026-10-29）
+
+在 Compiler ON 通过 Oxlint/测试/浏览器门禁后，对 `useMemo/useCallback/React.memo` 做逐项清理：
+
+- 初始统计：**87 处**（68 useMemo、18 useCallback、1 React.memo）。
+- 最终保留：**8 处**；删除 **79 处**，无 suppress。
+- 全程保持 `oxlint src` 0 errors、`tsc --noEmit` PASS、**122 文件 / 726 测试 PASS**。
+
+保留项均为**外部身份/生命周期约束**，不是纯优化缓存：
+
+| 位置 | 保留原因 |
+|---|---|
+| `twin/twin-equipment-status-pipeline.tsx` `scope` | 对象身份参与 layout effect/scope 依赖 |
+| `twin/twin-equipment-status-pipeline.tsx` `batcher` | 100ms 合批器的 timer/取消身份必须跨 render 存活 |
+| `twin/twin-page.tsx` `amhsBatcher` | 同上（AMHS 合批 timer） |
+| `twin/twin-page.tsx` `mergeToolStates` | 帧循环引用缓存，必须跨 render 保留上一帧数组合并结果 |
+| `workbench/use-run-submission.ts` `submissionScope` | ScopeToken/幂等键生命周期 owner |
+| `twin/use-tour-controller.ts` `stop` / `cancelTourIfRunning` | 调度器/RAF 会话身份契约，effect 依赖其稳定 identity |
+| `twin/use-wafer-playback.ts` `syncWaferHud` | 被播放 effect 依赖，identity 变化会无谓重启 RAF effect |
+
+其余纯派生值/对象/处理器全部交给 React Compiler 自动 memoize（含 catalog 派生列表、Twin 投影/HUD 计算、路由 search 回调、context value、useSyncExternalStore 回调等）。
+
+验证（当前工作树）：
+
+- `verify.ps1` **exit 0**：Oxlint 0 errors、122/726 测试、typecheck、build、.NET 180/180；
+- 真实浏览器 e2e **10/10 PASS**（`task7-memo-removal-e2e.json`）；
+- 渲染 smoke：600 帧，p95 **8.5 ms**、p99 **8.6 ms**、drawCalls **905**、failures []；
+- bundle 相对“Compiler ON + 手写 memo”版本：JS raw **−5,723 B**、gzip **−2,194 B**（`task7-memo-removal-bundle.json`）；
+- e2e 全场景 React commit 数 188（清理前 3 轮中位 190），无场景回归。
+
+注意：首次 verify 遇到一次既有后端 `IdempotencyReplayAfterPruneCreatesFreshCommand` 失败，重跑即时通过（记录为后端测试 flake，与本轮前端 memo 清理无关）；最终 verify log 为 `task7-memo-removal-verify.log`。
+
+结论：**可以删除，且已删除 79/87**；剩余 8 处不能按编译器优化删除，必须保留其外部生命周期/identity 语义。

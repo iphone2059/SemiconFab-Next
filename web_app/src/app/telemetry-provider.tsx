@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import type { FabTelemetryRegistry } from '@/realtime/telemetry-registry';
 import type { TelemetryRuntime } from '@/realtime/telemetry-runtime';
 
@@ -10,7 +10,7 @@ interface TelemetryContextValue {
 const TelemetryContext = createContext<TelemetryContextValue | null>(null);
 
 export function TelemetryProvider({ registry, version = 0, children }: { registry: FabTelemetryRegistry; version?: number; children: ReactNode }) {
-  const value = useMemo(() => ({ registry, version }), [registry, version]);
+  const value = (({ registry, version }));
   return <TelemetryContext.Provider value={value}>{children}</TelemetryContext.Provider>;
 }
 
@@ -25,8 +25,8 @@ export function TelemetryProvider({ registry, version = 0, children }: { registr
  */
 export function useFabTelemetry(fabId: string | undefined): TelemetryRuntime | undefined {
   const registry = useContext(TelemetryContext)?.registry;
-  const subscribe = useCallback((listener: () => void) => registry?.subscribe(listener) ?? (() => {}), [registry]);
-  const getSnapshot = useCallback(() => fabId ? registry?.get(fabId) : undefined, [fabId, registry]);
+  const subscribe = (listener: () => void) => registry?.subscribe(listener) ?? (() => {});
+  const getSnapshot = () => fabId ? registry?.get(fabId) : undefined;
   const runtime = useSyncExternalStore(subscribe, getSnapshot, () => undefined);
 
   useEffect(() => {

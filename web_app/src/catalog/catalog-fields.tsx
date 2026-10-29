@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import type { CatalogEntryDto } from '@/contracts/app-contracts';
 import { catalogFields, type CatalogField } from '@/catalog/catalog-data';
 import { ExternalLink } from '@/catalog/external-link';
@@ -50,7 +49,7 @@ export function FieldValue({ field }: { field: CatalogField | undefined }) {
 }
 
 export function RecordFields({ entry, language }: { entry: CatalogEntryDto; language: Language }) {
-  const fields = useMemo(() => catalogFields(entry.record), [entry.record]);
+  const fields = (catalogFields(entry.record));
   return (
     <div className="catalog-table-scroll">
       <table className="catalog-field-table">

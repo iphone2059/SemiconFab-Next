@@ -2,7 +2,7 @@ import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import { useAtomValue } from '@effect/atom-react';
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
-import { useMemo, type ChangeEvent } from 'react';
+import type { ChangeEvent } from 'react';
 import type { CatalogEntryDto } from '@/contracts/app-contracts';
 import { localeAtom } from '@/state/locale.atom';
 import { text, type Language } from '@/catalog/catalog-labels';
@@ -19,14 +19,11 @@ export interface CatalogImport {
 export function useCatalogImport(): CatalogImport {
   const registry = useContext(RegistryContext);
   const language = useAtomValue(localeAtom, (state) => state.language);
-  return useMemo(
-    () => ({
+  return (({
       importFile: (event: ChangeEvent<HTMLInputElement>) => {
         void importCatalogFile(registry, event, language);
       },
-    }),
-    [language, registry],
-  );
+    }));
 }
 
 async function importCatalogFile(

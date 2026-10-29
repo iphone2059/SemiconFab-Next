@@ -1,7 +1,7 @@
 import { useAtomValue } from '@effect/atom-react';
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
-import { useDeferredValue, useMemo } from 'react';
+import { useDeferredValue } from 'react';
 import type { CatalogEntryDto } from '@/contracts/app-contracts';
 import { catalogResource } from '@/api/catalog.resource';
 import { useResource } from '@/api/use-resource';
@@ -50,36 +50,25 @@ export function useCatalogData(): CatalogDataSelection {
   } = catalogState;
   // Network entries were validated by the catalog Query schema before caching.
   // Only local uploads require parseCatalogEntries at their import boundary.
-  const entries = useMemo(() => localEntries ?? catalogView.data?.items ?? [], [localEntries, catalogView.data]);
+  const entries = (localEntries ?? catalogView.data?.items ?? []);
   const importId = localEntries ? localImportId : (catalogView.data?.importId ?? '');
   const localPreview = localEntries !== null;
   const error = importError || (catalogView.error !== undefined ? 'Catalog request failed' : '');
   const loading = catalogView.isInitial && !localEntries;
   const detail = entries.find((entry) => entry.recordId === detailId);
   const deferredQuery = useDeferredValue(query);
-  const filtered = useMemo(
-    () => filterCatalog(entries, domain, category, deferredQuery, hideDrafts),
-    [entries, domain, category, deferredQuery, hideDrafts],
-  );
-  const categories = useMemo(
-    () =>
-      [
+  const filtered = (filterCatalog(entries, domain, category, deferredQuery, hideDrafts));
+  const categories = ([
         ...new Set(
           entries
             .filter((entry) => domain === 'ALL' || entry.domain === domain)
             .map((entry) => entry.category),
         ),
-      ].sort(),
-    [entries, domain],
-  );
-  const selectedEntries = useMemo(
-    () =>
-      selected.flatMap((id) => {
+      ].sort());
+  const selectedEntries = (selected.flatMap((id) => {
         const entry = entries.find((item) => item.recordId === id);
         return entry ? [entry] : [];
-      }),
-    [selected, entries],
-  );
+      }));
   const missingIds = selected.filter((id) => !entries.some((entry) => entry.recordId === id));
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);

@@ -29,16 +29,10 @@ export interface TwinProcessProjection {
  * derived from the page slice; no store writes or effects belong here.
  */
 export function useTwinProcessProjection({ selected, toolStates, mesJobs }: TwinProcessProjectionParams): TwinProcessProjection {
-  const selectedTelemetry = useMemo(
-    () => selected ? buildTelemetry(FAB_LAYOUT[selected.index], selected.index) : undefined,
-    [selected],
-  );
-  const selectedSpc = useMemo(
-    () => selectedTelemetry
+  const selectedTelemetry = (selected ? buildTelemetry(FAB_LAYOUT[selected.index], selected.index) : undefined);
+  const selectedSpc = (selectedTelemetry
       ? computeSpc(selectedTelemetry.history, selectedTelemetry.sensors[0], toolStates[selected?.index ?? 0] === 'down')
-      : undefined,
-    [selectedTelemetry, toolStates, selected?.index],
-  );
+      : undefined);
   // No impure fallback during render: the inspector effect materializes a demo MES
   // job once, and this projection reads the Atom-owned value only.
   const selectedMes = selected ? mesJobs[selected.index] : undefined;

@@ -14,8 +14,5 @@ export interface CatalogDownloads {
 export function useCatalogDownloads(): CatalogDownloads {
   const lifecycle = useMemo<DownloadLifecycle>(() => createDownloadLifecycle(), []);
   useEffect(() => () => lifecycle.dispose(), [lifecycle]);
-  return useMemo(
-    () => ({ downloadJson: (value: unknown, filename: string) => { lifecycle.saveJson(value, filename); } }),
-    [lifecycle],
-  );
+  return (({ downloadJson: (value: unknown, filename: string) => { lifecycle.saveJson(value, filename); } }));
 }

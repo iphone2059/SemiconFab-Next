@@ -1,7 +1,7 @@
 import { useAtomValue } from '@effect/atom-react';
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import type { SiteDto } from '@/contracts/app-contracts';
 import { sitesResource } from '@/api/sites.resource';
 import { runResource, runResultsResource, runsResource } from '@/api/runs.resource';
@@ -18,6 +18,9 @@ import { RunForm } from '@/workbench/run-form';
 import { FabOverview } from '@/workbench/fab-overview';
 import { RunHistory } from '@/workbench/run-history';
 import { useRunSubmission } from '@/workbench/use-run-submission';
+
+/** Stable empty fallback so the sites effect does not re-run every render while loading. */
+const NO_SITES: SiteDto[] = [];
 
 /**
  * BigInt accumulation lives outside the component: the experimental Oxc compiler
@@ -40,10 +43,7 @@ function Workbench({ site }: { site: SiteDto }) {
   const appRuntime = useAppRuntime();
   const { runId, form, submitError } = useAtomValue(workbenchAtom);
   const runsView = useResource(appRuntime, runsResource);
-  const scopedRuns = useMemo(
-    () => (runsView.data ?? []).filter((value) => value.siteId === site.siteId),
-    [runsView.data, site.siteId],
-  );
+  const scopedRuns = ((runsView.data ?? []).filter((value) => value.siteId === site.siteId));
   const listError = runsView.error !== undefined ? errorMessage(runsView.error) : '';
   const runView = useResource(appRuntime, runResource(runId ?? '__no-run__'), { enabled: !!runId });
   const runCompleted = !!runView.data && isCompleted(runView.data.status);
@@ -97,7 +97,7 @@ export default function WorkbenchApp() {
   const runtimeCount = runtimeVersion >= 0 ? runtimeRegistry?.size ?? 0 : 0;
   const fabIndex = useAtomValue(workbenchAtom, (state) => state.fabIndex);
   const sitesView = useResource(appRuntime, sitesResource);
-  const sites = useMemo(() => sitesView.data ?? [], [sitesView.data]);
+  const sites = sitesView.data ?? NO_SITES;
   const loading = sitesView.isInitial;
   const error = sitesView.error !== undefined ? errorMessage(sitesView.error) : '';
   useEffect(() => {

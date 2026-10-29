@@ -1,7 +1,7 @@
 import { useAtomValue } from '@effect/atom-react';
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useTwinLocale } from '@/twin/twin-i18n';
 import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
 import { twinDemoAtom } from '@/twin/twin-demo.atom';
@@ -30,7 +30,7 @@ export function OriginalInspector({selection,states,onClose,onManualKey,onSelect
   const oem = selection.kind==='oem' ? ORIGINAL_TWIN_UI.oem.find(row=>row.id===selection.id) : undefined;
   const processEquipment = selection.kind==='reference' ? ORIGINAL_TWIN_UI.equipment.find(row=>row.id===selection.id) : undefined;
   const telemetry = useAtomValue(twinDemoAtom, state=>processEquipment ? state.telemetry[processEquipment.id] : undefined);
-  const spc = useMemo(()=>telemetry?computeSpc(telemetry.history,telemetry.sensors[0],(states[equipment?.id??'']??'running')==='down'):undefined,[telemetry,states,equipment?.id]);
+  const spc = (telemetry?computeSpc(telemetry.history,telemetry.sensors[0],(states[equipment?.id??'']??'running')==='down'):undefined);
   const storedMes=useAtomValue(twinPageAtom, state=>equipment ? state.inspectorMes[equipment.id] : undefined);
   const mes=storedMes;
   useEffect(()=>{if(processEquipment&&!storedMes)twinPageActions.inspectorMesSet(registry, {id:processEquipment.id,job:createProcessMesJob(processEquipment, Date.now())});},[processEquipment,storedMes,registry]);

@@ -69,6 +69,7 @@ export function useWaferPlayback({ scene, waferActive, language, endTour, t }: T
     waferHudRef.current = null;
   }, [registry]);
 
+  // Identity constraint: the playback effects list this callback as a dependency.
   const syncWaferHud = useCallback((): void => {
     const controller = waferTimelineRef.current;
     if (!controller) return;

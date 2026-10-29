@@ -1,0 +1,71 @@
+{
+  "generatedAt": "2026-10-29T15:19:07.702Z",
+  "description": "Production bundle after removing compiler-redundant manual useMemo/useCallback/React.memo (compiler ON).",
+  "bundle": {
+    "generatedAt": "2026-10-29T15:19:07.577Z",
+    "assetsDir": "C:\\Users\\han_qingyu\\SemiconFab-Next\\.local\\worktrees\\effect4-flat\\web_app\\dist\\assets",
+    "files": [
+      {
+        "name": "gpu-B6EZQgwV.js",
+        "rawBytes": 392648,
+        "gzipBytes": 127232
+      },
+      {
+        "name": "index-BgjdYqnF.js",
+        "rawBytes": 230228,
+        "gzipBytes": 76456
+      },
+      {
+        "name": "index-DMLM5948.css",
+        "rawBytes": 121099,
+        "gzipBytes": 20863
+      },
+      {
+        "name": "legacy-LICENSE-CSEy9_Bq.txt",
+        "rawBytes": 4637,
+        "gzipBytes": 1739
+      },
+      {
+        "name": "lite-backend-D7PQpRi4.js",
+        "rawBytes": 1795208,
+        "gzipBytes": 170124
+      },
+      {
+        "name": "react-WWxCYaA2.js",
+        "rawBytes": 440889,
+        "gzipBytes": 140438
+      },
+      {
+        "name": "rolldown-runtime-XKyaHtl9.js",
+        "rawBytes": 726,
+        "gzipBytes": 429
+      },
+      {
+        "name": "telemetry.worker-BXuP41hJ.js",
+        "rawBytes": 2601,
+        "gzipBytes": 961
+      },
+      {
+        "name": "twin-page-CIllYI3G.js",
+        "rawBytes": 449923,
+        "gzipBytes": 125762
+      }
+    ],
+    "totals": {
+      "jsRawBytes": 3312223,
+      "jsGzipBytes": 641402,
+      "cssRawBytes": 121099,
+      "cssGzipBytes": 20863,
+      "allRawBytes": 3437959,
+      "allGzipBytes": 664004
+    }
+  },
+  "previousCompilerOn": {
+    "jsRawBytes": 3317946,
+    "jsGzipBytes": 643596,
+    "cssRawBytes": 121099,
+    "cssGzipBytes": 20863,
+    "allRawBytes": 3443682,
+    "allGzipBytes": 666198
+  }
+}

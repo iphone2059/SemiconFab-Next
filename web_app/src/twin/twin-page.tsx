@@ -105,8 +105,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     explodePercent: ui.explodePercent,
     aeroHeatmap: ui.aeroHeatmap,
   });
-  const layers = useMemo(() => ({ ...layerPreferences, airflow: projected.airflow, heatmap: projected.heatmap, xray: projected.xray !== null }),
-    [layerPreferences, projected.airflow, projected.heatmap, projected.xray]);
+  const layers = (({ ...layerPreferences, airflow: projected.airflow, heatmap: projected.heatmap, xray: projected.xray !== null }));
 
   const toolStates = ui.statusSource === 'research-replay' ? replayProjection?.states ?? replayBase
     : ui.statusSource === 'demo' ? demo.states : liveToolStates;
@@ -123,6 +122,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   useTwinKeyboard({ onEscape: actions.escape, setCamera: actions.setCamera });
   useTwinDemoClock(ui.statusSource, demo.playing);
 
+  // Owner object: its timer/coalescing identity must survive renders.
   const amhsBatcher = useMemo(() => createCoalescedDispatcher<AmhsStats>((stats) => twinPageActions.amhsSet(registry, stats), 100), [registry]);
   useEffect(() => () => amhsBatcher.cancel(), [amhsBatcher, registry]);
 
@@ -130,8 +130,9 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   // Research replay keeps its derived array in a ref until the query state lands.
   const directToolStates = useRef<readonly FabToolState[]>(toolStates);
   useLayoutEffect(() => { directToolStates.current = toolStates; }, [toolStates]);
+  // Owner closure: caches the last merged frame array across the scene loop.
   const mergeToolStates = useMemo(() => createToolStateMerger(), []);
-  const getToolStates = useMemo(() => (): readonly FabToolState[] => {
+  const getToolStates = ((): readonly FabToolState[] => {
     if (registry.get(twinUiAtom).entryMode === 'research') return directToolStates.current;
     if (registry.get(twinUiAtom).statusSource === 'demo') return registry.get(twinDemoAtom).states;
     const base = registry.get(twinPageAtom).liveToolStates;
@@ -139,13 +140,10 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     // state update is involved on the high-frequency path (ARCH-11). The merger
     // keeps the previous array while neither source reference changed.
     return mergeToolStates(base, telemetry?.getToolStates());
-  }, [telemetry, mergeToolStates, registry]);
+  });
 
-  const stateCounts = useMemo(() => {
-    const counts = { running: 0, idle: 0, down: 0, maint: 0 };
-    for (const state of toolStates) counts[state] += 1;
-    return counts;
-  }, [toolStates]);
+  const stateCounts: Record<FabToolState, number> = { running: 0, idle: 0, down: 0, maint: 0 };
+  for (const state of toolStates) stateCounts[state] += 1;
   const pressure = cleanroomPressureField(selected?.x ?? 0, selected?.z ?? 0);
 
   if (error) {

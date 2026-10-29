@@ -1,7 +1,7 @@
 import { useAtomValue } from '@effect/atom-react';
 import { Option } from 'effect';
 import * as AsyncResult from 'effect/reactivity/AsyncResult';
-import { useCallback, useEffect } from 'react';
+import { useEffect } from 'react';
 import type { AppRuntime } from '@/app/app-runtime';
 import { ensureResource, refreshResource, type Resource } from '@/api/resource';
 
@@ -32,12 +32,12 @@ export function useResource<A, E>(
   const enabled = options.enabled ?? true;
   const result = useAtomValue(resource.atom);
 
-  const refresh = useCallback(() => {
+  const refresh = () => {
     if (!enabled) return;
     void refreshResource(runtime, resource).catch(() => {
       /* typed error is kept in the Atom and displayed by the consumer */
     });
-  }, [enabled, resource, runtime]);
+  };
 
   useEffect(() => {
     if (!enabled) return;

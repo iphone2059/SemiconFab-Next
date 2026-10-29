@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import type { CatalogEntryDto } from '@/contracts/app-contracts';
 import { catalogFields } from '@/catalog/catalog-data';
 import { text, type Language } from '@/catalog/catalog-labels';
@@ -14,17 +13,10 @@ export function CatalogComparison({
   language: Language;
   onRemove: (id: string) => void;
 }) {
-  const fields = useMemo(
-    () =>
-      entries.map(
+  const fields = (entries.map(
         (entry) => new Map(catalogFields(entry.record).map((field) => [field.path, field])),
-      ),
-    [entries],
-  );
-  const paths = useMemo(
-    () => [...new Set(fields.flatMap((map) => [...map.keys()]))].sort(),
-    [fields],
-  );
+      ));
+  const paths = ([...new Set(fields.flatMap((map) => [...map.keys()]))].sort());
   if (entries.length === 0)
     return (
       <p className="catalog-empty">

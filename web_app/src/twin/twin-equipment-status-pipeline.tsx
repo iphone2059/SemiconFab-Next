@@ -44,6 +44,7 @@ export function EquipmentStatusPipeline({ siteId, fabId }: EquipmentStatusPipeli
   /** Snapshot high-water at provider/scope activation; older cached values stay in the Atom
    * (resource retention) but must not repopulate the freshly cleared UI projection. */
   const activationBaseline = useRef<{ epoch: number; sequence: number } | undefined>(undefined);
+  // Owner object: the coalescing timer identity must survive renders.
   const batcher = useMemo(() => createCoalescedDispatcher<EquipmentStatusProjectionFrame>((frame) => {
     const states = FAB_LAYOUT.map((_, index): FabToolState => {
       const value = frame.snapshot.tools[index]?.state;
