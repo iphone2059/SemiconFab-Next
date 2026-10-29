@@ -1,6 +1,7 @@
+import { useAtomValue } from '@effect/atom-react';
 import { OriginalIcon } from '@/components/original-icons';
-import { useTwinPageStore } from '@/twin/twin-page.atom';
-import { useTwinUiStore } from '@/twin/twin-ui.atom';
+import { twinPageAtom } from '@/twin/twin-page.atom';
+import { twinUiAtom } from '@/twin/twin-ui.atom';
 import type { WaferProduct } from '@/domain/wafer-route';
 import { useTwinLocale } from '@/twin/twin-i18n';
 
@@ -23,13 +24,14 @@ export interface TwinWaferHudProps {
  * FabViewport. Every id/class/label matches the former inline markup.
  */
 export function TwinWaferHud({ routesReady, error, onClose, onProductChange, onTogglePlay, onSpeedChange, onFollowChange, onReplay }: TwinWaferHudProps) {
+
   const { t } = useTwinLocale();
-  const product = useTwinPageStore((state) => state.wafer.product);
-  const hud = useTwinPageStore((state) => state.wafer.hud);
-  const completed = useTwinPageStore((state) => state.wafer.completed);
-  const follow = useTwinPageStore((state) => state.wafer.follow);
-  const playing = useTwinUiStore((state) => state.wafer.playing);
-  const speed = useTwinUiStore((state) => state.wafer.speed);
+  const product = useAtomValue(twinPageAtom, (state) => state.wafer.product);
+  const hud = useAtomValue(twinPageAtom, (state) => state.wafer.hud);
+  const completed = useAtomValue(twinPageAtom, (state) => state.wafer.completed);
+  const follow = useAtomValue(twinPageAtom, (state) => state.wafer.follow);
+  const playing = useAtomValue(twinUiAtom, (state) => state.wafer.playing);
+  const speed = useAtomValue(twinUiAtom, (state) => state.wafer.speed);
   return (
     <section id="wafer-follow-panel" className="twin-wafer" aria-label="Wafer Follow">
       <div className="twin-wafer-head"><div><OriginalIcon name="wafer" /><strong>{t('跟随晶圆漫游')}</strong><span id="wafer-route-badge">{hud?.badge}</span></div><button type="button" onClick={onClose} aria-label={t("关闭晶圆跟随")}>×</button></div>

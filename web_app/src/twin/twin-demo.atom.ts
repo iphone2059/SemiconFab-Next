@@ -1,4 +1,5 @@
-import { create } from 'zustand';
+import * as Atom from 'effect/reactivity/Atom';
+import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import { createDemoState, demoReducer, type DemoState } from '@/domain/simulation-twin-equipment';
 import { YIELD_SCENARIOS } from '@/domain/fab-yield';
 import type { FabToolState } from '@/domain/fab-layout';
@@ -7,18 +8,16 @@ const baseline = YIELD_SCENARIOS[0];
 // initDigitalTwinEngine initializes once; selecting a Scenario is a later event.
 export const initialTwinDemoState: DemoState = createDemoState(42);
 
-export const useTwinDemoStore = create<DemoState>()(() => initialTwinDemoState);
+export const twinDemoAtom = Atom.make<DemoState>(initialTwinDemoState).pipe(Atom.keepAlive);
 
-const reduce = (event: Parameters<typeof demoReducer>[1]): void => {
-  useTwinDemoStore.setState((state) => demoReducer(state, event));
+const reduce = (registry: AtomRegistry.AtomRegistry, event: Parameters<typeof demoReducer>[1]): void => {
+  registry.update(twinDemoAtom, (state) => demoReducer(state, event));
 };
 
 export const twinDemoActions = {
-  tick: () => reduce({ type: 'tick' }),
-  playingSet: (playing: boolean) => reduce({ type: 'play', playing }),
-  manualStateSet: (payload: { index: number; state: FabToolState }) => reduce({ type: 'manual', ...payload }),
-  manualKeySet: (payload: { key: string; state: FabToolState }) => reduce({ type: 'manual-key', ...payload }),
-  scenarioApplied: (scenario: typeof baseline) => reduce({ type: 'scenario', scenario }),
+  tick: (registry: AtomRegistry.AtomRegistry) => reduce(registry, { type: 'tick' }),
+  playingSet: (registry: AtomRegistry.AtomRegistry, playing: boolean) => reduce(registry, { type: 'play', playing }),
+  manualStateSet: (registry: AtomRegistry.AtomRegistry, payload: { index: number; state: FabToolState }) => reduce(registry, { type: 'manual', ...payload }),
+  manualKeySet: (registry: AtomRegistry.AtomRegistry, payload: { key: string; state: FabToolState }) => reduce(registry, { type: 'manual-key', ...payload }),
+  scenarioApplied: (registry: AtomRegistry.AtomRegistry, scenario: typeof baseline) => reduce(registry, { type: 'scenario', scenario }),
 };
-
-export const resetTwinDemoStore = (): void => useTwinDemoStore.setState(createDemoState(42), true);

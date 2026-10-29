@@ -1,3 +1,4 @@
+import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import { twinUiActions } from '@/twin/twin-ui.atom';
 import { twinPageActions } from '@/twin/twin-page.atom';
 
@@ -13,8 +14,8 @@ import { twinPageActions } from '@/twin/twin-page.atom';
  * Callers still own the scene cleanup (setWaferPoint/setWaferTrail/setView):
  * renderer handles belong to the page controller, never to a store.
  */
-export function closeWaferSession(): void {
-  twinUiActions.waferClose();
-  twinUiActions.waferPlay(false);
-  twinPageActions.waferFrameCleared();
+export function closeWaferSession(registry: AtomRegistry.AtomRegistry): void {
+  twinUiActions.waferClose(registry);
+  twinUiActions.waferPlay(registry, false);
+  twinPageActions.waferFrameCleared(registry);
 }

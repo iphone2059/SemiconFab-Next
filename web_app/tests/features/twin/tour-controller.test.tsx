@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
+import { resetTwinUiState } from '../../../tests/support/reset-ui-atoms';
+import { createAtomTestScope } from '../../../tests/support/atom-scope';
 import { StrictMode, type RefObject } from 'react';
-import { act, cleanup, render, renderHook } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   useTourController,
@@ -9,7 +11,7 @@ import {
   type TwinTourScheduler,
 } from '@/twin/use-tour-controller';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
-import { resetTwinUiStore, useTwinUiStore } from '@/twin/twin-ui.atom';
+import { twinUiAtom } from '@/twin/twin-ui.atom';
 
 /** Deterministic frame queue + clock: no wall-clock/RAF timing leaks into the assertions. */
 class VirtualFrames implements TwinTourScheduler {
@@ -93,14 +95,15 @@ function renderTour(overrides: Partial<TwinTourControllerParams> = {}) {
 }
 
 function tourActive(): boolean {
-  return useTwinUiStore.getState().tour.active;
+  return registry.get(twinUiAtom).tour.active;
 }
 
-beforeEach(() => resetTwinUiStore());
+const { registry, render, renderHook } = createAtomTestScope();
+beforeEach(() => resetTwinUiState(registry));
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  resetTwinUiStore();
+  resetTwinUiState(registry);
 });
 
 it('treats a repeated startTour as stop-then-restart instead of stacking RAF loops', () => {

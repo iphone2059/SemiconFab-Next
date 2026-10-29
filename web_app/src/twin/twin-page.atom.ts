@@ -7,7 +7,8 @@ import { DEFAULT_YIELD_INPUT, type YieldInput } from '@/domain/fab-yield';
 import type { DefectPattern } from '@/domain/wafer-map';
 import type { WaferProduct } from '@/domain/wafer-route';
 import type { WaferHud } from '@/domain/wafer-timeline';
-import { createSliceStore } from '@/state/create-slice-store';
+import * as Atom from 'effect/reactivity/Atom';
+import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 
 export type WaferUiState = {
   product: WaferProduct;
@@ -90,22 +91,22 @@ const oemDialog = (state: TwinPageState, patch: Patch<TwinPageState['oemDialog']
 const sameScope = (left: EquipmentStatusScope | undefined, right: EquipmentStatusScope): boolean =>
   left !== undefined && left.siteId === right.siteId && left.fabId === right.fabId;
 
-const twinPage = createSliceStore(initialTwinPageState, {
-  siteIdSet: (state, siteId?: string) => page(state, { siteId }),
-  siteErrorSet: (state, siteError?: string) => page(state, { siteError }),
+const reducers = {
+  siteIdSet: (state: TwinPageState, siteId?: string) => page(state, { siteId }),
+  siteErrorSet: (state: TwinPageState, siteError?: string) => page(state, { siteError }),
   /**
    * A01: in-place scope handover in one atomic update. Clears every FAB-scoped
    * projection so the next FAB never renders the previous FAB's snapshot, feed or
    * MES demo state before its own first accepted frame.
    */
-  liveScopeActivated: (state, liveStatusScope: EquipmentStatusScope) => page(state, {
+  liveScopeActivated: (state: TwinPageState, liveStatusScope: EquipmentStatusScope) => page(state, {
     liveStatusScope,
     liveToolStates: [...FAB_TOOL_STATES],
     statusFeed: undefined,
     mesJobs: {},
     inspectorMes: {},
   }),
-  liveSnapshotReceived: (state, payload: { scope: EquipmentStatusScope; states: FabToolState[]; updatedAt: string }) => {
+  liveSnapshotReceived: (state: TwinPageState, payload: { scope: EquipmentStatusScope; states: FabToolState[]; updatedAt: string }) => {
     // Scope token guard: a coalesced batch that raced the switch can never apply.
     if (!sameScope(state.liveStatusScope, payload.scope)) return state;
     return page(state, {
@@ -113,54 +114,166 @@ const twinPage = createSliceStore(initialTwinPageState, {
       statusFeed: { updatedAt: payload.updatedAt, stale: false },
     });
   },
-  replayBaseSet: (state, replayBase: readonly FabToolState[]) => page(state, { replayBase: [...replayBase] }),
-  statusFeedStale: (state, payload?: { scope?: EquipmentStatusScope }) => {
+  replayBaseSet: (state: TwinPageState, replayBase: readonly FabToolState[]) => page(state, { replayBase: [...replayBase] }),
+  statusFeedStale: (state: TwinPageState, payload?: { scope?: EquipmentStatusScope }) => {
     const scope = payload?.scope;
     if (scope && !sameScope(state.liveStatusScope, scope)) return state;
     return state.statusFeed
       ? page(state, { statusFeed: { ...state.statusFeed, stale: true } })
       : state;
   },
-  selectedSet: (state, selected?: PickedTool) => page(state, { selected }),
-  selectionSet: (state, selection?: TwinSelection) => page(state, { selection }),
-  mesJobSet: (state, payload: { index: number; job: MesJob }) => page(state, { mesJobs: { ...state.mesJobs, [payload.index]: payload.job } }),
-  layerToggled: (state, layer: SceneLayer) => page(state, { layerPreferences: { ...state.layerPreferences, [layer]: !state.layerPreferences[layer] } }),
-  amhsSet: (state, amhs?: AmhsStats) => page(state, { amhs }),
-  infoDialogSet: (state, infoDialog: 'architecture' | 'database' | null) => page(state, { infoDialog }),
-  showResearchUtilToggled: (state) => page(state, { showResearchUtil: !state.showResearchUtil }),
-  onboardingDontShowSet: (state, onboardingDontShow: boolean) => page(state, { onboardingDontShow }),
-  waferFrameReceived: (state, frame: { product: WaferProduct; index: number; hud: WaferHud; completed: boolean }) => wafer(state, frame),
+  selectedSet: (state: TwinPageState, selected?: PickedTool) => page(state, { selected }),
+  selectionSet: (state: TwinPageState, selection?: TwinSelection) => page(state, { selection }),
+  mesJobSet: (state: TwinPageState, payload: { index: number; job: MesJob }) => page(state, { mesJobs: { ...state.mesJobs, [payload.index]: payload.job } }),
+  layerToggled: (state: TwinPageState, layer: SceneLayer) => page(state, { layerPreferences: { ...state.layerPreferences, [layer]: !state.layerPreferences[layer] } }),
+  amhsSet: (state: TwinPageState, amhs?: AmhsStats) => page(state, { amhs }),
+  infoDialogSet: (state: TwinPageState, infoDialog: 'architecture' | 'database' | null) => page(state, { infoDialog }),
+  showResearchUtilToggled: (state: TwinPageState) => page(state, { showResearchUtil: !state.showResearchUtil }),
+  onboardingDontShowSet: (state: TwinPageState, onboardingDontShow: boolean) => page(state, { onboardingDontShow }),
+  waferFrameReceived: (state: TwinPageState, frame: { product: WaferProduct; index: number; hud: WaferHud; completed: boolean }) => wafer(state, frame),
   /**
    * Closing a wafer session drops the projected frame; the Twin UI store owns
    * close/playback and never mutates this store directly (see
    * features/twin/wafer-session.ts for the coordinated use case).
    */
-  waferFrameCleared: (state) => wafer(state, { hud: undefined, completed: false }),
-  waferFollowSet: (state, follow: boolean) => wafer(state, { follow }),
-  ymsOpenSet: (state, open: boolean) => yms(state, { open }),
-  ymsTabSet: (state, tab: 'map' | 'yield') => yms(state, { tab }),
-  ymsRandomize: (state, pattern: DefectPattern) => yms(state, { pattern, seed: state.yms.seed + 1 }),
-  ymsHoverDieSet: (state, hoverDie?: YmsUiState['hoverDie']) => yms(state, { hoverDie }),
-  ymsDieAreaSet: (state, dieArea: number) => yms(state, { dieArea }),
-  ymsDefectD0Set: (state, defectD0: number) => yms(state, { defectD0 }),
-  ymsClusterAlphaSet: (state, clusterAlpha: number) => yms(state, { clusterAlpha }),
-  ymsYieldInputSet: (state, yieldInput: YieldInput) => yms(state, { yieldInput }),
-  ymsYieldScenarioSet: (state, yieldScenario: string) => yms(state, { yieldScenario }),
-  ymsStdfCopiedSet: (state, stdfCopied: boolean) => yms(state, { stdfCopied }),
-  sidebarTabSet: (state, tab: 'fab' | 'oem') => sidebar(state, { tab, query: '', segment: 'ALL', switched: true }),
-  sidebarQuerySet: (state, query: string) => sidebar(state, { query }),
-  sidebarCategorySet: (state, category: string) => sidebar(state, { category }),
-  sidebarSegmentSet: (state, segment: string) => sidebar(state, { segment }),
-  sidebarStateFilterToggle: (state, stateFilter: string) => sidebar(state, {
+  waferFrameCleared: (state: TwinPageState) => wafer(state, { hud: undefined, completed: false }),
+  waferFollowSet: (state: TwinPageState, follow: boolean) => wafer(state, { follow }),
+  ymsOpenSet: (state: TwinPageState, open: boolean) => yms(state, { open }),
+  ymsTabSet: (state: TwinPageState, tab: 'map' | 'yield') => yms(state, { tab }),
+  ymsRandomize: (state: TwinPageState, pattern: DefectPattern) => yms(state, { pattern, seed: state.yms.seed + 1 }),
+  ymsHoverDieSet: (state: TwinPageState, hoverDie?: YmsUiState['hoverDie']) => yms(state, { hoverDie }),
+  ymsDieAreaSet: (state: TwinPageState, dieArea: number) => yms(state, { dieArea }),
+  ymsDefectD0Set: (state: TwinPageState, defectD0: number) => yms(state, { defectD0 }),
+  ymsClusterAlphaSet: (state: TwinPageState, clusterAlpha: number) => yms(state, { clusterAlpha }),
+  ymsYieldInputSet: (state: TwinPageState, yieldInput: YieldInput) => yms(state, { yieldInput }),
+  ymsYieldScenarioSet: (state: TwinPageState, yieldScenario: string) => yms(state, { yieldScenario }),
+  ymsStdfCopiedSet: (state: TwinPageState, stdfCopied: boolean) => yms(state, { stdfCopied }),
+  sidebarTabSet: (state: TwinPageState, tab: 'fab' | 'oem') => sidebar(state, { tab, query: '', segment: 'ALL', switched: true }),
+  sidebarQuerySet: (state: TwinPageState, query: string) => sidebar(state, { query }),
+  sidebarCategorySet: (state: TwinPageState, category: string) => sidebar(state, { category }),
+  sidebarSegmentSet: (state: TwinPageState, segment: string) => sidebar(state, { segment }),
+  sidebarStateFilterToggle: (state: TwinPageState, stateFilter: string) => sidebar(state, {
     stateFilter: state.sidebar.stateFilter === stateFilter ? 'ALL' : stateFilter,
   }),
-  inspectorMesSet: (state, payload: { id: string; job: MesJob }) => page(state, { inspectorMes: { ...state.inspectorMes, [payload.id]: payload.job } }),
-  oemDialogQuerySet: (state, query: string) => oemDialog(state, { query }),
-  oemDialogSegmentSet: (state, segment: string) => oemDialog(state, { segment }),
-  oemDialogVendorSet: (state, vendor: string) => oemDialog(state, { vendor }),
-  archQuerySet: (state, query: string) => page(state, { archQuery: query }),
-});
+  inspectorMesSet: (state: TwinPageState, payload: { id: string; job: MesJob }) => page(state, { inspectorMes: { ...state.inspectorMes, [payload.id]: payload.job } }),
+  oemDialogQuerySet: (state: TwinPageState, query: string) => oemDialog(state, { query }),
+  oemDialogSegmentSet: (state: TwinPageState, segment: string) => oemDialog(state, { segment }),
+  oemDialogVendorSet: (state: TwinPageState, vendor: string) => oemDialog(state, { vendor }),
+  archQuerySet: (state: TwinPageState, query: string) => page(state, { archQuery: query }),
+};
 
-export const useTwinPageStore = twinPage.useStore;
-export const twinPageActions = twinPage.actions;
-export const resetTwinPageStore = twinPage.reset;
+export const twinPageAtom = Atom.make<TwinPageState>(initialTwinPageState).pipe(Atom.keepAlive);
+
+export const twinPageActions = {
+  siteIdSet: (registry: AtomRegistry.AtomRegistry, siteId?: string): void => {
+    registry.update(twinPageAtom, state => reducers.siteIdSet(state, siteId));
+  },
+  siteErrorSet: (registry: AtomRegistry.AtomRegistry, siteError?: string): void => {
+    registry.update(twinPageAtom, state => reducers.siteErrorSet(state, siteError));
+  },
+  liveScopeActivated: (registry: AtomRegistry.AtomRegistry, liveStatusScope: EquipmentStatusScope): void => {
+    registry.update(twinPageAtom, state => reducers.liveScopeActivated(state, liveStatusScope));
+  },
+  liveSnapshotReceived: (registry: AtomRegistry.AtomRegistry, payload: { scope: EquipmentStatusScope; states: FabToolState[]; updatedAt: string }): void => {
+    registry.update(twinPageAtom, state => reducers.liveSnapshotReceived(state, payload));
+  },
+  replayBaseSet: (registry: AtomRegistry.AtomRegistry, replayBase: readonly FabToolState[]): void => {
+    registry.update(twinPageAtom, state => reducers.replayBaseSet(state, replayBase));
+  },
+  statusFeedStale: (registry: AtomRegistry.AtomRegistry, payload?: { scope?: EquipmentStatusScope }): void => {
+    registry.update(twinPageAtom, state => reducers.statusFeedStale(state, payload));
+  },
+  selectedSet: (registry: AtomRegistry.AtomRegistry, selected?: PickedTool): void => {
+    registry.update(twinPageAtom, state => reducers.selectedSet(state, selected));
+  },
+  selectionSet: (registry: AtomRegistry.AtomRegistry, selection?: TwinSelection): void => {
+    registry.update(twinPageAtom, state => reducers.selectionSet(state, selection));
+  },
+  mesJobSet: (registry: AtomRegistry.AtomRegistry, payload: { index: number; job: MesJob }): void => {
+    registry.update(twinPageAtom, state => reducers.mesJobSet(state, payload));
+  },
+  layerToggled: (registry: AtomRegistry.AtomRegistry, layer: SceneLayer): void => {
+    registry.update(twinPageAtom, state => reducers.layerToggled(state, layer));
+  },
+  amhsSet: (registry: AtomRegistry.AtomRegistry, amhs?: AmhsStats): void => {
+    registry.update(twinPageAtom, state => reducers.amhsSet(state, amhs));
+  },
+  infoDialogSet: (registry: AtomRegistry.AtomRegistry, infoDialog: 'architecture' | 'database' | null): void => {
+    registry.update(twinPageAtom, state => reducers.infoDialogSet(state, infoDialog));
+  },
+  showResearchUtilToggled: (registry: AtomRegistry.AtomRegistry): void => {
+    registry.update(twinPageAtom, state => reducers.showResearchUtilToggled(state));
+  },
+  onboardingDontShowSet: (registry: AtomRegistry.AtomRegistry, onboardingDontShow: boolean): void => {
+    registry.update(twinPageAtom, state => reducers.onboardingDontShowSet(state, onboardingDontShow));
+  },
+  waferFrameReceived: (registry: AtomRegistry.AtomRegistry, frame: { product: WaferProduct; index: number; hud: WaferHud; completed: boolean }): void => {
+    registry.update(twinPageAtom, state => reducers.waferFrameReceived(state, frame));
+  },
+  waferFrameCleared: (registry: AtomRegistry.AtomRegistry): void => {
+    registry.update(twinPageAtom, state => reducers.waferFrameCleared(state));
+  },
+  waferFollowSet: (registry: AtomRegistry.AtomRegistry, follow: boolean): void => {
+    registry.update(twinPageAtom, state => reducers.waferFollowSet(state, follow));
+  },
+  ymsOpenSet: (registry: AtomRegistry.AtomRegistry, open: boolean): void => {
+    registry.update(twinPageAtom, state => reducers.ymsOpenSet(state, open));
+  },
+  ymsTabSet: (registry: AtomRegistry.AtomRegistry, tab: 'map' | 'yield'): void => {
+    registry.update(twinPageAtom, state => reducers.ymsTabSet(state, tab));
+  },
+  ymsRandomize: (registry: AtomRegistry.AtomRegistry, pattern: DefectPattern): void => {
+    registry.update(twinPageAtom, state => reducers.ymsRandomize(state, pattern));
+  },
+  ymsHoverDieSet: (registry: AtomRegistry.AtomRegistry, hoverDie?: YmsUiState['hoverDie']): void => {
+    registry.update(twinPageAtom, state => reducers.ymsHoverDieSet(state, hoverDie));
+  },
+  ymsDieAreaSet: (registry: AtomRegistry.AtomRegistry, dieArea: number): void => {
+    registry.update(twinPageAtom, state => reducers.ymsDieAreaSet(state, dieArea));
+  },
+  ymsDefectD0Set: (registry: AtomRegistry.AtomRegistry, defectD0: number): void => {
+    registry.update(twinPageAtom, state => reducers.ymsDefectD0Set(state, defectD0));
+  },
+  ymsClusterAlphaSet: (registry: AtomRegistry.AtomRegistry, clusterAlpha: number): void => {
+    registry.update(twinPageAtom, state => reducers.ymsClusterAlphaSet(state, clusterAlpha));
+  },
+  ymsYieldInputSet: (registry: AtomRegistry.AtomRegistry, yieldInput: YieldInput): void => {
+    registry.update(twinPageAtom, state => reducers.ymsYieldInputSet(state, yieldInput));
+  },
+  ymsYieldScenarioSet: (registry: AtomRegistry.AtomRegistry, yieldScenario: string): void => {
+    registry.update(twinPageAtom, state => reducers.ymsYieldScenarioSet(state, yieldScenario));
+  },
+  ymsStdfCopiedSet: (registry: AtomRegistry.AtomRegistry, stdfCopied: boolean): void => {
+    registry.update(twinPageAtom, state => reducers.ymsStdfCopiedSet(state, stdfCopied));
+  },
+  sidebarTabSet: (registry: AtomRegistry.AtomRegistry, tab: 'fab' | 'oem'): void => {
+    registry.update(twinPageAtom, state => reducers.sidebarTabSet(state, tab));
+  },
+  sidebarQuerySet: (registry: AtomRegistry.AtomRegistry, query: string): void => {
+    registry.update(twinPageAtom, state => reducers.sidebarQuerySet(state, query));
+  },
+  sidebarCategorySet: (registry: AtomRegistry.AtomRegistry, category: string): void => {
+    registry.update(twinPageAtom, state => reducers.sidebarCategorySet(state, category));
+  },
+  sidebarSegmentSet: (registry: AtomRegistry.AtomRegistry, segment: string): void => {
+    registry.update(twinPageAtom, state => reducers.sidebarSegmentSet(state, segment));
+  },
+  sidebarStateFilterToggle: (registry: AtomRegistry.AtomRegistry, stateFilter: string): void => {
+    registry.update(twinPageAtom, state => reducers.sidebarStateFilterToggle(state, stateFilter));
+  },
+  inspectorMesSet: (registry: AtomRegistry.AtomRegistry, payload: { id: string; job: MesJob }): void => {
+    registry.update(twinPageAtom, state => reducers.inspectorMesSet(state, payload));
+  },
+  oemDialogQuerySet: (registry: AtomRegistry.AtomRegistry, query: string): void => {
+    registry.update(twinPageAtom, state => reducers.oemDialogQuerySet(state, query));
+  },
+  oemDialogSegmentSet: (registry: AtomRegistry.AtomRegistry, segment: string): void => {
+    registry.update(twinPageAtom, state => reducers.oemDialogSegmentSet(state, segment));
+  },
+  oemDialogVendorSet: (registry: AtomRegistry.AtomRegistry, vendor: string): void => {
+    registry.update(twinPageAtom, state => reducers.oemDialogVendorSet(state, vendor));
+  },
+  archQuerySet: (registry: AtomRegistry.AtomRegistry, query: string): void => {
+    registry.update(twinPageAtom, state => reducers.archQuerySet(state, query));
+  },
+};

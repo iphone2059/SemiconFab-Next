@@ -1,18 +1,21 @@
 // @vitest-environment jsdom
+import { resetWorkbenchState } from '../../../tests/support/reset-ui-atoms';
+import { useAtomValue } from '@effect/atom-react';
+import { createAtomTestScope } from '../../../tests/support/atom-scope';
 import { Effect } from 'effect';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { RunSummary, SiteDto } from '@/contracts/app-contracts';
 import { useRunSubmission } from '@/workbench/use-run-submission';
 import {
-  resetWorkbenchStore,
-  useWorkbenchStore,
+  workbenchAtom,
   workbenchActions,
 } from '@/workbench/workbench.atom';
 
 // The HTTP boundary is mocked so each case controls when a submission resolves.
+const { registry, render } = createAtomTestScope();
 const api = vi.hoisted(() => ({ createRun: vi.fn(), invalidateRuns: vi.fn() }));
 vi.mock('@/api/runs.mutation', () => ({
   createRun: api.createRun,
@@ -49,8 +52,8 @@ function deferred<T>(): Deferred<T> {
 
 /** Mirrors the page wiring: form draft from the store, command submit from the controller. */
 function Harness({ target }: { target: SiteDto }) {
-  const form = useWorkbenchStore((state) => state.form);
-  const submitError = useWorkbenchStore((state) => state.submitError);
+  const form = useAtomValue(workbenchAtom, (state) => state.form);
+  const submitError = useAtomValue(workbenchAtom, (state) => state.submitError);
   const { submit, submitting } = useRunSubmission(target, form);
   return (
     <form onSubmit={(event) => { void submit(event); }}>
@@ -75,7 +78,7 @@ function renderHarness(target: SiteDto) {
 }
 
 beforeEach(() => {
-  resetWorkbenchStore();
+  resetWorkbenchState(registry);
   api.createRun.mockReset();
   api.invalidateRuns.mockReset();
   let nextId = 0;
@@ -88,7 +91,7 @@ afterEach(() => {
 });
 
 it('reuses the idempotency key only for an unchanged retry scenario', async () => {
-  workbenchActions.siteIdSet('site-a');
+  workbenchActions.siteIdSet(registry, 'site-a');
   api.createRun.mockReturnValue(Effect.fail(new Error('submit failed')));
   const harness = renderHarness(site('site-a'));
 
@@ -104,7 +107,7 @@ it('reuses the idempotency key only for an unchanged retry scenario', async () =
   expect(keys[1]).toBe(keys[0]);
 
   // A different scenario is a new logical command: mint a new key.
-  act(() => workbenchActions.formFieldSet({ field: 'lotCount', value: '25' }));
+  act(() => workbenchActions.formFieldSet(registry, { field: 'lotCount', value: '25' }));
   fireEvent.submit(harness.form());
   await waitFor(() => expect(api.createRun).toHaveBeenCalledTimes(3));
   const changed = api.createRun.mock.calls[2][0] as { idempotencyKey: string };
@@ -112,7 +115,7 @@ it('reuses the idempotency key only for an unchanged retry scenario', async () =
 });
 
 it('applies a completion only while the submitted site is still active', async () => {
-  workbenchActions.siteIdSet('site-a');
+  workbenchActions.siteIdSet(registry, 'site-a');
   const pending = deferred<RunSummary>();
   api.createRun.mockReturnValueOnce(Effect.promise(() => pending.promise));
   const harness = renderHarness(site('site-a'));
@@ -121,7 +124,7 @@ it('applies a completion only while the submitted site is still active', async (
 
   // Site switch before the request settles: the site-A completion must not
   // select a run on site B or write any other state.
-  act(() => workbenchActions.siteIdSet('site-b'));
+  act(() => workbenchActions.siteIdSet(registry, 'site-b'));
   harness.rerender(site('site-b'));
   await act(async () => {
     pending.resolve(run('run-a'));
@@ -129,13 +132,13 @@ it('applies a completion only while the submitted site is still active', async (
     await Promise.resolve();
   });
 
-  expect(useWorkbenchStore.getState().runId).toBe('');
-  expect(useWorkbenchStore.getState().submitError).toBe('');
+  expect(registry.get(workbenchAtom).runId).toBe('');
+  expect(registry.get(workbenchAtom).submitError).toBe('');
   expect(harness.alert()).toBe('');
 });
 
 it('drops a completion whose submitting component unmounted', async () => {
-  workbenchActions.siteIdSet('site-a');
+  workbenchActions.siteIdSet(registry, 'site-a');
   const pending = deferred<RunSummary>();
   api.createRun.mockReturnValueOnce(Effect.promise(() => pending.promise));
   const harness = renderHarness(site('site-a'));
@@ -148,17 +151,17 @@ it('drops a completion whose submitting component unmounted', async () => {
     await Promise.resolve();
     await Promise.resolve();
   });
-  expect(useWorkbenchStore.getState().runId).toBe('');
+  expect(registry.get(workbenchAtom).runId).toBe('');
 });
 
 it('selects the created run after an accepted submission for the active site', async () => {
-  workbenchActions.siteIdSet('site-a');
+  workbenchActions.siteIdSet(registry, 'site-a');
   api.createRun.mockReturnValueOnce(Effect.succeed(run('run-accepted')));
   const harness = renderHarness(site('site-a'));
   fireEvent.submit(harness.form());
 
-  await waitFor(() => expect(useWorkbenchStore.getState().runId).toBe('run-accepted'));
-  expect(useWorkbenchStore.getState().submitError).toBe('');
+  await waitFor(() => expect(registry.get(workbenchAtom).runId).toBe('run-accepted'));
+  expect(registry.get(workbenchAtom).submitError).toBe('');
   expect(api.createRun).toHaveBeenCalledTimes(1);
   const input = api.createRun.mock.calls[0][0] as {
     request: { scenario: { siteId: string; fabs: unknown[] } };

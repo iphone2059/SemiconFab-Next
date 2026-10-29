@@ -1,23 +1,26 @@
 // @vitest-environment jsdom
-import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
+import { resetRuntimeState, resetTwinDemoState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
+import { createAtomTestScope } from '../../tests/support/atom-scope';
+import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
 import { TwinPage } from '@/twin/twin-page';
 import { sitesQueryOptions } from '@/api/sites.resource';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
 import { buildTelemetry, computeSpc } from '@/domain/fab-process-control';
-import { resetTwinUiStore } from '@/twin/twin-ui.atom';
-import { resetTwinPageStore, twinPageActions } from '@/twin/twin-page.atom';
-import { resetTwinDemoStore, twinDemoActions } from '@/twin/twin-demo.atom';
-import { resetRuntimeStore } from '@/state/runtime-store';
-import { useLocaleStore } from '@/state/locale.atom';
+
+import { twinPageActions } from '@/twin/twin-page.atom';
+import { twinDemoActions } from '@/twin/twin-demo.atom';
+
+import { localeAtom } from '@/state/locale.atom';
 
 // The hardware boundary stays out of this render test: only the inline layout
 // SPC strip is measured.
-vi.mock('../../src/twin/twin-viewer', async () => {
+vi.mock('../../src/features/twin/fab-viewer', async () => {
   const React = await import('react');
   return {
     FabViewport: React.forwardRef(function MockFabViewport(_props: unknown, _ref: unknown) {
@@ -30,9 +33,9 @@ const site = { siteId: 'site-1', code: 'SITE-1', templateHash: 'test', fabs: [{ 
 let client: QueryClient;
 
 beforeEach(() => {
-  useLocaleStore.setState({ language: 'zh', theme: 'light' }, true);
+  registry.set(localeAtom, { language: 'zh', theme: 'light' });
   localStorage.clear();
-  twinDemoActions.playingSet(false);
+  twinDemoActions.playingSet(registry, false);
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
   vi.stubGlobal('EventSource', class {
     onmessage: ((event: { data: string }) => void) | null = null;
@@ -49,18 +52,18 @@ afterEach(() => {
   cleanup();
   client.clear();
   vi.unstubAllGlobals();
-  resetTwinUiStore(); resetTwinPageStore(); resetTwinDemoStore(); resetRuntimeStore();
+  resetTwinUiState(registry); resetTwinPageState(registry); resetTwinDemoState(registry); resetRuntimeState(registry);
 });
 
 it('renders split control/spec SPC judgements in the layout inspector strip', () => {
   render(<QueryClientProvider client={client}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></QueryClientProvider>);
   const tool = FAB_LAYOUT[0];
   act(() => {
-    twinPageActions.selectedSet({
+    twinPageActions.selectedSet(registry, {
       index: 0, x: tool.x, z: tool.z, width: tool.width, depth: tool.depth, height: tool.height,
       category: tool.category, vendor: tool.vendor, model: tool.model, state: 'running',
     });
-    twinPageActions.selectionSet({ kind: 'layout', index: 0 });
+    twinPageActions.selectionSet(registry, { kind: 'layout', index: 0 });
   });
 
   const strip = document.querySelector('.twin-spc');

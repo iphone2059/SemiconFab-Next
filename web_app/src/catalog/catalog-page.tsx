@@ -1,3 +1,5 @@
+import { RegistryContext } from '@effect/atom-react';
+import { useContext } from 'react';
 import type { MouseEvent } from 'react';
 import type { CatalogEntryDto } from '@/contracts/app-contracts';
 import type { RouterSearch } from '@/routes/route-search';
@@ -37,6 +39,7 @@ export interface CatalogPageProps {
  * the shell, the list/compare views and the detail dialog.
  */
 export function CatalogPage({ view: initialView, search, onSearchChange, onViewChange }: CatalogPageProps) {
+  const registry = useContext(RegistryContext);
   const data = useCatalogData();
   const route = useCatalogRouteState({
     initialView,
@@ -51,24 +54,24 @@ export function CatalogPage({ view: initialView, search, onSearchChange, onViewC
   const t = (zh: string, en: string) => text(language, zh, en);
 
   function toggle(id: string): void {
-    catalogActions.selectedToggled(id);
+    catalogActions.selectedToggled(registry, id);
   }
   function selectDomain(domain: 'ALL' | 'FAB' | 'OSAT'): void {
-    catalogActions.domainSet(domain);
-    catalogActions.categorySet('');
-    catalogActions.pageSet(0);
+    catalogActions.domainSet(registry, domain);
+    catalogActions.categorySet(registry, '');
+    catalogActions.pageSet(registry, 0);
   }
   function selectQuery(query: string): void {
-    catalogActions.querySet(query);
-    catalogActions.pageSet(0);
+    catalogActions.querySet(registry, query);
+    catalogActions.pageSet(registry, 0);
   }
   function selectCategory(category: string): void {
-    catalogActions.categorySet(category);
-    catalogActions.pageSet(0);
+    catalogActions.categorySet(registry, category);
+    catalogActions.pageSet(registry, 0);
   }
   function selectHideDrafts(hideDrafts: boolean): void {
-    catalogActions.hideDraftsSet(hideDrafts);
-    catalogActions.pageSet(0);
+    catalogActions.hideDraftsSet(registry, hideDrafts);
+    catalogActions.pageSet(registry, 0);
   }
   function exportCatalog(): void {
     downloads.downloadJson(
@@ -94,8 +97,8 @@ export function CatalogPage({ view: initialView, search, onSearchChange, onViewC
         theme={preferences.theme}
         hrefFor={hrefFor}
         onNavigate={navigateView}
-        onToggleLanguage={() => localeActions.languageToggled()}
-        onToggleTheme={() => localeActions.themeToggled()}
+        onToggleLanguage={() => localeActions.languageToggled(registry)}
+        onToggleTheme={() => localeActions.themeToggled(registry)}
       />
       <main className="catalog-main">
         <div className="catalog-heading">
@@ -184,8 +187,8 @@ export function CatalogPage({ view: initialView, search, onSearchChange, onViewC
             currentPage={data.currentPage}
             pageCount={data.pageCount}
             onToggle={toggle}
-            onInspect={(id) => catalogActions.detailIdSet(id)}
-            onPageChange={(page) => catalogActions.pageSet(page)}
+            onInspect={(id) => catalogActions.detailIdSet(registry, id)}
+            onPageChange={(page) => catalogActions.pageSet(registry, page)}
           />
         </section>
         <CatalogFooter language={language} />
@@ -194,7 +197,7 @@ export function CatalogPage({ view: initialView, search, onSearchChange, onViewC
         <EquipmentDetails
           entry={data.detail}
           language={language}
-          onClose={() => catalogActions.detailIdSet(undefined)}
+          onClose={() => catalogActions.detailIdSet(registry, undefined)}
           onDownloadRecord={downloadRecord}
         />
       )}

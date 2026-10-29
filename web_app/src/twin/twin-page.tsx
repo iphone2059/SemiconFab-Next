@@ -1,3 +1,5 @@
+import { RegistryContext } from '@effect/atom-react';
+import { useContext } from 'react';
 import { OriginalIcon } from '@/components/original-icons';
 import { TwinLocaleProvider } from '@/twin/twin-i18n';
 import { useEffect, useMemo, useRef } from 'react';
@@ -11,9 +13,9 @@ import { researchClock } from '@/domain/simulation-research-replay';
 import { createTwinUiState, projectTwinSceneState, type EntryMode } from '@/twin/twin-state';
 import { classNames } from '@/components/class-names';
 import type { RouterSearch } from '@/routes/route-search';
-import { useTwinPageStore, twinPageActions } from '@/twin/twin-page.atom';
-import { useTwinDemoStore, twinDemoActions } from '@/twin/twin-demo.atom';
-import { useTwinUiStore, twinUiActions } from '@/twin/twin-ui.atom';
+import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
+import { twinDemoAtom, twinDemoActions } from '@/twin/twin-demo.atom';
+import { twinUiAtom, twinUiActions } from '@/twin/twin-ui.atom';
 import { createCoalescedDispatcher } from '@/lib/coalesced-dispatcher';
 import { useFabTelemetry } from '@/app/telemetry-provider';
 import { FabViewport, type FabViewportHandle } from '@/twin/twin-viewer';
@@ -54,6 +56,7 @@ interface TwinContentProps {
  * wires the controllers to the layout and renders the frozen DOM.
  */
 function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
+  const registry = useContext(RegistryContext);
   const scene = useRef<FabViewportHandle>(null);
   const { t, language, toggleLanguage, theme, ui, demo, page, status, lifecycle, viewerEpoch } = useTwinSlices();
   const mode = ui.entryMode;
@@ -118,29 +121,29 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   useTwinKeyboard({ onEscape: actions.escape, setCamera: actions.setCamera });
   useTwinDemoClock(ui.statusSource, demo.playing);
 
-  const amhsBatcher = useMemo(() => createCoalescedDispatcher<AmhsStats>((stats) => twinPageActions.amhsSet(stats), 100), []);
-  useEffect(() => () => amhsBatcher.cancel(), [amhsBatcher]);
+  const amhsBatcher = useMemo(() => createCoalescedDispatcher<AmhsStats>((stats) => twinPageActions.amhsSet(registry, stats), 100), [registry]);
+  useEffect(() => () => amhsBatcher.cancel(), [amhsBatcher, registry]);
 
-  // The scene frame loop reads the Zustand snapshots directly for demo/live modes.
+  // The scene frame loop reads the Effect Atom snapshots directly for demo/live modes.
   // Research replay keeps its derived array in a ref until the query state lands.
   const directToolStates = useRef<readonly FabToolState[]>(toolStates);
   directToolStates.current = toolStates;
-  const mergeToolStates = useMemo(createToolStateMerger, []);
+  const mergeToolStates = useMemo(createToolStateMerger, [registry]);
   const getToolStates = useMemo(() => (): readonly FabToolState[] => {
-    if (useTwinUiStore.getState().entryMode === 'research') return directToolStates.current;
-    if (useTwinUiStore.getState().statusSource === 'demo') return useTwinDemoStore.getState().states;
-    const base = useTwinPageStore.getState().liveToolStates;
+    if (registry.get(twinUiAtom).entryMode === 'research') return directToolStates.current;
+    if (registry.get(twinUiAtom).statusSource === 'demo') return registry.get(twinDemoAtom).states;
+    const base = registry.get(twinPageAtom).liveToolStates;
     // Telemetry Worker output is read inside the scene frame loop; no React
     // state update is involved on the high-frequency path (ARCH-11). The merger
     // keeps the previous array while neither source reference changed.
     return mergeToolStates(base, telemetry?.getToolStates());
-  }, [telemetry, mergeToolStates]);
+  }, [telemetry, mergeToolStates, registry]);
 
   const stateCounts = useMemo(() => {
     const counts = { running: 0, idle: 0, down: 0, maint: 0 };
     for (const state of toolStates) counts[state] += 1;
     return counts;
-  }, [toolStates]);
+  }, [toolStates, registry]);
   const pressure = cleanroomPressureField(selected?.x ?? 0, selected?.z ?? 0);
 
   if (error) {
@@ -183,7 +186,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
             {LAYER_LABELS.filter(({ layer }) => layer !== 'airflow').map(({ layer, label }) => (
               <button id={layer === 'amhs' ? 'btn-toggle-oht' : layer === 'ceiling' ? 'btn-toggle-ceiling' : layer === 'roof' ? 'btn-toggle-roof' : layer === 'heatmap' ? 'btn-toggle-heatmap' : 'btn-toggle-piping'} type="button" key={layer} className={layers[layer] ? 'active' : ''} aria-pressed={!!layers[layer]} onClick={() => actions.toggleLayer(layer)}><OriginalIcon name={layer === 'amhs' ? 'amhs' : layer === 'ceiling' || layer === 'roof' ? 'ffu' : 'heatmap'} />{layer === 'heatmap' ? t("气流热力图") : label}</button>
             ))}
-            <button id="btn-toggle-laminar" type="button" className={ui.spatialMode === 'aerodynamics' ? 'active' : ''} aria-pressed={ui.spatialMode === 'aerodynamics'} onClick={() => twinUiActions.spatialToggle('aerodynamics')}><OriginalIcon name="airflow" /> Airflow</button>
+            <button id="btn-toggle-laminar" type="button" className={ui.spatialMode === 'aerodynamics' ? 'active' : ''} aria-pressed={ui.spatialMode === 'aerodynamics'} onClick={() => twinUiActions.spatialToggle(registry, 'aerodynamics')}><OriginalIcon name="airflow" /> Airflow</button>
             <button id="btn-toggle-xray" type="button" className={xrayFilter ? 'active' : ''} aria-pressed={!!xrayFilter} onClick={() => actions.applyXRayFilter(xrayFilter ? null : 'all')}><OriginalIcon name="xray" />{t("全息透视")}</button>
           </div>
           <button id="lang-toggle-btn" className="twin-language-toggle" type="button" title={language === 'zh' ? 'Switch to English' : '切换为中文'} onClick={toggleLanguage}>{language === 'zh' ? '中文' : 'English'}</button>
@@ -193,7 +196,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
       <div className="twin-subbar" id="tour-status-subbar">
         <TwinYieldPill toolStates={toolStates} />
         <section className="twin-simulation" aria-label={t("B01 场景控制")}>
-          <button id="btn-sim-play" type="button" disabled={ui.statusSource !== 'demo'} title={ui.statusSource !== 'demo' ? t("请选择本地 DEMO 状态来源") : 'Toggle Sim Clock · 1600 ms'} onClick={() => twinDemoActions.playingSet(!demo.playing)} aria-pressed={ui.statusSource === 'demo' && demo.playing}>{demo.playing ? 'Ⅱ' : '▶'} <span id="lbl-sim-cycle">#{demo.cycle}</span></button>
+          <button id="btn-sim-play" type="button" disabled={ui.statusSource !== 'demo'} title={ui.statusSource !== 'demo' ? t("请选择本地 DEMO 状态来源") : 'Toggle Sim Clock · 1600 ms'} onClick={() => twinDemoActions.playingSet(registry, !demo.playing)} aria-pressed={ui.statusSource === 'demo' && demo.playing}>{demo.playing ? 'Ⅱ' : '▶'} <span id="lbl-sim-cycle">#{demo.cycle}</span></button>
           <select id="dt-scenario-select" aria-label="Scenario" value={demo.scenarioId} disabled={ui.statusSource !== 'demo'} onChange={(event) => actions.chooseDemoScenario(event.target.value)}>
             {YIELD_SCENARIOS.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
           </select>
@@ -201,7 +204,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
         <button type="button" className={`twin-yms-toggle${ymsOpen ? ' active' : ''}`} aria-pressed={ymsOpen} onClick={() => { actions.setYmsTab('map'); actions.setYmsOpen(!ymsOpen); }}><OriginalIcon name="wafer" />{t("YMS 晶圆图谱")}</button>
         <button id="btn-toggle-cut" type="button" className={classNames('twin-cut-toggle', { active: cutActive })} aria-pressed={cutActive} onClick={actions.toggleCut}><OriginalIcon name="cut" />{t("动态剖切")}</button>
         <button id="btn-follow-wafer" type="button" className={classNames('twin-wafer-toggle', { active: waferActive })} aria-pressed={waferActive} onClick={() => { if (waferActive) wafer.closeWafer(); else wafer.startWafer(); }}><OriginalIcon name="wafer" />{t("跟随晶圆")}</button>
-        <label className="twin-source"><select aria-label={t("状态来源")} value={ui.preferredStatusSource} disabled={mode === 'research'} onChange={(event) => twinUiActions.sourceSet(event.target.value as 'demo' | 'sse-live')}>
+        <label className="twin-source"><select aria-label={t("状态来源")} value={ui.preferredStatusSource} disabled={mode === 'research'} onChange={(event) => twinUiActions.sourceSet(registry, event.target.value as 'demo' | 'sse-live')}>
           <option value="sse-live">SSE</option><option value="demo">DEMO</option>
         </select></label>
         <span className={classNames('twin-feed', { 'is-replay': mode === 'research', 'is-stale': mode !== 'research' && statusFeed?.stale })}><i />{mode === 'research' ? 'REPLAY' : ui.statusSource === 'demo' ? 'DEMO' : !statusFeed ? 'CONNECTING' : statusFeed.stale ? 'CACHE' : 'LIVE'}</span>
@@ -234,7 +237,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
           <strong>{t("AERODYNAMICS · 层流与压差")}</strong>
           <span>{t("黄光区 +30 Pa → 主工艺区 +15 Pa → 灰区 0 Pa")}</span>
           <span>{selected ? `#${selected.index + 1}` : t("主工艺区")} · {pressure.pressure.toFixed(2)} Pa · ∂P/∂z {pressure.gradZ.toFixed(2)} Pa/m</span>
-          <button type="button" aria-pressed={ui.aeroHeatmap} onClick={() => twinUiActions.aeroHeatmapToggle()}>{t("压差热力图")}</button>
+          <button type="button" aria-pressed={ui.aeroHeatmap} onClick={() => twinUiActions.aeroHeatmapToggle(registry)}>{t("压差热力图")}</button>
           <small>{level === 'B1' ? t("B1 隐藏洁净室粒子") : t("1500 层流粒子 · 原版示意压差场")}{t("；非实测 CFD")}</small>
         </section>
       )}
@@ -284,7 +287,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
             </dl>
             <button type="button" className="twin-primary" onClick={() => scene.current?.selectTool(selected.index, true)}>{t("在场景中定位")}</button>
             <div className="twin-manual-state" role="group" aria-label={t("设备状态干预")}>
-              {(['running', 'idle', 'down', 'maint'] as const).map((state) => <button type="button" key={state} disabled={ui.statusSource !== 'demo'} aria-pressed={toolStates[selected.index] === state} onClick={() => twinDemoActions.manualStateSet({ index: selected.index, state })}>{state.toUpperCase()}</button>)}
+              {(['running', 'idle', 'down', 'maint'] as const).map((state) => <button type="button" key={state} disabled={ui.statusSource !== 'demo'} aria-pressed={toolStates[selected.index] === state} onClick={() => twinDemoActions.manualStateSet(registry, { index: selected.index, state })}>{state.toUpperCase()}</button>)}
             </div>
             <p className="twin-data-note">{t("状态干预限本地 DEMO；MES / SPC 为页面演示，不持久化、不发送后端制造命令。")}</p>
 
@@ -467,8 +470,8 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
               <label className="twin-onboarding-dont-show"><input id="onboarding-dont-show" type="checkbox" checked={onboardingDontShow} onChange={(event) => actions.setOnboardingDontShow(event.target.checked)} /><span id="onboarding-dont-show-text">{t("不再提示")}</span></label>
               <div className="twin-onboarding-actions">
                 <button type="button" onClick={actions.dismissOnboarding}>{t("跳过")}</button>
-                <button id="onboarding-prev-btn" type="button" onClick={() => twinUiActions.onboardingStep(onboardingStep - 1)} disabled={onboardingStep === 0}>{t("上一步")}</button>
-                <button id="onboarding-next-btn" type="button" className="primary" onClick={() => { if (onboardingStep === ONBOARDING_STEPS.length - 1) actions.finishOnboarding(); else twinUiActions.onboardingStep(onboardingStep + 1); }}>{onboardingStep === ONBOARDING_STEPS.length - 1 ? t("开始导览") : t("下一步")}</button>
+                <button id="onboarding-prev-btn" type="button" onClick={() => twinUiActions.onboardingStep(registry, onboardingStep - 1)} disabled={onboardingStep === 0}>{t("上一步")}</button>
+                <button id="onboarding-next-btn" type="button" className="primary" onClick={() => { if (onboardingStep === ONBOARDING_STEPS.length - 1) actions.finishOnboarding(); else twinUiActions.onboardingStep(registry, onboardingStep + 1); }}>{onboardingStep === ONBOARDING_STEPS.length - 1 ? t("开始导览") : t("下一步")}</button>
               </div>
             </div>
           </div>
@@ -485,6 +488,7 @@ export interface TwinPageProps {
 }
 
 export function TwinPage({ fabId, search, onSearchChange }: TwinPageProps = {}) {
+
   return (
     <TwinLocaleProvider>
       <TwinContent fabId={fabId} search={search} onSearchChange={onSearchChange} />

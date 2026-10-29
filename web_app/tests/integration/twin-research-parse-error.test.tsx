@@ -1,18 +1,21 @@
 // @vitest-environment jsdom
-import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
+import { resetRuntimeState, resetTwinDemoState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
+import { createAtomTestScope } from '../../tests/support/atom-scope';
+import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
+const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
 import { TwinPage } from '@/twin/twin-page';
 import { sitesQueryOptions } from '@/api/sites.resource';
 import { ResearchReplay } from '@/domain/simulation-research-replay';
-import { useLocaleStore } from '@/state/locale.atom';
-import { resetTwinUiStore } from '@/twin/twin-ui.atom';
-import { resetTwinPageStore } from '@/twin/twin-page.atom';
-import { resetRuntimeStore } from '@/state/runtime-store';
-import { resetTwinDemoStore } from '@/twin/twin-demo.atom';
+import { localeAtom } from '@/state/locale.atom';
+
+
+
+
 
 /**
  * A16 (twin-page portion): a ResearchReplay.parse exception must surface a
@@ -27,11 +30,11 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  resetTwinUiStore(); resetTwinPageStore(); resetRuntimeStore(); resetTwinDemoStore();
+  resetTwinUiState(registry); resetTwinPageState(registry); resetRuntimeState(registry); resetTwinDemoState(registry);
 });
 
 it('A16: shows a distinct visible research parse error when ResearchReplay.parse throws', async () => {
-  useLocaleStore.setState({ language: 'zh', theme: 'light' }, true);
+  registry.set(localeAtom, { language: 'zh', theme: 'light' });
   localStorage.clear();
   vi.stubGlobal('EventSource', class { onmessage = null; onerror = null; close() {} });
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {

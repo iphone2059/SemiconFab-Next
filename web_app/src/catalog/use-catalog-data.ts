@@ -1,9 +1,12 @@
+import { useAtomValue } from '@effect/atom-react';
+import { RegistryContext } from '@effect/atom-react';
+import { useContext } from 'react';
 import { useDeferredValue, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { CatalogEntryDto } from '@/contracts/app-contracts';
 import { catalogQueryOptions } from '@/api/catalog.resource';
 import { filterCatalog, type CatalogDomain } from '@/catalog/catalog-data';
-import { catalogActions, useCatalogStore } from '@/catalog/catalog.atom';
+import { catalogActions, catalogAtom } from '@/catalog/catalog.atom';
 
 const PAGE_SIZE = 40;
 
@@ -36,7 +39,8 @@ export interface CatalogDataSelection {
  * between the raw Equipment Reference payload and the rendered views.
  */
 export function useCatalogData(): CatalogDataSelection {
-  const catalogState = useCatalogStore();
+  const registry = useContext(RegistryContext);
+  const catalogState = useAtomValue(catalogAtom);
   const {
     domain, category, query, hideDrafts, selected,
     detailId, page, localEntries, localImportId, importError,
@@ -80,7 +84,7 @@ export function useCatalogData(): CatalogDataSelection {
   const pageEntries = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   function restoreServerCatalog(): void {
-    catalogActions.localImportCleared();
+    catalogActions.localImportCleared(registry);
     void catalogQuery.refetch();
   }
 

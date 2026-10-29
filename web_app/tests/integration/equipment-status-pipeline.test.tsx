@@ -1,19 +1,22 @@
 // @vitest-environment jsdom
-import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
+import { resetRuntimeState, resetTwinDemoState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
+import { createAtomTestScope } from '../../tests/support/atom-scope';
+import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
+const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
 import { TwinPage } from '@/twin/twin-page';
 import { sitesQueryOptions } from '@/api/sites.resource';
 import { equipmentStatusQueryKey } from '@/api/equipment.resource';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
 import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
-import { resetTwinUiStore, twinUiActions } from '@/twin/twin-ui.atom';
-import { resetTwinPageStore, useTwinPageStore } from '@/twin/twin-page.atom';
-import { resetRuntimeStore } from '@/state/runtime-store';
-import { resetTwinDemoStore } from '@/twin/twin-demo.atom';
+import { twinUiActions } from '@/twin/twin-ui.atom';
+import { twinPageAtom } from '@/twin/twin-page.atom';
+
+
 
 /**
  * A02: the parent page consumes a frequency-controlled projection. Raw SSE cache
@@ -23,7 +26,7 @@ import { resetTwinDemoStore } from '@/twin/twin-demo.atom';
  */
 
 const viewport = vi.hoisted(() => ({ renders: 0 }));
-vi.mock('../../src/twin/twin-viewer', async () => {
+vi.mock('@/twin/twin-viewer', async () => {
   const React = await import('react');
   return {
     FabViewport: React.forwardRef(function MockFabViewport() {
@@ -70,7 +73,7 @@ afterEach(() => {
   CapturingEventSource.instances = [];
   vi.unstubAllGlobals();
   vi.useRealTimers();
-  resetTwinUiStore(); resetTwinPageStore(); resetRuntimeStore(); resetTwinDemoStore();
+  resetTwinUiState(registry); resetTwinPageState(registry); resetRuntimeState(registry); resetTwinDemoState(registry);
 });
 
 it('A02: SSE frames publish through one throttled projection instead of rendering per frame', async () => {
@@ -92,15 +95,17 @@ it('A02: SSE frames publish through one throttled projection instead of renderin
   // so stop the 1600 ms demo tick before counting renders. Without this a slow
   // (parallel-worker) run can legitimately tick the demo clock mid-assertion and
   // add an unrelated FabViewport render.
-  await act(async () => { twinUiActions.sourceSet('sse-live'); });
+  await act(async () => { twinUiActions.sourceSet(registry, 'sse-live'); });
   const source = CapturingEventSource.instances.find((value) => value.url.includes('/equipment-status/stream'));
   if (!source) throw new Error('missing equipment-status stream');
   // Deterministically drive the 100 ms coalescer; wall-clock sleeps are flaky under parallel Vitest workers.
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   const projectedTimes: string[] = [];
-  const unsubscribe = useTwinPageStore.subscribe((next, previous) => {
+  let previous = registry.get(twinPageAtom);
+  const unsubscribe = registry.subscribe(twinPageAtom, next => {
     const current = next.statusFeed?.updatedAt;
     if (current !== undefined && current !== previous.statusFeed?.updatedAt) projectedTimes.push(current);
+    previous = next;
   });
   const before = viewport.renders;
 
@@ -113,8 +118,8 @@ it('A02: SSE frames publish through one throttled projection instead of renderin
 
   await flushProjection();
   expect(projectedTimes).toEqual(['2026-10-27T00:00:01Z']);
-  expect(useTwinPageStore.getState().liveToolStates[0]).toBe('down');
-  expect(useTwinPageStore.getState().statusFeed).toEqual({ updatedAt: '2026-10-27T00:00:01Z', stale: false });
+  expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('down');
+  expect(registry.get(twinPageAtom).statusFeed).toEqual({ updatedAt: '2026-10-27T00:00:01Z', stale: false });
 
   // Two frames inside one 100 ms window coalesce into a single projection publish.
   send(source, frame(2, 'idle', '2026-10-27T00:00:02Z'));
@@ -123,8 +128,8 @@ it('A02: SSE frames publish through one throttled projection instead of renderin
   // Count authoritative coalesced projection commits, not implementation-specific
   // React renders that may be batched differently across concurrent workers.
   expect(projectedTimes).toEqual(['2026-10-27T00:00:01Z', '2026-10-27T00:00:03Z']);
-  expect(useTwinPageStore.getState().liveToolStates[0]).toBe('maint');
-  expect(useTwinPageStore.getState().statusFeed?.updatedAt).toBe('2026-10-27T00:00:03Z');
+  expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('maint');
+  expect(registry.get(twinPageAtom).statusFeed?.updatedAt).toBe('2026-10-27T00:00:03Z');
   unsubscribe();
   client.clear();
 });

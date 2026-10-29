@@ -1,8 +1,9 @@
-import { create } from 'zustand';
+import * as Atom from 'effect/reactivity/Atom';
+import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import type { TwinLanguage } from '@/localization/language';
 import { readPreferences, readTwinLanguage, type Preferences } from '@/state/preferences.atom';
 
-function initialLocale(): Preferences {
+export function initialLocale(): Preferences {
   if (typeof window === 'undefined') return { language: 'zh', theme: 'light' };
   const storage = {
     getItem: (key: string) => {
@@ -19,13 +20,16 @@ function initialLocale(): Preferences {
 
 export interface LocaleStoreState extends Preferences {}
 
-export const useLocaleStore = create<LocaleStoreState>(() => initialLocale());
+// Initialize at the first read in each registry, including an injected registry
+// created after this module was loaded. A module-time preference snapshot goes stale.
+export const localeAtom = Atom.writable(
+  () => initialLocale(),
+  (context, value: LocaleStoreState) => context.setSelf(value),
+).pipe(Atom.keepAlive);
 
 export const localeActions = {
-  preferencesSet: (payload: Preferences) => useLocaleStore.setState(payload, true),
-  languageSet: (language: TwinLanguage) => useLocaleStore.setState({ language }),
-  languageToggled: () => useLocaleStore.setState((state) => ({ language: state.language === 'zh' ? 'en' : 'zh' })),
-  themeToggled: () => useLocaleStore.setState((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
+  preferencesSet: (registry: AtomRegistry.AtomRegistry, payload: Preferences): void => registry.set(localeAtom, payload),
+  languageSet: (registry: AtomRegistry.AtomRegistry, language: TwinLanguage): void => registry.update(localeAtom, state => ({ ...state, language })),
+  languageToggled: (registry: AtomRegistry.AtomRegistry): void => registry.update(localeAtom,  (state): LocaleStoreState => ({ ...state, language: state.language === 'zh' ? 'en' : 'zh' })),
+  themeToggled: (registry: AtomRegistry.AtomRegistry): void => registry.update(localeAtom,  (state): LocaleStoreState => ({ ...state, theme: state.theme === 'light' ? 'dark' : 'light' })),
 };
-
-export const resetLocaleStore = (): void => useLocaleStore.setState(initialLocale(), true);

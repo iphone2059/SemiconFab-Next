@@ -1,3 +1,6 @@
+import { resetCatalogState, resetLocaleState } from '../../../tests/support/reset-ui-atoms';
+import * as AtomRegistry from 'effect/reactivity/AtomRegistry';
+import { RegistryContext } from '@effect/atom-react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, expect, it } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -7,12 +10,13 @@ import { CatalogComparison } from '@/catalog/catalog-comparison';
 import { FieldValue, RecordFields } from '@/catalog/catalog-fields';
 import { ExternalLink } from '@/catalog/external-link';
 import { catalogQueryOptions } from '@/api/catalog.resource';
-import { resetCatalogStore } from '@/catalog/catalog.atom';
-import { resetLocaleStore } from '@/state/locale.atom';
 
+
+
+const registry = AtomRegistry.make();
 beforeEach(() => {
-  resetCatalogStore();
-  resetLocaleStore();
+  resetCatalogState(registry);
+  resetLocaleState(registry);
 });
 
 const entry: CatalogEntryDto = {
@@ -139,14 +143,14 @@ it('renders the migrated catalog page from the shared Query cache', () => {
     items: [serverEntry],
   });
   const html = renderToStaticMarkup(
-    <QueryClientProvider client={queryClient}>
+    <RegistryContext.Provider value={registry}><QueryClientProvider client={queryClient}>
       <CatalogPage
         view="catalog"
         search={{}}
         onSearchChange={() => {}}
         onViewChange={() => {}}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider></RegistryContext.Provider>,
   );
   expect(html).toContain('FPA');
   expect(html).toContain('SNAPSHOT legacy-test');

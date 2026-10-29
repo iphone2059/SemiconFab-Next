@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { resetCatalogState, resetLocaleState } from '../../../tests/support/reset-ui-atoms';
+import { createAtomTestScope } from '../../../tests/support/atom-scope';
+const { registry, render } = createAtomTestScope();
+import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { CatalogEntryDto } from '@/contracts/app-contracts';
 import { CatalogPage } from '@/catalog/catalog-page';
 import { catalogQueryOptions } from '@/api/catalog.resource';
-import { resetCatalogStore } from '@/catalog/catalog.atom';
-import { resetLocaleStore } from '@/state/locale.atom';
+
+
 import {
   CATALOG_EXPORT_FILENAME,
   catalogExportDocument,
@@ -170,8 +173,8 @@ describe('catalog page export integration', () => {
   let originalRevoke: PropertyDescriptor | undefined;
 
   beforeEach(() => {
-    resetCatalogStore();
-    resetLocaleStore();
+    resetCatalogState(registry);
+    resetLocaleState(registry);
     localStorage.clear();
     vi.useFakeTimers();
     originalCreate = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');

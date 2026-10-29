@@ -866,7 +866,6 @@ interface AllowlistEntry {
 
 const R14_ALLOWLIST: readonly AllowlistEntry[] = [
   // Documented pre-existing as-unknown-as sites (each cast is the narrowest possible boundary).
-  { file: 'state/create-slice-store.ts', snippet: 'actions as unknown as SliceActions<M>', reason: 'typed action factory: reducers are stored behind a never[] rest contract, SliceActions<M> is the only typed surface.' },
   { file: 'realtime/telemetry.worker.ts', snippet: 'globalThis as unknown as WorkerScope', reason: 'worker entry: the app tsconfig has no DedicatedWorkerGlobalScope; WorkerScope is the locally declared structural contract.' },
   { file: 'rendering/lite-backend.ts', snippet: 'undefined as unknown as LiteRuntime', reason: 'single-assignment self reference needed by the runtime disposer callback; assigned before any use.' },
   { file: 'realtime/command-event-source.transport.ts', snippet: 'new EventSource(target) as unknown as EventSourceLike', reason: 'injectable EventSource seam: the browser class is structurally compatible with the EventSourceLike test contract.' },

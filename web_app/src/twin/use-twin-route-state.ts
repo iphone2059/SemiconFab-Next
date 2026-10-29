@@ -1,12 +1,14 @@
+import { RegistryContext } from '@effect/atom-react';
+import { useContext } from 'react';
 import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { FabDto, SiteDto } from '@/contracts/app-contracts';
 import { sitesQueryOptions } from '@/api/sites.resource';
 import { searchToQueryString, type RouterSearch } from '@/routes/route-search';
 import { languageTag, readPreferences } from '@/state/preferences.atom';
-import { useLocaleStore } from '@/state/locale.atom';
-import { useTwinPageStore, twinPageActions } from '@/twin/twin-page.atom';
-import { useTwinUiStore, twinUiActions } from '@/twin/twin-ui.atom';
+import { localeAtom } from '@/state/locale.atom';
+import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
+import { twinUiAtom, twinUiActions } from '@/twin/twin-ui.atom';
 import type { EntryMode } from '@/twin/twin-state';
 import { ONBOARDING_KEY } from '@/twin/twin-page-data';
 import type { TwinLanguage } from '@/twin/twin-i18n';
@@ -53,6 +55,7 @@ export function useTwinRouteState({
   theme,
   t,
 }: TwinRouteStateParams): TwinRouteState {
+  const registry = useContext(RegistryContext);
   const searchQuery = searchToQueryString(search ?? {});
   const sitesQuery = useQuery(sitesQueryOptions());
 
@@ -60,29 +63,29 @@ export function useTwinRouteState({
   // from the router search and writes back through it (no history/location use).
   useEffect(() => {
     try {
-      useLocaleStore.setState(readPreferences(localStorage, searchQuery), true);
+      registry.set(localeAtom, readPreferences(localStorage, searchQuery));
     } catch {
       /* Storage denial must not prevent opening the FAB. */
     }
-  }, [searchQuery]);
+  }, [searchQuery, registry]);
 
   useEffect(() => {
     const requested = twinModeFrom(search ?? {});
-    if (requested && useTwinUiStore.getState().entryMode !== requested) twinUiActions.modeSet(requested);
-  }, [search?.mode]);
+    if (requested && registry.get(twinUiAtom).entryMode !== requested) twinUiActions.modeSet(registry, requested);
+  }, [search?.mode, registry]);
 
   useEffect(() => {
-    if (useTwinUiStore.getState().entryMode !== mode) return;
+    if (registry.get(twinUiAtom).entryMode !== mode) return;
     const patch = { mode };
     if (searchToQueryString({ ...(search ?? {}), ...patch }) !== searchQuery) onSearchChange?.(patch, true);
-  }, [mode, onSearchChange, search, searchQuery]);
+  }, [mode, onSearchChange, search, searchQuery, registry]);
 
   useEffect(() => {
-    const current = useLocaleStore.getState();
+    const current = registry.get(localeAtom);
     if (current.language !== language || current.theme !== theme) return;
     const patch = { lang: languageTag(language), theme };
     if (searchToQueryString({ ...(search ?? {}), ...patch }) !== searchQuery) onSearchChange?.(patch, true);
-  }, [language, theme, onSearchChange, search, searchQuery]);
+  }, [language, theme, onSearchChange, search, searchQuery, registry]);
 
   useEffect(() => {
     if (!sitesQuery.data) return;
@@ -94,7 +97,7 @@ export function useTwinRouteState({
     if (fabId) {
       next = sitesQuery.data.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
       if (!next) {
-        twinPageActions.siteErrorSet(t("指定的 FAB 不存在：{0}", [fabId]));
+        twinPageActions.siteErrorSet(registry, t("指定的 FAB 不存在：{0}", [fabId]));
         return;
       }
     } else if (siteId) {
@@ -102,44 +105,44 @@ export function useTwinRouteState({
     } else {
       next = legacySiteId ? sitesQuery.data.find((value) => value.siteId === legacySiteId) : sitesQuery.data[0];
       if (!next) {
-        twinPageActions.siteErrorSet(legacySiteId ? t("指定的 FAB 站点不存在：{0}", [legacySiteId]) : t("没有可用的 FAB 站点"));
+        twinPageActions.siteErrorSet(registry, legacySiteId ? t("指定的 FAB 站点不存在：{0}", [legacySiteId]) : t("没有可用的 FAB 站点"));
         return;
       }
     }
     // Multiple FABs are a first-class product shape: the route/first-FAB fallback
     // selects one FAB, it never rejects the site for having more than one.
-    if (useTwinPageStore.getState().siteId !== next.siteId) twinPageActions.siteIdSet(next.siteId);
-    if (useTwinPageStore.getState().siteError !== undefined) twinPageActions.siteErrorSet(undefined);
-  }, [sitesQuery.data, siteId, fabId, t]);
+    if (registry.get(twinPageAtom).siteId !== next.siteId) twinPageActions.siteIdSet(registry, next.siteId);
+    if (registry.get(twinPageAtom).siteError !== undefined) twinPageActions.siteErrorSet(registry, undefined);
+  }, [sitesQuery.data, siteId, fabId, t, registry]);
 
   useEffect(() => {
     if (!sitesQuery.error) return;
-    twinPageActions.siteErrorSet(sitesQuery.error instanceof Error ? sitesQuery.error.message : t('FAB 数据加载失败'));
-  }, [sitesQuery.error, t]);
+    twinPageActions.siteErrorSet(registry, sitesQuery.error instanceof Error ? sitesQuery.error.message : t('FAB 数据加载失败'));
+  }, [sitesQuery.error, t, registry]);
 
   useEffect(() => {
     const modal = twinModalFrom(search ?? {});
-    if (modal === 'database' || modal === 'catalog') twinPageActions.infoDialogSet('database');
-    else if (modal === 'arch') twinPageActions.infoDialogSet('architecture');
-    else if (modal === 'yms') { twinPageActions.ymsOpenSet(true); twinPageActions.ymsTabSet('map'); }
-  }, [search?.modal]);
+    if (modal === 'database' || modal === 'catalog') twinPageActions.infoDialogSet(registry, 'database');
+    else if (modal === 'arch') twinPageActions.infoDialogSet(registry, 'architecture');
+    else if (modal === 'yms') { twinPageActions.ymsOpenSet(registry, true); twinPageActions.ymsTabSet(registry, 'map'); }
+  }, [search?.modal, registry]);
 
   useEffect(() => {
     try {
       const modal = twinModalFrom(search ?? {});
-      if (!modal && localStorage.getItem(ONBOARDING_KEY) !== '1') twinUiActions.onboardingOpen();
+      if (!modal && localStorage.getItem(ONBOARDING_KEY) !== '1') twinUiActions.onboardingOpen(registry);
     } catch {
       // Storage may be blocked; the page still works without onboarding memory.
     }
-  }, [search?.modal]);
+  }, [search?.modal, registry]);
 
   const site = useMemo(() => {
     const sites = sitesQuery.data;
     if (!sites) return undefined;
     if (fabId) return sites.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
     return sites.find((value) => value.siteId === siteId) ?? sites[0];
-  }, [sitesQuery.data, siteId, fabId]);
-  const selectedFabId = useMemo(() => fabId ?? site?.fabs[0]?.fabId, [fabId, site]);
+  }, [sitesQuery.data, siteId, fabId, registry]);
+  const selectedFabId = useMemo(() => fabId ?? site?.fabs[0]?.fabId, [fabId, site, registry]);
   const fab = useMemo(
     () => site ? site.fabs.find((value) => value.fabId === selectedFabId) ?? site.fabs[0] : undefined,
     [site, selectedFabId],
@@ -147,7 +150,7 @@ export function useTwinRouteState({
 
   useEffect(() => {
     if (site) document.title = `${site.code} / ${fab?.code ?? 'FAB'} · 3D FAB`;
-  }, [site, fab]);
+  }, [site, fab, registry]);
 
   return { site, fab, selectedFabId, statusSiteId: site?.siteId };
 }

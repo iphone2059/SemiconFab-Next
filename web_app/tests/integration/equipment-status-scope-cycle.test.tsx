@@ -1,18 +1,21 @@
 // @vitest-environment jsdom
-import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
+import { resetRuntimeState, resetTwinDemoState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
+import { createAtomTestScope } from '../../tests/support/atom-scope';
+import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
+const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
 import { TwinPage } from '@/twin/twin-page';
 import { sitesQueryOptions } from '@/api/sites.resource';
 import { equipmentStatusQueryKey } from '@/api/equipment.resource';
 import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from '@/domain/fab-layout';
-import { resetTwinUiStore, twinUiActions } from '@/twin/twin-ui.atom';
-import { resetTwinPageStore, useTwinPageStore } from '@/twin/twin-page.atom';
-import { resetRuntimeStore } from '@/state/runtime-store';
-import { resetTwinDemoStore } from '@/twin/twin-demo.atom';
+import { twinUiActions } from '@/twin/twin-ui.atom';
+import { twinPageAtom } from '@/twin/twin-page.atom';
+
+
 import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
 
 /**
@@ -24,7 +27,7 @@ import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protoc
  */
 
 const viewport = vi.hoisted(() => ({ renders: 0 }));
-vi.mock('../../src/twin/twin-viewer', async () => {
+vi.mock('../../src/features/twin/fab-viewer', async () => {
   const React = await import('react');
   return {
     FabViewport: React.forwardRef(function MockFabViewport() {
@@ -97,7 +100,7 @@ afterEach(() => {
   viewport.renders = 0;
   CapturingEventSource.instances = [];
   vi.unstubAllGlobals();
-  resetTwinUiStore(); resetTwinPageStore(); resetRuntimeStore(); resetTwinDemoStore();
+  resetTwinUiState(registry); resetTwinPageState(registry); resetRuntimeState(registry); resetTwinDemoState(registry);
 });
 
 it('keeps Query cache and ordering across same-FAB remounts while detaching old SSE generations', async () => {
@@ -113,12 +116,12 @@ it('keeps Query cache and ordering across same-FAB remounts while detaching old 
   const view = render(tree);
 
   const sourceA = await streamFor('fab-a', 1);
-  await waitFor(() => expect(useTwinPageStore.getState().liveStatusScope?.fabId).toBe('fab-a'));
+  await waitFor(() => expect(registry.get(twinPageAtom).liveStatusScope?.fabId).toBe('fab-a'));
   // Keep the demo clock out of the projection latency budget.
-  act(() => twinUiActions.sourceSet('sse-live'));
+  act(() => twinUiActions.sourceSet(registry, 'sse-live'));
   send(sourceA, frame('fab-a', 5, '2026-10-27T00:00:05Z', { tools: tools({ 0: 'down' }) }));
   await waitFor(() => expect(cached(client, 'fab-a')?.sequence).toBe(5));
-  await waitFor(() => expect(useTwinPageStore.getState().liveToolStates[0]).toBe('down'));
+  await waitFor(() => expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('down'));
 
   const lateFirstCallback = sourceA.onmessage;
   view.unmount();
@@ -138,22 +141,22 @@ it('keeps Query cache and ordering across same-FAB remounts while detaching old 
   await flushProjection();
   expect(cached(client, 'fab-a')?.sequence).toBe(5);
   expect(cached(client, 'fab-a')?.tools[0].state).toBe('down');
-  expect(useTwinPageStore.getState().liveToolStates[0]).toBe('down');
+  expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('down');
 
   // A crossed-FAB frame on A's stream marks the feed stale but never writes the cache.
   send(sourceA2, frame('unknown-fab', 6, '2026-10-27T00:00:06Z', { tools: tools({ 0: 'maint' }) }));
   expect(cached(client, 'fab-a')?.sequence).toBe(5);
-  expect(useTwinPageStore.getState().statusFeed?.stale).toBe(true);
+  expect(registry.get(twinPageAtom).statusFeed?.stale).toBe(true);
 
   // A genuinely newer frame recovers LIVE and advances the single cache entry.
   send(sourceA2, frame('fab-a', 6, '2026-10-27T00:00:06Z', { tools: tools({ 0: 'maint' }) }));
   await waitFor(() => expect(cached(client, 'fab-a')?.sequence).toBe(6));
-  await waitFor(() => expect(useTwinPageStore.getState().liveToolStates[0]).toBe('maint'));
-  expect(useTwinPageStore.getState().statusFeed?.stale).toBe(false);
+  await waitFor(() => expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('maint'));
+  expect(registry.get(twinPageAtom).statusFeed?.stale).toBe(false);
   expect(cached(client, 'unknown-fab')).toBeUndefined();
   expect(client.getQueryCache().findAll({ queryKey: ['equipment', 'status'] })).toHaveLength(1);
   // A's accepted layout is complete: the projection never fell back to defaults.
-  expect(useTwinPageStore.getState().liveToolStates).toHaveLength(FAB_TOOL_STATES.length);
+  expect(registry.get(twinPageAtom).liveToolStates).toHaveLength(FAB_TOOL_STATES.length);
   remounted.unmount();
   expect(sourceA2.closed).toBe(true);
   client.clear();

@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
+import { resetTwinUiState } from '../../../tests/support/reset-ui-atoms';
+import { useAtomValue } from '@effect/atom-react';
+import { createAtomTestScope } from '../../../tests/support/atom-scope';
 import { StrictMode, type RefObject } from 'react';
-import { cleanup, fireEvent, render, renderHook, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Modal } from '@/components/modal';
 import type { FabToolState } from '@/domain/fab-layout';
@@ -9,9 +12,10 @@ import { useTwinActions } from '@/twin/use-twin-actions';
 import { useTwinKeyboard } from '@/twin/use-twin-keyboard';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
 import type { TwinView } from '@/twin/twin-state';
-import { resetTwinUiStore, useTwinUiStore } from '@/twin/twin-ui.atom';
-import { installNativeDialogPolyfill } from '../../support/native-dialog.ts';
+import { twinUiAtom } from '@/twin/twin-ui.atom';
+import { installNativeDialogPolyfill } from '../../../tests/support/native-dialog';
 
+const { registry, render, renderHook } = createAtomTestScope();
 installNativeDialogPolyfill();
 
 const LAYERS: Record<SceneLayer, boolean> = {
@@ -49,11 +53,11 @@ function press(key: string, target: Element = document.body, init: KeyboardEvent
   fireEvent.keyDown(target, { key, code: key, ...init });
 }
 
-beforeEach(() => resetTwinUiStore());
+beforeEach(() => resetTwinUiState(registry));
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  resetTwinUiStore();
+  resetTwinUiState(registry);
 });
 
 interface SurfaceProps {
@@ -106,7 +110,7 @@ it('re-centres the active Top preset after a manual camera move (ISO -> Top -> d
   const scene: RefObject<FabViewportHandle | null> = { current: handle };
 
   function TwinActionsHarness({ ref }: { ref: RefObject<FabViewportHandle | null> }) {
-    const view = useTwinUiStore((state) => state.view);
+    const view = useAtomValue(twinUiAtom, (state) => state.view);
     const actions = useTwinActions({
       scene: ref, mode: 'engineer', view, level: 'L1', exploded: false,
       mesJobs: {}, layerPreferences: LAYERS, toolStates: TOOL_STATES,
@@ -120,11 +124,11 @@ it('re-centres the active Top preset after a manual camera move (ISO -> Top -> d
   // ISO is the initial preset, so the baseline semantics of pressing 1 on the
   // already-active preset is an immediate re-centre.
   press('1');
-  expect(useTwinUiStore.getState().view).toBe('iso');
+  expect(registry.get(twinUiAtom).view).toBe('iso');
   expect(handle.setView).toHaveBeenNthCalledWith(1, 'iso');
 
   press('2');
-  expect(useTwinUiStore.getState().view).toBe('top');
+  expect(registry.get(twinUiAtom).view).toBe('top');
   expect(handle.setView).toHaveBeenCalledTimes(1);
 
   // The user drags the camera: the store preset stays 'top' but the camera pose
@@ -134,7 +138,7 @@ it('re-centres the active Top preset after a manual camera move (ISO -> Top -> d
   press('2');
   expect(handle.setView).toHaveBeenCalledTimes(1);
   expect(handle.setView).toHaveBeenCalledWith('top');
-  expect(useTwinUiStore.getState().view).toBe('top');
+  expect(registry.get(twinUiAtom).view).toBe('top');
 });
 
 it('ignores camera shortcuts from text-entry and contenteditable targets', () => {
@@ -242,6 +246,7 @@ it('registers a single listener under StrictMode and removes it on unmount', () 
   // contract; renderHook's wrapper indirection does not trigger it.
   const { unmount } = render(
     <StrictMode><KeyboardSurface onEscape={onEscape} setCamera={setCamera} /></StrictMode>,
+    { reactStrictMode: true },
   );
 
   const added = add.mock.calls.filter(([type]) => type === 'keydown');

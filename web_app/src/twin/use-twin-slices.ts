@@ -1,9 +1,11 @@
-import { useShallow } from 'zustand/react/shallow';
-import { useLocaleStore } from '@/state/locale.atom';
-import { useRuntimeStore } from '@/state/runtime-store';
-import { useTwinDemoStore } from '@/twin/twin-demo.atom';
-import { useTwinPageStore } from '@/twin/twin-page.atom';
-import { useTwinUiStore } from '@/twin/twin-ui.atom';
+import { useAtomValue } from '@effect/atom-react';
+import * as Atom from 'effect/reactivity/Atom';
+import { shallowRecordEqual } from '@/state/atom-equality';
+import { localeAtom } from '@/state/locale.atom';
+import { runtimeAtom } from '@/state/runtime-store';
+import { twinDemoAtom } from '@/twin/twin-demo.atom';
+import { twinPageAtom } from '@/twin/twin-page.atom';
+import { twinUiAtom } from '@/twin/twin-ui.atom';
 import { useTwinLocale } from '@/twin/twin-i18n';
 
 /**
@@ -19,9 +21,19 @@ import { useTwinLocale } from '@/twin/twin-i18n';
  *   high-frequency or nested updates never rerender this page or FabViewport.
  */
 export function useTwinSlices() {
+
   const { t, language, toggleLanguage } = useTwinLocale();
-  const theme = useLocaleStore((state) => state.theme);
-  const ui = useTwinUiStore(useShallow((state) => ({
+  const theme = useAtomValue(localeAtom, (state) => state.theme);
+  const ui = useAtomValue(twinContentUiAtom);
+  const demo = useAtomValue(twinContentDemoAtom);
+  const page = useAtomValue(twinContentPageAtom);
+  const status = useAtomValue(runtimeAtom, state => state.viewer.status);
+  const lifecycle = useAtomValue(runtimeAtom, state => state.viewer.lifecycle);
+  const viewerEpoch = useAtomValue(runtimeAtom, state => state.viewer.epoch);
+  return { t, language, toggleLanguage, theme, ui, demo, page, status, lifecycle, viewerEpoch };
+}
+
+const twinContentUiAtom = Atom.map(twinUiAtom, (state) => ({
     entryMode: state.entryMode,
     view: state.view,
     level: state.level,
@@ -36,15 +48,17 @@ export function useTwinSlices() {
     research: state.research,
     statusSource: state.statusSource,
     preferredStatusSource: state.preferredStatusSource,
-  })));
-  const demo = useTwinDemoStore(useShallow((state) => ({
+  })).pipe(Atom.withEquality(shallowRecordEqual));
+
+const twinContentDemoAtom = Atom.map(twinDemoAtom, (state) => ({
     states: state.states,
     keys: state.keys,
     cycle: state.cycle,
     playing: state.playing,
     scenarioId: state.scenarioId,
-  })));
-  const page = useTwinPageStore(useShallow((state) => ({
+  })).pipe(Atom.withEquality(shallowRecordEqual));
+
+const twinContentPageAtom = Atom.map(twinPageAtom, (state) => ({
     siteId: state.siteId,
     siteError: state.siteError,
     liveToolStates: state.liveToolStates,
@@ -58,9 +72,4 @@ export function useTwinSlices() {
     showResearchUtil: state.showResearchUtil,
     onboardingDontShow: state.onboardingDontShow,
     ymsOpen: state.yms.open,
-  })));
-  const status = useRuntimeStore(state => state.viewer.status);
-  const lifecycle = useRuntimeStore(state => state.viewer.lifecycle);
-  const viewerEpoch = useRuntimeStore(state => state.viewer.epoch);
-  return { t, language, toggleLanguage, theme, ui, demo, page, status, lifecycle, viewerEpoch };
-}
+  })).pipe(Atom.withEquality(shallowRecordEqual));

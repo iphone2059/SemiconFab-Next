@@ -14,7 +14,8 @@
 | Task 1 单层目录 + code-based routing | 完成，全量门禁通过 | `0d6ff12`；`docs/architecture/evidence/effect4-task1-flat-layout.md` |
 | Task 2 Effect AppRuntime / 单一 AtomRegistry | 完成 | Task 2 evidence；全量 verify.ps1 PASS（109 文件/675 测试） |
 | Task 3 Effect Schema + HTTP transport | 完成 | `effect4-task3-effect-schema-http.md`；Zod 已从源码/依赖/锁文件移除；111 文件/691 测试 PASS |
-| Task 4 Zustand→Atom + XState/Effect 命令契约 | 下一任务 | — |
+| Task 4 Zustand→Atom（阶段 A） | 完成 | `effect4-task4-atoms.md`；Zustand 已从源码/依赖/锁文件移除；114 文件/702 测试 |
+| Task 4 XState/Effect 命令契约（阶段 B） | 下一阶段 | — |
 | Task 5 Query→Resource Atom + resource-policy | 未开始 | — |
 | Task 6 Effect Stream/SSE/REST + 依赖清零 + 验收 | 未开始 | — |
 

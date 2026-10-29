@@ -1,31 +1,34 @@
 // @vitest-environment jsdom
-import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
+import { resetCatalogState, resetRuntimeState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
+import { createAtomTestScope } from '../../tests/support/atom-scope';
+import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
 import { CatalogPage } from '@/catalog/catalog-page';
 import { TwinPage } from '@/twin/twin-page';
-import { resetCatalogStore } from '@/catalog/catalog.atom';
-import { useLocaleStore } from '@/state/locale.atom';
-import { resetTwinUiStore, useTwinUiStore } from '@/twin/twin-ui.atom';
-import { resetTwinPageStore } from '@/twin/twin-page.atom';
-import { resetRuntimeStore } from '@/state/runtime-store';
+
+import { localeAtom } from '@/state/locale.atom';
+import { twinUiAtom } from '@/twin/twin-ui.atom';
+
+
 import { catalogQueryOptions } from '@/api/catalog.resource';
 import { sitesQueryOptions } from '@/api/sites.resource';
 import type { RouterSearch } from '@/routes/route-search';
 
 // Only replace the hardware boundary; pages, stores and effects remain real.
 vi.mock('../../src/rendering/lite-backend', async () => {
-  const { createScenePortStub } = await import('../support/scene-port-stub.ts');
+  const { createScenePortStub } = await import('../../tests/support/scene-port-stub');
   return { createLiteBackend: () => createScenePortStub() };
 });
 
 let client: QueryClient;
 beforeEach(() => {
-  resetCatalogStore(); resetTwinUiStore(); resetTwinPageStore(); resetRuntimeStore();
-  useLocaleStore.setState({ language: 'zh', theme: 'light' }, true);
+  resetCatalogState(registry); resetTwinUiState(registry); resetTwinPageState(registry); resetRuntimeState(registry);
+  registry.set(localeAtom, { language: 'zh', theme: 'light' });
   localStorage.clear();
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
   vi.stubGlobal('EventSource', class { onmessage = null; onerror = null; close() {} });
@@ -40,7 +43,7 @@ it('preserves catalog deep-link filters and locale instead of writing initial st
   const updates: Partial<RouterSearch>[] = [];
   render(<QueryClientProvider client={client}><CatalogPage view="catalog" search={search} onSearchChange={patch => updates.push(patch)} onViewChange={() => {}} /></QueryClientProvider>);
   for (const patch of updates) expect({ ...search, ...patch }).toMatchObject(search);
-  expect(useLocaleStore.getState()).toEqual({ language: 'en', theme: 'dark' });
+  expect(registry.get(localeAtom)).toEqual({ language: 'en', theme: 'dark' });
 });
 
 it('accepts changed URL input and still writes subsequent user edits', () => {
@@ -60,6 +63,6 @@ it('preserves Twin research and locale deep links during initial hydration', () 
   const updates: Partial<RouterSearch>[] = [];
   render(<QueryClientProvider client={client}><TwinPage fabId="fab-1" search={search} onSearchChange={patch => updates.push(patch)} /></QueryClientProvider>);
   for (const patch of updates) expect({ ...search, ...patch }).toMatchObject(search);
-  expect(useTwinUiStore.getState().entryMode).toBe('research');
-  expect(useLocaleStore.getState()).toEqual({ language: 'en', theme: 'dark' });
+  expect(registry.get(twinUiAtom).entryMode).toBe('research');
+  expect(registry.get(localeAtom)).toEqual({ language: 'en', theme: 'dark' });
 });

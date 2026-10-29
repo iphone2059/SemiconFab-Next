@@ -1,5 +1,7 @@
+import { useAtomValue } from '@effect/atom-react';
+import { RegistryContext } from '@effect/atom-react';
 import { createContext, useContext, useEffect, useMemo, type PropsWithChildren } from 'react';
-import { useLocaleStore, localeActions } from '@/state/locale.atom';
+import { localeAtom, localeActions } from '@/state/locale.atom';
 import { TWIN_EN } from '@/twin/twin-translations';
 import { GENERATED_TWIN_EN } from '@/generated/twin-translations.generated';
 import { languageTag } from '@/state/preferences.atom';
@@ -28,14 +30,15 @@ const TwinLocale = createContext({ language: 'zh' as TwinLanguage, t: twinTransl
 export const useTwinLocale = () => useContext(TwinLocale);
 
 export function TwinLocaleProvider({ children }: PropsWithChildren) {
-  const language = useLocaleStore((state) => state.language);
+  const registry = useContext(RegistryContext);
+  const language = useAtomValue(localeAtom, (state) => state.language);
   useEffect(() => {
     try { persistTwinLanguage(localStorage, language); } catch { /* Storage getter can also be denied. */ }
     document.documentElement.lang = languageTag(language);
     document.documentElement.dataset.lang = language;
     // The Twin page writes lang through TanStack Router search; this provider
     // only persists the preference and mirrors the document/attributes.
-  }, [language]);
-  const value = useMemo(() => ({ language, t: twinTranslator(language), toggleLanguage: () => localeActions.languageToggled() }), [language]);
+  }, [language, registry]);
+  const value = useMemo(() => ({ language, t: twinTranslator(language), toggleLanguage: () => localeActions.languageToggled(registry) }), [language, registry]);
   return <TwinLocale.Provider value={value}>{children}</TwinLocale.Provider>;
 }

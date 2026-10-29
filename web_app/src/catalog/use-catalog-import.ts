@@ -1,6 +1,10 @@
+import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
+import { useAtomValue } from '@effect/atom-react';
+import { RegistryContext } from '@effect/atom-react';
+import { useContext } from 'react';
 import { useMemo, type ChangeEvent } from 'react';
 import type { CatalogEntryDto } from '@/contracts/app-contracts';
-import { useLocaleStore } from '@/state/locale.atom';
+import { localeAtom } from '@/state/locale.atom';
 import { text, type Language } from '@/catalog/catalog-labels';
 import { parseCatalogEntries } from '@/catalog/catalog-data';
 import { catalogActions } from '@/catalog/catalog.atom';
@@ -13,18 +17,20 @@ export interface CatalogImport {
 }
 
 export function useCatalogImport(): CatalogImport {
-  const language = useLocaleStore((state) => state.language);
+  const registry = useContext(RegistryContext);
+  const language = useAtomValue(localeAtom, (state) => state.language);
   return useMemo(
     () => ({
       importFile: (event: ChangeEvent<HTMLInputElement>) => {
-        void importCatalogFile(event, language);
+        void importCatalogFile(registry, event, language);
       },
     }),
-    [language],
+    [language, registry],
   );
 }
 
 async function importCatalogFile(
+  registry: AtomRegistry.AtomRegistry,
   event: ChangeEvent<HTMLInputElement>,
   language: Language,
 ): Promise<void> {
@@ -32,9 +38,9 @@ async function importCatalogFile(
   event.currentTarget.value = '';
   if (!file) return;
   const requestId = crypto.randomUUID();
-  catalogActions.importStarted(requestId);
+  catalogActions.importStarted(registry, requestId);
   if (file.size > MAX_IMPORT_BYTES) {
-    catalogActions.importFailed({
+    catalogActions.importFailed(registry, {
       requestId,
       error: text(language, '文件超过 10 MiB。', 'File exceeds 10 MiB.'),
     });
@@ -42,9 +48,9 @@ async function importCatalogFile(
   }
   try {
     const parsed: CatalogEntryDto[] = parseCatalogEntries(JSON.parse(await file.text()));
-    catalogActions.localImportApplied({ requestId, entries: parsed, importId: file.name });
+    catalogActions.localImportApplied(registry, { requestId, entries: parsed, importId: file.name });
   } catch (reason: unknown) {
-    catalogActions.importFailed({
+    catalogActions.importFailed(registry, {
       requestId,
       error: reason instanceof Error ? reason.message : text(language, '导入失败', 'Import failed'),
     });

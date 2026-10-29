@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
-import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
+import { resetRuntimeState, resetTwinDemoState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
+import { createAtomTestScope } from '../../tests/support/atom-scope';
+import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
+const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
 import { FabViewport } from '@/twin/twin-viewer';
 import { TwinPage } from '@/twin/twin-page';
@@ -12,17 +15,17 @@ import { FabTelemetryRegistry } from '@/realtime/telemetry-registry';
 import { TelemetryRuntime } from '@/realtime/telemetry-runtime';
 import { createTelemetryWorkerHandler } from '@/realtime/telemetry-worker.logic';
 import { sitesQueryOptions } from '@/api/sites.resource';
-import { resetTwinUiStore } from '@/twin/twin-ui.atom';
-import { resetTwinPageStore } from '@/twin/twin-page.atom';
-import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '@/state/runtime-store';
-import { resetTwinDemoStore, twinDemoActions, useTwinDemoStore } from '@/twin/twin-demo.atom';
+
+
+import { runtimeActions, runtimeAtom } from '@/state/runtime-store';
+import { twinDemoActions, twinDemoAtom } from '@/twin/twin-demo.atom';
 import { twinUiActions } from '@/twin/twin-ui.atom';
 import type { FabToolState } from '@/domain/fab-layout';
-import type { ScenePortStub } from '../support/scene-port-stub.ts';
+import type { ScenePortStub } from '../../tests/support/scene-port-stub';
 
 const backend = vi.hoisted(() => ({ instances: [] as ScenePortStub[] }));
 vi.mock('../../src/rendering/lite-backend', async () => {
-  const { createScenePortStub } = await import('../support/scene-port-stub.ts');
+  const { createScenePortStub } = await import('../../tests/support/scene-port-stub');
   return {
     createLiteBackend: () => {
       const stub = createScenePortStub();
@@ -34,25 +37,25 @@ vi.mock('../../src/rendering/lite-backend', async () => {
 const site = { siteId: 'site-1', code: 'SITE-1', templateHash: 'test', fabs: [{ fabId: 'fab-1', code: 'FAB-01' }] };
 const sceneViews = (): string[] => backend.instances.flatMap(instance => [...instance.views]);
 const frameSource = (index = 0) => backend.instances[index].mounts[0].callbacks.getToolStates;
-afterEach(() => { cleanup(); backend.instances.length = 0; vi.unstubAllGlobals(); resetTwinUiStore(); resetTwinPageStore(); resetTwinDemoStore(); resetRuntimeStore(); });
+afterEach(() => { cleanup(); backend.instances.length = 0; vi.unstubAllGlobals(); resetTwinUiState(registry); resetTwinPageState(registry); resetTwinDemoState(registry); resetRuntimeState(registry); });
 
 it('does not reapply a preset on GPU recovery but applies it on viewport reload and view change', async () => {
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
   vi.stubGlobal('EventSource', class { onmessage = null; onerror = null; close() {} });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
   client.setQueryData(sitesQueryOptions().queryKey, [site]);
-  twinDemoActions.playingSet(false);
+  twinDemoActions.playingSet(registry, false);
   const view = render(<QueryClientProvider client={client}><TwinPage fabId="fab-1" /></QueryClientProvider>);
   try {
     await waitFor(() => expect(sceneViews()).toHaveLength(1));
-    const epoch = useRuntimeStore.getState().viewer.epoch!;
-    act(() => runtimeActions.viewerLifecycleReceived({ epoch, event: { type: 'recovering', message: 'GPU 设备已丢失', cause: 'device-lost' } }));
-    act(() => runtimeActions.viewerLifecycleReceived({ epoch, event: { type: 'ready', message: 'WebGPU · ready' } }));
+    const epoch = registry.get(runtimeAtom).viewer.epoch!;
+    act(() => runtimeActions.viewerLifecycleReceived(registry, { epoch, event: { type: 'recovering', message: 'GPU 设备已丢失', cause: 'device-lost' } }));
+    act(() => runtimeActions.viewerLifecycleReceived(registry, { epoch, event: { type: 'ready', message: 'WebGPU · ready' } }));
     expect(sceneViews()).toHaveLength(1);
-    act(() => runtimeActions.viewerReloadRequested());
+    act(() => runtimeActions.viewerReloadRequested(registry));
     await waitFor(() => expect(backend.instances).toHaveLength(2));
     await waitFor(() => expect(sceneViews()).toHaveLength(2));
-    act(() => twinUiActions.viewSet('top'));
+    act(() => twinUiActions.viewSet(registry, 'top'));
     expect(sceneViews()).toEqual(['iso', 'iso', 'top']);
   } finally { view.unmount(); client.clear(); }
 });
@@ -77,17 +80,17 @@ it('keeps paused DEMO states isolated while consuming telemetry in live mode', a
   const telemetry = new TelemetryRuntime({ url: 'fake', fabId: 'fab-1', eventSourceFactory: () => source, workerFactory: () => worker });
   telemetry.start(); source.onopen?.();
   source.onmessage?.({ data: JSON.stringify({ topic: 'telemetry.frame', sequence: 1, payload: { fabId: 'fab-1', sequence: 1, capturedAt: 'now', samples: [{ entityId: 'equipment-0', values: { state: 2, utilization: 0.5 } }] } }) });
-  const registry = new FabTelemetryRegistry(); registry.replaceAll(new Map([['fab-1', telemetry]]));
+  const telemetryRegistry = new FabTelemetryRegistry(); telemetryRegistry.replaceAll(new Map([['fab-1', telemetry]]));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
   client.setQueryData(sitesQueryOptions().queryKey, [site]);
-  twinDemoActions.playingSet(false);
-  const view = render(<QueryClientProvider client={client}><TelemetryProvider registry={registry}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></TelemetryProvider></QueryClientProvider>);
+  twinDemoActions.playingSet(registry, false);
+  const view = render(<QueryClientProvider client={client}><TelemetryProvider registry={telemetryRegistry}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></TelemetryProvider></QueryClientProvider>);
   await waitFor(() => expect(backend.instances).toHaveLength(1));
   const toolStateSource = frameSource();
-  expect(toolStateSource()).toEqual(useTwinDemoStore.getState().states);
-  twinUiActions.sourceSet('sse-live');
+  expect(toolStateSource()).toEqual(registry.get(twinDemoAtom).states);
+  twinUiActions.sourceSet(registry, 'sse-live');
   expect(toolStateSource()[0]).toBe('down');
-  twinUiActions.sourceSet('demo');
-  expect(toolStateSource()).toEqual(useTwinDemoStore.getState().states);
-  view.unmount(); client.clear(); registry.disposeAll();
+  twinUiActions.sourceSet(registry, 'demo');
+  expect(toolStateSource()).toEqual(registry.get(twinDemoAtom).states);
+  view.unmount(); client.clear(); telemetryRegistry.disposeAll();
 });

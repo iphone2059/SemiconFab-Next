@@ -1,20 +1,25 @@
 // @vitest-environment jsdom
+import { resetRuntimeState } from '../../../tests/support/reset-ui-atoms';
+import { createAtomTestScope } from '../../../tests/support/atom-scope';
 import { afterEach, expect, it, vi } from 'vitest';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
-import { createElement } from 'react';
-import { FabViewport } from '@/twin/twin-viewer';
-import { resetRuntimeStore, runtimeActions, useRuntimeStore } from '@/state/runtime-store';
+import { act, cleanup, waitFor } from '@testing-library/react';
+import { createElement, createRef } from 'react';
+import { RegistryContext } from '@effect/atom-react';
+import * as AtomRegistry from 'effect/reactivity/AtomRegistry';
+import { FabViewport, type FabViewportHandle } from '@/twin/twin-viewer';
+import { runtimeActions, runtimeAtom } from '@/state/runtime-store';
 import type { SiteDto, FabDto } from '@/contracts/app-contracts';
 import type { FabToolState } from '@/domain/fab-layout';
 import type { AmhsStats, PickedTool } from '@/contracts/scene.port';
-import type { ScenePortStub } from '../../support/scene-port-stub.ts';
-import { configureScenePortStub, resetScenePortStub, resolveScenePortMount } from '../../support/scene-port-stub.ts';
+import type { ScenePortStub } from '../../../tests/support/scene-port-stub';
+import { configureScenePortStub, resetScenePortStub, resolveScenePortMount } from '../../../tests/support/scene-port-stub';
 
 // Only the GPU backend boundary is doubled by a full ScenePort stub: mount() keeps the
 // readonly callbacks for the scene lifetime, so a test can invoke them after later renders.
+const { registry, render } = createAtomTestScope();
 const backend = vi.hoisted(() => ({ instances: [] as ScenePortStub[] }));
 vi.mock('../../../src/rendering/lite-backend', async () => {
-  const { createScenePortStub } = await import('../../support/scene-port-stub.ts');
+  const { createScenePortStub } = await import('../../../tests/support/scene-port-stub');
   return {
     createLiteBackend: () => {
       const stub = createScenePortStub();
@@ -39,7 +44,7 @@ afterEach(() => {
   cleanup();
   backend.instances.length = 0;
   resetScenePortStub();
-  resetRuntimeStore();
+  resetRuntimeState(registry);
 });
 
 it('invokes the latest scene callbacks without remounting the GPU scene', async () => {
@@ -58,13 +63,13 @@ it('invokes the latest scene callbacks without remounting the GPU scene', async 
   const mount = first.mounts[0];
   // Typed mount options carry the stable viewer identity, canvas, fabs, abort signal and
   // readonly callbacks (no positional argument list any more).
-  expect(mount.viewerId).toBe(useRuntimeStore.getState().viewer.epoch);
+  expect(mount.viewerId).toBe(registry.get(runtimeAtom).viewer.epoch);
   expect(mount.canvas).toBeInstanceOf(HTMLCanvasElement);
   expect(mount.signal).toBeInstanceOf(AbortSignal);
   expect(mount.fabs).toEqual([{ fabId: 'fab-1', code: 'FAB-01', position: [0, 0, 0] }]);
   expect(onStatusA).toHaveBeenCalledWith('WebGPU · ready');
-  expect(useRuntimeStore.getState().viewer.lifecycle).toBe('ready');
-  expect(useRuntimeStore.getState().viewer.status).toBe('WebGPU · ready');
+  expect(registry.get(runtimeAtom).viewer.lifecycle).toBe('ready');
+  expect(registry.get(runtimeAtom).viewer.status).toBe('WebGPU · ready');
   // The mount-time clear keeps its original semantics (mount effect + fabId
   // clear effect both emit the initial undefined clear).
   expect(onToolA).toHaveBeenCalledWith(undefined);
@@ -83,7 +88,7 @@ it('invokes the latest scene callbacks without remounting the GPU scene', async 
   await act(async () => { mount.callbacks.onLifecycle({ type: 'recovering', message: 'GPU 设备已丢失', cause: 'device-lost' }); });
   expect(onStatusB).toHaveBeenCalledWith('GPU 设备已丢失');
   expect(onStatusA).not.toHaveBeenCalledWith('GPU 设备已丢失');
-  expect(useRuntimeStore.getState().viewer.lifecycle).toBe('recovering');
+  expect(registry.get(runtimeAtom).viewer.lifecycle).toBe('recovering');
 
   await act(async () => { mount.callbacks.onLifecycle({ type: 'ready', message: 'WebGPU · recovered' }); });
   expect(onStatusB).toHaveBeenCalledWith('WebGPU · recovered');
@@ -107,7 +112,7 @@ it('clears selection through the latest handler when the same FAB viewer reloads
   const staleMount = firstPort.mounts[0];
 
   view.rerender(createElement(FabViewport, { ...baseProps, onToolChange: onToolB }));
-  act(() => runtimeActions.viewerReloadRequested());
+  act(() => runtimeActions.viewerReloadRequested(registry));
   await waitFor(() => expect(backend.instances).toHaveLength(2));
   // The reload's mount-time selection clear reaches the latest handler.
   await waitFor(() => expect(onToolB).toHaveBeenCalledWith(undefined));
@@ -131,16 +136,43 @@ it('clears selection through the latest handler when the same FAB viewer reloads
   });
   expect(onToolB).toHaveBeenCalledTimes(callsAfterSwitch);
   expect(onToolA).toHaveBeenCalledTimes(statusCallsAfterSwitch);
-  expect(useRuntimeStore.getState().viewer.status).not.toBe('stale ready');
-  expect(useRuntimeStore.getState().viewer.lifecycle).toBe('ready');
+  expect(registry.get(runtimeAtom).viewer.status).not.toBe('stale ready');
+  expect(registry.get(runtimeAtom).viewer.lifecycle).toBe('ready');
+});
+
+it('reloads only the replacement registry through the current imperative viewport handle', async () => {
+  const replacement = AtomRegistry.make();
+  const ref = createRef<FabViewportHandle>();
+  const viewport = (owner: AtomRegistry.AtomRegistry) => createElement(RegistryContext.Provider,
+    { value: owner }, createElement(FabViewport, { ...baseProps, ref }));
+  const view = render(viewport(registry));
+  try {
+    await waitFor(() => expect(backend.instances).toHaveLength(1));
+    view.rerender(viewport(replacement));
+    await waitFor(() => expect(backend.instances).toHaveLength(2));
+    const originalGeneration = registry.get(runtimeAtom).viewer.generation;
+    const replacementGeneration = replacement.get(runtimeAtom).viewer.generation;
+    const replacedPort = backend.instances[1];
+
+    act(() => ref.current?.reload());
+
+    expect(registry.get(runtimeAtom).viewer.generation).toBe(originalGeneration);
+    expect(replacement.get(runtimeAtom).viewer.generation).toBe(replacementGeneration + 1);
+    await waitFor(() => expect(backend.instances).toHaveLength(3));
+    expect(replacedPort.disposeCount).toBe(1);
+    expect(backend.instances[2].mounts[0].viewerId).toBe(replacement.get(runtimeAtom).viewer.epoch);
+  } finally {
+    view.unmount();
+    replacement.dispose();
+  }
 });
 
 it('reports a failed initialization as a failed lifecycle with display text kept separate', async () => {
   configureScenePortStub({ mode: 'failed' });
   const onStatus = vi.fn();
   render(createElement(FabViewport, { ...baseProps, onStatusChange: onStatus }));
-  await waitFor(() => expect(useRuntimeStore.getState().viewer.lifecycle).toBe('failed'));
-  const viewer = useRuntimeStore.getState().viewer;
+  await waitFor(() => expect(registry.get(runtimeAtom).viewer.lifecycle).toBe('failed'));
+  const viewer = registry.get(runtimeAtom).viewer;
   expect(viewer.status).toBe('WebGPU 初始化失败');
   expect(onStatus).toHaveBeenCalledWith('WebGPU 初始化失败');
   // The failed mount stays terminal: the status overlay offers an explicit reload and the
@@ -152,8 +184,8 @@ it('reports a failed initialization as a failed lifecycle with display text kept
 it('turns a rejected mount promise into a failed lifecycle instead of staying initializing', async () => {
   configureScenePortStub({ mode: 'reject', failure: new Error('后端不可用') });
   render(createElement(FabViewport, baseProps));
-  await waitFor(() => expect(useRuntimeStore.getState().viewer.lifecycle).toBe('failed'));
-  expect(useRuntimeStore.getState().viewer.status).toBe('后端不可用');
+  await waitFor(() => expect(registry.get(runtimeAtom).viewer.lifecycle).toBe('failed'));
+  expect(registry.get(runtimeAtom).viewer.status).toBe('后端不可用');
 });
 
 it('ignores a late mount promise after unmount and never writes into the disposed viewer', async () => {
@@ -163,11 +195,11 @@ it('ignores a late mount promise after unmount and never writes into the dispose
   await waitFor(() => expect(backend.instances).toHaveLength(1));
   const port = backend.instances[0];
   const lateMount = port.mounts[0];
-  expect(useRuntimeStore.getState().viewer.epoch).toBeDefined();
+  expect(registry.get(runtimeAtom).viewer.epoch).toBeDefined();
 
   view.unmount();
-  expect(useRuntimeStore.getState().viewer.lifecycle).toBe('disposed');
-  expect(useRuntimeStore.getState().viewer.epoch).toBeUndefined();
+  expect(registry.get(runtimeAtom).viewer.lifecycle).toBe('disposed');
+  expect(registry.get(runtimeAtom).viewer.epoch).toBeUndefined();
   expect(port.disposeCount).toBe(1);
 
   await act(async () => {
@@ -175,6 +207,6 @@ it('ignores a late mount promise after unmount and never writes into the dispose
     resolveScenePortMount({ status: 'ready' });
   });
   expect(onStatus).not.toHaveBeenCalledWith('late ready');
-  expect(useRuntimeStore.getState().viewer.lifecycle).toBe('disposed');
-  expect(useRuntimeStore.getState().viewer.status).not.toBe('late ready');
+  expect(registry.get(runtimeAtom).viewer.lifecycle).toBe('disposed');
+  expect(registry.get(runtimeAtom).viewer.status).not.toBe('late ready');
 });

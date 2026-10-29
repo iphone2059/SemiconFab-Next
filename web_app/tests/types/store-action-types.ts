@@ -1,5 +1,7 @@
+import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
+declare const registry: AtomRegistry.AtomRegistry;
 /**
- * Compile-time contract tests for the typed Zustand slice-store actions.
+ * Compile-time contract tests for the typed Effect Atom slice-store actions.
  *
  * Vitest never executes this file (it is not a *.test.* module); it exists so
  * `tsc --noEmit` proves the inference-based action surface is not just "valid
@@ -12,27 +14,27 @@ import { twinPageActions } from '@/twin/twin-page.atom';
 import { workbenchActions } from '@/workbench/workbench.atom';
 
 // Positive controls: the intended shape keeps compiling.
-workbenchActions.formFieldSet({ field: 'lotCount', value: '12' });
-twinPageActions.siteIdSet('site-1');
-twinPageActions.statusFeedStale();
-runtimeActions.viewerMounted('epoch-1');
-runtimeActions.viewerLifecycleReceived({ epoch: 'epoch-1', event: { type: 'ready', message: 'WebGPU · ready' } });
+workbenchActions.formFieldSet(registry, { field: 'lotCount', value: '12' });
+twinPageActions.siteIdSet(registry, 'site-1');
+twinPageActions.statusFeedStale(registry);
+runtimeActions.viewerMounted(registry, 'epoch-1');
+runtimeActions.viewerLifecycleReceived(registry, { epoch: 'epoch-1', event: { type: 'ready', message: 'WebGPU · ready' } });
 
 // @ts-expect-error the viewer lifecycle is a discriminated event, not an arbitrary string
-runtimeActions.viewerLifecycleReceived({ epoch: 'epoch-1', event: { type: 'bogus', message: 'x' } });
+runtimeActions.viewerLifecycleReceived(registry, { epoch: 'epoch-1', event: { type: 'bogus', message: 'x' } });
 // @ts-expect-error a recovering event must declare its loss cause
-runtimeActions.viewerLifecycleReceived({ epoch: 'epoch-1', event: { type: 'recovering', message: 'x' } });
+runtimeActions.viewerLifecycleReceived(registry, { epoch: 'epoch-1', event: { type: 'recovering', message: 'x' } });
 // @ts-expect-error the string-status action was replaced by the lifecycle action
-runtimeActions.viewerStatusReceived({ epoch: 'epoch-1', status: 'WebGPU · ready' });
+runtimeActions.viewerStatusReceived(registry, { epoch: 'epoch-1', status: 'WebGPU · ready' });
 // @ts-expect-error an unknown form field must not compile
-workbenchActions.formFieldSet({ field: 'notExisting', value: '12' });
+workbenchActions.formFieldSet(registry, { field: 'notExisting', value: '12' });
 // @ts-expect-error the payload is required
-workbenchActions.formFieldSet();
+workbenchActions.formFieldSet(registry);
 // @ts-expect-error the value must stay a string
-workbenchActions.formFieldSet({ field: 'lotCount', value: 12 });
+workbenchActions.formFieldSet(registry, { field: 'lotCount', value: 12 });
 // @ts-expect-error a required action argument cannot be omitted
-runtimeActions.viewerMounted();
+runtimeActions.viewerMounted(registry);
 // @ts-expect-error a required nested payload field cannot be omitted
-twinPageActions.mesJobSet({ index: 1 });
+twinPageActions.mesJobSet(registry, { index: 1 });
 // @ts-expect-error optional union values are still narrowed
-twinPageActions.sidebarTabSet('not-a-tab');
+twinPageActions.sidebarTabSet(registry, 'not-a-tab');

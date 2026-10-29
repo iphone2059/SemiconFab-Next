@@ -1,10 +1,13 @@
+import { useAtomValue } from '@effect/atom-react';
+import { RegistryContext } from '@effect/atom-react';
+import { useContext } from 'react';
 import { useEffect } from 'react';
 import type { MouseEvent } from 'react';
-import { localeActions, useLocaleStore } from '@/state/locale.atom';
+import { localeActions, localeAtom } from '@/state/locale.atom';
 import { languageTag, readPreferences, type Preferences } from '@/state/preferences.atom';
 import { searchToQueryString, type RouterSearch } from '@/routes/route-search';
 import { catalogSearchFrom, catalogSearchPatch } from '@/catalog/catalog-search';
-import { catalogActions, useCatalogStore } from '@/catalog/catalog.atom';
+import { catalogActions, catalogAtom } from '@/catalog/catalog.atom';
 import { text, type Language } from '@/catalog/catalog-labels';
 import type { CatalogView } from '@/catalog/catalog-types';
 
@@ -43,16 +46,17 @@ export interface CatalogRouteState {
  * the single authoritative source is explicit.
  */
 export function useCatalogRouteState(options: CatalogRouteStateOptions): CatalogRouteState {
+  const registry = useContext(RegistryContext);
   const { initialView, search, onSearchChange, onViewChange, entries } = options;
-  const catalogState = useCatalogStore();
-  const preferences = useLocaleStore();
+  const catalogState = useAtomValue(catalogAtom);
+  const preferences = useAtomValue(localeAtom);
   const language = preferences.language;
   const { view, domain, category, query, hideDrafts, selected } = catalogState;
   const searchKey = searchToQueryString(search);
 
   useEffect(() => {
     const route = catalogSearchFrom(search);
-    catalogActions.hydrate({
+    catalogActions.hydrate(registry, {
       view: initialView,
       domain: route.domain,
       category: route.category,
@@ -61,24 +65,24 @@ export function useCatalogRouteState(options: CatalogRouteStateOptions): Catalog
       selected: route.compare,
       page: 0,
     });
-    localeActions.preferencesSet(preferencesFromSearch(search));
+    localeActions.preferencesSet(registry, preferencesFromSearch(search));
     // searchKey is the stable identity of the router search; the raw object is
     // not stable across navigations, so the effect deliberately depends on it.
-  }, [initialView, searchKey]);
+  }, [initialView, searchKey, registry]);
 
   useEffect(() => {
     if (view !== 'compare' || selected.length > 0 || entries.length === 0) return;
     if (catalogSearchFrom(search).compare.length > 0) return;
-    catalogActions.selectedSet(
+    catalogActions.selectedSet(registry,
       entries.filter((entry) => entry.category === 'lithography').slice(0, 3).map((entry) => entry.recordId),
     );
-  }, [view, selected.length, entries, searchKey]);
+  }, [view, selected.length, entries, searchKey, registry]);
 
   useEffect(() => {
     // Hydration (or another effect) can replace these snapshots earlier in this
     // commit. Only write the current render back; otherwise URL input and old
     // store values repeatedly overwrite each other.
-    if (useCatalogStore.getState() !== catalogState || useLocaleStore.getState() !== preferences) return;
+    if (registry.get(catalogAtom) !== catalogState || registry.get(localeAtom) !== preferences) return;
     document.documentElement.lang = languageTag(language);
     document.title = `${text(
       language,
@@ -104,7 +108,7 @@ export function useCatalogRouteState(options: CatalogRouteStateOptions): Catalog
     if (searchToQueryString({ ...search, ...patch }) !== searchToQueryString(search)) {
       onSearchChange(patch, true);
     }
-  }, [catalogState, preferences, language, view, domain, category, query, selected, hideDrafts, search, onSearchChange]);
+  }, [catalogState, preferences, language, view, domain, category, query, selected, hideDrafts, search, onSearchChange, registry]);
 
   function openView(next: CatalogView): void {
     const patch = {
@@ -119,7 +123,7 @@ export function useCatalogRouteState(options: CatalogRouteStateOptions): Catalog
       }),
       compare: selected.join(',') || undefined,
     };
-    catalogActions.viewSet(next);
+    catalogActions.viewSet(registry, next);
     onViewChange(next, patch);
   }
 

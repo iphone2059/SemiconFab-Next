@@ -1,20 +1,22 @@
 // @vitest-environment jsdom
+import { resetWorkbenchState } from '../../../tests/support/reset-ui-atoms';
+import { createAtomTestScope } from '../../../tests/support/atom-scope';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import WorkbenchApp from '@/workbench/workbench';
 import { sitesQueryOptions } from '@/api/sites.resource';
 import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from '@/api/runs.resource';
 import {
-  resetWorkbenchStore,
-  useWorkbenchStore,
+  workbenchAtom,
   workbenchActions,
 } from '@/workbench/workbench.atom';
 
 // Server state for sites/runs/run/results is owned by TanStack Query (ARCH G-02);
 // every test that renders gets its own isolated Query cache. Client UI state lives
-// in the Zustand workbench store and is reset between cases.
+// in the Effect Atom workbench store and is reset between cases.
+const { registry, render } = createAtomTestScope();
 const createQueryClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
 // Use real wire identities: createRun validates Site/FAB GUIDs before HTTP.
 const singleFabSite = {
@@ -22,42 +24,42 @@ const singleFabSite = {
   fabs: [{ fabId: '37793fb6-5679-b7a3-3fef-d970433697c1', code: 'FAB-01' }],
 };
 
-beforeEach(() => resetWorkbenchStore());
+beforeEach(() => resetWorkbenchState(registry));
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
 
 it('keeps a newly created or explicitly selected run while a stale list refreshes', () => {
-  workbenchActions.siteIdSet('site-a');
-  workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['old-run'] });
-  expect(useWorkbenchStore.getState().runId).toBe('old-run');
-  workbenchActions.runIdSet('new-run');
-  workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['old-run'] });
-  expect(useWorkbenchStore.getState().runId).toBe('new-run');
-  workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['new-run', 'old-run'] });
-  workbenchActions.runIdSet('old-run');
-  workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['new-run', 'old-run'] });
-  expect(useWorkbenchStore.getState().runId).toBe('old-run');
+  workbenchActions.siteIdSet(registry, 'site-a');
+  workbenchActions.runsReceived(registry, { siteId: 'site-a', runIds: ['old-run'] });
+  expect(registry.get(workbenchAtom).runId).toBe('old-run');
+  workbenchActions.runIdSet(registry, 'new-run');
+  workbenchActions.runsReceived(registry, { siteId: 'site-a', runIds: ['old-run'] });
+  expect(registry.get(workbenchAtom).runId).toBe('new-run');
+  workbenchActions.runsReceived(registry, { siteId: 'site-a', runIds: ['new-run', 'old-run'] });
+  workbenchActions.runIdSet(registry, 'old-run');
+  workbenchActions.runsReceived(registry, { siteId: 'site-a', runIds: ['new-run', 'old-run'] });
+  expect(registry.get(workbenchAtom).runId).toBe('old-run');
 });
 
 it('clears the previous site selection and rejects its late list when the new site is empty', () => {
-  workbenchActions.siteIdSet('site-a');
-  workbenchActions.runIdSet('a-run');
-  workbenchActions.siteIdSet('site-a');
-  expect(useWorkbenchStore.getState().runId).toBe('a-run');
-  workbenchActions.siteIdSet('site-b');
-  expect(useWorkbenchStore.getState().runId).toBe('');
-  workbenchActions.runsReceived({ siteId: 'site-a', runIds: ['a-run'] });
-  workbenchActions.runsReceived({ siteId: 'site-b', runIds: [] });
-  expect(useWorkbenchStore.getState().runId).toBe('');
-  workbenchActions.runsReceived({ siteId: 'site-b', runIds: ['b-run'] });
-  expect(useWorkbenchStore.getState().runId).toBe('b-run');
+  workbenchActions.siteIdSet(registry, 'site-a');
+  workbenchActions.runIdSet(registry, 'a-run');
+  workbenchActions.siteIdSet(registry, 'site-a');
+  expect(registry.get(workbenchAtom).runId).toBe('a-run');
+  workbenchActions.siteIdSet(registry, 'site-b');
+  expect(registry.get(workbenchAtom).runId).toBe('');
+  workbenchActions.runsReceived(registry, { siteId: 'site-a', runIds: ['a-run'] });
+  workbenchActions.runsReceived(registry, { siteId: 'site-b', runIds: [] });
+  expect(registry.get(workbenchAtom).runId).toBe('');
+  workbenchActions.runsReceived(registry, { siteId: 'site-b', runIds: ['b-run'] });
+  expect(registry.get(workbenchAtom).runId).toBe('b-run');
 });
 
 it('does not render cached run details or totals belonging to another site', () => {
-  workbenchActions.siteIdSet('site-b');
-  workbenchActions.runIdSet('a-run');
+  workbenchActions.siteIdSet(registry, 'site-b');
+  workbenchActions.runIdSet(registry, 'a-run');
   // Keep background refetches pending instead of touching the network.
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
   // Seed the shared Query cache instead of the removed RTK cache.
@@ -82,7 +84,7 @@ it('does not render cached run details or totals belonging to another site', () 
 });
 
 it('renders the single FAB execution card and metric without a redundant FAB selector', () => {
-  workbenchActions.siteIdSet(singleFabSite.siteId);
+  workbenchActions.siteIdSet(registry, singleFabSite.siteId);
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url.endsWith('/api/v1/runs')) {
@@ -104,7 +106,7 @@ it('renders the single FAB execution card and metric without a redundant FAB sel
 });
 
 it('submits the single FAB scenario through the validated HTTP boundary', async () => {
-  workbenchActions.siteIdSet(singleFabSite.siteId);
+  workbenchActions.siteIdSet(registry, singleFabSite.siteId);
   const bodies: Array<{ scenario: { fabs: unknown[] } }> = [];
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -137,15 +139,15 @@ it('submits the single FAB scenario through the validated HTTP boundary', async 
     expect(bodies[0].scenario.fabs).toEqual([
       { fabId: '37793fb6-5679-b7a3-3fef-d970433697c1', code: 'FAB-01', lotCount: 24, processTimeUs: '1000000' },
     ]);
-    await waitFor(() => expect(useWorkbenchStore.getState().runId).toBe('run-9'));
-    expect(useWorkbenchStore.getState().submitError).toBe('');
+    await waitFor(() => expect(registry.get(workbenchAtom).runId).toBe('run-9'));
+    expect(registry.get(workbenchAtom).submitError).toBe('');
   } finally {
     Object.defineProperty(globalThis, 'crypto', { value: originalCrypto, configurable: true });
   }
 });
 
 it('remounts the single FAB command console when its site scope changes', async () => {
-  workbenchActions.siteIdSet(singleFabSite.siteId);
+  workbenchActions.siteIdSet(registry, singleFabSite.siteId);
   // Background queries stay pending; only the console markup matters here.
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
   const queryClient = createQueryClient();
@@ -165,7 +167,7 @@ it('remounts the single FAB command console when its site scope changes', async 
     queryClient.setQueryData(sitesQueryOptions().queryKey, [{
       ...singleFabSite, siteId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', code: 'RELOADED',
     }]);
-    workbenchActions.siteIdSet('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+    workbenchActions.siteIdSet(registry, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
   });
 
   // Keep one active FAB while replacing the site's scope-keyed console instance.

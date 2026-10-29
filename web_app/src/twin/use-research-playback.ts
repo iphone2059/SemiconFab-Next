@@ -1,3 +1,5 @@
+import { RegistryContext } from '@effect/atom-react';
+import { useContext } from 'react';
 import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { researchEventsQueryOptions } from '@/api/research.resource';
@@ -43,6 +45,7 @@ export function useResearchPlayback({
   replayBase,
   t,
 }: TwinResearchPlaybackParams): TwinResearchPlayback {
+  const registry = useContext(RegistryContext);
   const researchQuery = useQuery({ ...researchEventsQueryOptions(), enabled: mode === 'research' });
 
   // A16: a parse failure is a distinct, visible state; it must not silently become
@@ -54,7 +57,7 @@ export function useResearchPlayback({
     } catch (error) {
       return { replay: undefined, error: error instanceof Error ? error.message : String(error) };
     }
-  }, [researchQuery.data]);
+  }, [researchQuery.data, registry]);
   const research = researchParse.replay;
   const researchParseError = researchParse.error;
   const researchLoading = mode === 'research' && researchQuery.isLoading;
@@ -62,8 +65,8 @@ export function useResearchPlayback({
 
   useEffect(() => {
     if (!research) return;
-    twinUiActions.researchSeek(Math.min(3600, research.durationSec));
-  }, [research]);
+    twinUiActions.researchSeek(registry, Math.min(3600, research.durationSec));
+  }, [research, registry]);
 
   useEffect(() => {
     if (!researchPlaying || !research) return;
@@ -72,27 +75,27 @@ export function useResearchPlayback({
       const now = performance.now();
       const elapsed = ((now - last) / 1000) * researchSpeed;
       last = now;
-      twinUiActions.researchAdvance({ deltaSec: elapsed, durationSec: research.durationSec });
+      twinUiActions.researchAdvance(registry, { deltaSec: elapsed, durationSec: research.durationSec });
     }, 100);
     return () => window.clearInterval(timer);
-  }, [researchPlaying, research, researchSpeed]);
+  }, [researchPlaying, research, researchSpeed, registry]);
 
-  const researchSnapshot = useMemo(() => research?.snapshot(researchTime), [research, researchTime]);
+  const researchSnapshot = useMemo(() => research?.snapshot(researchTime), [research, researchTime, registry]);
   const replayProjection = useMemo(
     () => researchSnapshot ? projectReplayStates(researchSnapshot, replayBase) : undefined,
     [researchSnapshot, replayBase],
   );
 
   function setResearchPlaying(playing: boolean): void {
-    twinUiActions.researchPlay(playing);
+    twinUiActions.researchPlay(registry, playing);
   }
 
   function setResearchTime(timeSec: number): void {
-    twinUiActions.researchSeek(timeSec);
+    twinUiActions.researchSeek(registry, timeSec);
   }
 
   function setResearchSpeed(speed: 1 | 10 | 100 | 500): void {
-    twinUiActions.researchSpeedSet(speed);
+    twinUiActions.researchSpeedSet(registry, speed);
   }
 
   return {

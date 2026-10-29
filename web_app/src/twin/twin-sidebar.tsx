@@ -1,7 +1,10 @@
+import { useAtomValue } from '@effect/atom-react';
+import { RegistryContext } from '@effect/atom-react';
+import { useContext } from 'react';
 import { useMemo } from 'react';
 import { classNames } from '@/components/class-names';
 import { useTwinLocale } from '@/twin/twin-i18n';
-import { useTwinPageStore, twinPageActions } from '@/twin/twin-page.atom';
+import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
 import { ORIGINAL_TWIN_UI, filterOriginalOem, filterReferenceEquipment, localizedEquipment, type TwinSelection } from '@/domain/original-twin-data';
 import type { FabToolState } from '@/domain/fab-layout';
 import { OriginalIcon } from '@/components/original-icons';
@@ -27,13 +30,14 @@ export function TwinSidebar({selection,states,badgeCount=67,onSelect,onArchitect
   selection?:TwinSelection;states:Readonly<Record<string,FabToolState>>;badgeCount?:number;
   onSelect:(selection:TwinSelection)=>void;onArchitecture:()=>void;onDatabase:()=>void;
 }) {
+  const registry = useContext(RegistryContext);
   const {language}=useTwinLocale(); const zh=language==='zh';
-  const {tab,query,category,segment,stateFilter,switched}=useTwinPageStore(state=>state.sidebar);
-  const setTab=(value:'fab'|'oem')=>twinPageActions.sidebarTabSet(value);
-  const setQuery=(value:string)=>twinPageActions.sidebarQuerySet(value);
-  const setCategory=(value:string)=>twinPageActions.sidebarCategorySet(value);
-  const setSegment=(value:string)=>twinPageActions.sidebarSegmentSet(value);
-  const setStateFilter=(value:string)=>twinPageActions.sidebarStateFilterToggle(value);
+  const {tab,query,category,segment,stateFilter,switched}=useAtomValue(twinPageAtom, state=>state.sidebar);
+  const setTab=(value:'fab'|'oem')=>twinPageActions.sidebarTabSet(registry, value);
+  const setQuery=(value:string)=>twinPageActions.sidebarQuerySet(registry, value);
+  const setCategory=(value:string)=>twinPageActions.sidebarCategorySet(registry, value);
+  const setSegment=(value:string)=>twinPageActions.sidebarSegmentSet(registry, value);
+  const setStateFilter=(value:string)=>twinPageActions.sidebarStateFilterToggle(registry, value);
   const equipment=useMemo(()=>filterReferenceEquipment({query,category,state:stateFilter,language,states}),[query,category,stateFilter,language,states]);
   const oem=useMemo(()=>filterOriginalOem(query,segment),[query,segment]);
   const counts=useMemo(()=>{const result={running:0,idle:0,down:0,maint:0};for(const row of ORIGINAL_TWIN_UI.equipment)result[states[row.id]??'running']++;return result},[states]);

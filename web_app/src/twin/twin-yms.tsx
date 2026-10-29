@@ -1,10 +1,14 @@
+import { useAtomValue } from '@effect/atom-react';
+import { RegistryContext } from '@effect/atom-react';
+import { useContext } from 'react';
 import { memo, useMemo } from 'react';
-import { useShallow } from 'zustand/react/shallow';
+import * as Atom from 'effect/reactivity/Atom';
+import { shallowRecordEqual } from '@/state/atom-equality';
 import type { FabToolState } from '@/domain/fab-layout';
 import { computeFabYield, DEFAULT_YIELD_INPUT, scenarioStates, YIELD_SCENARIOS, type YieldInput } from '@/domain/fab-yield';
 import { ORIGINAL_TWIN_UI } from '@/domain/original-twin-data';
-import { useTwinDemoStore } from '@/twin/twin-demo.atom';
-import { twinPageActions, useTwinPageStore } from '@/twin/twin-page.atom';
+import { twinDemoAtom } from '@/twin/twin-demo.atom';
+import { twinPageActions, twinPageAtom } from '@/twin/twin-page.atom';
 import { resolveScenario } from '@/domain/simulation-twin-equipment';
 import {
   BIN_COLORS, BIN_LABELS, WM811K_DEFECT_METADATA, generateWaferMap, stdfSummary, theoreticalYieldModels, waferMetrics,
@@ -24,15 +28,9 @@ interface YmsProjectionProps {
  * and scenario changes out of TwinContent/FabViewport.
  */
 function useFabYieldProjection(toolStates: readonly FabToolState[]) {
-  const { yieldInput, yieldScenario } = useTwinPageStore(useShallow((state) => ({
-    yieldInput: state.yms.yieldInput,
-    yieldScenario: state.yms.yieldScenario,
-  })));
-  const { referenceLights, scenarioId, yieldJitter } = useTwinDemoStore(useShallow((state) => ({
-    referenceLights: state.referenceLights,
-    scenarioId: state.scenarioId,
-    yieldJitter: state.yieldJitter,
-  })));
+
+  const { yieldInput, yieldScenario } = useAtomValue(yieldPreferencesAtom);
+  const { referenceLights, scenarioId, yieldJitter } = useAtomValue(yieldDemoAtom);
   const yieldStates = useMemo(() => {
     if (yieldScenario === 'live') return toolStates;
     const scenario = YIELD_SCENARIOS.find((entry) => entry.id === yieldScenario);
@@ -67,11 +65,12 @@ function useFabYieldProjection(toolStates: readonly FabToolState[]) {
  * subscribed here instead of through TwinContent.
  */
 export function TwinYieldPill({ toolStates }: YmsProjectionProps) {
+  const registry = useContext(RegistryContext);
   const { t } = useTwinLocale();
   const { fabYield } = useFabYieldProjection(toolStates);
   return (
     <>
-      <button id="header-yield-val" className="twin-yield-pill" type="button" title="Cascading Yield Model" onClick={() => { twinPageActions.ymsOpenSet(true); twinPageActions.ymsTabSet('yield'); }}>{(fabYield.totalYield * 100).toFixed(2)}%⌄</button>
+      <button id="header-yield-val" className="twin-yield-pill" type="button" title="Cascading Yield Model" onClick={() => { twinPageActions.ymsOpenSet(registry, true); twinPageActions.ymsTabSet(registry, 'yield'); }}>{(fabYield.totalYield * 100).toFixed(2)}%⌄</button>
       <span id="header-wpm-val" className="twin-throughput">{fabYield.wpm.toLocaleString('en-US')}<small>{t("片/月")}</small></span>
     </>
   );
@@ -83,10 +82,11 @@ export function TwinYieldPill({ toolStates }: YmsProjectionProps) {
  * cross-die hover; the DOM is byte-for-byte the former inline markup.
  */
 const WaferDieMap = memo(function WaferDieMap({ dies }: { dies: readonly WaferDie[] }) {
+  const registry = useContext(RegistryContext);
   return (
     <>
       {dies.map((die) => (
-        <rect key={`${die.r}-${die.c}`} x={160 + die.dx - 5.15} y={160 + die.dy - 5.15} width={10.3} height={10.3} rx={1.5} fill={BIN_COLORS[die.bin]} stroke="#fff" strokeWidth={0.3} onMouseEnter={() => twinPageActions.ymsHoverDieSet({ r: die.r, c: die.c, bin: die.bin })} onMouseLeave={() => twinPageActions.ymsHoverDieSet(undefined)} />
+        <rect key={`${die.r}-${die.c}`} x={160 + die.dx - 5.15} y={160 + die.dy - 5.15} width={10.3} height={10.3} rx={1.5} fill={BIN_COLORS[die.bin]} stroke="#fff" strokeWidth={0.3} onMouseEnter={() => twinPageActions.ymsHoverDieSet(registry, { r: die.r, c: die.c, bin: die.bin })} onMouseLeave={() => twinPageActions.ymsHoverDieSet(registry, undefined)} />
       ))}
     </>
   );
@@ -100,48 +100,40 @@ const WaferDieMap = memo(function WaferDieMap({ dies }: { dies: readonly WaferDi
  * FabViewport.
  */
 export function TwinYmsPanel({ toolStates }: YmsProjectionProps) {
+  const registry = useContext(RegistryContext);
   const { t } = useTwinLocale();
-  const { tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, stdfCopied } = useTwinPageStore(useShallow((state) => ({
-    tab: state.yms.tab,
-    pattern: state.yms.pattern,
-    seed: state.yms.seed,
-    hoverDie: state.yms.hoverDie,
-    dieArea: state.yms.dieArea,
-    defectD0: state.yms.defectD0,
-    clusterAlpha: state.yms.clusterAlpha,
-    stdfCopied: state.yms.stdfCopied,
-  })));
+  const { tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, stdfCopied } = useAtomValue(waferMapPreferencesAtom);
   const { fabYield, yieldInput, yieldScenario, yieldUnresolved } = useFabYieldProjection(toolStates);
-  const waferDies = useMemo(() => generateWaferMap(waferPattern, waferSeed), [waferPattern, waferSeed]);
-  const waferAnalytics = useMemo(() => waferMetrics(waferDies), [waferDies]);
-  const yieldModels = useMemo(() => theoreticalYieldModels(dieArea, defectD0, clusterAlpha), [dieArea, defectD0, clusterAlpha]);
-  const stdf = useMemo(() => stdfSummary(waferDies, waferPattern), [waferDies, waferPattern]);
+  const waferDies = useMemo(() => generateWaferMap(waferPattern, waferSeed), [waferPattern, waferSeed, registry]);
+  const waferAnalytics = useMemo(() => waferMetrics(waferDies), [waferDies, registry]);
+  const yieldModels = useMemo(() => theoreticalYieldModels(dieArea, defectD0, clusterAlpha), [dieArea, defectD0, clusterAlpha, registry]);
+  const stdf = useMemo(() => stdfSummary(waferDies, waferPattern), [waferDies, waferPattern, registry]);
 
-  const selectWaferPattern = (value: DefectPattern) => twinPageActions.ymsRandomize(value);
-  const setDieArea = (value: number) => twinPageActions.ymsDieAreaSet(value);
-  const setDefectD0 = (value: number) => twinPageActions.ymsDefectD0Set(value);
-  const setClusterAlpha = (value: number) => twinPageActions.ymsClusterAlphaSet(value);
+  const selectWaferPattern = (value: DefectPattern) => twinPageActions.ymsRandomize(registry, value);
+  const setDieArea = (value: number) => twinPageActions.ymsDieAreaSet(registry, value);
+  const setDefectD0 = (value: number) => twinPageActions.ymsDefectD0Set(registry, value);
+  const setClusterAlpha = (value: number) => twinPageActions.ymsClusterAlphaSet(registry, value);
   const setYieldInput = (value: YieldInput | ((current: YieldInput) => YieldInput)) => {
-    if (typeof value === 'function') twinPageActions.ymsYieldInputSet(value(yieldInput));
-    else twinPageActions.ymsYieldInputSet(value);
+    if (typeof value === 'function') twinPageActions.ymsYieldInputSet(registry, value(yieldInput));
+    else twinPageActions.ymsYieldInputSet(registry, value);
   };
-  const setStdfCopied = (value: boolean) => twinPageActions.ymsStdfCopiedSet(value);
+  const setStdfCopied = (value: boolean) => twinPageActions.ymsStdfCopiedSet(registry, value);
   function chooseYieldScenario(id: string): void {
-    twinPageActions.ymsYieldScenarioSet(id);
+    twinPageActions.ymsYieldScenarioSet(registry, id);
     const scenario = YIELD_SCENARIOS.find((entry) => entry.id === id);
-    twinPageActions.ymsYieldInputSet(scenario ? { purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime } : DEFAULT_YIELD_INPUT);
+    twinPageActions.ymsYieldInputSet(registry, scenario ? { purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime } : DEFAULT_YIELD_INPUT);
   }
 
   return (
     <Modal backdropClassName="twin-yms-backdrop" className="twin-yms" label="YMS yield management"
-      onClose={() => twinPageActions.ymsOpenSet(false)}>
+      onClose={() => twinPageActions.ymsOpenSet(registry, false)}>
         <header className="twin-yms-head">
           <div><ModalTitle asChild><strong>YMS · YIELD MANAGEMENT</strong></ModalTitle><span>WM-811K SPATIAL CLASSIFIER · 8-STAGE CASCADING YIELD</span></div>
           <nav>
-            <button type="button" className={ymsTab === 'map' ? 'active' : ''} onClick={() => twinPageActions.ymsTabSet('map')}>Wafer Map</button>
-            <button type="button" className={ymsTab === 'yield' ? 'active' : ''} onClick={() => twinPageActions.ymsTabSet('yield')}>Yield Waterfall</button>
+            <button type="button" className={ymsTab === 'map' ? 'active' : ''} onClick={() => twinPageActions.ymsTabSet(registry, 'map')}>Wafer Map</button>
+            <button type="button" className={ymsTab === 'yield' ? 'active' : ''} onClick={() => twinPageActions.ymsTabSet(registry, 'yield')}>Yield Waterfall</button>
           </nav>
-          <button type="button" className="twin-yms-close" aria-label={t("关闭 YMS")} onClick={() => twinPageActions.ymsOpenSet(false)}>×</button>
+          <button type="button" className="twin-yms-close" aria-label={t("关闭 YMS")} onClick={() => twinPageActions.ymsOpenSet(registry, false)}>×</button>
         </header>
 
         {ymsTab === 'map' ? (
@@ -222,3 +214,25 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
     </Modal>
   );
 }
+
+const yieldPreferencesAtom = Atom.map(twinPageAtom, (state) => ({
+    yieldInput: state.yms.yieldInput,
+    yieldScenario: state.yms.yieldScenario,
+  })).pipe(Atom.withEquality(shallowRecordEqual));
+
+const yieldDemoAtom = Atom.map(twinDemoAtom, (state) => ({
+    referenceLights: state.referenceLights,
+    scenarioId: state.scenarioId,
+    yieldJitter: state.yieldJitter,
+  })).pipe(Atom.withEquality(shallowRecordEqual));
+
+const waferMapPreferencesAtom = Atom.map(twinPageAtom, (state) => ({
+    tab: state.yms.tab,
+    pattern: state.yms.pattern,
+    seed: state.yms.seed,
+    hoverDie: state.yms.hoverDie,
+    dieArea: state.yms.dieArea,
+    defectD0: state.yms.defectD0,
+    clusterAlpha: state.yms.clusterAlpha,
+    stdfCopied: state.yms.stdfCopied,
+  })).pipe(Atom.withEquality(shallowRecordEqual));

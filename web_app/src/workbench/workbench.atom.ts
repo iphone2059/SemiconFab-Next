@@ -1,4 +1,5 @@
-import { createSliceStore } from '@/state/create-slice-store';
+import * as Atom from 'effect/reactivity/Atom';
+import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 
 export interface WorkbenchFormState {
   lotCount: string;
@@ -27,22 +28,41 @@ export const initialWorkbenchState: WorkbenchState = {
   submitError: '',
 };
 
-const workbench = createSliceStore(initialWorkbenchState, {
-  siteIdSet: (state, siteId: string) => state.siteId === siteId
+const reducers = {
+  siteIdSet: (state: WorkbenchState, siteId: string) => state.siteId === siteId
     ? state
     : { ...state, siteId, runId: '', submitError: '' },
-  runsReceived: (state, payload: { siteId: string; runIds: string[] }) => state.siteId === payload.siteId && !state.runId
+  runsReceived: (state: WorkbenchState, payload: { siteId: string; runIds: string[] }) => state.siteId === payload.siteId && !state.runId
     ? { ...state, runId: payload.runIds[0] ?? '' }
     : state,
-  runIdSet: (state, runId: string) => ({ ...state, runId, submitError: '' }),
-  formFieldSet: (state, payload: { field: keyof WorkbenchFormState; value: string }) => ({
+  runIdSet: (state: WorkbenchState, runId: string) => ({ ...state, runId, submitError: '' }),
+  formFieldSet: (state: WorkbenchState, payload: { field: keyof WorkbenchFormState; value: string }) => ({
     ...state,
     form: { ...state.form, [payload.field]: payload.value },
   }),
-  submitErrorSet: (state, submitError: string) => ({ ...state, submitError }),
-  formReset: (state) => ({ ...state, form: initialWorkbenchState.form, submitError: '' }),
-});
+  submitErrorSet: (state: WorkbenchState, submitError: string) => ({ ...state, submitError }),
+  formReset: (state: WorkbenchState) => ({ ...state, form: initialWorkbenchState.form, submitError: '' }),
+};
 
-export const useWorkbenchStore = workbench.useStore;
-export const workbenchActions = workbench.actions;
-export const resetWorkbenchStore = workbench.reset;
+export const workbenchAtom = Atom.make<WorkbenchState>(initialWorkbenchState).pipe(Atom.keepAlive);
+
+export const workbenchActions = {
+  siteIdSet: (registry: AtomRegistry.AtomRegistry, siteId: string): void => {
+    registry.update(workbenchAtom, state => reducers.siteIdSet(state, siteId));
+  },
+  runsReceived: (registry: AtomRegistry.AtomRegistry, payload: { siteId: string; runIds: string[] }): void => {
+    registry.update(workbenchAtom, state => reducers.runsReceived(state, payload));
+  },
+  runIdSet: (registry: AtomRegistry.AtomRegistry, runId: string): void => {
+    registry.update(workbenchAtom, state => reducers.runIdSet(state, runId));
+  },
+  formFieldSet: (registry: AtomRegistry.AtomRegistry, payload: { field: keyof WorkbenchFormState; value: string }): void => {
+    registry.update(workbenchAtom, state => reducers.formFieldSet(state, payload));
+  },
+  submitErrorSet: (registry: AtomRegistry.AtomRegistry, submitError: string): void => {
+    registry.update(workbenchAtom, state => reducers.submitErrorSet(state, submitError));
+  },
+  formReset: (registry: AtomRegistry.AtomRegistry): void => {
+    registry.update(workbenchAtom, state => reducers.formReset(state));
+  },
+};

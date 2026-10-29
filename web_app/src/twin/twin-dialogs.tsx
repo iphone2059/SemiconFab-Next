@@ -1,7 +1,10 @@
+import { useAtomValue } from '@effect/atom-react';
+import { RegistryContext } from '@effect/atom-react';
+import { useContext } from 'react';
 import { useMemo } from 'react';
 import { useTwinLocale } from '@/twin/twin-i18n';
 import { ORIGINAL_TWIN_UI, filterOriginalOem, type OriginalOem } from '@/domain/original-twin-data';
-import { useTwinPageStore, twinPageActions } from '@/twin/twin-page.atom';
+import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
 import { Modal, ModalTitle } from '@/components/modal';
 import { classNames } from '@/components/class-names';
 
@@ -43,15 +46,16 @@ const DATA_ROWS = [
 ];
 
 export function TwinInfoDialog({ mode, onClose, onSelectOem }: { mode: 'architecture' | 'database'; onClose: () => void; onSelectOem: (id: string) => void }) {
+  const registry = useContext(RegistryContext);
   const { t, language } = useTwinLocale();
   const zh = language === 'zh';
-  const oemDialog = useTwinPageStore((state) => state.oemDialog);
-  const archQuery = useTwinPageStore((state) => state.archQuery);
+  const oemDialog = useAtomValue(twinPageAtom, (state) => state.oemDialog);
+  const archQuery = useAtomValue(twinPageAtom, (state) => state.archQuery);
   const allOem = ORIGINAL_TWIN_UI.oem;
-  const segments = useMemo(() => [...new Set(allOem.map((row) => row.segment))], [allOem]);
-  const vendors = useMemo(() => [...new Set(allOem.map((row) => row.vendor))].sort(), [allOem]);
+  const segments = useMemo(() => [...new Set(allOem.map((row) => row.segment))], [allOem, registry]);
+  const vendors = useMemo(() => [...new Set(allOem.map((row) => row.vendor))].sort(), [allOem, registry]);
   const oemRows = useMemo(() => filterOriginalOem(oemDialog.query, oemDialog.segment)
-    .filter((row) => oemDialog.vendor === 'ALL' || row.vendor === oemDialog.vendor), [oemDialog]);
+    .filter((row) => oemDialog.vendor === 'ALL' || row.vendor === oemDialog.vendor), [oemDialog, registry]);
   const archText = ARCH_LAYERS.map((row) => `${row.title} ${row.body} ${row.tools.flat().join(' ')}`).join(' ')
     + DATA_ROWS.flat().join(' ');
   const showArch = !archQuery.trim() || archText.toLowerCase().includes(archQuery.trim().toLowerCase());
@@ -71,12 +75,12 @@ export function TwinInfoDialog({ mode, onClose, onSelectOem }: { mode: 'architec
         </header>
         {mode === 'database' ? <>
           <div className="twin-dialog-filterbar">
-            <input id="modal-search-input" type="search" value={oemDialog.query} onChange={(event) => twinPageActions.oemDialogQuerySet(event.target.value)} placeholder={t('搜索型号、厂商、规格或工艺节点…')} aria-label={t('搜索 OEM 数据库')} />
-            <select id="modal-segment-select" value={oemDialog.segment} onChange={(event) => twinPageActions.oemDialogSegmentSet(event.target.value)} aria-label={t('工艺段')}>
+            <input id="modal-search-input" type="search" value={oemDialog.query} onChange={(event) => twinPageActions.oemDialogQuerySet(registry, event.target.value)} placeholder={t('搜索型号、厂商、规格或工艺节点…')} aria-label={t('搜索 OEM 数据库')} />
+            <select id="modal-segment-select" value={oemDialog.segment} onChange={(event) => twinPageActions.oemDialogSegmentSet(registry, event.target.value)} aria-label={t('工艺段')}>
               <option value="ALL">{t('全部工艺段')} ({segments.length})</option>
               {segments.map((segment) => <option key={segment} value={segment}>{segment}</option>)}
             </select>
-            <select id="modal-vendor-select" value={oemDialog.vendor} onChange={(event) => twinPageActions.oemDialogVendorSet(event.target.value)} aria-label={t('厂商')}>
+            <select id="modal-vendor-select" value={oemDialog.vendor} onChange={(event) => twinPageActions.oemDialogVendorSet(registry, event.target.value)} aria-label={t('厂商')}>
               <option value="ALL">{t('全部厂商')} ({vendors.length})</option>
               {vendors.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
             </select>
@@ -98,7 +102,7 @@ export function TwinInfoDialog({ mode, onClose, onSelectOem }: { mode: 'architec
           </div>
         </> : <>
           <div className="twin-dialog-filterbar">
-            <input id="arch-search-input" type="search" value={archQuery} onChange={(event) => twinPageActions.archQuerySet(event.target.value)} placeholder={t('搜索开源工具 (secsgem, pyspc, PySTDF, SimPy, ClickHouse)…')} aria-label={t('搜索架构')} />
+            <input id="arch-search-input" type="search" value={archQuery} onChange={(event) => twinPageActions.archQuerySet(registry, event.target.value)} placeholder={t('搜索开源工具 (secsgem, pyspc, PySTDF, SimPy, ClickHouse)…')} aria-label={t('搜索架构')} />
             <span className="twin-dialog-sources">Sources: <b>Awesome-Semiconductor-MES</b><b>Process-Control</b><b>Yield-Management</b></span>
           </div>
           <div className="twin-dialog-arch" id="arch-cards-container">

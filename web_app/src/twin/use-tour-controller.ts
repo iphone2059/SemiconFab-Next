@@ -1,3 +1,5 @@
+import { RegistryContext } from '@effect/atom-react';
+import { useContext } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '@/domain/simulation-original-tour';
@@ -85,6 +87,7 @@ export function useTourController({
   scheduler = browserScheduler,
   scopeKey,
 }: TwinTourControllerParams): TwinTourController {
+  const registry = useContext(RegistryContext);
   const sessionRef = useRef<TourSession | null>(null);
   const lifecycleRef = useRef<TourLifecycle>('IDLE');
   const generationRef = useRef(0);
@@ -95,7 +98,7 @@ export function useTourController({
 
   function applyTourStep(index: number): void {
     const tourStop = TOUR_STOPS[index];
-    if (tourStop) twinUiActions.tourStep({ waypoint: index, level: tourStop.level, view: 'iso' });
+    if (tourStop) twinUiActions.tourStep(registry, { waypoint: index, level: tourStop.level, view: 'iso' });
   }
 
   function syncTourHud(frame: TourFrame): void {
@@ -128,9 +131,9 @@ export function useTourController({
     tourIndexRef.current = -1;
     tourHudRef.current?.setHud(null);
     setTourHudSeed(null);
-    twinUiActions.tourStop();
+    twinUiActions.tourStop(registry);
     lifecycleRef.current = 'IDLE';
-  }, [scheduler]);
+  }, [scheduler, registry]);
 
   /** A frame may run only while its generation owns the running session. */
   function isCurrent(session: TourSession): boolean {
@@ -225,12 +228,12 @@ export function useTourController({
   /** Manual camera input stops the tour; identity follows the owned stop(). */
   const cancelTourIfRunning = useCallback((): void => {
     if (lifecycleRef.current !== 'IDLE') stop();
-  }, [stop]);
+  }, [stop, registry]);
 
   // Page unmount releases the loop/timeline/HUD through the same stop(). The
   // cleanup captures the stop identity (and therefore the scheduler) of the
   // render it belongs to; replacing the scheduler terminates the old session.
-  useEffect(() => () => stop(), [stop]);
+  useEffect(() => () => stop(), [stop, registry]);
 
   // FAB switch or viewer recreation invalidates every frame the old scene owns.
   useEffect(() => {
@@ -239,7 +242,7 @@ export function useTourController({
     stop();
     // stop() only reads refs; the scopeKey transition is the actual trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopeKey]);
+  }, [scopeKey, registry]);
 
   return { tourHudRef, tourHudSeed, startTour, endTour, advanceTour, previousTour, finishTour, cancelTourIfRunning };
 }

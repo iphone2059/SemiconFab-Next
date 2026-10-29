@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
-import { installNativeDialogPolyfill } from '../support/native-dialog.ts';
+import { resetRuntimeState, resetTwinDemoState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
+import { createAtomTestScope } from '../../tests/support/atom-scope';
+import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
+const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
 import { TwinPage } from '@/twin/twin-page';
 import { sitesQueryOptions } from '@/api/sites.resource';
@@ -11,14 +14,14 @@ import { equipmentStatusQueryKey } from '@/api/equipment.resource';
 import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from '@/domain/fab-layout';
 import { createMesJob } from '@/domain/fab-process-control';
 import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
-import { resetTwinUiStore, twinUiActions } from '@/twin/twin-ui.atom';
-import { resetTwinPageStore, twinPageActions, useTwinPageStore } from '@/twin/twin-page.atom';
-import { resetRuntimeStore } from '@/state/runtime-store';
-import { resetTwinDemoStore } from '@/twin/twin-demo.atom';
+import { twinUiActions } from '@/twin/twin-ui.atom';
+import { twinPageActions, twinPageAtom } from '@/twin/twin-page.atom';
+
+
 
 const backend = vi.hoisted(() => ({ mounts: 0 }));
 vi.mock('../../src/rendering/lite-backend', async () => {
-  const { createScenePortStub } = await import('../support/scene-port-stub.ts');
+  const { createScenePortStub } = await import('../../tests/support/scene-port-stub');
   return {
     createLiteBackend: () => {
       backend.mounts += 1;
@@ -104,7 +107,7 @@ afterEach(() => {
   backend.mounts = 0;
   CapturingEventSource.instances = [];
   vi.unstubAllGlobals();
-  resetTwinUiStore(); resetTwinPageStore(); resetRuntimeStore(); resetTwinDemoStore();
+  resetTwinUiState(registry); resetTwinPageState(registry); resetRuntimeState(registry); resetTwinDemoState(registry);
 });
 
 it('scopes status REST + SSE to the single configured canonical route FAB', async () => {
@@ -144,17 +147,17 @@ it('A01: remounting the Query provider clears projections before the same FAB ha
   const client = setup();
   const view = renderTwin(client, 'fab-a');
   const sourceA = await streamFor('fab-a');
-  await waitFor(() => expect(useTwinPageStore.getState().liveStatusScope?.fabId).toBe('fab-a'));
+  await waitFor(() => expect(registry.get(twinPageAtom).liveStatusScope?.fabId).toBe('fab-a'));
 
   // Seed state owned by the previous provider lifetime.
   act(() => {
-    twinPageActions.mesJobSet({ index: 3, job: createMesJob(FAB_LAYOUT[3], 3, 1000) });
-    twinPageActions.inspectorMesSet({ id: 'ref-tool', job: createMesJob(FAB_LAYOUT[4], 4, 1000) });
+    twinPageActions.mesJobSet(registry, { index: 3, job: createMesJob(FAB_LAYOUT[3], 3, 1000) });
+    twinPageActions.inspectorMesSet(registry, { id: 'ref-tool', job: createMesJob(FAB_LAYOUT[4], 4, 1000) });
   });
 
   send(sourceA, frame({ sequence: 5, generatedAt: '2026-10-27T00:00:05Z', tools: tools({ 0: 'down' }) }));
-  await waitFor(() => expect(useTwinPageStore.getState().liveToolStates[0]).toBe('down'));
-  expect(useTwinPageStore.getState().statusFeed).toEqual({ updatedAt: '2026-10-27T00:00:05Z', stale: false });
+  await waitFor(() => expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('down'));
+  expect(registry.get(twinPageAtom).statusFeed).toEqual({ updatedAt: '2026-10-27T00:00:05Z', stale: false });
 
   // Queue a frame in the 100 ms batcher and remount its Query provider before it
   // can publish: pending work must not escape into the new lifetime.
@@ -169,20 +172,20 @@ it('A01: remounting the Query provider clears projections before the same FAB ha
 
   await waitFor(() => expect(sourceA.onmessage).toBeNull());
   // The same FAB starts its new provider lifetime without old projections.
-  expect(useTwinPageStore.getState().liveToolStates).toEqual([...FAB_TOOL_STATES]);
-  expect(useTwinPageStore.getState().statusFeed).toBeUndefined();
-  expect(useTwinPageStore.getState().mesJobs).toEqual({});
-  expect(useTwinPageStore.getState().inspectorMes).toEqual({});
+  expect(registry.get(twinPageAtom).liveToolStates).toEqual([...FAB_TOOL_STATES]);
+  expect(registry.get(twinPageAtom).statusFeed).toBeUndefined();
+  expect(registry.get(twinPageAtom).mesJobs).toEqual({});
+  expect(registry.get(twinPageAtom).inspectorMes).toEqual({});
   await flushProjection();
-  expect(useTwinPageStore.getState().liveStatusScope?.fabId).toBe('fab-a');
-  expect(useTwinPageStore.getState().liveToolStates).toEqual([...FAB_TOOL_STATES]);
+  expect(registry.get(twinPageAtom).liveStatusScope?.fabId).toBe('fab-a');
+  expect(registry.get(twinPageAtom).liveToolStates).toEqual([...FAB_TOOL_STATES]);
 
   // A new provider has independent ordering history for the same FAB.
   const sourceNew = await streamFor('fab-a', 2);
   send(sourceNew, frame({ sequence: 1, generatedAt: '2026-10-27T00:00:20Z', tools: tools({ 0: 'idle' }) }));
-  await waitFor(() => expect(useTwinPageStore.getState().liveToolStates[0]).toBe('idle'));
-  expect(useTwinPageStore.getState().liveStatusScope).toEqual({ siteId: 'site-1', fabId: 'fab-a' });
-  expect(useTwinPageStore.getState().statusFeed).toEqual({ updatedAt: '2026-10-27T00:00:20Z', stale: false });
+  await waitFor(() => expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('idle'));
+  expect(registry.get(twinPageAtom).liveStatusScope).toEqual({ siteId: 'site-1', fabId: 'fab-a' });
+  expect(registry.get(twinPageAtom).statusFeed).toEqual({ updatedAt: '2026-10-27T00:00:20Z', stale: false });
   client.clear();
   replacementClient.clear();
 });
@@ -195,7 +198,7 @@ it('A02: an SSE frame rejected by the ordered consumer never reaches the FAB-sco
 
   send(source, frame({ sequence: 2, generatedAt: '2026-10-27T00:00:02Z', tools: tools({ 0: 'down' }) }));
   await waitFor(() => expect(client.getQueryData<EquipmentStatusSnapshot>(key)?.sequence).toBe(2));
-  await waitFor(() => expect(useTwinPageStore.getState().liveToolStates[0]).toBe('down'));
+  await waitFor(() => expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('down'));
 
   // Older frame: the ordered consumer rejects it, so the shared cache keeps the
   // newer accepted snapshot (the audited behaviour wrote it unconditionally).
@@ -204,21 +207,21 @@ it('A02: an SSE frame rejected by the ordered consumer never reaches the FAB-sco
   const cached = client.getQueryData<EquipmentStatusSnapshot>(key);
   expect(cached?.sequence).toBe(2);
   expect(cached?.tools[0].state).toBe('down');
-  expect(useTwinPageStore.getState().liveToolStates[0]).toBe('down');
+  expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('down');
   client.clear();
 });
 it('A01: a disconnected status stream is labelled CACHE, never LIVE', async () => {
   const client = setup();
   renderTwin(client, 'fab-a');
-  act(() => twinUiActions.sourceSet('sse-live'));
+  act(() => twinUiActions.sourceSet(registry, 'sse-live'));
   const source = await streamFor('fab-a');
   const feed = () => document.querySelector('.twin-feed')?.textContent ?? '';
 
   send(source, frame({ sequence: 1, generatedAt: '2026-10-27T00:00:01Z' }));
-  await waitFor(() => expect(useTwinPageStore.getState().statusFeed?.stale).toBe(false));
+  await waitFor(() => expect(registry.get(twinPageAtom).statusFeed?.stale).toBe(false));
   expect(feed()).toContain('LIVE');
   act(() => { source.onerror?.({}); });
-  expect(useTwinPageStore.getState().statusFeed?.stale).toBe(true);
+  expect(registry.get(twinPageAtom).statusFeed?.stale).toBe(true);
   expect(feed()).toContain('CACHE');
   expect(feed()).not.toContain('LIVE');
   client.clear();

@@ -193,9 +193,6 @@ importers:
       xstate:
         specifier: 6.0.0-alpha.70
         version: 6.0.0-alpha.70
-      zustand:
-        specifier: 5.0.16
-        version: 5.0.16(@types/react@19.3.0)(react@19.3.1)(use-sync-external-store@1.7.0(react@19.3.1))
     devDependencies:
       '@testing-library/dom':
         specifier: 10.4.2
@@ -1098,24 +1095,6 @@ packages:
     resolution: {integrity: sha512-TSFfXYaTNz+ylEpguNsu0L5vDy8cjHRXAqpZBKQnJI++Jm61Vb41TAg1HzeEbC+Mnq9XelKs2dQNOizTwcnssQ==}
     hasBin: true
 
-  zustand@5.0.16:
-    resolution: {integrity: sha512-Uv7e327ihlCfayfja3hDc0M64Upev1LWBKpRobdK4NyovDDPeeX4imWXc/wzC1yc6fkYPoAY/ncKVPAs2jrtQw==}
-    engines: {node: '>=12.20.0'}
-    peerDependencies:
-      '@types/react': '>=18.0.0'
-      immer: '>=9.0.6'
-      react: '>=18.0.0'
-      use-sync-external-store: '>=1.2.0'
-    peerDependenciesMeta:
-      '@types/react':
-        optional: true
-      immer:
-        optional: true
-      react:
-        optional: true
-      use-sync-external-store:
-        optional: true
-
 snapshots:
 
   '@asamuzakjp/css-color@7.1.9':
@@ -1748,9 +1727,3 @@ snapshots:
   xmlchars@2.2.0: {}
 
   xstate@6.0.0-alpha.70: {}
-
-  zustand@5.0.16(@types/react@19.3.0)(react@19.3.1)(use-sync-external-store@1.7.0(react@19.3.1)):
-    optionalDependencies:
-      '@types/react': 19.3.0
-      react: 19.3.1
-      use-sync-external-store: 1.7.0(react@19.3.1)

@@ -1,3 +1,6 @@
+import { useAtomValue } from '@effect/atom-react';
+import { RegistryContext } from '@effect/atom-react';
+import { useContext } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { SiteDto } from '@/contracts/app-contracts';
@@ -5,7 +8,7 @@ import { sitesQueryOptions } from '@/api/sites.resource';
 import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from '@/api/runs.resource';
 import { fab3dPath } from '@/routes/route-url-mapping';
 import { useFabRuntimeRegistry } from '@/app/runtime-provider';
-import { useWorkbenchStore, workbenchActions, type WorkbenchFormState } from '@/workbench/workbench.atom';
+import { workbenchAtom, workbenchActions, type WorkbenchFormState } from '@/workbench/workbench.atom';
 import { CommandConsole } from '@/workbench/command-console';
 import { errorMessage } from '@/workbench/error-message';
 import { isCompleted } from '@/workbench/workbench-format';
@@ -21,7 +24,8 @@ import { useRunSubmission } from '@/workbench/use-run-submission';
  * controller and no server payload is copied into client state.
  */
 function Workbench({ site }: { site: SiteDto }) {
-  const { runId, form, submitError } = useWorkbenchStore();
+  const registry = useContext(RegistryContext);
+  const { runId, form, submitError } = useAtomValue(workbenchAtom);
   const runsQuery = useQuery({ ...runsQueryOptions(), refetchInterval: 1500 });
   const scopedRuns = useMemo(
     () => (runsQuery.data ?? []).filter((value) => value.siteId === site.siteId),
@@ -37,10 +41,10 @@ function Workbench({ site }: { site: SiteDto }) {
   const runError = runQuery.error ? errorMessage(runQuery.error) : resultQuery.error ? errorMessage(resultQuery.error) : '';
   const { submit, submitting } = useRunSubmission(site, form);
   useEffect(() => {
-    workbenchActions.runsReceived({ siteId: site.siteId, runIds: scopedRuns.map((value) => value.runId) });
-  }, [scopedRuns, site.siteId]);
+    workbenchActions.runsReceived(registry, { siteId: site.siteId, runIds: scopedRuns.map((value) => value.runId) });
+  }, [scopedRuns, site.siteId, registry]);
   const setField = (field: keyof WorkbenchFormState, value: string) =>
-    workbenchActions.formFieldSet({ field, value });
+    workbenchActions.formFieldSet(registry, { field, value });
   const displayedRun = run?.runId === runId && run.siteId === site.siteId ? run : undefined;
   const displayedResult = displayedRun && result?.runId === runId ? result : undefined;
   const completedLots = displayedResult?.fabs.reduce(
@@ -65,7 +69,7 @@ function Workbench({ site }: { site: SiteDto }) {
         runs={scopedRuns}
         runId={runId}
         error={listError}
-        onSelect={(next) => workbenchActions.runIdSet(next)}
+        onSelect={(next) => workbenchActions.runIdSet(registry, next)}
       />
     </>
   );
@@ -73,7 +77,8 @@ function Workbench({ site }: { site: SiteDto }) {
 
 /** Page composition root: shell/navigation plus the keyed workbench sections. */
 export default function WorkbenchApp() {
-  const siteId = useWorkbenchStore((state) => state.siteId);
+  const registry = useContext(RegistryContext);
+  const siteId = useAtomValue(workbenchAtom, (state) => state.siteId);
   const runtimeRegistry = useFabRuntimeRegistry();
   const [fabIndex, setFabIndex] = useState(0);
   const sitesQuery = useQuery(sitesQueryOptions());
@@ -82,12 +87,12 @@ export default function WorkbenchApp() {
   const error = sitesQuery.error ? errorMessage(sitesQuery.error) : '';
   useEffect(() => {
     if (sites.length === 0) return;
-    if (!sites.some((value) => value.siteId === siteId)) workbenchActions.siteIdSet(sites[0].siteId);
-  }, [sites, siteId]);
+    if (!sites.some((value) => value.siteId === siteId)) workbenchActions.siteIdSet(registry, sites[0].siteId);
+  }, [sites, siteId, registry]);
   const site = sites.find((value) => value.siteId === siteId);
   const fabs = site?.fabs ?? [];
   const selectedFab = fabs[Math.min(fabIndex, Math.max(0, fabs.length - 1))];
-  useEffect(() => { setFabIndex(0); }, [siteId]);
+  useEffect(() => { setFabIndex(0); }, [siteId, registry]);
   // The 3D link points at the final canonical URL for the selected FAB.
   const threeDeeHref = selectedFab ? fab3dPath(selectedFab.fabId) : '/';
   return (
@@ -160,7 +165,7 @@ export default function WorkbenchApp() {
               当前基地
               <select
                 value={siteId}
-                onChange={(event) => workbenchActions.siteIdSet(event.target.value)}
+                onChange={(event) => workbenchActions.siteIdSet(registry, event.target.value)}
                 disabled={!sites.length}
               >
                 {!sites.length && <option>等待 API 数据</option>}

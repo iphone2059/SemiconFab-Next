@@ -1,5 +1,6 @@
 import type { HoveredTool, SceneLifecycleEvent } from '@/contracts/scene.port';
-import { createSliceStore } from '@/state/create-slice-store';
+import * as Atom from 'effect/reactivity/Atom';
+import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 
 /**
  * Discrete viewer lifecycle owned by the runtime store (R-04). Scene-sync effects and the
@@ -29,26 +30,54 @@ export const initialRuntimeState: RuntimeState = {
 const clearedViewer = (generation: number, lifecycle: ViewerLifecycle = 'idle'): RuntimeState['viewer'] =>
   ({ generation, lifecycle, status: PREPARING_STATUS });
 
-const runtime = createSliceStore(initialRuntimeState, {
-  viewerMounted: (state, epoch: string) => ({ ...state, viewer: { ...clearedViewer(state.viewer.generation, 'initializing'), epoch } }),
-  viewerLifecycleReceived: (state, payload: { epoch: string; event: SceneLifecycleEvent }) => state.viewer.epoch !== payload.epoch
+const reducers = {
+  viewerMounted: (state: RuntimeState, epoch: string) => ({ ...state, viewer: { ...clearedViewer(state.viewer.generation, 'initializing'), epoch } }),
+  viewerLifecycleReceived: (state: RuntimeState, payload: { epoch: string; event: SceneLifecycleEvent }) => state.viewer.epoch !== payload.epoch
     ? state
     : { ...state, viewer: { ...state.viewer, lifecycle: payload.event.type, status: payload.event.message } },
-  viewerHoverReceived: (state, payload: { epoch: string; hover?: HoveredTool }) => state.viewer.epoch !== payload.epoch
+  viewerHoverReceived: (state: RuntimeState, payload: { epoch: string; hover?: HoveredTool }) => state.viewer.epoch !== payload.epoch
     ? state
     : { ...state, viewer: { ...state.viewer, hover: payload.hover } },
-  viewerHoverCleared: (state) => ({ ...state, viewer: { ...state.viewer, hover: undefined } }),
-  viewerSelectionSyncStarted: (state, epoch: string) => ({ ...state, viewer: { ...state.viewer, selectionSync: epoch } }),
-  viewerSelectionSyncFinished: (state, epoch: string) => state.viewer.selectionSync !== epoch
+  viewerHoverCleared: (state: RuntimeState) => ({ ...state, viewer: { ...state.viewer, hover: undefined } }),
+  viewerSelectionSyncStarted: (state: RuntimeState, epoch: string) => ({ ...state, viewer: { ...state.viewer, selectionSync: epoch } }),
+  viewerSelectionSyncFinished: (state: RuntimeState, epoch: string) => state.viewer.selectionSync !== epoch
     ? state
     : { ...state, viewer: { ...state.viewer, selectionSync: undefined } },
-  viewerReloadRequested: (state) => ({ ...state, viewer: { ...clearedViewer(state.viewer.generation + 1) } }),
-  viewerUnmounted: (state, epoch: string) => state.viewer.epoch !== epoch
+  viewerReloadRequested: (state: RuntimeState) => ({ ...state, viewer: { ...clearedViewer(state.viewer.generation + 1) } }),
+  viewerUnmounted: (state: RuntimeState, epoch: string) => state.viewer.epoch !== epoch
     ? state
     : { ...state, viewer: { ...clearedViewer(state.viewer.generation, 'disposed') } },
-  fatalErrorSet: (state, fatalError: string) => ({ ...state, fatalError }),
-});
+  fatalErrorSet: (state: RuntimeState, fatalError: string) => ({ ...state, fatalError }),
+};
 
-export const useRuntimeStore = runtime.useStore;
-export const runtimeActions = runtime.actions;
-export const resetRuntimeStore = runtime.reset;
+export const runtimeAtom = Atom.make<RuntimeState>(initialRuntimeState).pipe(Atom.keepAlive);
+
+export const runtimeActions = {
+  viewerMounted: (registry: AtomRegistry.AtomRegistry, epoch: string): void => {
+    registry.update(runtimeAtom, state => reducers.viewerMounted(state, epoch));
+  },
+  viewerLifecycleReceived: (registry: AtomRegistry.AtomRegistry, payload: { epoch: string; event: SceneLifecycleEvent }): void => {
+    registry.update(runtimeAtom, state => reducers.viewerLifecycleReceived(state, payload));
+  },
+  viewerHoverReceived: (registry: AtomRegistry.AtomRegistry, payload: { epoch: string; hover?: HoveredTool }): void => {
+    registry.update(runtimeAtom, state => reducers.viewerHoverReceived(state, payload));
+  },
+  viewerHoverCleared: (registry: AtomRegistry.AtomRegistry): void => {
+    registry.update(runtimeAtom, state => reducers.viewerHoverCleared(state));
+  },
+  viewerSelectionSyncStarted: (registry: AtomRegistry.AtomRegistry, epoch: string): void => {
+    registry.update(runtimeAtom, state => reducers.viewerSelectionSyncStarted(state, epoch));
+  },
+  viewerSelectionSyncFinished: (registry: AtomRegistry.AtomRegistry, epoch: string): void => {
+    registry.update(runtimeAtom, state => reducers.viewerSelectionSyncFinished(state, epoch));
+  },
+  viewerReloadRequested: (registry: AtomRegistry.AtomRegistry): void => {
+    registry.update(runtimeAtom, state => reducers.viewerReloadRequested(state));
+  },
+  viewerUnmounted: (registry: AtomRegistry.AtomRegistry, epoch: string): void => {
+    registry.update(runtimeAtom, state => reducers.viewerUnmounted(state, epoch));
+  },
+  fatalErrorSet: (registry: AtomRegistry.AtomRegistry, fatalError: string): void => {
+    registry.update(runtimeAtom, state => reducers.fatalErrorSet(state, fatalError));
+  },
+};

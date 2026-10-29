@@ -1,12 +1,14 @@
+import { RegistryContext } from '@effect/atom-react';
+import { useContext } from 'react';
 import type { RefObject } from 'react';
 import type { CutAxis, PickedTool, SceneLayer, XRayFilter } from '@/contracts/scene.port';
 import { FAB_LAYOUT, type FabToolState } from '@/domain/fab-layout';
 import { ORIGINAL_TWIN_UI, type TwinSelection } from '@/domain/original-twin-data';
 import { applyMesAction, createMesJob, type MesAction, type MesJob } from '@/domain/fab-process-control';
 import { YIELD_SCENARIOS } from '@/domain/fab-yield';
-import { runtimeActions, useRuntimeStore } from '@/state/runtime-store';
+import { runtimeActions, runtimeAtom } from '@/state/runtime-store';
 import { twinDemoActions } from '@/twin/twin-demo.atom';
-import { useTwinPageStore, twinPageActions } from '@/twin/twin-page.atom';
+import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
 import { twinUiActions } from '@/twin/twin-ui.atom';
 import type { EntryMode, FabLevel, TwinView } from '@/twin/twin-state';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
@@ -74,46 +76,47 @@ export function useTwinActions({
   onboardingDontShow,
   startTour,
 }: TwinActionsParams): TwinActions {
-  const setSelected = (value?: PickedTool) => twinPageActions.selectedSet(value);
-  const setSelection = (value?: TwinSelection) => twinPageActions.selectionSet(value);
-  const setReplayBase = (value: readonly FabToolState[]) => twinPageActions.replayBaseSet(value);
-  const setInfoDialog = (value: 'architecture' | 'database' | null) => twinPageActions.infoDialogSet(value);
-  const toggleResearchUtil = () => twinPageActions.showResearchUtilToggled();
-  const setOnboardingDontShow = (value: boolean) => twinPageActions.onboardingDontShowSet(value);
-  const setYmsOpen = (value: boolean) => twinPageActions.ymsOpenSet(value);
-  const setYmsTab = (value: 'map' | 'yield') => twinPageActions.ymsTabSet(value);
-  const setWaferFollow = (value: boolean) => twinPageActions.waferFollowSet(value);
+  const registry = useContext(RegistryContext);
+  const setSelected = (value?: PickedTool) => twinPageActions.selectedSet(registry, value);
+  const setSelection = (value?: TwinSelection) => twinPageActions.selectionSet(registry, value);
+  const setReplayBase = (value: readonly FabToolState[]) => twinPageActions.replayBaseSet(registry, value);
+  const setInfoDialog = (value: 'architecture' | 'database' | null) => twinPageActions.infoDialogSet(registry, value);
+  const toggleResearchUtil = () => twinPageActions.showResearchUtilToggled(registry);
+  const setOnboardingDontShow = (value: boolean) => twinPageActions.onboardingDontShowSet(registry, value);
+  const setYmsOpen = (value: boolean) => twinPageActions.ymsOpenSet(registry, value);
+  const setYmsTab = (value: 'map' | 'yield') => twinPageActions.ymsTabSet(registry, value);
+  const setWaferFollow = (value: boolean) => twinPageActions.waferFollowSet(registry, value);
   const setMesJobs = (updater: (current: Record<number, MesJob>) => Record<number, MesJob>) => {
     const next = updater(mesJobs);
-    for (const [index, job] of Object.entries(next)) twinPageActions.mesJobSet({ index: Number(index), job });
+    for (const [index, job] of Object.entries(next)) twinPageActions.mesJobSet(registry, { index: Number(index), job });
   };
   const setLayers = (updater: (current: Record<SceneLayer, boolean>) => Record<SceneLayer, boolean>) => {
     const next = updater(layerPreferences);
-    for (const layer of Object.keys(next) as SceneLayer[]) if (next[layer] !== layerPreferences[layer]) twinPageActions.layerToggled(layer);
+    for (const layer of Object.keys(next) as SceneLayer[]) if (next[layer] !== layerPreferences[layer]) twinPageActions.layerToggled(registry, layer);
   };
 
   function setMode(value: EntryMode): void {
     if (value === 'research' && mode !== 'research') setReplayBase(toolStates);
-    twinUiActions.modeSet(value);
+    twinUiActions.modeSet(registry, value);
   }
 
   function setCamera(next: TwinView): void {
-    twinUiActions.viewSet(next);
+    twinUiActions.viewSet(registry, next);
     // Repeating the active preset still re-centres a manually moved camera.
     if (next === view) scene.current?.setView(next);
   }
 
   function toggleLayer(layer: SceneLayer): void {
-    if (layer === 'airflow') { twinUiActions.spatialToggle('aerodynamics'); return; }
-    if (layer === 'heatmap') { twinUiActions.aeroHeatmapToggle(); return; }
-    if (layer === 'xray') { twinUiActions.spatialToggle('xray'); return; }
+    if (layer === 'airflow') { twinUiActions.spatialToggle(registry, 'aerodynamics'); return; }
+    if (layer === 'heatmap') { twinUiActions.aeroHeatmapToggle(registry); return; }
+    if (layer === 'xray') { twinUiActions.spatialToggle(registry, 'xray'); return; }
     setLayers((current) => ({ ...current, [layer]: !current[layer] }));
   }
 
-  function applyXRayFilter(filter: XRayFilter | null): void { twinUiActions.xraySet(filter); }
-  function toggleCut(): void { twinUiActions.spatialToggle('cut'); }
+  function applyXRayFilter(filter: XRayFilter | null): void { twinUiActions.xraySet(registry, filter); }
+  function toggleCut(): void { twinUiActions.spatialToggle(registry, 'cut'); }
   function updateCut(axis: CutAxis, position: number, invert: boolean): void {
-    twinUiActions.cutSet({ axis, positionM: position, invert });
+    twinUiActions.cutSet(registry, { axis, positionM: position, invert });
   }
 
   function flyLevel(next: 'L1' | 'B1' | 'DUAL' | 'EXPLODED'): void {
@@ -129,22 +132,22 @@ export function useTwinActions({
 
   // Frozen switchFabLevel/activateSpatialMode semantics: entering Exploded always targets 100%,
   // leaving it resets the preset to 0%; any level switch away also closes the exploded mode.
-  function leaveExploded(): void { if (exploded) twinUiActions.explodeSet(0); }
-  function setL1(): void { leaveExploded(); twinUiActions.levelSet('L1'); flyLevel('L1'); }
-  function setB1(): void { const next = level === 'B1' ? 'L1' : 'B1'; leaveExploded(); twinUiActions.levelSet(next); flyLevel(next); }
-  function setDual(): void { const next = level === 'DUAL' ? 'L1' : 'DUAL'; leaveExploded(); twinUiActions.levelSet(next); flyLevel(next); }
+  function leaveExploded(): void { if (exploded) twinUiActions.explodeSet(registry, 0); }
+  function setL1(): void { leaveExploded(); twinUiActions.levelSet(registry, 'L1'); flyLevel('L1'); }
+  function setB1(): void { const next = level === 'B1' ? 'L1' : 'B1'; leaveExploded(); twinUiActions.levelSet(registry, next); flyLevel(next); }
+  function setDual(): void { const next = level === 'DUAL' ? 'L1' : 'DUAL'; leaveExploded(); twinUiActions.levelSet(registry, next); flyLevel(next); }
   function toggleExploded(): void {
     if (exploded) {
-      twinUiActions.explodeSet(0);
-      twinUiActions.spatialToggle('exploded');
+      twinUiActions.explodeSet(registry, 0);
+      twinUiActions.spatialToggle(registry, 'exploded');
       flyLevel('L1');
     } else {
-      twinUiActions.spatialToggle('exploded');
+      twinUiActions.spatialToggle(registry, 'exploded');
       flyLevel('EXPLODED');
-      twinUiActions.explodeSet(100);
+      twinUiActions.explodeSet(registry, 100);
     }
   }
-  function changeExplode(percent: number): void { twinUiActions.explodeSet(percent); }
+  function changeExplode(percent: number): void { twinUiActions.explodeSet(registry, percent); }
 
   function handleTwinSelection(next: TwinSelection): void {
     setSelection(next);
@@ -154,12 +157,12 @@ export function useTwinActions({
       setSelected(undefined);
       if (catalogIndex >= 0) {
         const token = crypto.randomUUID();
-        runtimeActions.viewerSelectionSyncStarted(token);
+        runtimeActions.viewerSelectionSyncStarted(registry, token);
         scene.current?.selectTool(catalogIndex, false);
-        window.setTimeout(() => runtimeActions.viewerSelectionSyncFinished(token), 0);
+        window.setTimeout(() => runtimeActions.viewerSelectionSyncFinished(registry, token), 0);
       }
       else scene.current?.clearSelection();
-      if (row?.level === 'B1') { twinUiActions.levelSet('B1'); flyLevel('B1'); scene.current?.setDual(false); scene.current?.setBasement(true); }
+      if (row?.level === 'B1') { twinUiActions.levelSet(registry, 'B1'); flyLevel('B1'); scene.current?.setDual(false); scene.current?.setBasement(true); }
     } else if (next.kind === 'oem') {
       setSelected(undefined);
       scene.current?.clearSelection();
@@ -168,18 +171,18 @@ export function useTwinActions({
 
   function handleToolChange(tool?: PickedTool): void {
     setSelected(tool);
-    const sync = useRuntimeStore.getState().viewer.selectionSync;
-    if (sync) { runtimeActions.viewerSelectionSyncFinished(sync); return; }
+    const sync = registry.get(runtimeAtom).viewer.selectionSync;
+    if (sync) { runtimeActions.viewerSelectionSyncFinished(registry, sync); return; }
     // A05: the scene keeps this callback across renders, so read the latest
     // selection from the store instead of the render closure.
-    const currentSelection = useTwinPageStore.getState().selection;
+    const currentSelection = registry.get(twinPageAtom).selection;
     if (tool && currentSelection?.kind === 'reference' && FAB_LAYOUT[tool.index]?.recordId === currentSelection.id) return;
     if (tool) setSelection({ kind: 'layout', index: tool.index });
     else if (currentSelection?.kind === 'layout') setSelection(undefined);
   }
 
   function handleManualKey(key: string, state: FabToolState): void {
-    twinDemoActions.manualKeySet({ key, state });
+    twinDemoActions.manualKeySet(registry, { key, state });
   }
 
   function runMesAction(action: MesAction): void {
@@ -194,14 +197,14 @@ export function useTwinActions({
   function chooseDemoScenario(id: string): void {
     const scenario = YIELD_SCENARIOS.find((entry) => entry.id === id);
     if (!scenario) return;
-    twinUiActions.sourceSet('demo');
-    twinDemoActions.scenarioApplied(scenario);
-    twinPageActions.ymsYieldScenarioSet('live');
-    twinPageActions.ymsYieldInputSet({ purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime });
+    twinUiActions.sourceSet(registry, 'demo');
+    twinDemoActions.scenarioApplied(registry, scenario);
+    twinPageActions.ymsYieldScenarioSet(registry, 'live');
+    twinPageActions.ymsYieldInputSet(registry, { purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime });
   }
 
   function dismissOnboarding(): void {
-    twinUiActions.onboardingClose();
+    twinUiActions.onboardingClose(registry);
     try { if (onboardingDontShow) localStorage.setItem(ONBOARDING_KEY, '1'); } catch { /* ignore storage denial */ }
   }
 
@@ -217,7 +220,7 @@ export function useTwinActions({
   }
 
   function escape(): void {
-    twinUiActions.escape();
+    twinUiActions.escape(registry);
     scene.current?.clearSelection();
     setSelected(undefined);
     setSelection(undefined);
