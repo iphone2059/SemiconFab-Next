@@ -1,6 +1,6 @@
 # SemiconFab Next：Effect 4 与单层源码目录重构（已实施）
 
-**状态：** 2026-10-29 起进入第二轮“正确性优先”重构：Phase A 已冻结新目标规范 `05-correctness-first-target-spec.md` 与 ADR-006/007/008/09；`01`–`04` 中与新规范冲突的资源/命令/恢复描述以 `05`–`09` 为准。Task 0–7（`refactor/effect4-flat-20261029`）的 726 PASS 仅作历史证据，不再代表新架构已通过。
+**状态：** 2026-10-30 起执行第二轮“正确性审查整改”（Round 2）：ADR-010/011/012/013 与 `14-round2-remediation-matrix.md` 冻结 CR-01…CR-10 的修复与验收；F1–F6 代码与单测已提交，F7（全量 verify 绑定新 SHA、600s GPU 长稳/Compiler 等价重跑、真实后端 400/409 联调）待执行。第一轮 `05`–`09` 与对应证据仍为历史记录，冲突处以 Round 2 文档为准。
 **基线：** 远端 `main` 的 `4fc8a94a3f10d185c8bef7929349ac6ccb2b8792`（独立 worktree `.local/worktrees/effect4-baseline` 仅用于 A/B）。
 **范围：** 仅 `web_app` 前端；后端不变，Babylon Lite + WebGPU-only 产品约束不变。
 **验收证据：** `docs/architecture/evidence/`；浏览器 e2e：`docs/perf/effect4-e2e.json`；性能/GPU：`docs/architecture/evidence/perf/`。
@@ -25,6 +25,11 @@
 | `07-adr-scope-identity-model.md` | ADR-007：Scope 树、身份模型、调度器/有界流/唯一投影（Phase C 冻结接口） |
 | `08-adr-command-durable-recovery.md` | ADR-008：后端持久恢复与权威契约（Phase D 冻结接口） |
 | `09-gap-register-and-gates.md` | 缺口登记 G01–G20、阶段门禁、环境约束 |
+| `10-adr-command-cursor-ack-protocol.md` | ADR-010：命令事件 observed/delivered/acknowledged 游标、dirty 缺口与恢复状态机（CR-01/02/06） |
+| `11-adr-cancellable-gateway-timeout.md` | ADR-011：原生可取消 Effect Gateway、调度器真实超时与物理请求预算（CR-04/08） |
+| `12-adr-transactional-command-persistence.md` | ADR-012：SQLite WAL 事务化存储、唯一幂等、epoch journal 与故障注入（CR-03） |
+| `13-adr-resource-commit-identity-capacity.md` | ADR-013：通用资源 superseded-write、类型化身份、单一容量、轮询 generation（CR-05/07/09/10） |
+| `14-round2-remediation-matrix.md` | Round 2 缺陷→阶段→验收矩阵与执行记录 |
 
 ## 已实施的核心决定
 

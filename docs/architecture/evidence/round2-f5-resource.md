@@ -138,3 +138,8 @@ F5 完成后复跑 `R14`（含在我范围的 24 文件复跑中）：`✓ tests
 - `ResourceDefinition` 从 `key` 迁移到 `identity` 是 ADR-013 冻结接口的直接落地；本轮同步更新了所有资源定义文件、manager、tests/api 与 Phase B 测试中的定义构造。公共 handle 仍暴露 canonical `handle.key`。
 - 未对真实后端/浏览器重跑设备 SSE/REST；F5 的设备 epoch/sequence 回归使用受控 fetch（与 Phase B 相同方式）。
 - 未验证 V8 heap snapshot（同 Phase B 限制）；容量/节点/轮询有界性通过 manager.stats 与 registry.getNodes 断言。
+
+## Lead 绑定（2026-10-30）
+
+- F5 实现提交：`3f91a7c16185ff9e566d3e35368af4b427ef7600`。
+- 本文件早先的 “SHA pending” 指该提交；Round 2 的 F7 全量 verify 未执行（用户要求直接提交），见验收索引限制。

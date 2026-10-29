@@ -45,3 +45,17 @@
 - 每个阶段写 `docs/architecture/evidence/round2-<phase>-*.md`：命令、原始输出、RED→GREEN 对照、seed/注入点、限制。
 - 最终签收：`final-verify.json` + 原始 `final-verify-<sha>.log` + `correctness-refactor-acceptance.md` Round 2 章节；所有引用写新 SHA。
 - 若某矩阵项无法在环境内验证（如真实进程 kill），必须写“未验证/限制”与替代证据，不得标 PASS。
+
+## 5. 执行记录（2026-10-30）
+
+| 阶段 | 状态 | 提交 | 证据 |
+|---|---|---|---|
+| F1 规范冻结 | 完成 | `b0c3e09` | ADR-010/011/012/013 + 本矩阵 |
+| F2 SSE/恢复 | 完成（矩阵 1/2前端/6；RED→GREEN） | `6a8ab3d` | `round2-f2-sse.md` |
+| F3 事务持久化 | 完成（210 后端测试；6 注入点） | `2315f6c` + `9436d83`（归属修复） | `round2-f3-store.md` |
+| F4 取消/预算 | 完成（43 F4 tests；真实 Effect 超时/物理预算/旧结果守卫） | `9ba9460` | `round2-f4-cancellation.md` |
+| F5 资源不变量 | 完成（矩阵 5/7a/7b/7c） | `3f91a7c` | `round2-f5-resource.md` |
+| F6 安全退化/现代化 | 代码+单测完成；实机 GPU 探针未跑完 | `a459c18` + `14aba4e` + `5133235` | `lite-backend-recovery.test.ts`、现代语法门禁 |
+| F7 最终签收 | **未完成**（用户要求直接提交，停止全量 verify） | — | 需重新执行 `scripts/verify.ps1`（FAB_RUN_GPU_GATE=1）并绑定新 SHA |
+
+**本轮实际验证**：前端 typecheck/lint 0；`pnpm test` 154 files/854 tests；后端 210；架构/契约/生成物 PASS；生产浏览器 E2E 9/9；Oxc 兼容 PASS。**未完成**：Round 2 HEAD 全量 verify、600s GPU 长稳 + circuit-breaker 实机、Compiler ON/OFF 重跑、后端 400/409 实联调。详见 `correctness-refactor-acceptance.md` 的 Round 2 章节；禁止用第一轮证据替代。

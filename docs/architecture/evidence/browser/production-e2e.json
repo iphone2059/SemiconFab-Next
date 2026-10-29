@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-29T18:06:01.380Z",
-  "commit": "af002f46b6a63599205b21132538075bbfaa15a7",
+  "generatedAt": "2026-10-29T23:38:56.370Z",
+  "commit": "14aba4eab9c8fa3e0e81d9219402806eda06b752",
   "mode": "on",
   "webUrl": "http://127.0.0.1:4180",
   "apiUrl": "http://127.0.0.1:5180",
@@ -55,11 +55,11 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/dd5aca54-41e0-4da7-a61c-6b41cd2da04e",
+            "url": "http://127.0.0.1:4180/api/v1/runs/f354ed7a-85ea-43d4-843e-f2701704f21e",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/dd5aca54-41e0-4da7-a61c-6b41cd2da04e/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/f354ed7a-85ea-43d4-843e-f2701704f21e/results",
             "count": 1
           }
         ]
@@ -186,19 +186,19 @@
             "count": 5
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/dd5aca54-41e0-4da7-a61c-6b41cd2da04e",
+            "url": "http://127.0.0.1:4180/api/v1/runs/f354ed7a-85ea-43d4-843e-f2701704f21e",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/dd5aca54-41e0-4da7-a61c-6b41cd2da04e/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/f354ed7a-85ea-43d4-843e-f2701704f21e/results",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/ee244b7e-a6f7-4392-860d-1c0d6614f0d4",
+            "url": "http://127.0.0.1:4180/api/v1/runs/96e160c7-63a6-4dd7-a101-0e78e1c7e032",
             "count": 2
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/ee244b7e-a6f7-4392-860d-1c0d6614f0d4/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/96e160c7-63a6-4dd7-a101-0e78e1c7e032/results",
             "count": 1
           }
         ]
@@ -350,7 +350,7 @@
       "pass": true,
       "actual": "all assertions passed",
       "consoleErrors": [
-        "console: Error: FAB 不存在：unknown-fab\n    at Wf (http://127.0.0.1:4180/assets/index-BNaxjjRz.js:3:240675)\n    at async loader (http://127.0.0.1:4180/assets/index-BNaxjjRz.js:3:241174)\n    at async fn (http://127.0.0.1:4180/assets/react-3Dcbn-Qc.js:11:24506)"
+        "console: Error: FAB 不存在：unknown-fab\n    at hp (http://127.0.0.1:4180/assets/index-B4ISpAnS.js:3:252426)\n    at async loader (http://127.0.0.1:4180/assets/index-B4ISpAnS.js:3:252925)\n    at async fn (http://127.0.0.1:4180/assets/react-I2ogZ3ri.js:11:24506)"
       ],
       "network": {
         "total": 8,
@@ -422,11 +422,11 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/ee244b7e-a6f7-4392-860d-1c0d6614f0d4",
+            "url": "http://127.0.0.1:4180/api/v1/runs/96e160c7-63a6-4dd7-a101-0e78e1c7e032",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/ee244b7e-a6f7-4392-860d-1c0d6614f0d4/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/96e160c7-63a6-4dd7-a101-0e78e1c7e032/results",
             "count": 1
           }
         ]
@@ -473,11 +473,11 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/ee244b7e-a6f7-4392-860d-1c0d6614f0d4",
+            "url": "http://127.0.0.1:4180/api/v1/runs/96e160c7-63a6-4dd7-a101-0e78e1c7e032",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/ee244b7e-a6f7-4392-860d-1c0d6614f0d4/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/96e160c7-63a6-4dd7-a101-0e78e1c7e032/results",
             "count": 1
           },
           {
@@ -485,7 +485,7 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/commands/b6659e76-237b-47e1-ac36-4bfe5e34c883",
+            "url": "http://127.0.0.1:4180/api/v1/commands/663cd649-faa2-4ec6-813f-314e0f249ac6",
             "count": 1
           },
           {

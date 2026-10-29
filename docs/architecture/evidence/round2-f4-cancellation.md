@@ -269,3 +269,8 @@ stderr | tests/correctness/gateway/physical-budget.test.ts > queue capacity drop
    客户端直接解码 F3 schema，fake HTTP 覆盖 200/400/409；真实后端 400/409 端到端联合验证归 F7 最终签收（backend-owner 可随时重跑/补后端断言）。
 5. **FabRuntime 集成归 command-owner**：`physicalBudget` 传参、recovery 请求 `withPermit`、`onDrop`→Dirty+权威 list、gateway Effect 调用点均在其文件（fab-runtime.ts / command-event-*.ts / runtime-bootstrap.tsx / xstate adapter），已按其请求冻结接口并 send_message；本证据只验证 scheduler/gateway/reconciler 自身不变量与共享预算行为。
 6. **证据 SHA**：本轮规则要求最终证据绑定 commit SHA；本任务禁止 git 写操作，工作树含多 owner 并行修改，故本文件绑定工作树状态与 HEAD `b0c3e09`，最终签收需在新 SHA 上重跑本节命令。
+
+## Lead 绑定（2026-10-30）
+
+- F4 实现提交：`9ba9460afa652b4b23b6e15b6c4e057ebab5837e`。
+- 本文件早先的 “SHA pending” 指该提交；真实后端 400/409 端到端联调与 Round 2 F7 全量 verify 未执行（用户要求直接提交），见验收索引限制。

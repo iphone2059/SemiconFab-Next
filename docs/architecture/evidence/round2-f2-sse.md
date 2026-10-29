@@ -250,3 +250,8 @@ tests/correctness/sse:
 7. **RED 迁移说明**：CR-01 的 RED 在 F2 实现前完成；CR-02/CR-06 的 RED 亦在 F2 前运行。F4 契约冻结后 fake gateway 迁移为 native Effect，测试断言保持/加强（未弱化），但基线 RED 输出对应旧 Promise fake 形状（原始失败文本见 §3）。
 8. **全量套件曾出现一次 worker OOM**：根因是 recovery 成功后 scheduler 对账 batch 再次 overflow → 新 recovery → 无限循环（tracked > queue capacity），core-007 worker 4GB heap exit 134；修复 §2.6 保护后全量 24.98s exit 0。该故障已写入风险表，F7 verify 应复跑确认。
 9. **SHA pending**：本文件未绑定最终 commit；由 Lead 在提交后绑定。
+
+## Lead 绑定（2026-10-30）
+
+- F2 实现提交：`6a8ab3d53073b4ed6d4529bc062ab5f9946ba696`（同批集成依赖 F4 `9ba9460`、F3 `2315f6c`）。
+- 本文件早先的 “SHA pending” 指该提交；Round 2 的 F7 全量 verify 未执行（用户要求直接提交），实机 GPU/等价验收仍待办，见 `correctness-refactor-acceptance.md`。

@@ -177,3 +177,8 @@ PASS: 3 independent .NET projects (fab_shared + fab_app + fab_tests) / 1 self-co
 - DB 重置（删除 `commands.db`）等价于保留窗口整体丢失：旧命令 404、旧 cursor 409/gap，属契约行为；不宣称跨 DB 重置恢复。
 - 保留窗口内不变量已覆盖；窗口外（TTL/512 终态/4096 journal）语义与文档见 contracts README。
 - 前端恢复循环（F2）需按本 phase 的 `epoch` 必填 / 409 / `nextAfterSequence`（空页前进）语义实现；本文件已把精确形状发 Lead/command-owner/cancellation-owner。
+
+## Lead 绑定（2026-10-30）
+
+- F3 实现提交：`2315f6c81d3842bcaa503f191aed1a8707e76f57`；架构归属修复（store 迁入 `fab_shared/Fab.Contracts`，fab_app 零 PackageReference）：`9436d83c594d7c9e78d7c51147a734b3129ee1b8`。
+- 本文件早先的 “SHA pending” 指上述提交；Round 2 的 F7 全量 verify 未执行，见 `correctness-refactor-acceptance.md` 限制。

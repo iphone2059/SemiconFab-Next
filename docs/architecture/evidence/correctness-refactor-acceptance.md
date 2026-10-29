@@ -62,3 +62,34 @@
 4. **生成物 hash**：`tools/generated-artifacts.json` 经授权 `--update` 登记，contracts schema 已规范 LF 以避免跨平台 hash 漂移。
 5. **数据窗口**：后端命令恢复只保证保留窗口内（终态 TTL 5min / 512 终态 / journal 4096）；窗口外 404/gap 是契约。
 6. **浏览器 E2E 数据**：开发数据仅 1 个 FAB；跨 FAB 由集成/单元覆盖。
+
+---
+
+# Round 2 正确性整改（CR-01…CR-10）
+
+- 审查基线：`9ab2fd3f3cc5304f030dbf7f8e46a414ccd4ebda`（第一轮签收）；规范：`docs/architecture/10`–`14`（ADR-010/011/012/013 + 验收矩阵）。
+- 整改实现提交：F1 `b0c3e09`、F6 GPU breaker `a459c18` + `14aba4e`、F3 `2315f6c` + 架构归属修复 `9436d83`、F5 `3f91a7c`、F2 `6a8ab3d`、F4 `9ba9460`、React 19 现代化 `5133235`。
+- 本文件只记录**实际执行过**的命令与结果；未完成项在“未完成/限制”中列出，不标 PASS。
+
+## 已验证（Round 2 工作树 / 提交）
+
+| 门禁 | 结果 | 证据 |
+|---|---|---|
+| 前端 `pnpm typecheck` / `pnpm lint` | 0 error / 0 warning | 本地命令与 verify 日志 |
+| 前端测试 `pnpm test` | **154 files / 854 tests passed** | `.local/round2-modern-full-test.log` |
+| 后端 `dotnet test Release` | **210 passed**（180 基线 + 10 持久化 + 8 故障注入 + 12 恢复 API） | `round2-f3-store.md` |
+| 架构 `check_architecture.py` | PASS（`fab_app` 保持零 PackageReference；SQLite 归属 `fab_shared/Fab.Contracts`，门禁未豁免） | `round2-f3-store.md` §1.1/§7 |
+| 契约/生成物 | `generate_contracts --check`、`check_generated_artifacts --check` PASS | `round2-f3-store.md` |
+| 生产 bundle 浏览器 E2E | **9/9 PASS**（commit `14aba4e`，Chrome 155） | `browser/production-e2e.json` |
+| Oxc 兼容门禁 | **COMPILER COMPAT PASS** | `compiler/compiler-compat.json` |
+| CR 矩阵单测/集成 | 矩阵 1/2/4/5/6/7、故障注入矩阵、CORE 回归见各 phase 证据 | `round2-f2-sse.md`、`round2-f3-store.md`、`round2-f4-cancellation.md`、`round2-f5-resource.md` |
+| React 19 现代化门禁 | forwardRef 等 legacy idiom 在 `src` 为 0；负向 fixture 触发全部规则 | `tests/architecture/react19-modern-syntax.test.ts` |
+
+## 未完成/限制（明确不标 PASS）
+
+1. **Round 2 HEAD 的 `scripts/verify.ps1` 全量运行未完成**：GPU 600s 长稳 + circuit-breaker 实机探针在启动后被中止（用户要求直接推送）。因此 Round 2 的 CORE-012 实机验收未完成；第一轮 `af002f4` 的 GPU/等价证据不能替代本轮。
+2. **Compiler ON/OFF 生产等价未在 Round 2 HEAD 重跑到完成**（第一轮 `af002f4` 结果不可替代）。
+3. CR-08 circuit breaker 的单元/集成测试通过（`lite-backend-recovery.test.ts` 17 tests，含 `?perf&recoveryBudget=8` fail-closed 与 plain `?perf` 默认预算），但**真实 WebGPU fail-closed 探针未在实机跑完**。
+4. 真实后端 400/409 端到端联调（F3↔F4）未执行，登记为 F7 待办。
+5. 最终 `final-verify.json` / `final-verify-<sha>.log` 未生成；Round 2 签收需按矩阵 F7 重新执行全量 verify 并绑定新 SHA。
+6. 本轮按用户指令直接提交/推送，GitHub CI（含 gpu-gate workflow）以实际运行为准。
