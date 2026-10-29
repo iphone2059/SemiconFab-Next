@@ -3,10 +3,9 @@ import { resetWorkbenchState } from '../../../tests/support/reset-ui-atoms';
 import { createAtomTestScope } from '../../../tests/support/atom-scope';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import WorkbenchApp from '@/workbench/workbench';
-import { sitesQueryOptions } from '@/api/sites.resource';
 import { workbenchActions } from '@/workbench/workbench.atom';
+import { createTestRuntime, seedSites, ResourceTestProviders } from '../../support/resource-test-runtime.tsx';
 
 const { registry, render } = createAtomTestScope();
 const site = { siteId: 'site-1', code: 'SITE-1', templateHash: 'hash', fabs: [{ fabId: 'fab-1', code: 'FAB-1' }] };
@@ -23,12 +22,12 @@ it('keeps the website entrance free of 3D preview rendering and links to the can
   workbenchActions.siteIdSet(registry, 'site-1');
   // Keep background refetches pending instead of touching the network.
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  queryClient.setQueryData(sitesQueryOptions().queryKey, [site]);
+  const queryClient = createTestRuntime(registry);
+  seedSites(queryClient, [site]);
   const { container } = render(
-    <QueryClientProvider client={queryClient}>
+    <ResourceTestProviders runtime={queryClient}>
       <WorkbenchApp />
-    </QueryClientProvider>,
+    </ResourceTestProviders>,
   );
   expect(container.innerHTML).toContain('href="/fabs/fab-1/3d"');
   expect(container.innerHTML).toContain('href="/equipment"');

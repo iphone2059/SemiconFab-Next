@@ -2,15 +2,13 @@
 import { resetRuntimeState, resetTwinDemoState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
 import { createAtomTestScope } from '../../tests/support/atom-scope';
 import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { createTestRuntime, seedSites, readEquipmentStatus, ResourceTestProviders } from '../support/resource-test-runtime.tsx';
 
 const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
 import { TwinPage } from '@/twin/twin-page';
-import { sitesQueryOptions } from '@/api/sites.resource';
-import { equipmentStatusQueryKey } from '@/api/equipment.resource';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
 import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
 import { twinUiActions } from '@/twin/twin-ui.atom';
@@ -79,12 +77,12 @@ afterEach(() => {
 it('A02: SSE frames publish through one throttled projection instead of rendering per frame', async () => {
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
   vi.stubGlobal('EventSource', CapturingEventSource);
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  client.setQueryData(sitesQueryOptions().queryKey, [site]);
+  const client = createTestRuntime(registry);
+  seedSites(client, [site]);
   render(
-    <QueryClientProvider client={client}>
+    <ResourceTestProviders runtime={client}>
       <TwinPage fabId="fab-1" search={{ modal: 'arch' }} />
-    </QueryClientProvider>,
+    </ResourceTestProviders>,
   );
 
   await waitFor(() => expect(viewport.renders).toBeGreaterThan(0));
@@ -111,7 +109,7 @@ it('A02: SSE frames publish through one throttled projection instead of renderin
 
   send(source, frame(1, 'down', '2026-10-27T00:00:01Z'));
   // The cache and the bridge child observed the raw frame...
-  expect(client.getQueryData<EquipmentStatusSnapshot>(equipmentStatusQueryKey('site-1', 'fab-1'))?.sequence).toBe(1);
+  expect(readEquipmentStatus(client, 'site-1', 'fab-1')?.sequence).toBe(1);
   // ...but TwinContent/FabViewport has not rendered for it yet.
   expect(viewport.renders, 'a raw SSE cache write must not rerender TwinContent').toBe(before);
   expect(projectedTimes).toEqual([]);
@@ -131,5 +129,4 @@ it('A02: SSE frames publish through one throttled projection instead of renderin
   expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('maint');
   expect(registry.get(twinPageAtom).statusFeed?.updatedAt).toBe('2026-10-27T00:00:03Z');
   unsubscribe();
-  client.clear();
 });

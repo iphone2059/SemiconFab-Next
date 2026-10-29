@@ -1,9 +1,10 @@
 import { Effect } from 'effect';
-import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
-import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from '@/api/equipment.resource';
+import { equipmentStatusGate, equipmentStatusResource, fetchEquipmentStatus } from '@/api/equipment.resource';
+import { refreshResource } from '@/api/resource';
+import { createTestRuntime, readEquipmentStatus } from '../support/resource-test-runtime.tsx';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
-import { runsQueryOptions, runQueryOptions, runResultsQueryOptions } from '@/api/runs.resource';
+import { fetchRun, fetchRunResults, fetchRuns } from '@/api/runs.resource';
 import { createRun as createRunEffect } from '@/api/runs.mutation';
 
 /**
@@ -18,7 +19,6 @@ const JSON_HEADERS = { 'content-type': 'application/json' };
 /** A real FAB frame always carries one valid state per layout tool. */
 const fullTools = (state = 'running') => FAB_LAYOUT.map(() => ({ state }));
 const jsonResponse = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: JSON_HEADERS });
-const client = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -36,7 +36,7 @@ it('uses FAB-scoped relative URLs, same-origin credentials, no-store and no brow
   const calls = captureFetch(() => jsonResponse({
     siteId: 'site/1', fabId: 'fab/1', generatedAt: '2026-10-27T00:00:00Z', sequence: 1, epoch: 1, tools: fullTools(),
   }));
-  await client().fetchQuery(equipmentStatusQueryOptions('site/1', 'fab/1'));
+  await Effect.runPromise(fetchEquipmentStatus('site/1', 'fab/1'));
   expect(calls).toHaveLength(1);
   expect(calls[0].url).toBe('/api/v1/sites/site%2F1/fabs/fab%2F1/equipment-status');
   expect(calls[0].init?.credentials).toBe('same-origin');
@@ -47,10 +47,9 @@ it('uses FAB-scoped relative URLs, same-origin credentials, no-store and no brow
 
 it('encodes run ids and keeps list/detail/result endpoints distinct', async () => {
   const calls = captureFetch(() => jsonResponse([]));
-  const queryClient = client();
-  await queryClient.fetchQuery(runsQueryOptions());
-  await queryClient.fetchQuery(runQueryOptions('run/1')).catch(() => undefined);
-  await queryClient.fetchQuery(runResultsQueryOptions('run/1')).catch(() => undefined);
+  await Effect.runPromise(fetchRuns());
+  await Effect.runPromise(fetchRun('run/1')).catch(() => undefined);
+  await Effect.runPromise(fetchRunResults('run/1')).catch(() => undefined);
   expect(calls.map((call) => call.url)).toEqual([
     '/api/v1/runs',
     '/api/v1/runs/run%2F1',
@@ -78,17 +77,17 @@ it('sends JSON and Idempotency-Key on createRun', async () => {
 
 it('preserves ProblemDetails and non-JSON gateway errors', async () => {
   vi.stubGlobal('fetch', async () => jsonResponse({ title: '身份拒绝', detail: '缺少开发密钥' }, 401));
-  await expect(client().fetchQuery(runsQueryOptions())).rejects.toThrow(/缺少开发密钥/);
+  await expect(Effect.runPromise(fetchRuns())).rejects.toThrow(/缺少开发密钥/);
   vi.stubGlobal('fetch', async () => new Response('Bad gateway', { status: 502 }));
-  await expect(client().fetchQuery(runsQueryOptions())).rejects.toThrow(/Bad gateway/);
+  await expect(Effect.runPromise(fetchRuns())).rejects.toThrow(/Bad gateway/);
 });
 
 it('rejects an invalid payload before it reaches the cache', async () => {
   vi.stubGlobal('fetch', async () => jsonResponse({ siteId: 1, generatedAt: 'now', tools: [] }));
-  await expect(client().fetchQuery(equipmentStatusQueryOptions('site-1', 'fab-1'))).rejects.toThrow();
+  await expect(Effect.runPromise(fetchEquipmentStatus('site-1', 'fab-1'))).rejects.toThrow();
   // FAB identity is part of the contract: a site-only snapshot must not be cached.
   vi.stubGlobal('fetch', async () => jsonResponse({ siteId: 'site-1', generatedAt: 'now', tools: [{ state: 'UP' }] }));
-  await expect(client().fetchQuery(equipmentStatusQueryOptions('site-1', 'fab-1'))).rejects.toThrow(/fabId/);
+  await expect(Effect.runPromise(fetchEquipmentStatus('site-1', 'fab-1'))).rejects.toThrow(/fabId/);
 });
 it('A03: keeps the additive server epoch through the Effect REST schema', async () => {
   // Schema strips unknown keys by default, so the epoch must be part of the schema or
@@ -97,7 +96,7 @@ it('A03: keeps the additive server epoch through the Effect REST schema', async 
     siteId: 'site-1', fabId: 'fab-1', generatedAt: '2026-10-27T00:00:00Z',
     sequence: 1, epoch: 7, tools: fullTools(),
   }));
-  const snapshot = await client().fetchQuery(equipmentStatusQueryOptions('site-1', 'fab-1'));
+  const snapshot = await Effect.runPromise(fetchEquipmentStatus('site-1', 'fab-1'));
   expect(snapshot.sequence).toBe(1);
   expect(snapshot.epoch).toBe(7);
 });
@@ -107,8 +106,10 @@ it('A02: a partial FAB frame is rejected by the shared ordered gate before the c
     siteId: 'site-1', fabId: 'fab-1', generatedAt: '2026-10-27T00:00:00Z', sequence: 1, epoch: 1,
     tools: [{ state: 'running' }],
   }));
-  const queryClient = client();
-  await expect(queryClient.fetchQuery(equipmentStatusQueryOptions('site-1', 'fab-1')))
+  const runtime = createTestRuntime();
+  equipmentStatusGate(runtime.registry, { siteId: 'site-1', fabId: 'fab-1' });
+  await expect(refreshResource(runtime, equipmentStatusResource('site-1', 'fab-1')))
     .rejects.toThrow(/ordered acceptance gate/);
-  expect(queryClient.getQueryData(equipmentStatusQueryKey('site-1', 'fab-1'))).toBeUndefined();
+  expect(readEquipmentStatus(runtime, 'site-1', 'fab-1')).toBeUndefined();
+  runtime.dispose();
 });

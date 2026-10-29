@@ -1,5 +1,4 @@
 import { createRouter } from '@tanstack/react-router';
-import { queryClient } from '@/api/query-client';
 import { applicationRuntime, type AppRuntime } from '@/app/app-runtime';
 import { routeTree } from './route-tree';
 
@@ -11,7 +10,7 @@ import { routeTree } from './route-tree';
 export function createAppRouter(runtime: AppRuntime<never>) {
   return createRouter({
     routeTree,
-    context: { queryClient, appRuntime: runtime },
+    context: { appRuntime: runtime },
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
   });

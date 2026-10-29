@@ -2,10 +2,11 @@ import { useAtomValue } from '@effect/atom-react';
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import type { SiteDto } from '@/contracts/app-contracts';
-import { sitesQueryOptions } from '@/api/sites.resource';
-import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from '@/api/runs.resource';
+import { sitesResource } from '@/api/sites.resource';
+import { runResource, runResultsResource, runsResource } from '@/api/runs.resource';
+import { useResource } from '@/api/use-resource';
+import { useAppRuntime } from '@/app/app-runtime-provider';
 import { fab3dPath } from '@/routes/route-url-mapping';
 import { useFabRuntimeRegistry } from '@/app/runtime-provider';
 import { workbenchAtom, workbenchActions, type WorkbenchFormState } from '@/workbench/workbench.atom';
@@ -19,26 +20,27 @@ import { RunHistory } from '@/workbench/run-history';
 import { useRunSubmission } from '@/workbench/use-run-submission';
 
 /**
- * Dashboard composition root: Query snapshots are selected here and handed to
- * the presentational feature components; the submission command lives in its
- * controller and no server payload is copied into client state.
+ * Dashboard composition root: resource Atom snapshots are selected here and
+ * handed to the presentational feature components; the submission command lives
+ * in its controller and no server payload is copied into client state.
  */
 function Workbench({ site }: { site: SiteDto }) {
   const registry = useContext(RegistryContext);
+  const appRuntime = useAppRuntime();
   const { runId, form, submitError } = useAtomValue(workbenchAtom);
-  const runsQuery = useQuery({ ...runsQueryOptions(), refetchInterval: 1500 });
+  const runsView = useResource(appRuntime, runsResource);
   const scopedRuns = useMemo(
-    () => (runsQuery.data ?? []).filter((value) => value.siteId === site.siteId),
-    [runsQuery.data, site.siteId],
+    () => (runsView.data ?? []).filter((value) => value.siteId === site.siteId),
+    [runsView.data, site.siteId],
   );
-  const listError = runsQuery.error ? errorMessage(runsQuery.error) : '';
-  const runQuery = useQuery({ ...runQueryOptions(runId), enabled: !!runId, refetchInterval: 1500 });
-  const runCompleted = !!runQuery.data && isCompleted(runQuery.data.status);
-  // Results are only requested once the backend reports COMPLETED, exactly like the skipped RTK query.
-  const resultQuery = useQuery({ ...runResultsQueryOptions(runId), enabled: !!runId && runCompleted });
-  const run = runQuery.data;
-  const result = resultQuery.data;
-  const runError = runQuery.error ? errorMessage(runQuery.error) : resultQuery.error ? errorMessage(resultQuery.error) : '';
+  const listError = runsView.error !== undefined ? errorMessage(runsView.error) : '';
+  const runView = useResource(appRuntime, runResource(runId ?? '__no-run__'), { enabled: !!runId });
+  const runCompleted = !!runView.data && isCompleted(runView.data.status);
+  // Results are only requested once the backend reports COMPLETED.
+  const resultView = useResource(appRuntime, runResultsResource(runId ?? '__no-run__'), { enabled: !!runId && runCompleted });
+  const run = runView.data;
+  const result = resultView.data;
+  const runError = runView.error !== undefined ? errorMessage(runView.error) : resultView.error !== undefined ? errorMessage(resultView.error) : '';
   const { submit, submitting } = useRunSubmission(site, form);
   useEffect(() => {
     workbenchActions.runsReceived(registry, { siteId: site.siteId, runIds: scopedRuns.map((value) => value.runId) });
@@ -78,13 +80,14 @@ function Workbench({ site }: { site: SiteDto }) {
 /** Page composition root: shell/navigation plus the keyed workbench sections. */
 export default function WorkbenchApp() {
   const registry = useContext(RegistryContext);
+  const appRuntime = useAppRuntime();
   const siteId = useAtomValue(workbenchAtom, (state) => state.siteId);
   const runtimeRegistry = useFabRuntimeRegistry();
   const [fabIndex, setFabIndex] = useState(0);
-  const sitesQuery = useQuery(sitesQueryOptions());
-  const sites = sitesQuery.data ?? [];
-  const loading = sitesQuery.isLoading;
-  const error = sitesQuery.error ? errorMessage(sitesQuery.error) : '';
+  const sitesView = useResource(appRuntime, sitesResource);
+  const sites = sitesView.data ?? [];
+  const loading = sitesView.isInitial;
+  const error = sitesView.error !== undefined ? errorMessage(sitesView.error) : '';
   useEffect(() => {
     if (sites.length === 0) return;
     if (!sites.some((value) => value.siteId === siteId)) workbenchActions.siteIdSet(registry, sites[0].siteId);
@@ -187,7 +190,7 @@ export default function WorkbenchApp() {
           {error && (
             <div className="error" role="alert">
               站点 API 错误：{error}。请检查 API、Worker 与服务器端开发密钥配置。
-              <button className="ghost" onClick={() => void sitesQuery.refetch()}>
+              <button className="ghost" onClick={() => sitesView.refresh()}>
                 重试
               </button>
             </div>

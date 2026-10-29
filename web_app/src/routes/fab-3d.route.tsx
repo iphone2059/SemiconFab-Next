@@ -23,7 +23,7 @@ export const fab3dRoute = createRoute({
   path: '/fabs/$fabId/3d',
   validateSearch: decodeRouterSearch,
   loader: async ({ context, params }) => {
-    const site = await requireFabSites(context.queryClient, params.fabId);
+    const site = await requireFabSites(context.appRuntime, params.fabId);
     return { fabId: params.fabId, siteId: site.siteId };
   },
   component: FabSceneRoute,

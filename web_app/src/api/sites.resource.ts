@@ -1,27 +1,21 @@
-import { makeResource } from '@/api/resource';
-import { RESOURCE_POLICIES } from '@/api/resource-policy';
-import { queryOptions } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { sitesSchema } from '@/api/sites.schema';
 import type { SiteDto } from '@/contracts/app-contracts';
 import { createHttpTransport, decodeApiResponse, type ApiError, type FetchLike } from '@/api/http.transport';
-import { queryKeys } from '@/api/query-keys';
+import { makeResource } from '@/api/resource';
+import { RESOURCE_POLICIES } from '@/api/resource-policy';
 
-/** Native API boundary; only the Query adapter runs this Effect as a Promise. */
+/** Native API boundary; the Resource Atom is the only server-snapshot owner. */
 export function fetchSites(fetcher?: FetchLike): Effect.Effect<SiteDto[], ApiError> {
   return createHttpTransport({ fetchImpl: fetcher }).fetchJson('/api/v1/sites').pipe(
     Effect.flatMap(decodeApiResponse(sitesSchema, '站点响应格式无效 / invalid sites response')),
   );
 }
-export const sitesQueryOptions = () => queryOptions({
-  queryKey: queryKeys.sites.all,
-  queryFn: ({ signal }) => Effect.runPromise(fetchSites(), { signal }), staleTime: 30_000,
-});
+
+/** Canonical sites resource Atom (single-flight + 30s freshness + 5min idle TTL). */
+export const sitesResource = makeResource(fetchSites(), RESOURCE_POLICIES.sites);
 
 /** Route-param -> site lookup; the URL owns FAB identity in M1. */
 export function findSiteByFabId(sites: readonly SiteDto[], fabId: string): SiteDto | undefined {
   return sites.find((site) => site.fabs.some((fab) => fab.fabId === fabId));
 }
-
-/** Canonical sites resource Atom (single-flight + 30s freshness + 5min idle TTL). */
-export const sitesResource = makeResource(fetchSites(), RESOURCE_POLICIES.sites);

@@ -1,9 +1,9 @@
-import { Effect, Option } from 'effect';
+import { Option } from 'effect';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import type { AppRuntime } from '@/app/app-runtime';
 import type { CommandEventSource } from '@/contracts/command-events.contract';
-import { sitesQueryOptions } from '@/api/sites.resource';
+import { sitesResource } from '@/api/sites.resource';
+import { useResource } from '@/api/use-resource';
 import { FabLifecycleCoordinator } from '@/runtime/fab-lifecycle-coordinator';
 import { FabRuntimeFactory } from '@/runtime/fab-runtime-factory';
 import { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
@@ -29,8 +29,8 @@ export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode
   const [runtimeVersion, setRuntimeVersion] = useState(0);
   const lifecycle = useRef<FabLifecycleCoordinator | undefined>(undefined);
   const signature = useRef('');
-  const sitesQuery = useQuery(sitesQueryOptions());
-  const sites = sitesQuery.data;
+  const sitesResourceView = useResource(appRuntime, sitesResource);
+  const sites = sitesResourceView.data;
 
   useEffect(() => {
     if (!sites) return;
@@ -60,7 +60,7 @@ export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode
     const httpGateway = typeof fetch === 'function' ? createHttpCommandGateway() : undefined;
     // Transitional UI composition edge; Task 4 replaces the legacy recovery contract.
     const gateway = httpGateway && { getCommandStatus: (fabId: string, commandId: string) =>
-      Effect.runPromise(httpGateway.getCommandStatus(fabId, commandId)).then(Option.getOrNull) };
+      appRuntime.runPromise(httpGateway.getCommandStatus(fabId, commandId)).then(Option.getOrNull) };
     const factory = new FabRuntimeFactory({
       sourceFor: (fabId) => sourceByFab.get(fabId) ?? createPendingCommandEventSource(),
       gateway,

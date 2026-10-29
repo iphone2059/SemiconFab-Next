@@ -26,17 +26,6 @@ const ALLOWED_RUNNERS = new Set([
   'app/app-runtime.ts',
   // Task 4 stage B: Effect Scope owns XState actor acquire/release finalizers.
   'runtime/command-workflow-scope.ts',
-  // Transitional Task 3 adapters: Query queryFns/UI controllers still run the
-  // typed Effects at the old edge until Task 5 moves them onto resource atoms.
-  'api/catalog.resource.ts',
-  'api/equipment.resource.ts',
-  'api/research.resource.ts',
-  'api/runs.resource.ts',
-  'api/sites.resource.ts',
-  'api/wafer.resource.ts',
-  'app/runtime-bootstrap.tsx',
-  'workbench/use-command-console.ts',
-  'workbench/use-run-submission.ts',
 ]);
 const ALLOWED_REGISTRY = new Set(['app/app-runtime.ts']);
 const ALLOWED_MANAGED_RUNTIME = new Set(['app/app-runtime.ts']);

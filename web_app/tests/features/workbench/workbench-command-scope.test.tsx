@@ -7,6 +7,7 @@ import { RuntimeProvider } from '@/app/runtime-provider';
 import { CommandConsole } from '@/workbench/command-console';
 import type { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
 import type { SubmitEquipmentCommandInput, SubmittedEquipmentCommand } from '@/api/commands.mutation';
+import { createTestRuntime, ResourceTestProviders } from '../../support/resource-test-runtime.tsx';
 
 // The HTTP boundary is deferred so each case can decide when (and for which
 // console lifetime) a submission resolves.
@@ -54,8 +55,9 @@ const accepted = (commandId: string, fabId = 'fab-a'): SubmittedEquipmentCommand
 });
 
 function renderConsole(registry: FabRuntimeRegistry, siteId: string, fabId: string) {
+  const appRuntime = createTestRuntime();
   const tree = (props: { siteId: string; fabId: string }) =>
-    createElement(RuntimeProvider, { registry, children: createElement(CommandConsole, props) });
+    createElement(ResourceTestProviders, { runtime: appRuntime, children: createElement(RuntimeProvider, { registry, children: createElement(CommandConsole, props) }) });
   const view = render(tree({ siteId, fabId }));
   return {
     view,

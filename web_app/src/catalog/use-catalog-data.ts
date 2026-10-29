@@ -2,9 +2,10 @@ import { useAtomValue } from '@effect/atom-react';
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { useDeferredValue, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import type { CatalogEntryDto } from '@/contracts/app-contracts';
-import { catalogQueryOptions } from '@/api/catalog.resource';
+import { catalogResource } from '@/api/catalog.resource';
+import { useResource } from '@/api/use-resource';
+import { useAppRuntime } from '@/app/app-runtime-provider';
 import { filterCatalog, type CatalogDomain } from '@/catalog/catalog-data';
 import { catalogActions, catalogAtom } from '@/catalog/catalog.atom';
 
@@ -40,19 +41,20 @@ export interface CatalogDataSelection {
  */
 export function useCatalogData(): CatalogDataSelection {
   const registry = useContext(RegistryContext);
+  const appRuntime = useAppRuntime();
+  const catalogView = useResource(appRuntime, catalogResource);
   const catalogState = useAtomValue(catalogAtom);
   const {
     domain, category, query, hideDrafts, selected,
     detailId, page, localEntries, localImportId, importError,
   } = catalogState;
-  const catalogQuery = useQuery(catalogQueryOptions());
   // Network entries were validated by the catalog Query schema before caching.
   // Only local uploads require parseCatalogEntries at their import boundary.
-  const entries = localEntries ?? catalogQuery.data?.items ?? [];
-  const importId = localEntries ? localImportId : (catalogQuery.data?.importId ?? '');
+  const entries = localEntries ?? catalogView.data?.items ?? [];
+  const importId = localEntries ? localImportId : (catalogView.data?.importId ?? '');
   const localPreview = localEntries !== null;
-  const error = importError || (catalogQuery.error instanceof Error ? 'Catalog request failed' : '');
-  const loading = catalogQuery.isLoading && !localEntries;
+  const error = importError || (catalogView.error !== undefined ? 'Catalog request failed' : '');
+  const loading = catalogView.isInitial && !localEntries;
   const detail = entries.find((entry) => entry.recordId === detailId);
   const deferredQuery = useDeferredValue(query);
   const filtered = useMemo(
@@ -85,7 +87,7 @@ export function useCatalogData(): CatalogDataSelection {
 
   function restoreServerCatalog(): void {
     catalogActions.localImportCleared(registry);
-    void catalogQuery.refetch();
+    catalogView.refresh();
   }
 
   return {

@@ -10,10 +10,20 @@ import type { ResourcePolicy } from '@/api/resource-policy';
  * identity, plus the Effect used to load it. The Atom is the only value owner;
  * freshness/idle TTL are control metadata (not a second cache).
  */
+export interface ResourceOptions<A> {
+  /**
+   * Ordered-acceptance hook used by resources whose writes must pass a shared
+   * gate (equipment status REST/SSE). Returning a value writes it; throwing makes
+   * the read fail without overwriting the last accepted value.
+   */
+  readonly accept?: (next: A, previous: A | undefined, registry: AtomRegistry.AtomRegistry) => A;
+}
+
 export interface Resource<A, E> {
   readonly atom: Atom.Writable<AsyncResult.AsyncResult<A, E>, AsyncResult.AsyncResult<A, E>>;
   readonly load: Effect.Effect<A, E, never>;
   readonly policy: ResourcePolicy;
+  readonly accept?: ResourceOptions<A>['accept'];
 }
 
 /** Deterministic family keyed by logical identity; repeated calls return the same Resource. */
@@ -30,12 +40,16 @@ export function resourceFamily<Key extends string, A, E>(
   };
 }
 
-export function makeResource<A, E>(load: Effect.Effect<A, E, never>, policy: ResourcePolicy): Resource<A, E> {
+export function makeResource<A, E>(
+  load: Effect.Effect<A, E, never>,
+  policy: ResourcePolicy,
+  options: ResourceOptions<A> = {},
+): Resource<A, E> {
   const atom = Atom.writable<AsyncResult.AsyncResult<A, E>, AsyncResult.AsyncResult<A, E>>(
     () => AsyncResult.initial<A, E>(),
     (context, value) => context.setSelf(value),
   ).pipe(Atom.setIdleTTL(Duration.millis(policy.idleTtlMs)));
-  return { atom, load, policy };
+  return { atom, load, policy, accept: options.accept };
 }
 
 /** One in-flight load per Resource instance; every waiter shares the same request. */
@@ -68,8 +82,10 @@ export function refreshResource<A, E>(runtime: AppRuntime<never>, resource: Reso
 
   const request = runtime.runPromise(resource.load)
     .then((value) => {
-      if (!runtime.disposed) registry.set(resource.atom, AsyncResult.success(value));
-      return value;
+      if (runtime.disposed) return value;
+      const accepted = resource.accept ? resource.accept(value, previousValue?.value, registry) : value;
+      registry.set(resource.atom, AsyncResult.success(accepted));
+      return accepted;
     })
     .catch((error: E) => {
       if (!runtime.disposed) registry.set(resource.atom, AsyncResult.failWithPrevious(error, { previous }));

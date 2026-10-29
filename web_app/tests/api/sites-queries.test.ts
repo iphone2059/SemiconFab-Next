@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { afterEach, expect, it, vi } from 'vitest';
-import { fetchSites as fetchSitesEffect, findSiteByFabId, sitesQueryOptions } from '@/api/sites.resource';
+import { fetchSites as fetchSitesEffect, findSiteByFabId, sitesResource } from '@/api/sites.resource';
 
 const fetchSites = (...args: Parameters<typeof fetchSitesEffect>) => Effect.runPromise(fetchSitesEffect(...args));
 
@@ -22,10 +22,8 @@ it('fetches sites through the relative URL with RTK-equivalent transport options
   expect(fetcher.mock.calls[0][1]).toMatchObject({ credentials: 'same-origin', cache: 'no-store', signal: expect.any(AbortSignal) });
 });
 
-it('exposes one query-key/staleTime contract for every sites consumer', () => {
-  const options = sitesQueryOptions();
-  expect(options.queryKey).toEqual(['sites']);
-  expect(options.staleTime).toBe(30_000);
+it('exposes one freshness/idle-TTL policy for every sites consumer', () => {
+  expect(sitesResource.policy).toEqual({ freshnessMs: 30_000, idleTtlMs: 300_000 });
 });
 
 it('surfaces non-2xx ProblemDetails as a descriptive Error', async () => {

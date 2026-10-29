@@ -1,9 +1,10 @@
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { useEffect, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import type { FabDto, SiteDto } from '@/contracts/app-contracts';
-import { sitesQueryOptions } from '@/api/sites.resource';
+import { sitesResource } from '@/api/sites.resource';
+import { useResource } from '@/api/use-resource';
+import { useAppRuntime } from '@/app/app-runtime-provider';
 import { searchToQueryString, type RouterSearch } from '@/routes/route-search';
 import { languageTag, readPreferences } from '@/state/preferences.atom';
 import { localeAtom } from '@/state/locale.atom';
@@ -56,8 +57,9 @@ export function useTwinRouteState({
   t,
 }: TwinRouteStateParams): TwinRouteState {
   const registry = useContext(RegistryContext);
+  const appRuntime = useAppRuntime();
+  const sitesView = useResource(appRuntime, sitesResource);
   const searchQuery = searchToQueryString(search ?? {});
-  const sitesQuery = useQuery(sitesQueryOptions());
 
   // URL is the owner of persisted language/theme overrides; the store is synced
   // from the router search and writes back through it (no history/location use).
@@ -88,14 +90,14 @@ export function useTwinRouteState({
   }, [language, theme, onSearchChange, search, searchQuery, registry]);
 
   useEffect(() => {
-    if (!sitesQuery.data) return;
+    if (!sitesView.data) return;
     // Canonical route identity (/fabs/$fabId/3d) wins over the transitional
     // ?siteId= compatibility parameter; the legacy parameter is still honoured
     // when the route does not carry a FAB id.
     const legacySiteId = twinSiteIdFrom(search ?? {});
     let next: SiteDto | undefined;
     if (fabId) {
-      next = sitesQuery.data.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
+      next = sitesView.data.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
       if (!next) {
         twinPageActions.siteErrorSet(registry, t("指定的 FAB 不存在：{0}", [fabId]));
         return;
@@ -103,7 +105,7 @@ export function useTwinRouteState({
     } else if (siteId) {
       return;
     } else {
-      next = legacySiteId ? sitesQuery.data.find((value) => value.siteId === legacySiteId) : sitesQuery.data[0];
+      next = legacySiteId ? sitesView.data.find((value) => value.siteId === legacySiteId) : sitesView.data[0];
       if (!next) {
         twinPageActions.siteErrorSet(registry, legacySiteId ? t("指定的 FAB 站点不存在：{0}", [legacySiteId]) : t("没有可用的 FAB 站点"));
         return;
@@ -113,12 +115,12 @@ export function useTwinRouteState({
     // selects one FAB, it never rejects the site for having more than one.
     if (registry.get(twinPageAtom).siteId !== next.siteId) twinPageActions.siteIdSet(registry, next.siteId);
     if (registry.get(twinPageAtom).siteError !== undefined) twinPageActions.siteErrorSet(registry, undefined);
-  }, [sitesQuery.data, siteId, fabId, t, registry]);
+  }, [sitesView.data, siteId, fabId, t, registry, sitesView.error]);
 
   useEffect(() => {
-    if (!sitesQuery.error) return;
-    twinPageActions.siteErrorSet(registry, sitesQuery.error instanceof Error ? sitesQuery.error.message : t('FAB 数据加载失败'));
-  }, [sitesQuery.error, t, registry]);
+    if (sitesView.error === undefined) return;
+    twinPageActions.siteErrorSet(registry, t('FAB 数据加载失败'));
+  }, [sitesView.error, t, registry]);
 
   useEffect(() => {
     const modal = twinModalFrom(search ?? {});
@@ -137,11 +139,11 @@ export function useTwinRouteState({
   }, [search?.modal, registry]);
 
   const site = useMemo(() => {
-    const sites = sitesQuery.data;
+    const sites = sitesView.data;
     if (!sites) return undefined;
     if (fabId) return sites.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
     return sites.find((value) => value.siteId === siteId) ?? sites[0];
-  }, [sitesQuery.data, siteId, fabId, registry]);
+  }, [sitesView.data, siteId, fabId, registry]);
   const selectedFabId = useMemo(() => fabId ?? site?.fabs[0]?.fabId, [fabId, site, registry]);
   const fab = useMemo(
     () => site ? site.fabs.find((value) => value.fabId === selectedFabId) ?? site.fabs[0] : undefined,

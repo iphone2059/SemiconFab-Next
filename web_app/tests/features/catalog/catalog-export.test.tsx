@@ -3,11 +3,10 @@ import { resetCatalogState, resetLocaleState } from '../../../tests/support/rese
 import { createAtomTestScope } from '../../../tests/support/atom-scope';
 const { registry, render } = createAtomTestScope();
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { CatalogEntryDto } from '@/contracts/app-contracts';
 import { CatalogPage } from '@/catalog/catalog-page';
-import { catalogQueryOptions } from '@/api/catalog.resource';
+import { createTestRuntime, seedCatalog, ResourceTestProviders } from '../../support/resource-test-runtime.tsx';
 
 
 import {
@@ -196,8 +195,8 @@ describe('catalog page export integration', () => {
   });
 
   function renderPage() {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    queryClient.setQueryData(catalogQueryOptions().queryKey, {
+    const queryClient = createTestRuntime(registry);
+    seedCatalog(queryClient, {
       importId: 'snapshot-1',
       totalCount: 1,
       matchedCount: 1,
@@ -205,9 +204,9 @@ describe('catalog page export integration', () => {
       items: [entry],
     });
     return render(
-      <QueryClientProvider client={queryClient}>
+      <ResourceTestProviders runtime={queryClient}>
         <CatalogPage view="catalog" search={{}} onSearchChange={() => {}} onViewChange={() => {}} />
-      </QueryClientProvider>,
+      </ResourceTestProviders>,
     );
   }
 

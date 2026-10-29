@@ -3,13 +3,12 @@ import * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import { RegistryContext } from '@effect/atom-react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, expect, it } from 'vitest';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { CatalogEntryDto } from '@/contracts/app-contracts';
 import { CatalogPage } from '@/catalog/catalog-page';
 import { CatalogComparison } from '@/catalog/catalog-comparison';
 import { FieldValue, RecordFields } from '@/catalog/catalog-fields';
 import { ExternalLink } from '@/catalog/external-link';
-import { catalogQueryOptions } from '@/api/catalog.resource';
+import { createTestRuntime, seedCatalog, ResourceTestProviders } from '../../support/resource-test-runtime.tsx';
 
 
 
@@ -63,7 +62,7 @@ const serverEntry: CatalogEntryDto = {
   },
 };
 
-const createQueryClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+const createQueryClient = () => createTestRuntime();
 
 it('shows original values, units and provenance while escaping imported markup', () => {
   const html = renderToStaticMarkup(<RecordFields entry={entry} language="en" />);
@@ -135,7 +134,7 @@ it('renders the migrated catalog page from the shared Query cache', () => {
   // The catalog endpoint now lives in TanStack Query (ARCH G-02); seed one
   // isolated cache per render instead of a bespoke RTK store entry.
   const queryClient = createQueryClient();
-  queryClient.setQueryData(catalogQueryOptions().queryKey, {
+  seedCatalog(queryClient, {
     importId: 'legacy-test',
     totalCount: 1,
     matchedCount: 1,
@@ -143,14 +142,14 @@ it('renders the migrated catalog page from the shared Query cache', () => {
     items: [serverEntry],
   });
   const html = renderToStaticMarkup(
-    <RegistryContext.Provider value={registry}><QueryClientProvider client={queryClient}>
+    <RegistryContext.Provider value={registry}><ResourceTestProviders runtime={queryClient}>
       <CatalogPage
         view="catalog"
         search={{}}
         onSearchChange={() => {}}
         onViewChange={() => {}}
       />
-    </QueryClientProvider></RegistryContext.Provider>,
+    </ResourceTestProviders></RegistryContext.Provider>,
   );
   expect(html).toContain('FPA');
   expect(html).toContain('SNAPSHOT legacy-test');

@@ -2,14 +2,13 @@
 import { resetRuntimeState, resetTwinDemoState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
 import { createAtomTestScope } from '../../tests/support/atom-scope';
 import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { createTestRuntime, seedSites, ResourceTestProviders, type AppRuntime } from '../support/resource-test-runtime.tsx';
 
 const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
 import { TwinPage } from '@/twin/twin-page';
-import { sitesQueryOptions } from '@/api/sites.resource';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
 import { buildTelemetry, computeSpc } from '@/domain/fab-process-control';
 
@@ -30,7 +29,7 @@ vi.mock('../../src/features/twin/fab-viewer', async () => {
 });
 
 const site = { siteId: 'site-1', code: 'SITE-1', templateHash: 'test', fabs: [{ fabId: 'fab-1', code: 'FAB-01' }] };
-let client: QueryClient;
+let client: AppRuntime<never>;
 
 beforeEach(() => {
   registry.set(localeAtom, { language: 'zh', theme: 'light' });
@@ -44,19 +43,18 @@ beforeEach(() => {
     removeEventListener() {}
     close() {}
   });
-  client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  client.setQueryData(sitesQueryOptions().queryKey, [site]);
+  client = createTestRuntime(registry);
+  seedSites(client, [site]);
 });
 
 afterEach(() => {
   cleanup();
-  client.clear();
   vi.unstubAllGlobals();
   resetTwinUiState(registry); resetTwinPageState(registry); resetTwinDemoState(registry); resetRuntimeState(registry);
 });
 
 it('renders split control/spec SPC judgements in the layout inspector strip', () => {
-  render(<QueryClientProvider client={client}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></QueryClientProvider>);
+  render(<ResourceTestProviders runtime={client}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
   const tool = FAB_LAYOUT[0];
   act(() => {
     twinPageActions.selectedSet(registry, {

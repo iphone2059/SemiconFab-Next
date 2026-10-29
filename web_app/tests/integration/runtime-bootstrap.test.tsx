@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AppProviders } from '@/app/app-providers';
 import { useCommandProjection, useFabRuntimeRegistry } from '@/app/runtime-provider';
 import { useFabTelemetry } from '@/app/telemetry-provider';
-import { sitesQueryOptions } from '@/api/sites.resource';
+import { createRuntimeWithSites, type AppRuntime } from '../support/resource-test-runtime.tsx';
 import WorkbenchApp from '@/workbench/workbench';
 import type { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
 
@@ -26,20 +25,22 @@ function RegistryProbe() {
   return <div data-testid="runtime-fabs">{registry?.size ?? -1}</div>;
 }
 
-function clientWithSites(): QueryClient {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData(sitesQueryOptions().queryKey, sites);
-  return client;
+const runtimes: AppRuntime<never>[] = [];
+function runtimeWithSites(): AppRuntime<never> {
+  const runtime = createRuntimeWithSites(sites);
+  runtimes.push(runtime);
+  return runtime;
 }
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  for (const runtime of runtimes.splice(0)) await runtime.dispose();
   captured = null;
   vi.unstubAllGlobals();
 });
 
 it('assembles the configured FAB XState runtime from the sites document', async () => {
-  render(<AppProviders client={clientWithSites()}><RegistryProbe /></AppProviders>);
+  render(<AppProviders runtime={runtimeWithSites()}><RegistryProbe /></AppProviders>);
   // Registry mutations do not re-render the probe; poll the captured registry.
   await waitFor(() => expect(captured?.size).toBe(1));
   expect(captured?.fabIds).toEqual(['fab-a']);
@@ -49,7 +50,7 @@ it('assembles the configured FAB XState runtime from the sites document', async 
 });
 
 it('disposes runtimes when the provider unmounts (StrictMode-safe lifecycle)', async () => {
-  const { unmount } = render(<AppProviders client={clientWithSites()}><RegistryProbe /></AppProviders>);
+  const { unmount } = render(<AppProviders runtime={runtimeWithSites()}><RegistryProbe /></AppProviders>);
   await waitFor(() => expect(captured?.size).toBe(1));
   const registry = captured;
   unmount();
@@ -86,7 +87,7 @@ it('starts only the consumed FAB telemetry runtime and exposes useFabTelemetry(f
   vi.stubGlobal('EventSource', FakeEventSource);
   vi.stubGlobal('Worker', FakeWorker);
 
-  const view = render(<AppProviders client={clientWithSites()}><RegistryProbe /><TelemetryProbe /></AppProviders>);
+  const view = render(<AppProviders runtime={runtimeWithSites()}><RegistryProbe /><TelemetryProbe /></AppProviders>);
   // Telemetry is demand-driven: the configured FAB has one mounted consumer.
   await waitFor(() => expect(telemetryUrls.length).toBe(1));
   expect(telemetryUrls).toEqual([
@@ -135,9 +136,9 @@ it('keeps one FAB telemetry stream alive until the last useFabTelemetry consumer
   vi.stubGlobal('EventSource', FakeEventSource);
   vi.stubGlobal('Worker', FakeWorker);
 
-  const client = clientWithSites();
+  const client = runtimeWithSites();
   const view = render(
-    <AppProviders client={client}>
+    <AppProviders runtime={client}>
       <TelemetryConsumer fabId="fab-a" testId="consumer-a" />
       <TelemetryConsumer fabId="fab-a" testId="consumer-b" />
     </AppProviders>,
@@ -149,7 +150,7 @@ it('keeps one FAB telemetry stream alive until the last useFabTelemetry consumer
 
   // Unmounting one of two consumers keeps the shared runtime and stream open.
   view.rerender(
-    <AppProviders client={client}>
+    <AppProviders runtime={client}>
       <TelemetryConsumer fabId="fab-a" testId="consumer-a" />
     </AppProviders>,
   );
@@ -181,7 +182,7 @@ it('rejects a foreign FAB payload on the configured command SSE stream', async (
   vi.stubGlobal('EventSource', FakeEventSource);
 
   render(
-    <AppProviders client={clientWithSites()}>
+    <AppProviders runtime={runtimeWithSites()}>
       <RegistryProbe />
       <ProjectionProbe fabId="fab-a" commandId="cmd-1" />
     </AppProviders>,
@@ -226,7 +227,7 @@ it('does not hold idle FAB telemetry/command SSE connections on the workbench ro
   }
   vi.stubGlobal('EventSource', FakeEventSource);
   vi.stubGlobal('Worker', FakeWorker);
-  const view = render(<AppProviders client={clientWithSites()}><RegistryProbe /><WorkbenchApp /></AppProviders>);
+  const view = render(<AppProviders runtime={runtimeWithSites()}><RegistryProbe /><WorkbenchApp /></AppProviders>);
   await waitFor(() => expect(captured?.size).toBe(1));
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(urls).toEqual([]);
@@ -234,8 +235,8 @@ it('does not hold idle FAB telemetry/command SSE connections on the workbench ro
 });
 
 it('shows the configured FAB in the workbench without a redundant FAB selector', async () => {
-  const client = clientWithSites();
-  render(<AppProviders client={client}><WorkbenchApp /></AppProviders>);
+  const client = runtimeWithSites();
+  render(<AppProviders runtime={client}><WorkbenchApp /></AppProviders>);
   await waitFor(() => expect(screen.getByText('XSTATE RUNTIMES')).toBeTruthy());
   const selector = document.querySelector('aside select');
   expect(selector).toBeNull();

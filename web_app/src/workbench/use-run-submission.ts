@@ -1,12 +1,13 @@
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
-import { Effect } from 'effect';
-import { useEffect, useMemo, useRef, type FormEvent } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { CreateRunRequest, SiteDto } from '@/contracts/app-contracts';
 import { ScopeGate, type ScopeToken } from '@/runtime/scope-gate';
 import { validateScenario } from '@/domain/simulation-scenario';
-import { createRun, invalidateRuns } from '@/api/runs.mutation';
+import { createRun } from '@/api/runs.mutation';
+import { refreshResource } from '@/api/resource';
+import { runsResource } from '@/api/runs.resource';
+import { useAppRuntime } from '@/app/app-runtime-provider';
 import { workbenchAtom, workbenchActions } from '@/workbench/workbench.atom';
 import type { WorkbenchFormState } from '@/workbench/workbench.atom';
 import { errorMessage } from '@/workbench/error-message';
@@ -34,16 +35,10 @@ interface PendingSubmission {
  */
 export function useRunSubmission(site: SiteDto, form: WorkbenchFormState): RunSubmission {
   const registry = useContext(RegistryContext);
-  const queryClient = useQueryClient();
+  const appRuntime = useAppRuntime();
+  const [submitting, setSubmitting] = useState(false);
   const submissionScope = useMemo(() => new ScopeGate(), [registry]);
   const pending = useRef<PendingSubmission | undefined>(undefined);
-  const mutation = useMutation({
-    mutationFn: (input: Parameters<typeof createRun>[0]) => Effect.runPromise(createRun(input)),
-    // The server list/detail/results refresh after acceptance.
-    onSuccess: () => {
-      void invalidateRuns(queryClient);
-    },
-  });
   useEffect(() => () => submissionScope.dispose(), [submissionScope, registry]);
 
   function accepts(token: ScopeToken): boolean {
@@ -83,16 +78,21 @@ export function useRunSubmission(site: SiteDto, form: WorkbenchFormState): RunSu
     const key = pending.current?.json === json ? pending.current.key : crypto.randomUUID();
     pending.current = { json, key };
     const token = submissionScope.begin(site.siteId);
+    setSubmitting(true);
     try {
-      const created = await mutation.mutateAsync({ request, idempotencyKey: key });
+      const created = await appRuntime.runPromise(createRun({ request, idempotencyKey: key }));
       if (accepts(token)) {
         pending.current = undefined;
         workbenchActions.runIdSet(registry, created.runId);
+        // Resource invalidation is precise: only the runs list is refreshed.
+        void refreshResource(appRuntime, runsResource).catch(() => {});
       }
     } catch (error: unknown) {
       if (accepts(token)) workbenchActions.submitErrorSet(registry, errorMessage(error));
+    } finally {
+      if (accepts(token)) setSubmitting(false);
     }
   }
 
-  return { submit, submitting: mutation.isPending };
+  return { submit, submitting };
 }

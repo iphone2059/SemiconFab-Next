@@ -2,9 +2,9 @@
 import { resetRuntimeState, resetTwinDemoState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
 import { createAtomTestScope } from '../../tests/support/atom-scope';
 import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { createTestRuntime, seedSites, ResourceTestProviders, type AppRuntime } from '../support/resource-test-runtime.tsx';
 
 const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
@@ -15,7 +15,6 @@ import { TwinYmsPanel } from '@/twin/twin-yms';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
 import { createMesJob } from '@/domain/fab-process-control';
 import { TwinLocaleProvider } from '@/twin/twin-i18n';
-import { sitesQueryOptions } from '@/api/sites.resource';
 import { twinUiActions } from '@/twin/twin-ui.atom';
 import { twinPageActions } from '@/twin/twin-page.atom';
 import { twinDemoActions } from '@/twin/twin-demo.atom';
@@ -43,7 +42,7 @@ const hud = (patch: Partial<{ step: string; width: string; toolGroup: string; re
   bay: 'Lithography Scanner Bay (光刻曝光核心间 (黄光区))', status: 'Navigating...', badge: 'Product A · 120 Steps', ...patch,
 });
 
-let client: QueryClient;
+let client: AppRuntime<never>;
 
 beforeEach(() => {
   registry.set(localeAtom, { language: 'zh', theme: 'light' });
@@ -58,20 +57,19 @@ beforeEach(() => {
     removeEventListener() {}
     close() {}
   });
-  client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  client.setQueryData(sitesQueryOptions().queryKey, [site]);
+  client = createTestRuntime(registry);
+  seedSites(client, [site]);
 });
 
 afterEach(() => {
   cleanup();
-  client.clear();
   viewport.renders = 0;
   vi.unstubAllGlobals();
   resetTwinUiState(registry); resetTwinPageState(registry); resetTwinDemoState(registry); resetRuntimeState(registry);
 });
 
 function renderTwin() {
-  render(<QueryClientProvider client={client}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></QueryClientProvider>);
+  render(<ResourceTestProviders runtime={client}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
 }
 
 it('updates the AMHS readout from its own subscription without rerendering TwinContent/FabViewport', () => {

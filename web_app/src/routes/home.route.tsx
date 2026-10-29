@@ -1,5 +1,6 @@
 import { createRoute } from '@tanstack/react-router';
-import { sitesQueryOptions } from '@/api/sites.resource';
+import { sitesResource } from '@/api/sites.resource';
+import { ensureResource } from '@/api/resource';
 import WorkbenchApp from '@/workbench/workbench';
 import { rootRoute } from './root.route';
 import { decodeRouterSearch } from './route-search';
@@ -15,7 +16,7 @@ export const homeRoute = createRoute({
   validateSearch: decodeRouterSearch,
   loader: async ({ context }) => {
     try {
-      await context.queryClient.ensureQueryData(sitesQueryOptions());
+      await ensureResource(context.appRuntime, sitesResource);
     } catch {
       /* WorkbenchApp shows the retryable site API error state. */
     }

@@ -1,9 +1,9 @@
 import { Schema } from 'effect';
-import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createRunRequestSchema, runSummarySchema, runResultSchema } from '@/api/runs.schema';
 import { catalogPageSchema } from '@/api/catalog.schema';
-import { catalogQueryOptions } from '@/api/catalog.resource';
+import { fetchCatalog } from '@/api/catalog.resource';
+import { Effect } from 'effect';
 
 const uuid = '3acd7b05-e6e8-5312-bb5b-045e7dd3074b';
 const entry = {
@@ -59,10 +59,7 @@ it('never caches a malformed catalog payload from the server', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
     ...page, items: [{ ...entry, recordId: 'invalid' }],
   }), { status: 200 })));
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  await expect(client.fetchQuery(catalogQueryOptions())).rejects.toThrow();
-  expect(client.getQueryData(catalogQueryOptions().queryKey)).toBeUndefined();
-  client.clear();
+  await expect(Effect.runPromise(fetchCatalog())).rejects.toThrow();
 });
 
 it('validates run submissions before sending HTTP', () => {

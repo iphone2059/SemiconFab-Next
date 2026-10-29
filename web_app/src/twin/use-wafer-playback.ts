@@ -2,8 +2,9 @@ import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { waferRoutesQueryOptions } from '@/api/wafer.resource';
+import { waferRoutesResource } from '@/api/wafer.resource';
+import { useResource } from '@/api/use-resource';
+import { useAppRuntime } from '@/app/app-runtime-provider';
 import type { WaferProduct } from '@/domain/wafer-route';
 import { createWaferTimeline, type WaferHud, type WaferTimeline } from '@/domain/wafer-timeline';
 import { buildWaferScenario } from '@/domain/wafer-scenario';
@@ -46,11 +47,12 @@ export interface TwinWaferPlayback {
  */
 export function useWaferPlayback({ scene, waferActive, language, endTour, t }: TwinWaferPlaybackParams): TwinWaferPlayback {
   const registry = useContext(RegistryContext);
+  const appRuntime = useAppRuntime();
+  const waferRoutesView = useResource(appRuntime, waferRoutesResource, { enabled: waferActive });
   const waferTimelineRef = useRef<WaferTimeline | null>(null);
   const waferHudRef = useRef<WaferHud | null>(null);
-  const waferRoutesQuery = useQuery({ ...waferRoutesQueryOptions(), enabled: waferActive });
-  const waferRoutes = waferRoutesQuery.data;
-  const waferError = waferRoutesQuery.isError ? t('路线加载失败') : '';
+  const waferRoutes = waferRoutesView.data;
+  const waferError = waferRoutesView.isError ? t('路线加载失败') : '';
 
   // The retained controller belongs to this registry. Release it before the
   // replacement registry's playback or locale effects can project another frame.

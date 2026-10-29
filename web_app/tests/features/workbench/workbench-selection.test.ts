@@ -4,20 +4,18 @@ import { createAtomTestScope } from '../../../tests/support/atom-scope';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import WorkbenchApp from '@/workbench/workbench';
-import { sitesQueryOptions } from '@/api/sites.resource';
-import { runQueryOptions, runResultsQueryOptions, runsQueryOptions } from '@/api/runs.resource';
 import {
   workbenchAtom,
   workbenchActions,
 } from '@/workbench/workbench.atom';
+import { createTestRuntime, seedRuns, seedRun, seedRunResults, seedSites, ResourceTestProviders } from '../../support/resource-test-runtime.tsx';
 
 // Server state for sites/runs/run/results is owned by TanStack Query (ARCH G-02);
 // every test that renders gets its own isolated Query cache. Client UI state lives
 // in the Effect Atom workbench store and is reset between cases.
 const { registry, render } = createAtomTestScope();
-const createQueryClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+const createQueryClient = () => createTestRuntime(registry);
 // Use real wire identities: createRun validates Site/FAB GUIDs before HTTP.
 const singleFabSite = {
   siteId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', code: 'DEMO-SITE', templateHash: 'hash',
@@ -64,20 +62,20 @@ it('does not render cached run details or totals belonging to another site', () 
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
   // Seed the shared Query cache instead of the removed RTK cache.
   const queryClient = createQueryClient();
-  queryClient.setQueryData(sitesQueryOptions().queryKey, [{
+  seedSites(queryClient, [{
     siteId: 'site-b', code: 'B', templateHash: 'hash', fabs: [{ fabId: 'b-fab', code: 'FAB-B' }],
   }]);
-  queryClient.setQueryData(runsQueryOptions().queryKey, []);
-  queryClient.setQueryData(runQueryOptions('a-run').queryKey, {
+  seedRuns(queryClient, []);
+  seedRun(queryClient, 'a-run', {
     runId: 'a-run', siteId: 'site-a', status: 'COMPLETED', version: '1',
     createdAtUtc: '2026-10-25T00:00:00Z', executions: [],
   });
-  queryClient.setQueryData(runResultsQueryOptions('a-run').queryKey, {
+  seedRunResults(queryClient, 'a-run', {
     runId: 'a-run', fabs: [{ fabId: 'a-fab', completedLots: '999999', totalLots: '999999',
       simulationTimeUs: '1', busyTimeUs: '1', traceHash: 'hash', events: [] }],
   });
   const { container } = render(
-    createElement(QueryClientProvider, { client: queryClient, children: createElement(WorkbenchApp) }),
+    createElement(ResourceTestProviders, { runtime: queryClient, children: createElement(WorkbenchApp) }),
   );
   expect(container.innerHTML).toContain('AWAITING RUN');
   expect(container.innerHTML).not.toContain('999,999');
@@ -93,10 +91,10 @@ it('renders the single FAB execution card and metric without a redundant FAB sel
     return new Promise(() => {});
   }));
   const queryClient = createQueryClient();
-  queryClient.setQueryData(sitesQueryOptions().queryKey, [singleFabSite]);
-  queryClient.setQueryData(runsQueryOptions().queryKey, []);
+  seedSites(queryClient, [singleFabSite]);
+  seedRuns(queryClient, []);
   const { container } = render(
-    createElement(QueryClientProvider, { client: queryClient, children: createElement(WorkbenchApp) }),
+    createElement(ResourceTestProviders, { runtime: queryClient, children: createElement(WorkbenchApp) }),
   );
   expect(container.querySelector('aside select')).toBeNull();
   expect(container.querySelectorAll('.fab-card')).toHaveLength(1);
@@ -126,10 +124,10 @@ it('submits the single FAB scenario through the validated HTTP boundary', async 
   Object.defineProperty(globalThis, 'crypto', { value: { ...originalCrypto, randomUUID: () => 'idem-single' }, configurable: true });
   try {
     const queryClient = createQueryClient();
-    queryClient.setQueryData(sitesQueryOptions().queryKey, [singleFabSite]);
-    queryClient.setQueryData(runsQueryOptions().queryKey, []);
+    seedSites(queryClient, [singleFabSite]);
+    seedRuns(queryClient, []);
     const { container } = render(
-      createElement(QueryClientProvider, { client: queryClient, children: createElement(WorkbenchApp) }),
+      createElement(ResourceTestProviders, { runtime: queryClient, children: createElement(WorkbenchApp) }),
     );
     const form = container.querySelector('.workbench-run-form form');
     expect(form).not.toBeNull();
@@ -151,10 +149,10 @@ it('remounts the single FAB command console when its site scope changes', async 
   // Background queries stay pending; only the console markup matters here.
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
   const queryClient = createQueryClient();
-  queryClient.setQueryData(sitesQueryOptions().queryKey, [singleFabSite]);
-  queryClient.setQueryData(runsQueryOptions().queryKey, []);
+  seedSites(queryClient, [singleFabSite]);
+  seedRuns(queryClient, []);
   const { container } = render(
-    createElement(QueryClientProvider, { client: queryClient, children: createElement(WorkbenchApp) }),
+    createElement(ResourceTestProviders, { runtime: queryClient, children: createElement(WorkbenchApp) }),
   );
   expect(container.querySelector('.sidebar-note select')).toBeNull();
   const consoleSelects = () => container.querySelectorAll('form select');
@@ -164,7 +162,7 @@ it('remounts the single FAB command console when its site scope changes', async 
   expect((consoleSelects()[0] as HTMLSelectElement).value).toBe('equipment-5');
 
   act(() => {
-    queryClient.setQueryData(sitesQueryOptions().queryKey, [{
+    seedSites(queryClient, [{
       ...singleFabSite, siteId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', code: 'RELOADED',
     }]);
     workbenchActions.siteIdSet(registry, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');

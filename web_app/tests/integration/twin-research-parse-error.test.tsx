@@ -2,14 +2,13 @@
 import { resetRuntimeState, resetTwinDemoState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
 import { createAtomTestScope } from '../../tests/support/atom-scope';
 import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { createTestRuntime, seedSites, ResourceTestProviders } from '../support/resource-test-runtime.tsx';
 
 const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
 import { TwinPage } from '@/twin/twin-page';
-import { sitesQueryOptions } from '@/api/sites.resource';
 import { ResearchReplay } from '@/domain/simulation-research-replay';
 import { localeAtom } from '@/state/locale.atom';
 
@@ -51,12 +50,12 @@ it('A16: shows a distinct visible research parse error when ResearchReplay.parse
     throw new Error('RangeError: Maximum call stack size exceeded');
   });
 
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  client.setQueryData(sitesQueryOptions().queryKey, [site]);
+  const client = createTestRuntime(registry);
+  seedSites(client, [site]);
   render(
-    <QueryClientProvider client={client}>
+    <ResourceTestProviders runtime={client}>
       <TwinPage fabId="fab-1" search={{ mode: 'research', modal: 'arch' }} />
-    </QueryClientProvider>,
+    </ResourceTestProviders>,
   );
 
   await waitFor(() => expect(document.querySelector('.twin-research-parse-error')).not.toBeNull());
@@ -67,5 +66,4 @@ it('A16: shows a distinct visible research parse error when ResearchReplay.parse
   expect(document.body.textContent).not.toContain('回放加载失败');
   expect(document.querySelector('#research-hud')).not.toBeNull();
   expect(ResearchReplay.parse).toHaveBeenCalled();
-  client.clear();
 });

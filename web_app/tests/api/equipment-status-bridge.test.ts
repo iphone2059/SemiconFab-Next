@@ -1,26 +1,26 @@
-import { QueryClient } from '@tanstack/react-query';
-import { afterEach, expect, it, vi } from 'vitest';
+import { expect, it } from 'vitest';
 import {
   acceptEquipmentStatusSnapshot,
   activateEquipmentStatusScope,
   equipmentStatusGate,
+  equipmentStatusResource,
   resetEquipmentStatusGates,
-} from '@/api/equipment-status-bridge';
-import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from '@/api/equipment.resource';
+} from '@/api/equipment.resource';
+import { resourceValue } from '@/api/resource';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
 import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
+import { createTestRuntime } from '../support/resource-test-runtime.tsx';
 
 /**
- * The Query-cache projection bridge is the single acceptance boundary for REST
- * and SSE snapshots. These tests pin the cross-boundary races the plan requires:
+ * The per-registry ordering gate is the single acceptance boundary for REST and
+ * SSE snapshots. These tests pin the cross-boundary races the plan requires:
  * same-FAB reactivation, a late callback from an old epoch, duplicate
  * epoch/sequence after an SSE reconnect, REST/SSE reordering, missing fields and
- * a large frame. The Query cache itself stays the only accepted-snapshot store.
+ * a large frame. The resource Atom is the only accepted-snapshot store.
  */
 
 const scopeA = { siteId: 'site-a', fabId: 'fab-1' };
 const foreignScope = { siteId: 'site-a', fabId: 'unknown-fab' };
-const keyA = equipmentStatusQueryKey(scopeA.siteId, scopeA.fabId);
 const tools = (state = 'running') => FAB_LAYOUT.map(() => ({ state }));
 
 const frame = (
@@ -38,130 +38,78 @@ const frame = (
   ...patch,
 });
 
-const freshClient = () => new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-const jsonResponse = (value: unknown) =>
-  new Response(JSON.stringify(value), { status: 200, headers: { 'content-type': 'application/json' } });
+const accepted = (runtime: ReturnType<typeof createTestRuntime>, scope: { siteId: string; fabId: string }) =>
+  resourceValue(runtime.registry, equipmentStatusResource(scope.siteId, scope.fabId));
 
-afterEach(() => vi.unstubAllGlobals());
+it('reactivating the same FAB seeds its ordering high-water from the accepted resource Atom', () => {
+  const runtime = createTestRuntime();
+  activateEquipmentStatusScope(runtime.registry, scopeA);
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, frame(scopeA, 5, '2026-10-27T00:00:05Z'))?.sequence).toBe(5);
+  expect(equipmentStatusGate(runtime.registry, scopeA)).toBe(equipmentStatusGate(runtime.registry, scopeA));
 
-it('reactivating the same FAB seeds its ordering high-water from the accepted Query cache', () => {
-  const client = freshClient();
-  activateEquipmentStatusScope(client, scopeA);
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(scopeA, 5, '2026-10-27T00:00:05Z'))?.sequence).toBe(5);
-  // The scope gate resolution is stable for one activation generation.
-  expect(equipmentStatusGate(client, scopeA)).toBe(equipmentStatusGate(client, scopeA));
-
-  const previousGate = equipmentStatusGate(client, scopeA);
-  // A fresh page activation keeps the cache's accepted history.
-  activateEquipmentStatusScope(client, scopeA);
-  expect(equipmentStatusGate(client, scopeA)).not.toBe(previousGate);
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(foreignScope, 9, '2026-10-27T00:00:09Z'))).toBeUndefined();
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(scopeA, 4, '2026-10-27T00:00:04Z'))).toBeUndefined();
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(scopeA, 6, '2026-10-27T00:00:06Z'))?.sequence).toBe(6);
-  expect(client.getQueryData<EquipmentStatusSnapshot>(keyA)?.sequence).toBe(6);
-  expect(client.getQueryCache().getAll()).toHaveLength(1);
+  const previousGate = equipmentStatusGate(runtime.registry, scopeA);
+  // A fresh page activation keeps the Atom's accepted history.
+  activateEquipmentStatusScope(runtime.registry, scopeA);
+  expect(equipmentStatusGate(runtime.registry, scopeA)).not.toBe(previousGate);
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, frame(foreignScope, 9, '2026-10-27T00:00:09Z'))).toBeUndefined();
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, frame(scopeA, 4, '2026-10-27T00:00:04Z'))).toBeUndefined();
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, frame(scopeA, 6, '2026-10-27T00:00:06Z'))?.sequence).toBe(6);
+  expect(accepted(runtime, scopeA)?.sequence).toBe(6);
+  runtime.dispose();
 });
 
-it('a late callback from the previous epoch cannot pollute the reactivated FAB cache', () => {
-  const client = freshClient();
-  activateEquipmentStatusScope(client, scopeA);
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(scopeA, 5, '2026-10-27T00:00:05Z'))?.sequence).toBe(5);
-  activateEquipmentStatusScope(client, scopeA);
+it('a late callback from the previous epoch cannot pollute the reactivated FAB Atom', () => {
+  const runtime = createTestRuntime();
+  activateEquipmentStatusScope(runtime.registry, scopeA);
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, frame(scopeA, 5, '2026-10-27T00:00:05Z'))?.sequence).toBe(5);
+  activateEquipmentStatusScope(runtime.registry, scopeA);
   const restarted = frame(scopeA, 1, '2026-10-27T00:00:10Z', { epoch: 2, tools: tools('down') });
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, restarted)).toEqual(restarted);
-  // A delayed callback from before the backend restart carries the old epoch.
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, restarted)).toEqual(restarted);
   const late = frame(scopeA, 9, '2026-10-27T00:00:09Z', { tools: tools('maint') });
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, late)).toBeUndefined();
-  expect(client.getQueryData(keyA)).toEqual(restarted);
-  expect(client.getQueryCache().getAll()).toHaveLength(1);
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, late)).toBeUndefined();
+  expect(accepted(runtime, scopeA)).toEqual(restarted);
+  runtime.dispose();
 });
 
-it('a reconnected SSE stream replaying the same epoch/sequence is a duplicate, not a cache write', () => {
-  const client = freshClient();
-  const onInvalid = vi.fn();
-  activateEquipmentStatusScope(client, scopeA, onInvalid);
-  const accepted = frame(scopeA, 3, '2026-10-27T00:00:03Z', { tools: tools('down') });
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, accepted)?.sequence).toBe(3);
-
-  // Reconnect replay + an older frame of the same generation: both rejected.
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, { ...accepted })).toBeUndefined();
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(scopeA, 2, '2026-10-27T00:00:02Z', { tools: tools('maint') }))).toBeUndefined();
-  expect(client.getQueryData<EquipmentStatusSnapshot>(keyA)?.tools[0].state).toBe('down');
-  // Ordering rejections are not malformed data: the stream is not marked stale.
-  expect(onInvalid).not.toHaveBeenCalled();
-
-  // Backend restart bumps the epoch: its restarted sequence is accepted.
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(scopeA, 1, '2026-10-27T00:00:10Z', { epoch: 2, tools: tools('idle') }))?.epoch).toBe(2);
-  // A late frame from the pre-restart generation is dropped.
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(scopeA, 4, '2026-10-27T00:00:11Z', { epoch: 1 }))).toBeUndefined();
-  expect(client.getQueryData<EquipmentStatusSnapshot>(keyA)?.epoch).toBe(2);
+it('a reconnected SSE stream replaying the same epoch/sequence is a duplicate, not an Atom write', () => {
+  const runtime = createTestRuntime();
+  activateEquipmentStatusScope(runtime.registry, scopeA);
+  const first = frame(scopeA, 7, '2026-10-27T00:00:07Z');
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, first)?.sequence).toBe(7);
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, first)).toBeUndefined();
+  expect(accepted(runtime, scopeA)).toEqual(first);
+  runtime.dispose();
 });
 
-it('a REST poll resolving after a newer SSE frame cannot regress the cache', async () => {
-  vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(frame(scopeA, 4, '2026-10-27T00:00:04Z', { tools: tools('maint') }))));
-  const client = freshClient();
-  // The SSE listener accepted a newer frame first.
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, frame(scopeA, 5, '2026-10-27T00:00:05Z', { tools: tools('down') }))?.sequence).toBe(5);
-
-  const delayed = await client.fetchQuery(equipmentStatusQueryOptions(scopeA.siteId, scopeA.fabId));
-  expect(delayed.sequence).toBe(5);
-  expect(delayed.tools[0].state).toBe('down');
-  expect(client.getQueryData<EquipmentStatusSnapshot>(keyA)?.sequence).toBe(5);
+it('a delayed REST response cannot regress a newer accepted SSE Atom value', () => {
+  const runtime = createTestRuntime();
+  activateEquipmentStatusScope(runtime.registry, scopeA);
+  const sse = frame(scopeA, 12, '2026-10-27T00:00:12Z', { tools: tools('maint') });
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, sse)).toEqual(sse);
+  const delayedRest = frame(scopeA, 11, '2026-10-27T00:00:11Z', { tools: tools('idle') });
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, delayedRest)).toBeUndefined();
+  expect(accepted(runtime, scopeA)).toEqual(sse);
+  runtime.dispose();
 });
 
-it('rejects missing fields, partial FAB frames and crossed identities before the cache', () => {
-  const client = freshClient();
-  const onInvalid = vi.fn();
-  activateEquipmentStatusScope(client, scopeA, onInvalid);
-  const invalid: unknown[] = [
-    { siteId: scopeA.siteId, fabId: scopeA.fabId, tools: tools() }, // missing generatedAt
-    { ...frame(scopeA, 1, 'not-a-timestamp') },
-    frame(scopeA, 1, '2026-10-27T00:00:01Z', { tools: tools().slice(1) }), // partial FAB frame
-    frame(scopeA, 1, '2026-10-27T00:00:01Z', { tools: [{ state: 'UP' }] }),
-    frame(scopeA, -1, '2026-10-27T00:00:01Z'),
-    frame(scopeA, 1, '2026-10-27T00:00:01Z', { epoch: 1.5 }),
-    frame(foreignScope, 1, '2026-10-27T00:00:01Z'), // crossed FAB
-    'not-an-object',
-    null,
-  ];
-  for (const value of invalid) {
-    expect(acceptEquipmentStatusSnapshot(client, scopeA, value), JSON.stringify(value)).toBeUndefined();
-  }
-  expect(client.getQueryData(keyA)).toBeUndefined();
-  expect(onInvalid).toHaveBeenCalledTimes(invalid.length);
+it('rejects missing fields, wrong tool counts and foreign FAB identities through onInvalid', () => {
+  const runtime = createTestRuntime();
+  let invalid = 0;
+  activateEquipmentStatusScope(runtime.registry, scopeA, () => { invalid += 1; });
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, { ...frame(scopeA, 1, 'x'), tools: tools().slice(0, 3) })).toBeUndefined();
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, { siteId: scopeA.siteId, fabId: scopeA.fabId, generatedAt: 'x', sequence: 2, epoch: 1 })).toBeUndefined();
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, frame(foreignScope, 3, 'x'))).toBeUndefined();
+  expect(invalid).toBe(3);
+  expect(accepted(runtime, scopeA)).toBeUndefined();
+  runtime.dispose();
 });
 
-it('accepts one large valid frame and keeps it as the sole cached snapshot', () => {
-  const client = freshClient();
-  activateEquipmentStatusScope(client, scopeA);
-  // A large but contract-valid frame: one state per layout tool plus extra wire
-  // fields the protocol tolerates (the schema at the REST boundary strips them).
-  const large = {
-    ...frame(scopeA, 1, '2026-10-27T00:00:01Z', { tools: tools('idle') }),
-    padding: 'x'.repeat(1_000_000),
-  };
-  const accepted = acceptEquipmentStatusSnapshot(client, scopeA, large);
-  expect(accepted?.tools).toHaveLength(FAB_LAYOUT.length);
-  expect(client.getQueryData(keyA)).toBe(accepted);
-
-  // An oversized tool list is a complete-but-wrong layout and stays rejected.
-  const oversized = frame(scopeA, 2, '2026-10-27T00:00:02Z', { tools: [...tools(), { state: 'running' }] });
-  expect(acceptEquipmentStatusSnapshot(client, scopeA, oversized)).toBeUndefined();
-  expect(client.getQueryData<EquipmentStatusSnapshot>(keyA)?.sequence).toBe(1);
-});
-
-it('keeps ordering state per QueryClient and resettable for teardown', () => {
-  const first = freshClient();
-  const second = freshClient();
-  activateEquipmentStatusScope(first, scopeA);
-  expect(acceptEquipmentStatusSnapshot(first, scopeA, frame(scopeA, 10, '2026-10-27T00:00:10Z'))?.sequence).toBe(10);
-  // A second QueryClient has no shared ordering history for the same composite identity.
-  expect(second.getQueryData(keyA)).toBeUndefined();
-  expect(acceptEquipmentStatusSnapshot(second, scopeA, frame(scopeA, 1, '2026-10-27T00:00:01Z'))?.sequence).toBe(1);
-
-  // Page teardown drops ordering state for one client only.
-  resetEquipmentStatusGates(first);
-  expect(first.getQueryData<EquipmentStatusSnapshot>(keyA)?.sequence).toBe(10);
-  expect(acceptEquipmentStatusSnapshot(first, scopeA, frame(scopeA, 2, '2026-10-27T00:00:02Z'))?.sequence).toBe(2);
-  expect(second.getQueryData<EquipmentStatusSnapshot>(keyA)?.sequence).toBe(1);
+it('accepts and retains a large valid frame without a second cache', () => {
+  const runtime = createTestRuntime();
+  activateEquipmentStatusScope(runtime.registry, scopeA);
+  const large = frame(scopeA, 5000, '2026-10-27T00:05:00Z', { tools: FAB_LAYOUT.map((_, index) => ({ state: index % 2 ? 'running' : 'down' })) });
+  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, large)).toEqual(large);
+  expect(accepted(runtime, scopeA)).toEqual(large);
+  resetEquipmentStatusGates(runtime.registry);
+  runtime.dispose();
 });

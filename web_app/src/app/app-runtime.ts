@@ -18,6 +18,8 @@ export interface AppRuntimeOptions<R> {
   /** Shared application services, built lazily and exactly once per runtime. */
   readonly layer: Layer.Layer<R, never>;
   readonly defaultIdleTTL?: number;
+  /** Test/composition seam: inject an existing registry instead of creating one. */
+  readonly registry?: AtomRegistry.AtomRegistry;
 }
 
 export interface AppRuntime<R = never> {
@@ -35,7 +37,7 @@ export interface AppRuntime<R = never> {
 }
 
 export function createApplicationRuntime<R = never>(options: AppRuntimeOptions<R>): AppRuntime<R> {
-  const registry = AtomRegistry.make({
+  const registry = options.registry ?? AtomRegistry.make({
     scheduleTask,
     defaultIdleTTL: options.defaultIdleTTL ?? DEFAULT_IDLE_TTL_MS,
   });

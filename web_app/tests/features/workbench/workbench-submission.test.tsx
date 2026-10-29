@@ -4,7 +4,6 @@ import { useAtomValue } from '@effect/atom-react';
 import { createAtomTestScope } from '../../../tests/support/atom-scope';
 import { Effect } from 'effect';
 import { act, cleanup, fireEvent, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { RunSummary, SiteDto } from '@/contracts/app-contracts';
@@ -13,6 +12,7 @@ import {
   workbenchAtom,
   workbenchActions,
 } from '@/workbench/workbench.atom';
+import { createTestRuntime, ResourceTestProviders } from '../../support/resource-test-runtime.tsx';
 
 // The HTTP boundary is mocked so each case controls when a submission resolves.
 const { registry, render } = createAtomTestScope();
@@ -64,9 +64,9 @@ function Harness({ target }: { target: SiteDto }) {
 }
 
 function renderHarness(target: SiteDto) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = createTestRuntime(registry);
   const wrapper = ({ children }: { children: ReactNode }) =>
-    createElement(QueryClientProvider, { client: queryClient, children });
+    createElement(ResourceTestProviders, { runtime: queryClient, children });
   const tree = (next: SiteDto) => createElement(wrapper, null, createElement(Harness, { target: next }));
   const view = render(tree(target));
   return {

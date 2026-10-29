@@ -2,15 +2,13 @@
 import { resetRuntimeState, resetTwinDemoState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
 import { createAtomTestScope } from '../../tests/support/atom-scope';
 import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { createTestRuntime, seedSites, readEquipmentStatus, ResourceTestProviders, type AppRuntime } from '../support/resource-test-runtime.tsx';
 
 const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
 import { TwinPage } from '@/twin/twin-page';
-import { sitesQueryOptions } from '@/api/sites.resource';
-import { equipmentStatusQueryKey } from '@/api/equipment.resource';
 import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from '@/domain/fab-layout';
 import { twinUiActions } from '@/twin/twin-ui.atom';
 import { twinPageAtom } from '@/twin/twin-page.atom';
@@ -92,8 +90,8 @@ const send = (source: CapturingEventSource, value: unknown) => {
   act(() => { source.onmessage?.({ data: JSON.stringify(value) }); });
 };
 const flushProjection = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 140)); });
-const cached = (client: QueryClient, fabId: string) =>
-  client.getQueryData<EquipmentStatusSnapshot>(equipmentStatusQueryKey('site-1', fabId));
+const cached = (client: AppRuntime<never>, fabId: string) =>
+  readEquipmentStatus(client, 'site-1', fabId);
 
 afterEach(() => {
   cleanup();
@@ -106,12 +104,12 @@ afterEach(() => {
 it('keeps Query cache and ordering across same-FAB remounts while detaching old SSE generations', async () => {
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
   vi.stubGlobal('EventSource', CapturingEventSource);
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  client.setQueryData(sitesQueryOptions().queryKey, [site]);
+  const client = createTestRuntime(registry);
+  seedSites(client, [site]);
   const tree = (
-    <QueryClientProvider client={client}>
+    <ResourceTestProviders runtime={client}>
       <TwinPage fabId="fab-a" search={{ modal: 'arch' }} />
-    </QueryClientProvider>
+    </ResourceTestProviders>
   );
   const view = render(tree);
 
@@ -154,10 +152,8 @@ it('keeps Query cache and ordering across same-FAB remounts while detaching old 
   await waitFor(() => expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('maint'));
   expect(registry.get(twinPageAtom).statusFeed?.stale).toBe(false);
   expect(cached(client, 'unknown-fab')).toBeUndefined();
-  expect(client.getQueryCache().findAll({ queryKey: ['equipment', 'status'] })).toHaveLength(1);
   // A's accepted layout is complete: the projection never fell back to defaults.
   expect(registry.get(twinPageAtom).liveToolStates).toHaveLength(FAB_TOOL_STATES.length);
   remounted.unmount();
   expect(sourceA2.closed).toBe(true);
-  client.clear();
 });

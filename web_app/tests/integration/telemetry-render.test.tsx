@@ -2,9 +2,9 @@
 import { resetRuntimeState, resetTwinDemoState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
 import { createAtomTestScope } from '../../tests/support/atom-scope';
 import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { createTestRuntime, seedSites, ResourceTestProviders } from '../support/resource-test-runtime.tsx';
 
 const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
@@ -14,7 +14,6 @@ import { TelemetryProvider } from '@/app/telemetry-provider';
 import { FabTelemetryRegistry } from '@/realtime/telemetry-registry';
 import { TelemetryRuntime } from '@/realtime/telemetry-runtime';
 import { createTelemetryWorkerHandler } from '@/realtime/telemetry-worker.logic';
-import { sitesQueryOptions } from '@/api/sites.resource';
 
 
 import { runtimeActions, runtimeAtom } from '@/state/runtime-store';
@@ -42,10 +41,10 @@ afterEach(() => { cleanup(); backend.instances.length = 0; vi.unstubAllGlobals()
 it('does not reapply a preset on GPU recovery but applies it on viewport reload and view change', async () => {
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
   vi.stubGlobal('EventSource', class { onmessage = null; onerror = null; close() {} });
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  client.setQueryData(sitesQueryOptions().queryKey, [site]);
+  const client = createTestRuntime(registry);
+  seedSites(client, [site]);
   twinDemoActions.playingSet(registry, false);
-  const view = render(<QueryClientProvider client={client}><TwinPage fabId="fab-1" /></QueryClientProvider>);
+  const view = render(<ResourceTestProviders runtime={client}><TwinPage fabId="fab-1" /></ResourceTestProviders>);
   try {
     await waitFor(() => expect(sceneViews()).toHaveLength(1));
     const epoch = registry.get(runtimeAtom).viewer.epoch!;
@@ -57,7 +56,7 @@ it('does not reapply a preset on GPU recovery but applies it on viewport reload 
     await waitFor(() => expect(sceneViews()).toHaveLength(2));
     act(() => twinUiActions.viewSet(registry, 'top'));
     expect(sceneViews()).toEqual(['iso', 'iso', 'top']);
-  } finally { view.unmount(); client.clear(); }
+  } finally { view.unmount(); }
 });
 
 it('uses a changed frame source without remounting the scene', async () => {
@@ -81,10 +80,10 @@ it('keeps paused DEMO states isolated while consuming telemetry in live mode', a
   telemetry.start(); source.onopen?.();
   source.onmessage?.({ data: JSON.stringify({ topic: 'telemetry.frame', sequence: 1, payload: { fabId: 'fab-1', sequence: 1, capturedAt: 'now', samples: [{ entityId: 'equipment-0', values: { state: 2, utilization: 0.5 } }] } }) });
   const telemetryRegistry = new FabTelemetryRegistry(); telemetryRegistry.replaceAll(new Map([['fab-1', telemetry]]));
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
-  client.setQueryData(sitesQueryOptions().queryKey, [site]);
+  const client = createTestRuntime(registry);
+  seedSites(client, [site]);
   twinDemoActions.playingSet(registry, false);
-  const view = render(<QueryClientProvider client={client}><TelemetryProvider registry={telemetryRegistry}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></TelemetryProvider></QueryClientProvider>);
+  const view = render(<ResourceTestProviders runtime={client}><TelemetryProvider registry={telemetryRegistry}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></TelemetryProvider></ResourceTestProviders>);
   await waitFor(() => expect(backend.instances).toHaveLength(1));
   const toolStateSource = frameSource();
   expect(toolStateSource()).toEqual(registry.get(twinDemoAtom).states);
@@ -92,5 +91,5 @@ it('keeps paused DEMO states isolated while consuming telemetry in live mode', a
   expect(toolStateSource()[0]).toBe('down');
   twinUiActions.sourceSet(registry, 'demo');
   expect(toolStateSource()).toEqual(registry.get(twinDemoAtom).states);
-  view.unmount(); client.clear(); telemetryRegistry.disposeAll();
+  view.unmount(); telemetryRegistry.disposeAll();
 });

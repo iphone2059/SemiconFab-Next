@@ -1,7 +1,7 @@
-import { Effect } from 'effect';
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { submitEquipmentCommand } from '@/api/commands.mutation';
 import { createEquipmentCommandIdempotencyKey } from '@/api/command.schema';
+import { useAppRuntime } from '@/app/app-runtime-provider';
 import { useFabRuntimeRegistry } from '@/app/runtime-provider';
 import type { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
 
@@ -69,6 +69,7 @@ export interface CommandConsoleController {
  */
 export function useCommandConsole({ siteId, fabId }: { siteId: string; fabId: string }): CommandConsoleController {
   const registry = useFabRuntimeRegistry();
+  const appRuntime = useAppRuntime();
   const runtime = registry?.get(fabId);
   const [equipmentId, setEquipmentId] = useState(EQUIPMENT_IDS[0]);
   const [action, setAction] = useState<string>(COMMAND_ACTIONS[0]);
@@ -112,7 +113,7 @@ export function useCommandConsole({ siteId, fabId }: { siteId: string; fabId: st
       : createEquipmentCommandIdempotencyKey();
     update((previous) => ({ ...previous, busy: true, error: '', pendingKey: { identity, key: idempotencyKey } }));
     try {
-      const submitted = await Effect.runPromise(submitEquipmentCommand({ siteId, fabId, equipmentId, action, idempotencyKey }));
+      const submitted = await appRuntime.runPromise(submitEquipmentCommand({ siteId, fabId, equipmentId, action, idempotencyKey }));
       // A completion for a replaced scope must not enter the new FAB's page, its
       // tracked list, or its runtime.
       if (!isCurrentScope()) return;

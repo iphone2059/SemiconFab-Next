@@ -1,17 +1,16 @@
 // @vitest-environment jsdom
 import { RegistryContext, useAtomValue } from '@effect/atom-react';
 import * as AtomRegistry from 'effect/reactivity/AtomRegistry';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { useRef, type PropsWithChildren } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { waferRoutesQueryOptions } from '@/api/wafer.resource';
 import type { WaferProduct, WaferRouteStep } from '@/domain/wafer-route';
 import { useWaferPlayback } from '@/twin/use-wafer-playback';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
 import { twinPageAtom, type TwinPageState } from '@/twin/twin-page.atom';
 import { twinUiActions, twinUiAtom } from '@/twin/twin-ui.atom';
 import { localeActions, localeAtom } from '@/state/locale.atom';
+import { createTestRuntime, seedWaferRoutes, ResourceTestProviders, type AppRuntime } from '../../support/resource-test-runtime.tsx';
 
 // Keep the real query observer, atoms and domain timeline; only drive the browser
 // clock manually so a retained 16x timeline is observable through its page projection.
@@ -25,7 +24,8 @@ let nextFrame: number;
 const frames = new Map<number, FrameRequestCallback>();
 let first: AtomRegistry.AtomRegistry;
 let second: AtomRegistry.AtomRegistry;
-let client: QueryClient;
+let firstRuntime: AppRuntime<never>;
+let secondRuntime: AppRuntime<never>;
 
 beforeEach(() => {
   now = 0;
@@ -41,8 +41,10 @@ beforeEach(() => {
   second = AtomRegistry.make();
   first.set(localeAtom, { language: 'en', theme: 'light' });
   second.set(localeAtom, { language: 'en', theme: 'light' });
-  client = new QueryClient();
-  client.setQueryData(waferRoutesQueryOptions().queryKey, routes);
+  firstRuntime = createTestRuntime(first);
+  secondRuntime = createTestRuntime(second);
+  seedWaferRoutes(firstRuntime, routes);
+  seedWaferRoutes(secondRuntime, routes);
   twinUiActions.waferOpen(first);
 });
 
@@ -50,7 +52,6 @@ afterEach(() => {
   cleanup();
   first.dispose();
   second.dispose();
-  client.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -68,8 +69,9 @@ function stepFrames(count: number): void {
 
 function mountPlayback() {
   let owner = first;
+  let ownerRuntime = firstRuntime;
   function Wrapper({ children }: PropsWithChildren) {
-    return <RegistryContext.Provider value={owner}><QueryClientProvider client={client}>{children}</QueryClientProvider></RegistryContext.Provider>;
+    return <RegistryContext.Provider value={owner}><ResourceTestProviders runtime={ownerRuntime}>{children}</ResourceTestProviders></RegistryContext.Provider>;
   }
   const hook = renderHook(() => {
     const scene = useRef<FabViewportHandle | null>(null);
@@ -77,7 +79,7 @@ function mountPlayback() {
     const language = useAtomValue(localeAtom, state => state.language);
     return useWaferPlayback({ scene, waferActive, language, endTour() {}, t: text => text });
   }, { wrapper: Wrapper, reactStrictMode: true });
-  return { ...hook, replaceRegistry() { owner = second; hook.rerender(); } };
+  return { ...hook, replaceRegistry() { owner = second; ownerRuntime = secondRuntime; hook.rerender(); } };
 }
 
 it('discards the previous timeline and HUD when the replacement registry is inactive', () => {
