@@ -1,70 +1,74 @@
-# SemiconFab Next：Effect 4 与单层源码目录重构文档
+# SemiconFab Next：Effect 4 与单层源码目录重构（已实施）
 
-**文档状态：** 设计草案，待架构决策批准；不是已实施或已验收声明。\
-**基线：** 远端 `main` 的源码基线
-`4fc8a94a3f10d185c8bef7929349ac6ccb2b8792`。\
-**范围：** `web_app` 前端；不重构 ASP.NET Core 后端，不改变 Babylon
-Lite + WebGPU-only 的产品约束。
+**状态：** 已实施并完成 Task 0–6 验收（2026-10-29，分支 `refactor/effect4-flat-20261029`）。本目录是当前事实来源；旧的“设计草案/待批准”表述已被本页取代。
+**基线：** 远端 `main` 的 `4fc8a94a3f10d185c8bef7929349ac6ccb2b8792`（独立 worktree `.local/worktrees/effect4-baseline` 仅用于 A/B）。
+**范围：** 仅 `web_app` 前端；后端不变，Babylon Lite + WebGPU-only 产品约束不变。
+**验收证据：** `docs/architecture/evidence/`；浏览器 e2e：`docs/perf/effect4-e2e.json`；性能/GPU：`docs/architecture/evidence/perf/`。
 
 ## 文档地图
 
-  ------------------------------------------------------------------------------------------------------
-  文档                                        用途
-  ------------------------------------------- ----------------------------------------------------------
-  `01-effect4-target-architecture.md`         目标架构、状态所有权、Effect Runtime、资源缓存、实时数据与
-                                              XState 契约
+| 文档 | 用途 |
+|---|---|
+| `01-effect4-target-architecture.md` | 目标架构、状态所有权、Effect Runtime、Resource Atom、实时数据与 XState 契约 |
+| `02-flat-source-layout.md` | `web_app/src` 严格单层目录、命名规则、旧路径映射与 code-based routing |
+| `03-migration-plan.md` | Task 0–6 的实际执行顺序、边界与回滚策略 |
+| `04-acceptance-and-architecture-gates.md` | A0–A4 验收矩阵、自动化门禁、负向测试与最终签收清单 |
+| `evidence/effect4-progress.md` | Task/提交/证据索引 |
+| `evidence/effect4-task*.md` | 每个任务的执行证据 |
+| `evidence/effect4-task6-browser-e2e.md` | A3 浏览器 10 场景结果与修复记录 |
+| `evidence/effect4-task6-performance-a4.md` | A4 渲染/遥测/bundle/连接/render 指标与 A0–A4 对照 |
+| `evidence/effect4-task6-rxjs-removal.md` | RxJS→Effect Stream/PubSub 迁移证据 |
+| `reviews/2026-10-29-effect-consolidation-design-review.md` | 方案评审历史（不作为当前事实） |
 
-  `02-flat-source-layout.md`                  `web_app/src` 严格单层目录、命名规则、旧路径映射与路由改造
+## 已实施的核心决定
 
-  `03-migration-plan.md`                      可执行的分阶段重构顺序、任务边界、依赖清理与回滚策略
+1. `effect@4.0.7` + `@effect/atom-react@4.0.7` 负责应用副作用、异步执行与响应式状态；`ManagedRuntime` 只在 `app/app-runtime.ts` 创建一次。
+2. 一个应用一个 `AtomRegistry`；Router context 与 React 树共用同一 `AppRuntime`。
+3. 已删除 Zustand、TanStack Query、Zod、RxJS 与 `@tanstack/router-plugin`；没有兼容层、双写或第二资源缓存。
+4. 保留 TanStack Router（**code-based**，无 routeTree 生成插件）、React 19、XState 6 Alpha、Babylon Lite/WebGPU。
+5. `web_app/src` 严格 `src/<module>/<file>`：允许模块 `api app catalog components contracts domain generated lib localization realtime rendering routes runtime state twin workbench`，根只允许 `main.tsx`；无二级目录。
+6. 远程快照唯一 owner 为 Resource Atom（`api/resource.ts`）：`AsyncResult` + freshness/idle TTL/single-flight/错误保留/取消；Router loader 与页面共享 `ensureResource`。
+7. XState 仍拥有命令生命周期；Effect Scope 管理 actor acquire/release，命令事件经 Effect PubSub/Stream 进入 bridge；Flux/Redux/Query/RxJS 均不再参与命令状态。
+8. 高频遥测/TypedArray/Worker/Babylon 引擎对象不进入 AtomRegistry；100ms UI 合批与 FAB Scope 顺序语义保留。
+9. 设备状态 REST 与 SSE 共用一个 per-registry 顺序 Gate；gate 只保存 epoch/sequence，快照存储只属于 FAB 作用域 Resource Atom。
 
-  `04-acceptance-and-architecture-gates.md`   自动化门禁、浏览器验收、性能基线、负向测试与最终验收清单
-  ------------------------------------------------------------------------------------------------------
+## 当前布局（实际树）
 
-## 本次重构的核心决定
+```text
+web_app/src/
+  main.tsx
+  api/          resource-policy.ts resource.ts use-resource.ts *.resource.ts *.schema.ts http.transport.ts
+  app/          app-runtime.ts app-runtime-provider.tsx app-providers.tsx runtime-bootstrap.tsx
+  catalog/      catalog page/atoms/controllers/import/export
+  components/   shared UI primitives
+  contracts/    command contracts / gateway / workflow / scene port
+  domain/       pure domain logic (no React/Effect/network)
+  generated/    generated static-structure data
+  lib/          generic primitives
+  localization/
+  realtime/     SSE/PubSub Streams, telemetry worker, equipment-status gate
+  rendering/    Babylon Lite + WebGPU backend
+  routes/       code-based route tree, route-data loaders, search schema
+  runtime/      FabRuntime/Factory/Registry, command bridge, XState adapter, Effect Scope
+  state/        UI Effect atoms
+  twin/         Twin page and HUDs
+  workbench/    Workbench page/controllers
+```
 
-1.  `effect` 与 `@effect/atom-react`
-    负责应用副作用、异步执行和响应式状态。
-2.  一个应用实例只创建一个 `AtomRegistry`；Router loader 和 React
-    组件必须使用同一 Registry。
-3.  移除 Zustand、TanStack Query、Zod、RxJS，不保留模拟这些库 API
-    的兼容层。
-4.  保留 TanStack Router、React、XState 和 Babylon Lite；渲染仍然只使用
-    WebGPU，不引入 WebGL。
-5.  `web_app/src` 只允许 `src/<module>/<file>` 结构；不允许
-    `src/<module>/<submodule>/<file>`。
-6.  因为当前文件式路由依赖嵌套目录，严格单层目录要求意味着路由改为
-    TanStack Router code-based routing。URL 与错误处理语义必须保持不变。
-7.  高频遥测、TypedArray、Worker 数据通道和 Babylon Lite 引擎对象不进入
-    AtomRegistry。
-8.  命令生命周期仍由 XState 拥有；Effect 管理 actor
-    生命周期、事件串行化、取消、资源释放和恢复工作。
+## 依赖与门禁（当前）
 
-## 重要边界
+- 生产依赖：`@babylonjs/lite`、`@effect/atom-react`、`@tanstack/react-router`、`effect`、`react`、`react-dom`、`xstate`。
+- 旧依赖 gate：`web_app/tests/architecture/legacy-dependency-gate.test.ts`（Zod/Zustand/TanStack Query/RxJS 在源码/manifest/lockfile 均为零）。
+- Effect 边界：`effect-runtime-boundary.test.ts`（runner/registry/ManagedRuntime/RegistryContext 白名单）。
+- 单层目录：`source-layout.test.ts`；资源所有权：`resource-ownership.test.ts`；导入图/契约：`architecture-import-graph.test.ts`、`architecture-contract-rules.test.ts`。
+- 工具链：`scripts/verify.ps1`（Node/pnpm/.NET SDK 固定；pnpm `12.15.0` 由 `start-dev.ps1` 预置）。
+- 浏览器功能：`pnpm e2e` → `tools/e2e_functional.mjs` + `scripts/e2e.ps1` → `docs/perf/effect4-e2e.json`。
+- 性能/GPU：`tools/render_perf.mjs`、`tools/telemetry_stress.mjs`、`tools/bundle_metrics.mjs`；A/B 原始 JSON 在 `evidence/perf/`。
 
--   远端 `main` 当前仍使用 Zustand、TanStack Query、Zod、RxJS 和
-    `@tanstack/router-plugin`。本文定义的是目标，不代表这些依赖已经删除。
--   提供的迁移提案将 `effect` 与 `@effect/atom-react` 目标版本设为
-    `4.0.7`。实施前必须以实际安装包、锁文件和类型检查确认该精确版本的
-    API；不能根据最新版文档直接推断补丁版本完全一致。
--   项目现有架构文档和测试包含文件式路由、生成路由树以及 Vite
-    插件约束。改成 code-based routing
-    是为满足单层目录而进行的明确架构变更，必须同步更新相关测试与架构规范，不能只删除目录。
--   本文不声称已经运行浏览器、WebGPU、性能或迁移后构建测试。
--   新增的容量驱逐诊断、终态优先保留、资源 freshness
-    helper、命令恢复并发上限等均属于目标行为；若当前源码不具备，必须作为新增实现与测试处理。
+## 验收边界（如实记录）
 
-## 建议的文档落点
-
-将文档保存到 `docs/architecture/`，不要放进当前架构门禁明确禁止的
-`docs/superpowers/` 路径，除非项目正式修改并验证该门禁规则。
-
-## 参考基线
-
--   当前前端依赖：`web_app/package.json`
--   当前架构门禁：`web_app/tests/architecture/architecture-import-graph.test.ts`、`architecture-contract-rules.test.ts`、`route-tree-generation.test.ts`
--   当前资源缓存：`web_app/src/api/queries/`
--   当前设备状态顺序门：`web_app/src/realtime/equipment-status/` 与
-    `web_app/src/api/cache/equipment-status-bridge.ts`
--   当前命令工作流：`web_app/src/runtime/`、`web_app/src/application/`
--   当前渲染边界：`web_app/src/rendering/`、`web_app/src/realtime/workers/`
+- 开发数据只有 1 个 FAB；跨 FAB 隔离由单元/集成测试覆盖，浏览器 S7 的跨 FAB 场景记为限制。
+- GPU 设备丢失未做真实硬件注入端到端验证；由渲染生命周期测试覆盖。
+- 长时 heap 仅记录 600 帧窗口；非分钟级稳定性测试。
+- 生产构建产物已测量（raw/gzip），浏览器功能与性能基线使用 Vite dev server。
+- 不 push、不 merge；任务按提交逐项记录在 `evidence/effect4-progress.md`。

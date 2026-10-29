@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-29T14:05:07.946Z",
+  "generatedAt": "2026-10-29T14:16:35.105Z",
   "target": "http://127.0.0.1:5179",
   "browser": "Chrome/155.0.8059.86",
   "commit": null,
@@ -67,17 +67,23 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:5179/api/v1/runs/a0e3bc59-d671-49e2-8656-ca0da6760ff7",
+            "url": "http://127.0.0.1:5179/api/v1/runs/65f34ba4-e8b3-4294-8b21-479d4d5feb26",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:5179/api/v1/runs/a0e3bc59-d671-49e2-8656-ca0da6760ff7/results",
+            "url": "http://127.0.0.1:5179/api/v1/runs/65f34ba4-e8b3-4294-8b21-479d4d5feb26/results",
             "count": 1
           }
         ]
       },
       "screenshot": null,
-      "limitations": []
+      "limitations": [],
+      "performance": {
+        "jsHeapUsedMb": 25.58,
+        "taskDurationMs": 180.5,
+        "activeEventSources": 0,
+        "workerTargets": 0
+      }
     },
     {
       "id": "S2",
@@ -136,7 +142,13 @@
         ]
       },
       "screenshot": null,
-      "limitations": []
+      "limitations": [],
+      "performance": {
+        "jsHeapUsedMb": 34.72,
+        "taskDurationMs": 341,
+        "activeEventSources": 0,
+        "workerTargets": 0
+      }
     },
     {
       "id": "S3",
@@ -210,7 +222,13 @@
         ]
       },
       "screenshot": null,
-      "limitations": []
+      "limitations": [],
+      "performance": {
+        "jsHeapUsedMb": 43.93,
+        "taskDurationMs": 1.1,
+        "activeEventSources": 0,
+        "workerTargets": 0
+      }
     },
     {
       "id": "S4",
@@ -241,7 +259,7 @@
       "pass": true,
       "consoleErrors": [],
       "network": {
-        "total": 158,
+        "total": 159,
         "eventSources": 0,
         "keyRequests": [
           {
@@ -273,15 +291,19 @@
             "count": 16
           },
           {
-            "url": "http://127.0.0.1:5179/api/v1/runs/a0e3bc59-d671-49e2-8656-ca0da6760ff7",
+            "url": "http://127.0.0.1:5179/api/v1/runs/65f34ba4-e8b3-4294-8b21-479d4d5feb26",
             "count": 13
           },
           {
-            "url": "http://127.0.0.1:5179/api/v1/runs/a0e3bc59-d671-49e2-8656-ca0da6760ff7/results",
+            "url": "http://127.0.0.1:5179/api/v1/runs/65f34ba4-e8b3-4294-8b21-479d4d5feb26/results",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:5179/api/v1/runs/b458cda3-55af-47dd-835c-ddf5207590e9",
+            "url": "http://127.0.0.1:5179/api/v1/runs/3abe893e-2fdf-4005-bf5e-6c557a687674",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5179/api/v1/runs/3abe893e-2fdf-4005-bf5e-6c557a687674/results",
             "count": 1
           }
         ]
@@ -289,7 +311,13 @@
       "screenshot": null,
       "limitations": [
         "Accepted-submit timing depends on the local DES API; the POST count and absence of an error alert are asserted instead of a specific run duration."
-      ]
+      ],
+      "performance": {
+        "jsHeapUsedMb": 51.93,
+        "taskDurationMs": 719.5,
+        "activeEventSources": 0,
+        "workerTargets": 0
+      }
     },
     {
       "id": "S5",
@@ -311,7 +339,7 @@
         {
           "description": "export triggers a JSON download",
           "expected": "download file present",
-          "actual": "downloads.htm.crdownload",
+          "actual": "downloads.htm (1).crdownload,downloads.htm.crdownload",
           "pass": true
         }
       ],
@@ -356,7 +384,13 @@
       "screenshot": null,
       "limitations": [
         "Downloaded file is asserted by presence in the CDP download directory; its contents are covered by catalog-export unit tests."
-      ]
+      ],
+      "performance": {
+        "jsHeapUsedMb": 40.72,
+        "taskDurationMs": 341.6,
+        "activeEventSources": 0,
+        "workerTargets": 0
+      }
     },
     {
       "id": "S6",
@@ -455,7 +489,13 @@
         ]
       },
       "screenshot": null,
-      "limitations": []
+      "limitations": [],
+      "performance": {
+        "jsHeapUsedMb": 81.16,
+        "taskDurationMs": 926.6,
+        "activeEventSources": 2,
+        "workerTargets": 1
+      }
     },
     {
       "id": "S7",
@@ -558,7 +598,13 @@
       "screenshot": null,
       "limitations": [
         "The dev fixture exposes one FAB; cross-FAB isolation is covered by equipment-status-scope-cycle/twin-fab-scope unit suites. Offline emulation is the transport-interruption simulation (no real network cut)."
-      ]
+      ],
+      "performance": {
+        "jsHeapUsedMb": 77.71,
+        "taskDurationMs": 1720.2,
+        "activeEventSources": 2,
+        "workerTargets": 2
+      }
     },
     {
       "id": "S8",
@@ -609,7 +655,13 @@
         ]
       },
       "screenshot": null,
-      "limitations": []
+      "limitations": [],
+      "performance": {
+        "jsHeapUsedMb": 82.52,
+        "taskDurationMs": 86.4,
+        "activeEventSources": 0,
+        "workerTargets": 2
+      }
     },
     {
       "id": "S9",
@@ -658,7 +710,13 @@
         ]
       },
       "screenshot": null,
-      "limitations": []
+      "limitations": [],
+      "performance": {
+        "jsHeapUsedMb": 86.43,
+        "taskDurationMs": 72,
+        "activeEventSources": 0,
+        "workerTargets": 2
+      }
     },
     {
       "id": "S10",
@@ -668,7 +726,7 @@
         {
           "description": "re-entering the Twin page leaves at most one active stream per URL",
           "expected": "no duplicate active streams",
-          "actual": "active=8 duplicates=6",
+          "actual": "active=2 duplicates=0",
           "pass": true
         },
         {
@@ -753,7 +811,13 @@
       "screenshot": null,
       "limitations": [
         "Timers/actors are asserted by dispose unit tests; this browser scenario checks stream duplication and worker target count."
-      ]
+      ],
+      "performance": {
+        "jsHeapUsedMb": 82.94,
+        "taskDurationMs": 1124.9,
+        "activeEventSources": 2,
+        "workerTargets": 1
+      }
     }
   ],
   "passed": 10,

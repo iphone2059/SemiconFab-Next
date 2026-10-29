@@ -33,6 +33,8 @@ pnpm e2e
 | S9 | 未知 URL 404 | PASS |
 | S10 | Twin 退出/重进：无重复 active EventSource，Worker 数不增长 | PASS |
 
+每个场景另记录 `performance`（JS heap、task duration、active EventSource、Worker targets）与网络摘要，供 A4 连接测量引用。
+
 原始结果：`docs/perf/effect4-e2e.json`；关键截图：`docs/perf/e2e/S1-sites-failure.png`（Sites 失败态）、`docs/perf/e2e/S7-offline.png`（断线 CACHE 态）。
 
 ## 3. 本阶段发现并修复的真实缺陷

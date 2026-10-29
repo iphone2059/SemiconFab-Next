@@ -61,6 +61,23 @@ pnpm e2e
 - 场景：Sites 成功/失败/重试、设备目录筛选/搜索/视图、URL lang/theme 刷新/前进后退、Workbench 校验/重复提交/错误、Catalog 导入/导出、Twin DEMO/晶圆/Research、Twin REST/SSE/断线恢复、未知 FAB、未知 URL、页面退出重进连接卫生。
 
 ```
+## 性能、GPU 与构建产物证据（A4）
+
+```powershell
+# 需要已启动 dev（API+Vite）；基线 worktree 使用 4fc8a94 与独立端口
+node tools/render_perf.mjs --url http://127.0.0.1:5173/fabs/<fabId>/3d --frames 600 --profile dev
+node tools/render_perf.mjs --url http://127.0.0.1:5173/fabs/<fabId>/3d --frames 600 --profile 60hz
+node tools/telemetry_stress.mjs --url http://127.0.0.1:5173/tests/telemetry-stress.html --seconds 8 --rate 60
+
+# 生产构建后测量 raw/gzip（对每个 worktree 的 web_app/dist/assets 执行）
+node web_app/node_modules/vite/bin/vite.js build   # 在对应 web_app 内
+node tools/bundle_metrics.mjs --dir <worktree>/web_app/dist/assets --out docs/architecture/evidence/perf/final-bundle.json
+```
+
+- 原始 JSON：`docs/architecture/evidence/perf/final-*.json`。
+- 汇总与边界：`docs/architecture/evidence/effect4-task6-performance-a4.md`（3 轮交替 A/B、bundle、连接/Worker/heap、A0–A4 对照）。
+- 浏览器功能证据：`docs/perf/effect4-e2e.json`（`pnpm e2e` 生成，含每场景网络与性能字段）。
+
 ## 前端架构门禁
 
 - `web_app/tests/architecture/architecture-boundaries.test.ts`：通用正则边界规则（分层 import、XState/工作流实现隔离等）。

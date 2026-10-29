@@ -3,7 +3,7 @@
 ## 版本与用途
 
 > **文档编号：** SFN-WEB-REVIEW-STD-001  
-> **版本：** 1.0  
+> **版本：** 1.1（2026-10-29：Effect 4 终态同步）  
 > **日期：** 2026-10-28  
 > **状态：** 正式评审规范（供 AI Agent 与人工审查执行）  
 > **适用范围：** `SemiconFab-Next/web_app` 及其与 Web 运行有关的前后端接口、静态资产、脚本和部署配置  
@@ -99,7 +99,7 @@
 
 | ID / 维度 | 必查项（检查对象） | 证据与验收准则 |
 |---|---|---|
-| **R19 状态所有权** | Router/Query/Zustand/XState/Worker/GPU 是否各有唯一权威所有者；防止镜像失步。 | 状态所有权表和跨边界更新链。 |
+| **R19 状态所有权** | AppRuntime/Resource Atom/XState/Worker/GPU 是否各有唯一权威所有者；防止镜像失步。 | 状态所有权表和跨边界更新链。 |
 | **R20 订阅和更新粒度** | Selector、useShallow、Context、memo、React Commit、无效广播/重复更新。 | React Profiler、变更触发的重渲染矩阵。 |
 | **R21 异步竞争与取消** | 请求乱序、Abort、过期 Promise、挂载卸载、FAB 切换、GPU 恢复后迟到回调。 | 受控调度测试、故障注入、事件时间线。 |
 | **R22 事件语义与回压** | Epoch/Sequence/Revision、幂等、增量合并、去重、重放、pending 槽位、重连与一致性。 | 协议时序图、最后一帧故障/乱序/重复测试。 |
@@ -119,7 +119,7 @@
 |---|---|---|
 | **R27 身份与资源级授权** | 请求身份、站点/FAB/设备资源授权、能力校验；不可仅依靠前端隐藏。 | 跨 FAB 越权负例、后端认证授权测试。 |
 | **R28 Web 安全攻击面** | XSS/DOM 注入、CSRF、CORS、CSP、URL 参数、文件上传与内容渲染。 | 威胁模型、扫描与人工验证、PoC 最小复现。 |
-| **R29 输入与协议健壮性** | Zod/JSON 协议、消息大小、结构深度、恶意 SSE/Worker 载荷和资源耗尽。 | Fuzz/异常帧、上界与失败处理测试。 |
+| **R29 输入与协议健壮性** | Effect Schema/JSON 协议、消息大小、结构深度、恶意 SSE/Worker 载荷和资源耗尽。 | Fuzz/异常帧、上界与失败处理测试。 |
 | **R30 依赖/密钥/许可** | 锁文件、依赖风险、构建完整性、第三方模型来源、密钥注入及版权许可。 | SBOM、依赖审计、许可证/出处清单。 |
 
 ## 08 交互体验、国际化与可访问性
@@ -169,12 +169,14 @@
 
 以下专项在 R01–R48 之上单列，并形成独立结论。通用 Web 审查不能代替 GPU、实时系统或工业数字孪生的验证。
 
-## 3.1 React / TypeScript / Router / Query / Zustand / XState
+## 3.1 React / TypeScript / Router / Effect 4 / XState
 
 - **类型与接口：** 检查 `any`、不安全断言、无法表达 `FabId/RunId/CommandId` 区别的裸字符串；针对外部输入使用运行时 Schema。
-- **Router：** URL/search 单一所有权、参数校验、导航历史、深链恢复、Code Splitting；保持 Router loader 与 TanStack Query 缓存单一来源，核验 `defaultPreloadStaleTime: 0` 的实际效果。
-- **Query：** Query Key 包含 FAB/Site/身份范围、StaleTime/GcTime、Abort、Invalidation，避免 Redux/Zustand 保存 HTTP 权威数据副本。
-- **Zustand：** Selector 稳定性、细粒度订阅、跨 Store 副作用协调、版本替换；拒绝高频 telemetry → React State。
+- **Router：** code-based route tree（`routes/route-tree.ts`）URL/search/404/error 单一所有权；loader 通过 `ensureResource` 与页面共享 Resource Atom；核验无 routeTree 生成物/router plugin。
+- **Effect 4 AppRuntime：** 单一 `ManagedRuntime`/`AtomRegistry`；`Effect.run*` 仅在 `app/app-runtime.ts`、`runtime/command-stream.ts`、`runtime/command-workflow-scope.ts` 与登记的 transport 边界；禁止第二 registry/cache。
+- **Resource Atom：** 远程快照唯一 owner；检查 freshness/idle TTL/single-flight/previous-value/错误保留/取消；router loader、页面、mutation 共享同一实例；禁止第二 Map/Effect Cache/Store 快照。
+- **XState/Effect：** actor 生命周期由 Effect Scope 管理；命令信号只经 `CommandEventSource` Stream；禁止 RxJS/Query/Zustand 参与命令状态；
+- **高频路径：** telemetry TypedArray/Worker/Babylon 对象不进入 AtomRegistry；100ms 合批与逐帧 React state 禁令仍适用。
 - **XState：** Actor 生命周期、终态保留、Revision 单调、命令去重、权威状态核对；UI 只读投影、不直连 Actor 实现。
 - **组件：** Portal/Dialog/焦点恢复、错误边界、Suspense、Hydration/卸载清理、稳定的事件闭包。
 
@@ -491,7 +493,7 @@ acceptance: "可观察、可复现的通过标准"
 
 # 附录 B. 主要技术基线与参考原则
 
-**当前项目技术参考：** React 19、TypeScript 7、Vite 8、TanStack Router/Query、Zustand、XState v6、RxJS、Babylon Lite/WebGPU、Worker/TypedArray、ASP.NET Core/.NET 11。执行评审时以实际锁文件和 HEAD 为准。
+**当前项目技术参考（2026-10-29）：** React 19、TypeScript 7、Vite 8、TanStack Router（code-based）、Effect 4 + @effect/atom-react、XState v6 alpha、Babylon Lite/WebGPU、Worker/TypedArray、ASP.NET Core/.NET 11。Zustand/TanStack Query/Zod/RxJS 已移除。执行评审时以实际锁文件和 HEAD 为准。
 
 **建议参照：** ISO/IEC 25010（质量特性分类）；OWASP ASVS 与 OWASP Top 10（Web 安全）；W3C WCAG（无障碍）；浏览器 Web Vitals/Performance API（体验）；TypeScript 官方类型设计；WebGPU 规范及浏览器实现限制；适用的 SEMI 规范与后端工业安全边界。
 

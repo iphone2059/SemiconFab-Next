@@ -1,6 +1,8 @@
 # 实施状态（V2.1 最终）
 
-- 状态：**M0–M6 与后续 review 修复（多 FAB、SSE 游标/缺口、命令保留/幂等/能力、FAB 级遥测/设备状态、真实 GPU/Worker 压力门禁）已完成；性能优化专项（渲染热路径、遥测传输、RunStore 索引、静态资源打包、门禁加强、仿真值类型）已完成；review-2/review-3 修复已完成；PR #1 相机输入对齐已完成；**2026-10-28 递归整改 R-01…R-14（11 个职责提交，`67915c0..546647d`）已完成：键盘监听最新回调、Tour 单一 RAF、命令结果严格校验、唯一 HTTP transport、ScenePort/ViewerLifecycle、独立 GPU Effect Owner、生成物登记/校验、实时边界拆分、feature 所有权收口、镜像式测试布局、R7–R14 架构门禁与负向 fixtures；2026-10-28 收尾提交消除 R12/R13 例外、将 Workbench 本地组件归位并为 routeTree 增加官方生成逐字节门禁**；PostgreSQL/Outbox/生产身份因基础设施缺失保留边界。**
+- 状态：**Effect 4 / 单层目录 / code-based routing 重构已完成并验收（2026-10-29，分支 `refactor/effect4-flat-20261029`，受测代码提交见本文件 A4 证据与 `docs/architecture/evidence/effect4-task6-performance-a4.md`（Task 0–6 提交索引见 `evidence/effect4-progress.md`））。** 当前事实以本文件“Effect 4 重构终态”章节与 `docs/architecture/README.md` 为准；下方“V2.1 历史状态/里程碑”保留当日审计轨迹，其中 TanStack Query/Zustand/RxJS/Zod、生成式路由树与 `features/` 目录已被 2026-10-29 重构取代。\
+- Effect 4 终态验证：前端 **120 文件 / 718 测试 PASS**；`./scripts/verify.ps1` exit 0；浏览器 e2e **10/10 PASS**（`docs/perf/effect4-e2e.json`）；A/B 性能/GPU 证据见 `docs/architecture/evidence/perf/`。\
+- 历史 V2.1 状态（截至 2026-10-28）：M0–M6、review 修复与 R-01…R-14 递归整改已完成；PostgreSQL/Outbox/生产身份因基础设施缺失保留边界。
 - 最后验证（提交前）：
   - 契约/架构检查 PASS
   - Python 工具测试（`python -m unittest discover -s tools`）与渲染门禁 Node 单测（`node --test tools/test_render_perf_checks.mjs`）PASS
@@ -13,25 +15,32 @@
   - Worker 压力：500/2000/5000 entities × 60Hz × 5s，真实浏览器 Worker 收发 100%，p95 0.4/0.8/1.2ms
   - 性能优化证据：`docs/evidence/perf-2026-10-27.json`（base `536b44e`，9 个主题提交）；review-2 修复证据：`docs/evidence/perf-2026-10-27-review2.json`（base `6cdfc7a`，4 个修复提交；RunStore 10k 历史 Submit steady p50 6.2ms）；review-3 修复证据：`docs/evidence/perf-2026-10-27-review3.json`（base `a05ca0a`，提交通知合并唤醒）；相机输入对齐证据：`docs/evidence/camera-parity-2026-10-27.json`（PR #1，merge `c1d1678`，真实浏览器 12 项交互探针通过）
 
-## 当前架构
-
-当前产品与测试范围为 **一个 FAB（FAB-01）**。多 FAB 是保留的架构扩展能力，不是当前部署或验收要求；下文历史记录中的多 FAB 验证不代表当前需要部署多个 FAB。
+## 当前架构（2026-10-29 Effect 4 终态）
 
 ```text
 React 19 + Vite 8 + TS 7
-TanStack Router     URL/search/生成式路由树（canonical URL only）
-TanStack Query      唯一 HTTP 缓存
-Zustand             客户端 UI 状态
-RxJS + Zod          实时类型化流/解码（CommandEventBridge 输入）
-XState              命令工作流（CommandWorkflow 契约后；FabRuntime 按 FAB 装配）
-Babylon Lite 1.36   WebGPU-only 渲染
+Effect 4.0.7 + @effect/atom-react 4.0.7
+  AppRuntime: 一个 ManagedRuntime + 一个 AtomRegistry（app/app-runtime.ts）
+  Resource Atom: AsyncResult + freshness/idle TTL/single-flight/错误保留（api/resource.ts）
+  Effect Schema + Effect HTTP transport（api/*.schema.ts / api/http.transport.ts）
+  Effect Stream/PubSub: 命令 SSE 与遥测信号（realtime/*.transport.ts）
+  Effect Scope: XState actor acquire/release + SSE/Stream fiber 生命周期
+TanStack Router     code-based 路由树（routes/route-tree.ts）；URL/search 单一所有权
+XState 6 Alpha      命令生命周期（runtime/*command*；经 CommandWorkflow 契约）
+Babylon Lite 1.36   WebGPU-only 渲染（rendering/lite-backend.ts）
 ```
 
-- 产品 URL：`/`、`/fabs/{fabId}/3d`、`/equipment`、`/equipment/compare`；旧地址无重定向。
-- 目录（2026-10-28 终态，详见 `docs/architecture.md` §30）：`src/app`、`src/api/{transport,schemas,cache,queries,mutations}`、`src/application/{contracts,coordination,ports/scene.ts}`、`src/realtime/{equipment-status,protocol,telemetry,transport,workers,buffers}`、`src/runtime`（含 `runtime/commands` XState 实现）、`src/state`、`src/localization`、`src/shared/scheduling`、`src/domain/{fab,amhs,personnel,equipment,simulation,wafer,math}`、`src/features/{twin,catalog,workbench}`、`src/components`、`src/rendering/{lite-backend.ts,lite,contracts}`、`src/generated`（生成物统一目录）；`src` 根只允许 `main.tsx` + `contracts.ts`（R6）。
-- 旧 `src/render`、Redux/`src/store`、RTK Query、immer、Babylon 旧代码/旧迁移文档/parity 工具与测试均已删除（Git 历史保留）。
-- P2 架构清理（2026-10-28，行为不变）：18 个纯领域模块移入 `src/domain/**`（`original-twin-data` 不再反向依赖 feature）；`app/router` 通用 search/url-mapping 不再认识 catalog/Twin（转换分别归 `features/catalog/search.ts`、`features/twin/twin-search.ts`）；`state/createSliceStore` 改为类型安全工厂；遥测传输与设备状态投影分离；Twin 页拆为 `features/twin/controllers/*` + `equipment-status-pipeline.tsx`；生成物迁入 `src/generated/`。
-- 递归整改（2026-10-28，`67915c0..546647d`）随后完成：`application/ports/scene.ts` ScenePort + `ViewerLifecycle`（`state/runtimeStore.ts`）；domain 拆为 `simulation/tour-timeline.ts`、`wafer/wafer-timeline.ts`、`math/`，MES 创建要求显式 epoch-ms；`TwinLanguage` 迁入 `localization/language.ts`；`rendering/lite/effects/{xray,xray-shaders,cut,wafer,index}.ts` 独立资源所有者；`rendering/contracts/static-structure-data.ts` + `tools/generated-artifacts.json` + `tools/check_generated_artifacts.mjs`；`realtime/equipment-status/{protocol,gate,stream,index}.ts` + `api/cache/equipment-status-bridge.ts` + `shared/scheduling/coalesced-dispatcher.ts`；catalog/workbench 子目录与全局 `widgets/charting` 删除；测试镜像式布局与 R7–R14 门禁。
+- 产品 URL：`/`、`/fabs/{fabId}/3d`、`/equipment`、`/equipment/compare`；无旧地址重定向/兼容转发。
+- 目录（严格单层）：`src/api app catalog components contracts domain generated lib localization realtime rendering routes runtime state twin workbench`；`src` 根只允许 `main.tsx`（`source-layout.test.ts`）。
+- 已删除：Zustand、TanStack Query、Zod、RxJS、`@tanstack/router-plugin`、`QueryClient/queryKeys/QueryProvider`、`createSliceStore`、旧 `features/` 路径。
+- 资源所有权：Router loader 与页面共享 `ensureResource`；远程快照只在 Resource Atom；Gate 仅保存 epoch/sequence；无第二 Map/Effect Cache 快照（`resource-ownership.test.ts`）。
+- 设备状态：REST 与 SSE 共用 per-registry 顺序 Gate；SSE 帧只经 `acceptEquipmentStatusSnapshot` 写入 FAB 作用域 Resource Atom；100ms UI 合批保留。
+- 命令：HTTP 提交 → FAB SSE → Effect PubSub/Stream → `CommandEventBridge` → XState；Effect Scope 管理 actor、transport 与 recovery fibers；无 RxJS Subscription。
+- 遥测：FAB 级 20Hz SSE → `TelemetryRuntime` → Worker FrameRingBuffer → 渲染 frame loop；不进入 AtomRegistry/React 逐帧 state。
+- 生成物：`tools/generated-artifacts.json` 登记；`tools/check_generated_artifacts.mjs --check` 并入 `verify.ps1`；无 routeTree 生成物。
+- 浏览器验收：`pnpm e2e`（`tools/e2e_functional.mjs` + `scripts/e2e.ps1`），10 场景全部 PASS。
+- 性能/GPU：`tools/render_perf.mjs`（dev/60Hz ×3 轮交替 A/B）、`tools/telemetry_stress.mjs`（×3）、`tools/bundle_metrics.mjs`；原始 JSON 在 `docs/architecture/evidence/perf/`。
+- 历史 V2.1 细节（TanStack Query/Zustand/旧 feature 目录/routeTree）仅保留在下方“里程碑”等历史章节，不再代表当前实现。
 
 ## 里程碑
 
@@ -57,14 +66,15 @@ Babylon Lite 1.36   WebGPU-only 渲染
 - **命令可靠性**：Idempotency-Key 幂等、能力目录/前置条件、FAB 授权 seam、终态 TTL/容量保留；命令 SSE 带 epoch/sequence 与 Last-Event-ID，缺口触发 replay-gap + 权威核对。
 - **性能**：`tools/render_perf.mjs` 在 headless Chrome + 真实 WebGPU 上验证 `navigator.gpu`/adapter/canvas、renderer frames/draw calls/gpuErrors；dev 门禁 + 60Hz profile（p95/p99/heap trend/首帧，`scripts/perf-render.ps1 -Profile`）；静态结构构建期打包（`tools/pack_static_structure.mjs` → `src/generated/static-structure-packed.ts`）；`tests/performance/telemetry-load.test.ts` 覆盖 500/2000/5000 实体负载。命令见根 README。
 
-## 测试与门禁
+## 测试与门禁（Effect 4 终态）
 
-- RQ-01..RQ-05、CE-01..CE-08：真实运行；CE-06 已有权威状态查询端点与集成测试。
-- ARCH-01..12 与 R0–R14：`web_app/tests/architecture/` 三层门禁——`architecture-boundaries.test.ts`（正则边界）、`architecture-import-graph.test.ts`（真实 TypeScript import 图 R0–R6）、`architecture-contract-rules.test.ts`（R7–R14，含 `fixtures/r7…r14` 负向证明）；`route-tree-generation.test.ts` 在隔离干净 worktree 中官方重生成 `routeTree.gen.ts` 并逐字节比对（插件/生成器版本固定、`@ts-nocheck` 仅限该文件）；`tools/check_architecture.py` 检查终态目录/domain 分层/旧根模块缺席/generated 区域/模块档案数量（18 条）。
-- 生成物：`tools/generated-artifacts.json` 登记 3 件产物；`node tools/check_generated_artifacts.mjs --check` 校验输入/输出 sha256 与 `src/generated` 全覆盖（R11）；各生成器 `--check` 已并入 `scripts/verify.ps1`；`app/router/routeTree.gen.ts` 属构建期插件生成物，不进 registry，由 `route-tree-generation` 门禁验证。
-- 测试布局：`web_app/tests/{api,application,components,contract,domain,features,integration,performance,realtime,rendering,state,architecture}` + `fixtures/support/types`（历史平铺测试已迁移、golden fixtures 与断言强度不变）。
-- 高频路径：`web_app/tests/realtime/realtime-frame-buffer.test.ts`、`web_app/tests/performance/telemetry-frame-buffer.test.ts`/`telemetry-load.test.ts`（CPU/负载）+ `tools/render_perf.mjs`（真实 GPU）。
-- 传输：`web_app/tests/realtime/realtime-transport.test.ts` 覆盖 SSE 游标/replay-gap、HTTP gateway、命令幂等提交、TelemetryRuntime Worker 链路；`web_app/tests/integration/fab-runtime-batch23.test.ts` 覆盖 Runtime 保留/缺口核对。
+- 前端：**120 文件 / 718 测试 PASS**；`tsc --noEmit` 与 `vite build` PASS；`verify.ps1` 内冻结依赖安装。
+- A0 架构门禁：`source-layout.test.ts`（严格单层）、`architecture-import-graph.test.ts`（R0–R6 真实 import 图）、`architecture-contract-rules.test.ts`（R7–R14 + 负向 fixtures）、`legacy-dependency-gate.test.ts`（Zod/Zustand/Query/RxJS 清零）、`effect-runtime-boundary.test.ts`（runner/registry/provider 白名单）、`resource-ownership.test.ts`（唯一资源快照 owner/无第二 cache/路由不直接 fetch）。
+- A1/A2：Resource Atom（RES 语义）、Effect Schema/HTTP、XState/Effect 命令契约、FAB Scope/设备状态 Gate/Telemetry/渲染生命周期。
+- A3：`pnpm e2e` 10/10 场景（Sites 失败/重试、目录筛选/搜索/视图、URL search、Workbench、Catalog 导入/导出、Twin DEMO/晶圆/Research、Twin REST/SSE 断线恢复、未知 FAB、404、退出重进连接卫生）。
+- A4：渲染 dev/60Hz 各 3 轮交替 A/B、遥测压力 3 轮、bundle raw/gzip、连接/Worker/heap 指标、React render 隔离测试；证据索引 `docs/architecture/evidence/perf/`。
+- 后端：3 个 .NET 项目 Release 构建 + `dotnet test`（verify 内）。
+- 浏览器功能与性能为同一台机器、同一 Chrome/WebGPU 环境；性能基线 worktree 为 `4fc8a94`。
 
 ## 已知边界
 

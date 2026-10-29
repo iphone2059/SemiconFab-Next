@@ -1,6 +1,6 @@
 # ADR 0008: Redux Toolkit and RTK Query for application state
 
-- Status: Superseded (2026-10-27)
+- Status: Superseded (2026-10-27); final state ownership superseded by [ADR-0011](0011-effect4-runtime-architecture.md) (2026-10-29)
 - Date: 2026-10-25
 - Supersedes: the page-local `useReducer`/`useState` state model used by the first Twin implementation
 - Superseded by: [ADR-0009](0009-tanstack-router-query-boundary.md) for server data (RTK Query removed in M2a, 2026-10-27) and by the V2.1 Zustand decision for client UI state (Redux Toolkit/react-redux/`src/store` removed in M2b, 2026-10-27). Retained principles: Babylon objects never enter state containers; telemetry is coalesced outside React. Final-state mapping after the 2026-10-28 recursive remediation is recorded in [Update (2026-10-28)](#update-2026-10-28) at the end of this ADR.

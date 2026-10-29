@@ -1,0 +1,148 @@
+{
+  "generatedAt": "2026-10-29T14:15:12.521Z",
+  "browser": "Chrome/155.0.8059.86",
+  "passed": 10,
+  "failed": 0,
+  "scenarios": [
+    {
+      "id": "S1",
+      "pass": true,
+      "network": {
+        "total": 132,
+        "eventSources": 0
+      },
+      "performance": {
+        "jsHeapUsedMb": 27.97,
+        "taskDurationMs": 165.9,
+        "activeEventSources": 0,
+        "workerTargets": 0
+      }
+    },
+    {
+      "id": "S2",
+      "pass": true,
+      "network": {
+        "total": 128,
+        "eventSources": 0
+      },
+      "performance": {
+        "jsHeapUsedMb": 35.16,
+        "taskDurationMs": 357.7,
+        "activeEventSources": 0,
+        "workerTargets": 0
+      }
+    },
+    {
+      "id": "S3",
+      "pass": true,
+      "network": {
+        "total": 257,
+        "eventSources": 0
+      },
+      "performance": {
+        "jsHeapUsedMb": 40.18,
+        "taskDurationMs": 1.3,
+        "activeEventSources": 0,
+        "workerTargets": 0
+      }
+    },
+    {
+      "id": "S4",
+      "pass": true,
+      "network": {
+        "total": 159,
+        "eventSources": 0
+      },
+      "performance": {
+        "jsHeapUsedMb": 37.49,
+        "taskDurationMs": 589,
+        "activeEventSources": 0,
+        "workerTargets": 0
+      }
+    },
+    {
+      "id": "S5",
+      "pass": true,
+      "network": {
+        "total": 128,
+        "eventSources": 0
+      },
+      "performance": {
+        "jsHeapUsedMb": 40.67,
+        "taskDurationMs": 323.8,
+        "activeEventSources": 0,
+        "workerTargets": 0
+      }
+    },
+    {
+      "id": "S6",
+      "pass": true,
+      "network": {
+        "total": 384,
+        "eventSources": 2
+      },
+      "performance": {
+        "jsHeapUsedMb": 81.1,
+        "taskDurationMs": 916.1,
+        "activeEventSources": 2,
+        "workerTargets": 1
+      }
+    },
+    {
+      "id": "S7",
+      "pass": true,
+      "network": {
+        "total": 384,
+        "eventSources": 2
+      },
+      "performance": {
+        "jsHeapUsedMb": 81.63,
+        "taskDurationMs": 2469.6,
+        "activeEventSources": 4,
+        "workerTargets": 2
+      }
+    },
+    {
+      "id": "S8",
+      "pass": true,
+      "network": {
+        "total": 127,
+        "eventSources": 0
+      },
+      "performance": {
+        "jsHeapUsedMb": 86.46,
+        "taskDurationMs": 88.3,
+        "activeEventSources": 4,
+        "workerTargets": 2
+      }
+    },
+    {
+      "id": "S9",
+      "pass": true,
+      "network": {
+        "total": 127,
+        "eventSources": 0
+      },
+      "performance": {
+        "jsHeapUsedMb": 90.36,
+        "taskDurationMs": 79.1,
+        "activeEventSources": 4,
+        "workerTargets": 2
+      }
+    },
+    {
+      "id": "S10",
+      "pass": true,
+      "network": {
+        "total": 197,
+        "eventSources": 2
+      },
+      "performance": {
+        "jsHeapUsedMb": 76.51,
+        "taskDurationMs": 355.5,
+        "activeEventSources": 8,
+        "workerTargets": 2
+      }
+    }
+  ]
+}

@@ -1,15 +1,15 @@
 # 实时协议（Realtime Protocol）
 
 - 版本：V2.1 / 2026-10-27（2026-10-28 递归整改 R-08 同步）
-- 状态：**契约/类型化流/HTTP-SSE 产品链路已实现（模拟后端）；真实 WebSocket 未接**（implemented / WebSocket pending）
-- 依据：[ADR-0010](adr/0010-command-event-bridge.md)；总览见 [架构基线](architecture.md) §4/§30；命令桥见 [命令事件桥](command-event-bridge.md)；恢复见 [命令核对](command-reconciliation.md)；渲染旁路见 [渲染管线](rendering.md)
+- 状态：**Effect 4 重构终态（2026-10-29）：命令/设备状态/遥测 HTTP-SSE 链路已实现（模拟后端）；命令信号为 Effect Stream/PubSub，不再使用 RxJS；真实 WebSocket 未接**（implemented / WebSocket pending）
+- 依据：[ADR-0011](adr/0011-effect4-runtime-architecture.md)（Effect 4 运行时/资源/Stream 边界）、[ADR-0010](adr/0010-command-event-bridge.md)；总览见 [架构 README](architecture/README.md)；命令桥见 [命令事件桥](command-event-bridge.md)；恢复见 [命令核对](command-reconciliation.md)；渲染旁路见 [渲染管线](rendering.md)
 - 上位规范：[08-API-EVENT-CONTRACTS](SemiconFab-Next-Engineering-v1.1/08-API-EVENT-CONTRACTS.md)、[14-CONTRACTS-AND-EVENT-FLOWS](SemiconFab-Next-Engineering-v1.1/engineering/14-CONTRACTS-AND-EVENT-FLOWS.md)（本前端协议不得另造第二套语义）
-- 当前实现（2026-10-28 事实）：设备状态 SSE + 后端**模拟**命令 SSE / 20Hz 遥测 SSE 已接入产品；`MessageDecoder` 由 `SseCommandEventSource` 与 `TelemetryRuntime` 共用；设备状态的 payload/scope、epoch+sequence 顺序门控与 SSE 生命周期分别由 `realtime/equipment-status/{protocol,gate,stream,index}.ts` 唯一拥有；REST/SSE→Query 的唯一投影桥为 `api/cache/equipment-status-bridge.ts`；通用低频合批原语为 `shared/scheduling/coalesced-dispatcher.ts`。`realtime/streams` 与 `WebSocketClient`/`SequenceTracker`/`RealtimeGateway` 的 RxJS 骨架在 2026-10-27 审计清理中作为生产不可达死代码删除（M4+ 接入真实 WebSocket 时按 ADR-0010 重建）。后端 `--realtime`（WebSocket）仍为占位。
+- 当前实现（2026-10-29 事实）：设备状态 SSE + 后端**模拟**命令 SSE / 20Hz 遥测 SSE 已接入产品。命令信号由 `realtime/command-event-source.transport.ts` 实现为 **Effect PubSub + Stream**（`commandResults/reconnected/gaps/connectionStatus/transportFailures`），EventSource 只由第一个/最后一个 result Stream 消费者懒打开/关闭；`FabRuntime` 通过 `runtime/command-stream.ts` 消费 Stream，无 RxJS Subscription。设备状态 payload/scope、epoch+sequence 顺序门控与 REST/SSE 共同写入路径由 `realtime/equipment-status.*.ts` + `api/equipment.resource.ts` 唯一拥有；接受帧写入 FAB 作用域 Resource Atom（`api/resource.ts`），Gate 只保存顺序元数据。遥测仍由 `realtime/telemetry-runtime.ts` 走 Worker/FrameRingBuffer。真实 WebSocket 生产传输仍缺。
 - 门禁：解码/序列/路由、CE-01..08 已在测试源/真实模拟后端上 PASS；浏览器 e2e 命令 accepted→executing→succeeded；真实 WebSocket 生产传输仍缺。
 
 ## 1. 范围与边界
 
-实时层的目标：把后端实时流安全、可诊断地转换成应用可消费的**类型化 Observable**，并把高频数据旁路到 Worker/GPU。
+实时层的目标：把后端实时流安全、可诊断地转换成应用可消费的**类型化 Effect Stream**，并把高频数据旁路到 Worker/GPU。
 
 > 当前产品使用的是 HTTP/SSE 模拟链路（见 §2.1/§10）；本文的 WebSocket 描述是待接目标的协议规范，不代表已实现。
 
@@ -28,11 +28,11 @@
 
 | 层 | 目录/文件 | 组件 | 职责 | 不得做 |
 |---|---|---|---|---|
-| transport（命令） | `realtime/transport/SseCommandEventSource.ts` + `api/transport/HttpCommandGateway.ts` | SSE 事件源、权威 HTTP 查询 | EventSource 生命周期、journal 游标 `{epoch}:{sequence}`、`replay-gap` → `gaps$`；权威状态查询 | 业务去重、UI、工作流 |
-| protocol | `realtime/protocol/MessageDecoder.ts` | `MessageDecoder` | envelope 版本/字段解码与校验 | 业务去重、按“看起来重复”丢消息 |
-| equipment-status | `realtime/equipment-status/{protocol,gate,stream,index}.ts` | payload/scope、epoch+sequence gate、SSE 生命周期 | FAB 作用域快照的**唯一**解码/顺序/传输权威；REST 与 SSE 共用同一 gate | 写 Query 缓存（由 `api/cache/` 投影桥负责） |
-| telemetry | `realtime/telemetry/{TelemetryRuntime,FabTelemetryRegistry}.ts` | 20Hz SSE 运行时、按 FAB 引用计数 | 传输/解码/帧/背压、Worker 生命周期 | 逐帧 React state |
-| high-frequency | `realtime/workers/`、`realtime/buffers/FrameRingBuffer.ts`；低频合批 `shared/scheduling/coalesced-dispatcher.ts` | Worker、环形缓冲、通用合批 | 高频遥测解码/批处理 -> TypedArray -> 渲染；低频 UI 聚合 | 逐帧 React state、逐事件 dispatch |
+| transport（命令） | `realtime/command-event-source.transport.ts` + `api/http.transport.ts` | Effect PubSub Stream 事件源、权威 HTTP 查询 | EventSource 懒生命周期、journal 游标 `{epoch}:{sequence}`、`gaps`/`reconnected`/`connectionStatus`/`transportFailures` Stream；权威状态查询 | 业务去重、UI、工作流 |
+| protocol | `realtime/message-decoder.ts` | `MessageDecoder` | envelope 版本/字段解码与校验 | 业务去重、按“看起来重复”丢消息 |
+| equipment-status | `realtime/equipment-status.protocol.ts`、`equipment-status.gate.ts`、`equipment-status.transport.ts`；`api/equipment.resource.ts` | payload/scope、epoch+sequence gate、REST/SSE 资源 | FAB 作用域快照的唯一顺序权威；接受帧写入 Resource Atom | 创建第二快照缓存 |
+| telemetry | `realtime/telemetry-runtime.ts`、`telemetry-registry.ts` | 20Hz SSE 运行时、按 FAB 引用计数 | 传输/解码/帧/背压、Worker 生命周期 | 逐帧 React state |
+| high-frequency | `realtime/telemetry-worker-*`、`realtime/frame-ring-buffer.ts`；低频合批 `lib/coalesced-dispatcher.ts` | Worker、环形缓冲、通用合批 | 高频遥测解码 -> TypedArray -> 渲染；低频 UI 聚合 | 逐帧 React state、逐事件 dispatch |
 
 `realtime/streams`（`EventRouter`/`CommandResultStream` 等）与 `realtime/synchronization` **当前不存在**；真实 WebSocket 接入时按下面的协议语义重建，不得直接恢复为生产不可达骨架。
 

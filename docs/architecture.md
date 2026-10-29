@@ -1,6 +1,8 @@
 # SemiconFab Next V2.1 架构基线
 
-- 版本：V2.1（2026-10-27；2026-10-28 递归整改 R-01…R-14 同步）
+> **2026-10-29 更新：** 本 V2.1 基线（TanStack Query/Zustand/RxJS/Zod/routeTree 生成）已被 Effect 4 + 严格单层目录 + code-based routing 重构取代。当前事实与验收证据见 [architecture/README.md](architecture/README.md)、[01-effect4-target-architecture.md](architecture/01-effect4-target-architecture.md)、[02-flat-source-layout.md](architecture/02-flat-source-layout.md)、[03-migration-plan.md](architecture/03-migration-plan.md)、[04-acceptance-and-architecture-gates.md](architecture/04-acceptance-and-architecture-gates.md) 与 [ADR-0011](adr/0011-effect4-runtime-architecture.md)。本文 §1–§30 保留 2026-10-28 的历史轨迹，不再代表当前实现；当前状态见 [IMPLEMENTATION-STATUS.md](IMPLEMENTATION-STATUS.md)。
+
+- 版本：V2.1 历史基线（2026-10-27；2026-10-28 R-01…R-14 同步）；**2026-10-29 被 Effect 4 重构取代，见页首更新**
 - 状态：**基线已采纳；M0–M6、all review batches 与 2026-10-28 递归整改（11 个职责提交 + 文档同步提交，`67915c0..546647d`）均已落地：多 FAB 目录/遥测、FAB 级设备状态、命令幂等/鉴权/校验、SSE 游标/缺口恢复、命令保留、真实 GPU 门禁与压力测试、严格 ScenePort 生命周期、确定性领域时钟、独立 GPU Effect Owner、生成物登记/校验、实时/feature 所有权收口与 R0–R14 架构门禁全部实现；2026-10-28 收尾提交进一步消除 R12/R13 例外并为 routeTree 增加官方生成一致性门禁；仅 PostgreSQL/Outbox/生产身份因基础设施缺失保留为边界**。
 - 适用对象：`web_app` 前端架构。后端 `fab_app`/`fab_shared` 的项目与命名空间边界沿用 ADR-0001…ADR-0007
 - 产品与测试范围（2026-10-28 确认）：当前仅 FAB-01，所有测试使用一个活动 FAB。保留多 FAB 的可配置目录、集合契约与复合身份隔离架构，当前不要求多 FAB 部署或验收；历史多 FAB 记录不改变这一范围。

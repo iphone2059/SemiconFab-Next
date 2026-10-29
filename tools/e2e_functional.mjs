@@ -145,6 +145,7 @@ const setStatusSource = async (value) => {
 };
 const navigate = async (url, waitExpression) => {
   clearScenarioState();
+  activeEventSources.clear();
   await send('Page.navigate', { url: new URL(url, baseUrl).href });
   await waitFor('document.readyState === "complete"', 30000, 'document ready ' + url);
   if (waitExpression) await waitFor(waitExpression, timeoutMs, 'page content ' + url);
@@ -161,6 +162,16 @@ const screenshot = async (name) => {
   return path.relative(root, file).replaceAll('\\', '/');
 };
 
+const performanceSnapshot = async () => {
+  const metrics = Object.fromEntries(((await send('Performance.getMetrics')).result?.metrics ?? []).map((entry) => [entry.name, entry.value]));
+  const targets = await (await fetch('http://127.0.0.1:' + port + '/json/list')).json();
+  return {
+    jsHeapUsedMb: Number(((metrics.JSHeapUsedSize ?? 0) / 1024 / 1024).toFixed(2)),
+    taskDurationMs: Number(((metrics.TaskDuration ?? 0) * 1000).toFixed(1)),
+    activeEventSources: activeEventSources.size,
+    workerTargets: targets.filter((entry) => entry.type === 'worker').length,
+  };
+};
 const runScenario = async (id, name, startUrl, steps) => {
   if (onlyScenario && id !== onlyScenario) return undefined;
   screenshotCounter = 0;
@@ -168,9 +179,11 @@ const runScenario = async (id, name, startUrl, steps) => {
     id, name, startUrl: new URL(startUrl, baseUrl).href, steps: [], expected: '',
     actual: '', pass: false, consoleErrors: [], network: null, screenshot: null, limitations: [],
   };
-  const step = (description, expected, actual) => record.steps.push({ description, expected, actual, pass: true });
+  const step = (description, expected, actual, pass = true) => record.steps.push({ description, expected, actual, pass });
   try {
     await steps({ record, step, screenshot: async (suffix = '') => screenshot(id + (suffix ? '-' + suffix : '')) });
+    const failedSteps = record.steps.filter((entry) => !entry.pass);
+    if (failedSteps.length) throw new Error('failed assertions: ' + failedSteps.map((entry) => entry.description + ' (' + entry.actual + ')').join('; '));
     const unexpectedConsoleErrors = consoleErrors.filter((entry) => !/net::ERR_FAILED|Failed to load resource: the server responded with a status of 404|Failed to load resource: net::ERR_INTERNET_DISCONNECTED|Page entered Back-Forward Cache|FAB 不存在|The above error occurred in the <MatchInnerImpl>|React will try to recreate this component tree/.test(entry));
     record.pass = unexpectedConsoleErrors.length === 0;
     if (!record.pass) throw new Error('browser console errors: ' + unexpectedConsoleErrors.join(' | '));
@@ -184,6 +197,7 @@ const runScenario = async (id, name, startUrl, steps) => {
     try { record.screenshot = await screenshot(id + '-failure'); } catch { /* best effort */ }
   }
   record.consoleErrors = [...consoleErrors];
+  record.performance = await performanceSnapshot().catch(() => null);
   const byUrl = new Map();
   for (const request of requests) byUrl.set(request.url, (byUrl.get(request.url) ?? 0) + 1);
   record.network = {
@@ -268,6 +282,7 @@ try {
   await send('Runtime.enable');
   await send('Page.enable');
   await send('Network.enable');
+  await send('Performance.enable');
   await send('DOM.enable');
   await send('Log.enable');
   on('Log.entryAdded', (params) => { if (params.entry.level === 'error') consoleErrors.push('log: ' + params.entry.text); });
@@ -444,11 +459,12 @@ try {
     await navigate('/', 'document.querySelector(".workbench-run-form")').catch(() => undefined);
     await waitFor('document.querySelector("main")', 20000, 'workbench shell');
     await sleep(1000);
+    activeEventSources.clear();
     await navigate('/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
     await sleep(3000);
     const active = [...activeEventSources];
     const duplicates = active.length - new Set(active.map((value) => value.split(' ')[1])).size;
-    step('re-entering the Twin page leaves at most one active stream per URL', 'no duplicate active streams', 'active=' + active.length + ' duplicates=' + duplicates);
+    step('re-entering the Twin page leaves at most one active stream per URL', 'no duplicate active streams', 'active=' + active.length + ' duplicates=' + duplicates, duplicates <= 0);
     step('first Twin lifetime opened its own SSE streams', '>=1 EventSource', String(firstStreams));
     const workerTargetsAfter = (await (await fetch('http://127.0.0.1:' + port + '/json/list')).json()).filter((entry) => entry.type === 'worker').length;
     step('Worker count does not grow unbounded across enter/exit', 'after <= before + 1', 'before=' + workerTargetsBefore + ' after=' + workerTargetsAfter);

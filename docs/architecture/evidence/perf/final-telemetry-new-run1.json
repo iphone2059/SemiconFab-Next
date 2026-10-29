@@ -1,0 +1,50 @@
+{
+  "measuredAt": "2026-10-29T14:11:24.019Z",
+  "browser": "Chrome/155.0.8059.86",
+  "url": "http://127.0.0.1:5179/tests/telemetry-stress.html?seconds=8&rate=60&entities=500%2C2000%2C5000",
+  "seconds": 8,
+  "rate": 60,
+  "results": [
+    {
+      "entities": 500,
+      "frameSize": 1000,
+      "expected": 480,
+      "sent": 480,
+      "received": 480,
+      "receiveRatio": 1,
+      "averageLatencyMs": 0.22,
+      "p95LatencyMs": 0.4,
+      "maxLatencyMs": 0.8,
+      "maxSendDelayMs": 14.63,
+      "errors": []
+    },
+    {
+      "entities": 2000,
+      "frameSize": 4000,
+      "expected": 480,
+      "sent": 480,
+      "received": 480,
+      "receiveRatio": 1,
+      "averageLatencyMs": 0.39,
+      "p95LatencyMs": 0.8,
+      "maxLatencyMs": 1.4,
+      "maxSendDelayMs": 15.83,
+      "errors": []
+    },
+    {
+      "entities": 5000,
+      "frameSize": 10000,
+      "expected": 480,
+      "sent": 480,
+      "received": 480,
+      "receiveRatio": 1,
+      "averageLatencyMs": 0.45,
+      "p95LatencyMs": 0.8,
+      "maxLatencyMs": 3.2,
+      "maxSendDelayMs": 15.43,
+      "errors": []
+    }
+  ],
+  "failures": [],
+  "browserErrors": []
+}
