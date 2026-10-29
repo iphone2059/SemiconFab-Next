@@ -1,10 +1,17 @@
+import type { Effect } from 'effect';
 import type { CommandOutcome, CommandResultEvent } from '@/contracts/command-events.contract';
 
 /**
- * Authoritative command-recovery contract (ADR-008 §2.2/§2.4). The backend is the
- * only durable authority: a browser refresh or a transport gap can always list
- * the FAB's unconfirmed commands and page the journal from a cursor, so the
- * frontend never has to invent recovery from an in-memory ledger.
+ * Authoritative command-recovery contract (ADR-008 §2.2/§2.4, ADR-010, ADR-011).
+ * The backend is the only durable authority: a browser refresh or a transport gap
+ * can always list the FAB's unconfirmed commands and page the journal from an
+ * epoch-scoped cursor, so the frontend never has to invent recovery from an
+ * in-memory ledger.
+ *
+ * Every gateway method returns a native Effect (ADR-011 §2.1): the scheduler wraps
+ * it in `Effect.timeoutOption`, so a timeout/dispose interrupts the fiber and the
+ * AbortSignal reaches the underlying fetch. Implementations must never call
+ * `AppRuntime.runPromise` internally.
  */
 export type CommandRecoveryFilter = 'active' | 'terminal' | 'all';
 
@@ -29,10 +36,16 @@ export interface CommandRecoveryList {
   readonly commands: readonly CommandRecoveryRecord[];
 }
 
-/** GET /api/v1/sites/{siteId}/fabs/{fabId}/command-journal cursor. */
+/**
+ * GET /api/v1/sites/{siteId}/fabs/{fabId}/command-journal cursor (ADR-010 §3).
+ * The cursor is always epoch-scoped and sequence-explicit: an epoch mismatch is a
+ * 409 `journal-epoch-mismatch`, never a silent guess from a bare sequence.
+ */
 export interface CommandJournalQuery {
-  readonly epoch?: string;
-  readonly afterSequence?: number;
+  /** Journal epoch the cursor belongs to; always sent as `?epoch=`. */
+  readonly epoch: string;
+  /** Last delivered sequence; the returned page starts strictly after it. */
+  readonly afterSequence: number;
   readonly limit?: number;
 }
 
@@ -54,19 +67,88 @@ export interface CommandJournalPage {
   readonly firstRetainedSequence: number;
   readonly latestSequence: number;
   readonly events: readonly CommandJournalEvent[];
+  /**
+   * Next page cursor: the last returned sequence, or the requested cursor on an
+   * empty page (ADR-010 §3). Recovery loops until `nextAfterSequence >= latestSequence`.
+   */
+  readonly nextAfterSequence: number;
 }
 
 /**
+ * The request was cancelled (timeout/dispose/caller abort). Cancellation is NOT a
+ * business failure: it must never enter failure counters or store-fault
+ * diagnostics, and it is the only error a cancelled physical request produces.
+ */
+export interface CommandRequestAborted {
+  readonly _tag: 'CommandRequestAborted';
+  readonly message: string;
+  readonly cause?: unknown;
+}
+
+/**
+ * The journal cursor's epoch was replaced/pruned (HTTP 409
+ * `journal-epoch-mismatch`). The consumer must fall back to authoritative list
+ * recovery instead of continuing to page by sequence (ADR-010 §3).
+ */
+export interface CommandJournalEpochMismatch {
+  readonly _tag: 'CommandJournalEpochMismatch';
+  readonly message: string;
+  /** Epoch the backend currently serves; cursors from any other epoch are invalid. */
+  readonly currentEpoch: string;
+  readonly firstRetainedSequence: number;
+  readonly latestSequence: number;
+}
+
+/**
+ * Retryable authoritative-query failure: network/transport, HTTP 5xx or 429.
+ * The recovery state machine keeps Dirty and retries with bounded backoff.
+ */
+export interface CommandGatewayRetryableFailure {
+  readonly _tag: 'CommandGatewayRetryableFailure';
+  readonly message: string;
+  /** HTTP status when the failure came from a response; absent for network failures. */
+  readonly status?: number;
+  readonly cause?: unknown;
+}
+
+/** Non-retryable authoritative-query failure classification. */
+export type CommandGatewayTerminalReason =
+  | 'invalid-response'
+  | 'identity-mismatch'
+  | 'rejected'
+  | 'invalid-request'
+  | 'store-fault';
+
+/**
+ * Non-retryable authoritative-query failure. `store-fault` means the durable
+ * journal can no longer be trusted at all (immediate Unrecoverable); the other
+ * reasons are deterministic client/contract failures (no retry can fix them).
+ */
+export interface CommandGatewayTerminalFailure {
+  readonly _tag: 'CommandGatewayTerminalFailure';
+  readonly reason: CommandGatewayTerminalReason;
+  readonly message: string;
+  readonly status?: number;
+  readonly cause?: unknown;
+}
+
+/** Closed error algebra of the authoritative command gateway. */
+export type CommandGatewayError =
+  | CommandRequestAborted
+  | CommandJournalEpochMismatch
+  | CommandGatewayRetryableFailure
+  | CommandGatewayTerminalFailure;
+
+/**
  * Authoritative command gateway used for recovery after missed realtime frames.
- * Implementations reject on transport/schema failure; a missing command inside
- * the retention window is represented explicitly (null / 404 semantics), never
- * as a fabricated command outcome.
+ * A missing command inside the retention window is represented explicitly
+ * (null / 404 semantics), never as a fabricated command outcome.
  */
 export interface CommandGateway {
   /** GET /api/v1/commands/{commandId}; null inside the documented 404 window. */
-  getCommandStatus(fabId: string, commandId: string): Promise<CommandResultEvent | null>;
+  getCommandStatus(fabId: string, commandId: string): Effect.Effect<CommandResultEvent | null, CommandGatewayError>;
   /** List the FAB's commands by terminal state; the browser-refresh recovery entry. */
-  listFabCommands(siteId: string, fabId: string, filter: CommandRecoveryFilter): Promise<CommandRecoveryList>;
-  /** Page the authoritative journal from a cursor; hasGap requires list recovery. */
-  getCommandJournalPage(siteId: string, fabId: string, cursor: CommandJournalQuery): Promise<CommandJournalPage>;
+  listFabCommands(siteId: string, fabId: string, filter: CommandRecoveryFilter): Effect.Effect<CommandRecoveryList, CommandGatewayError>;
+  /** Page the authoritative journal from an epoch cursor; hasGap requires list recovery. */
+  getCommandJournalPage(siteId: string, fabId: string, query: CommandJournalQuery): Effect.Effect<CommandJournalPage, CommandGatewayError>;
 }

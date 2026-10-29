@@ -81,16 +81,11 @@ it.each([
   expect(result).toMatchObject({ _tag: 'Failure', failure: { _tag: tag } });
 });
 it('models a missing command as null without swallowing a network failure', async () => {
-  const missing = createHttpCommandGateway({
-    runPromise: (effect) => Effect.runPromise(effect),
-    fetchImpl: async () => new Response('', { status: 404 }),
-  });
-  await expect(missing.getCommandStatus('fab', 'cmd')).resolves.toBeNull();
-  const offline = createHttpCommandGateway({
-    runPromise: (effect) => Effect.runPromise(effect),
-    fetchImpl: async () => { throw new TypeError('offline'); },
-  });
-  await expect(offline.getCommandStatus('fab', 'cmd')).rejects.toMatchObject({ _tag: 'NetworkUnavailable' });
+  const missing = createHttpCommandGateway({ fetchImpl: async () => new Response('', { status: 404 }) });
+  await expect(Effect.runPromise(missing.getCommandStatus('fab', 'cmd'))).resolves.toBeNull();
+  const offline = createHttpCommandGateway({ fetchImpl: async () => { throw new TypeError('offline'); } });
+  await expect(Effect.runPromise(Effect.flip(offline.getCommandStatus('fab', 'cmd'))))
+    .resolves.toMatchObject({ _tag: 'CommandGatewayRetryableFailure' });
 });
 // An invalid static document is a validation failure rather than an Effect defect.
 it('reports malformed wafer-route data through the expected API error channel', async () => {

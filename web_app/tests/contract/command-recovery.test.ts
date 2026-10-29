@@ -1,6 +1,13 @@
+import { Effect } from 'effect';
+import type { CommandGatewayError } from '@/contracts/command-gateway.contract';
+import type { CommandResultEvent } from '@/contracts/command-events.contract';
 import { expect, it } from 'vitest';
 import { CommandEventRecovery } from '@/runtime/command-event-recovery';
 import { commandResult, fakeCommandGateway } from '../support/command-fakes.ts';
+
+/** Approved execution boundary for this contract test (no application singleton). */
+const run = (effect: Effect.Effect<CommandResultEvent | null, CommandGatewayError>): Promise<CommandResultEvent | null> =>
+  Effect.runPromise(effect);
 
 const event = (fabId: string, commandId: string, revision: number) =>
   commandResult({ fabId, commandId, revision, outcome: 'executing' });
@@ -45,7 +52,7 @@ it('drains in arrival order and can reconcile through the authoritative gateway'
   const gateway = fakeCommandGateway({
     getCommandStatus: async () => commandResult({ fabId: 'fab', commandId: 'cmd', revision: 4, outcome: 'succeeded' }),
   });
-  const authoritative = await recovery.reconcile(gateway, 'fab', 'cmd');
+  const authoritative = await recovery.reconcile(gateway, 'fab', 'cmd', run);
   expect(authoritative?.outcome).toBe('succeeded');
   expect(recovery.pendingFor('fab', 'cmd')).toHaveLength(1);
   expect(recovery.drain().map((value) => value.revision)).toEqual([4]);

@@ -1,14 +1,62 @@
 import { Duration, Effect, Exit, Option, Scope, Semaphore } from 'effect';
-import type { CommandGateway } from '@/contracts/command-gateway.contract';
+import type { CommandGateway, CommandGatewayError } from '@/contracts/command-gateway.contract';
 import type { CommandWorkflow } from '@/contracts/command-workflow.contract';
-import { CommandReconciler } from '@/runtime/command-reconciler';
+import {
+  CommandReconciler,
+  type ReconciliationRequest,
+  type ReconciliationRequestIdentity,
+} from '@/runtime/command-reconciler';
 import type { RuntimeHost } from '@/runtime/fab-runtime-host';
 
 export const DEFAULT_MAX_CONCURRENT_RECONCILIATIONS = 4;
 export const DEFAULT_MAX_QUEUED_RECONCILIATIONS = 128;
 export const DEFAULT_RECONCILIATION_TIMEOUT_MS = 10_000;
-/** A dropped queued item is retried once capacity frees; this bounds that retry list. */
-const MAX_OVERFLOW_RETRIES = 4_096;
+/** ADR-011 §2.2: one FAB shares exactly four physical HTTP slots across every entry point. */
+export const DEFAULT_PHYSICAL_REQUEST_BUDGET = 4;
+
+/**
+ * FAB-wide physical HTTP budget (ADR-011 §2.2). Exactly one instance exists per
+ * FAB: the reconciliation scheduler and the FabRuntime recovery pipeline
+ * (journal/list) acquire the same slots, so "at most 4 physical requests per FAB"
+ * holds across all entry points, not per subsystem.
+ */
+export interface PhysicalRequestBudget {
+  readonly capacity: number;
+  /** Live physical requests currently holding a slot across every FAB entry point. */
+  readonly inFlight: number;
+  /** Runs the effect while holding one shared physical slot; always released (success/failure/interrupt). */
+  readonly withPermit: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
+}
+
+/** Creates the single shared physical budget of one FAB (default 4, ADR-011 §2.2). */
+export function createPhysicalRequestBudget(capacity: number = DEFAULT_PHYSICAL_REQUEST_BUDGET): PhysicalRequestBudget {
+  const slots = Math.max(1, Math.trunc(capacity));
+  const semaphore = Semaphore.makeUnsafe(slots);
+  let inFlight = 0;
+  const withPermit = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+    Semaphore.withPermits(semaphore, 1)(
+      Effect.sync(() => {
+        inFlight += 1;
+      }).pipe(
+        Effect.flatMap(() =>
+          // The finalizer is registered only after the counter incremented, so a
+          // permit-interrupt race can never decrement the counter twice.
+          Effect.ensuring(
+            effect,
+            Effect.sync(() => {
+              inFlight -= 1;
+            }),
+          )),
+      ),
+    );
+  return {
+    capacity: slots,
+    get inFlight(): number {
+      return inFlight;
+    },
+    withPermit,
+  };
+}
 
 /** Current workflow generation for one command; undefined = unknown/terminal/evicted. */
 export interface ReconciliationTarget {
@@ -28,7 +76,10 @@ export interface ReconciliationDropDiagnostic {
 export interface FabReconciliationSchedulerStats {
   readonly scheduled: number;
   readonly queued: number;
+  /** Logical reconciliation items currently running (bounded by maxConcurrent). */
   readonly inFlight: number;
+  /** Physical HTTP requests currently in flight across the whole FAB (shared budget). */
+  readonly physicallyInFlight: number;
   readonly completed: number;
   readonly failed: number;
   readonly timedOut: number;
@@ -42,6 +93,12 @@ export interface FabReconciliationSchedulerOptions {
   readonly runtime: RuntimeHost;
   /** FabScope; the scheduler forks its own ReconciliationSchedulerScope from it. */
   readonly parentScope: Scope.Scope;
+  /**
+   * The one physical HTTP budget of this FAB (ADR-011 §2.2). FabRuntime creates it
+   * once and passes the same object to every recovery request, so reconciliation
+   * and recovery share the four slots.
+   */
+  readonly physicalBudget: PhysicalRequestBudget;
   /** Authoritative gateway; without one the scheduler resolves every schedule to false. */
   readonly gateway?: CommandGateway;
   readonly resolve: (commandId: string) => ReconciliationTarget | undefined;
@@ -50,41 +107,58 @@ export interface FabReconciliationSchedulerOptions {
   readonly maxConcurrent?: number;
   readonly maxQueued?: number;
   readonly timeoutMs?: number;
-  /** Observability hook for queue-capacity drops (never silent). */
+  /**
+   * Observability hook for queue-capacity drops (never silent). FabRuntime turns
+   * this into Dirty + authoritative list recovery (ADR-010 state machine); the
+   * scheduler no longer keeps a second unbounded retry list (CR-08).
+   */
   readonly onDrop?: (diagnostic: ReconciliationDropDiagnostic) => void;
   /** Called after an authoritative result was delivered to the workflow (projection/terminal ownership lives in FabRuntime). */
   readonly onReconciled?: (commandId: string) => void;
 }
 
 interface ScheduledEntry {
+  /** Monotonic request generation; a superseded generation must not write the actor. */
+  readonly id: number;
   readonly commandId: string;
   readonly waiters: Array<(reconciled: boolean) => void>;
   settled: boolean;
   readonly promise: Promise<boolean>;
 }
 
-function scheduledEntry(commandId: string): ScheduledEntry {
+function scheduledEntry(id: number, commandId: string): ScheduledEntry {
   let resolve!: (reconciled: boolean) => void;
   const promise = new Promise<boolean>((resolvePromise) => {
     resolve = resolvePromise;
   });
-  return { commandId, waiters: [resolve], settled: false, promise };
+  return { id, commandId, waiters: [resolve], settled: false, promise };
 }
 
+type ItemOutcome =
+  | { readonly _tag: 'delivered' }
+  | { readonly _tag: 'not-delivered' }
+  | { readonly _tag: 'cancelled' }
+  | { readonly _tag: 'failed'; readonly error: CommandGatewayError };
+
 /**
- * The single authoritative-reconciliation scheduler of one FAB (ADR-007 §4).
+ * The single authoritative-reconciliation scheduler of one FAB (ADR-007 §4,
+ * ADR-011 §2.2).
  *
  * Every reconciliation entry point (trackCommand, replay gap, reconnect,
  * transport failure, overflow, explicit reconcileCommand/reconcileAll and the
- * recovery pass) funnels through here. One Effect Semaphore bounds the whole FAB
- * to `maxConcurrent` in-flight queries, per-command single-flight merges
- * duplicate schedules, the FIFO queue is bounded and reports capacity drops,
- * each item is timed out, and closing the scheduler Scope cancels every queued or
- * in-flight item without leaking a semaphore slot.
+ * recovery pass) funnels through here. One logical Effect Semaphore bounds the
+ * FAB to `maxConcurrent` in-flight reconciliations, per-command single-flight
+ * merges duplicate schedules, the FIFO queue is bounded (a capacity drop is
+ * reported through onDrop and recovered by FabRuntime/authoritative list — there
+ * is no hidden second retry buffer), each item is timed out around the REAL
+ * reconciler Effect so interruption aborts fetch and releases the shared physical
+ * permit, and closing the scheduler Scope cancels every queued or in-flight item
+ * without leaking a semaphore slot.
  */
 export class FabReconciliationScheduler {
   readonly fabId: string;
   private readonly runtime: RuntimeHost;
+  private readonly physicalBudget: PhysicalRequestBudget;
   private readonly schedulerScope: Scope.Closeable;
   private readonly semaphore: Semaphore.Semaphore;
   private readonly reconciler?: CommandReconciler;
@@ -99,7 +173,7 @@ export class FabReconciliationScheduler {
   private readonly queue: ScheduledEntry[] = [];
   private readonly queuedById = new Map<string, ScheduledEntry>();
   private readonly inFlightById = new Map<string, ScheduledEntry>();
-  private readonly overflowRetry: string[] = [];
+  private nextEntryId = 1;
   private scheduledCount = 0;
   private completedCount = 0;
   private failedCount = 0;
@@ -112,6 +186,7 @@ export class FabReconciliationScheduler {
   constructor(options: FabReconciliationSchedulerOptions) {
     this.fabId = options.fabId;
     this.runtime = options.runtime;
+    this.physicalBudget = options.physicalBudget;
     this.schedulerScope = Scope.forkUnsafe(options.parentScope);
     this.semaphore = Semaphore.makeUnsafe(Math.max(1, options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT_RECONCILIATIONS));
     this.reconciler = options.gateway ? new CommandReconciler(options.gateway) : undefined;
@@ -138,7 +213,7 @@ export class FabReconciliationScheduler {
     const queued = this.queuedById.get(commandId);
     if (queued) return queued.promise;
     if (this.queue.length >= this.maxQueued) this.dropForCapacity();
-    const entry = scheduledEntry(commandId);
+    const entry = scheduledEntry(this.nextEntryId++, commandId);
     this.queue.push(entry);
     this.queuedById.set(commandId, entry);
     this.wake();
@@ -162,6 +237,7 @@ export class FabReconciliationScheduler {
       scheduled: this.scheduledCount,
       queued: this.queue.length,
       inFlight: this.inFlightById.size,
+      physicallyInFlight: this.physicalBudget.inFlight,
       completed: this.completedCount,
       failed: this.failedCount,
       timedOut: this.timedOutCount,
@@ -181,7 +257,8 @@ export class FabReconciliationScheduler {
 
   /**
    * Cancel every queued item, interrupt every in-flight fiber by closing the
-   * scheduler Scope and release the semaphore. Idempotent.
+   * scheduler Scope (the interruption aborts each fetch and releases its shared
+   * physical permit) and release the logical semaphore. Idempotent.
    */
   dispose(): void {
     if (this.disposed) return;
@@ -189,13 +266,13 @@ export class FabReconciliationScheduler {
     const queued = [...this.queue];
     this.queue.length = 0;
     this.queuedById.clear();
-    this.overflowRetry.length = 0;
     for (const entry of queued) {
       this.cancelledCount += 1;
       this.settle(entry, false);
     }
     // Closing the owning Scope interrupts every in-flight item; each item's
-    // ensuring clause settles its waiters and deletes its in-flight entry.
+    // ensuring clause settles its waiters, deletes its in-flight entry and the
+    // physical budget releases its permit on interruption.
     this.runtime.runSync(Scope.close(this.schedulerScope, Exit.void));
     for (const entry of [...this.inFlightById.values()]) {
       if (entry.settled) continue;
@@ -216,25 +293,12 @@ export class FabReconciliationScheduler {
 
   private drain(): void {
     if (this.disposed) return;
-    this.refillOverflowRetries();
     while (this.inFlightById.size < this.maxConcurrent) {
       const entry = this.queue.shift();
       if (!entry) break;
       this.queuedById.delete(entry.commandId);
       if (entry.settled) continue;
       this.start(entry);
-    }
-  }
-
-  private refillOverflowRetries(): void {
-    while (this.queue.length < this.maxQueued && this.overflowRetry.length > 0) {
-      const commandId = this.overflowRetry.shift();
-      if (commandId === undefined) break;
-      if (this.queuedById.has(commandId) || this.inFlightById.has(commandId)) continue;
-      if (this.isTerminal(commandId)) continue;
-      const entry = scheduledEntry(commandId);
-      this.queue.push(entry);
-      this.queuedById.set(commandId, entry);
     }
   }
 
@@ -251,9 +315,22 @@ export class FabReconciliationScheduler {
       const target = self.resolveTarget(entry.commandId);
       const reconciler = self.reconciler;
       if (!target || !reconciler) return;
+      const request: ReconciliationRequest = {
+        entryId: entry.id,
+        isCurrent: (identity) => self.isEntryCurrent(entry, target, identity),
+      };
+      // ADR-011 §2.2: timeoutOption wraps the REAL reconciler Effect (never a
+      // Promise), so the timeout interrupts the fiber -> tryPromise aborts the
+      // fetch -> the physical budget permit is released by withPermit's ensuring.
       const outcome = yield* Effect.timeoutOption(
-        Effect.promise(() =>
-          reconciler.reconcile(target.workflow, self.fabId, entry.commandId, target.isCurrent).catch(() => false),
+        self.physicalBudget.withPermit(
+          reconciler.reconcile(target.workflow, self.fabId, entry.commandId, request).pipe(
+            Effect.map((delivered): ItemOutcome => delivered ? { _tag: 'delivered' } : { _tag: 'not-delivered' }),
+            Effect.catch((error: CommandGatewayError): Effect.Effect<ItemOutcome> =>
+              Effect.succeed(error._tag === 'CommandRequestAborted'
+                ? { _tag: 'cancelled' }
+                : { _tag: 'failed', error })),
+          ),
         ),
         Duration.millis(self.timeoutMs),
       );
@@ -261,10 +338,15 @@ export class FabReconciliationScheduler {
         self.timedOutCount += 1;
         return;
       }
-      if (outcome.value) {
+      const result = outcome.value;
+      if (result._tag === 'delivered') {
         self.completedCount += 1;
         self.settle(entry, true);
         self.onReconciled?.(entry.commandId);
+        return;
+      }
+      if (result._tag === 'cancelled') {
+        self.cancelledCount += 1;
         return;
       }
       self.failedCount += 1;
@@ -282,7 +364,25 @@ export class FabReconciliationScheduler {
     );
   }
 
-  /** Drop the oldest non-terminal queued item, report it and retry it later. */
+  /** The request may write only while its workflow AND scheduler entry generation are current. */
+  private isEntryCurrent(
+    entry: ScheduledEntry,
+    target: ReconciliationTarget,
+    identity: ReconciliationRequestIdentity,
+  ): boolean {
+    if (this.disposed) return false;
+    if (identity.entryId !== entry.id) return false;
+    if (identity.commandId !== entry.commandId) return false;
+    if (this.inFlightById.get(entry.commandId) !== entry) return false;
+    return target.isCurrent();
+  }
+
+  /**
+   * Drop the oldest non-terminal queued item and report it. There is deliberately
+   * no hidden overflow retry buffer: the drop is durable intent only when the
+   * consumer (FabRuntime) enters Dirty and performs authoritative list recovery
+   * (ADR-010 §4, ADR-011 §2.2, CR-08).
+   */
   private dropForCapacity(): void {
     const nonTerminalIndex = this.queue.findIndex((entry) => !this.isTerminal(entry.commandId));
     const index = nonTerminalIndex >= 0 ? nonTerminalIndex : 0;
@@ -291,8 +391,6 @@ export class FabReconciliationScheduler {
     this.queuedById.delete(droppedEntry.commandId);
     this.droppedCount += 1;
     this.settle(droppedEntry, false);
-    if (this.overflowRetry.length >= MAX_OVERFLOW_RETRIES) this.overflowRetry.shift();
-    this.overflowRetry.push(droppedEntry.commandId);
     this.onDrop?.({
       reason: 'queue-capacity',
       commandId: droppedEntry.commandId,

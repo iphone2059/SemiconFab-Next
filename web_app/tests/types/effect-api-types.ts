@@ -1,11 +1,12 @@
 /** Compile-only positive/negative checks of the native Schema/HTTP boundary. */
-import { Effect, Option, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 import type { CatalogPageDto, CreateRunRequest, RunResult, RunSummary, SiteDto } from '@/contracts/app-contracts';
 import { catalogPageSchema } from '@/api/catalog.schema';
 import { createRunRequestSchema, runListSchema, runResultSchema, runSummarySchema } from '@/api/runs.schema';
 import { sitesSchema } from '@/api/sites.schema';
 import { submittedEquipmentCommandSchema, type SubmittedEquipmentCommand } from '@/api/command.schema';
 import { createHttpTransport, decodeApiResponse, type ApiError } from '@/api/http.transport';
+import type { CommandGatewayError } from '@/contracts/command-gateway.contract';
 import { createHttpCommandGateway } from '@/api/http-command-gateway';
 import { submitEquipmentCommand } from '@/api/commands.mutation';
 import type { CommandResultEvent } from '@/contracts/command-events.contract';
@@ -19,13 +20,12 @@ declare const sites: typeof sitesSchema.Type;
 export const wireContracts: [CatalogPageDto, RunSummary, RunSummary[], RunResult, CreateRunRequest, SiteDto[]] =
   [catalog, run, runs, results, request, sites];
 export const http: Effect.Effect<unknown, ApiError, never> = createHttpTransport().fetchJson('/api/v1/sites');
-// ADR-008 §2.4: the authoritative recovery gateway is Promise-based; the
-// composition root injects the approved Effect runner for wire decoding.
-export const gateway: Promise<CommandResultEvent | null> = createHttpCommandGateway({
-  runPromise: (effect) => Effect.runPromise(effect),
-}).getCommandStatus('fab', 'cmd');
-// @ts-expect-error The gateway never exposes an Effect-shaped status query.
-export const gatewayEffect: Effect.Effect<Option.Option<CommandResultEvent>, ApiError, never> = gateway;
+// ADR-011 §2.1: the authoritative recovery gateway returns a native cancellable
+// Effect; no internal runPromise exists, the composition root executes it.
+export const gateway: Effect.Effect<CommandResultEvent | null, CommandGatewayError, never> =
+  createHttpCommandGateway().getCommandStatus('fab', 'cmd');
+// @ts-expect-error The gateway no longer exposes a Promise-shaped status query.
+export const gatewayPromise: Promise<CommandResultEvent | null> = gateway;
 export const submission: Effect.Effect<SubmittedEquipmentCommand, ApiError, never> = submitEquipmentCommand({
   siteId: 'site', fabId: 'fab', equipmentId: 'tool', action: 'START', idempotencyKey: 'stable',
 });

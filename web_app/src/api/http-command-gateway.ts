@@ -1,7 +1,8 @@
-import { Effect } from 'effect';
+import { Effect, Option } from 'effect';
 import type { CommandResultEvent } from '@/contracts/command-events.contract';
 import type {
   CommandGateway,
+  CommandGatewayError,
   CommandJournalPage,
   CommandJournalQuery,
   CommandRecoveryFilter,
@@ -13,6 +14,7 @@ import {
   MAX_COMMAND_JOURNAL_LIMIT,
   decodeCommandJournalPage,
   decodeCommandRecoveryList,
+  decodeJournalEpochMismatch,
 } from '@/api/command-recovery.schema';
 import {
   CommandIdentityMismatch,
@@ -26,26 +28,112 @@ import {
 export interface HttpCommandGatewayOptions {
   readonly baseUrl?: string;
   readonly fetchImpl?: FetchLike;
-  /**
-   * Approved Effect execution boundary supplied by the composition root
-   * (AppRuntime.runPromise). The API layer never calls the global Effect runner.
-   */
-  readonly runPromise: <A, E>(effect: Effect.Effect<A, E, never>) => Promise<A>;
 }
 
-/** Browser implementation of the authoritative command-recovery contract (ADR-008 §2.4). */
+/** Browser implementation of the authoritative command-recovery contract (ADR-008 §2.4, ADR-011 §2.1). */
 export interface HttpCommandGateway extends CommandGateway {}
 
-export function createHttpCommandGateway(options: HttpCommandGatewayOptions): HttpCommandGateway {
+export type HttpCommandGatewayError = CommandGatewayError;
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+/** ProblemDetails store fault is the only HTTP failure that is immediately unrecoverable (ADR-010 §4). */
+const isStoreFault = (body: unknown): boolean =>
+  isRecord(body) && (body.code === 'store-fault' || body.code === 'STORE_FAULT');
+
+/**
+ * Maps the transport error algebra onto the gateway's closed error algebra so the
+ * recovery state machine can decide retry / Unrecoverable / list-fallback without
+ * inspecting HTTP internals.
+ */
+function gatewayFailure(error: ApiError): CommandGatewayError {
+  switch (error._tag) {
+    case 'RequestAborted':
+      return { _tag: 'CommandRequestAborted', message: error.message, cause: error.cause };
+    case 'NetworkUnavailable':
+      return { _tag: 'CommandGatewayRetryableFailure', message: error.message, cause: error.cause };
+    case 'IdempotencyConflict':
+    case 'HttpFailure':
+      if (isStoreFault(error.body)) {
+        return { _tag: 'CommandGatewayTerminalFailure', reason: 'store-fault', message: error.message, status: error.status };
+      }
+      if (error.status >= 500 || error.status === 429) {
+        return { _tag: 'CommandGatewayRetryableFailure', message: error.message, status: error.status };
+      }
+      // F3: a missing/invalid journal cursor is a deterministic client/contract
+      // error (400 journal-cursor-invalid), never retried by sequence.
+      return {
+        _tag: 'CommandGatewayTerminalFailure',
+        reason: error.status === 400 ? 'invalid-request' : 'rejected',
+        message: error.message,
+        status: error.status,
+      };
+    case 'InvalidServerResponse':
+      return { _tag: 'CommandGatewayTerminalFailure', reason: 'invalid-response', message: error.message, cause: error.cause };
+    case 'CommandIdentityMismatch':
+      return { _tag: 'CommandGatewayTerminalFailure', reason: 'identity-mismatch', message: error.message };
+    case 'InvalidRequest':
+      return { _tag: 'CommandGatewayTerminalFailure', reason: 'invalid-request', message: error.message, cause: error.cause };
+  }
+}
+
+const isCommandGatewayFailure = (error: ApiError | CommandGatewayError): error is CommandGatewayError => {
+  switch (error._tag) {
+    case 'CommandRequestAborted':
+    case 'CommandJournalEpochMismatch':
+    case 'CommandGatewayRetryableFailure':
+    case 'CommandGatewayTerminalFailure':
+      return true;
+    default:
+      return false;
+  }
+};
+
+const asCommandGateway = <A>(effect: Effect.Effect<A, ApiError | CommandGatewayError>): Effect.Effect<A, CommandGatewayError> =>
+  effect.pipe(Effect.catch((error) => Effect.fail(isCommandGatewayFailure(error) ? error : gatewayFailure(error))));
+
+/**
+ * Decodes the F3 409 journal ProblemDetails body (`journal-epoch-mismatch`) into the
+ * structured gateway error; any other 409 stays a terminal rejected failure.
+ */
+function epochMismatchFailure(
+  error: { readonly message: string; readonly body?: unknown },
+): Effect.Effect<never, CommandGatewayError> {
+  const decoded = decodeJournalEpochMismatch(error.body).pipe(
+    Effect.mapError((): CommandGatewayError => ({
+      _tag: 'CommandGatewayTerminalFailure',
+      reason: 'rejected',
+      message: error.message,
+      status: 409,
+    })),
+  );
+  return decoded.pipe(
+    Effect.flatMap((mismatch): Effect.Effect<never, CommandGatewayError> => Effect.fail({
+      _tag: 'CommandJournalEpochMismatch',
+      message: error.message,
+      currentEpoch: mismatch.currentEpoch,
+      firstRetainedSequence: mismatch.firstRetainedSequence,
+      latestSequence: mismatch.latestSequence,
+    })),
+  );
+}
+
+export function createHttpCommandGateway(options: HttpCommandGatewayOptions = {}): HttpCommandGateway {
   const baseUrl = options.baseUrl ?? '/api/v1';
   const transport = createHttpTransport({ fetchImpl: options.fetchImpl });
-  const run = options.runPromise;
 
-  const getCommandStatus = (fabId: string, commandId: string): Promise<CommandResultEvent | null> =>
-    run(
+  const getCommandStatus = (fabId: string, commandId: string): Effect.Effect<CommandResultEvent | null, CommandGatewayError> =>
+    asCommandGateway(
       Effect.gen(function* () {
-        const body = yield* transport.fetchJson(baseUrl + '/commands/' + encodeURIComponent(commandId));
-        const parsed = yield* decodeApiResponse(submittedEquipmentCommandSchema, 'invalid command response')(body);
+        const bodyOption = yield* transport
+          .fetchJson(baseUrl + '/commands/' + encodeURIComponent(commandId))
+          .pipe(
+            Effect.map((body) => Option.some(body)),
+            Effect.catchTag('HttpFailure', (error) =>
+              error.status === 404 ? Effect.succeed(Option.none<unknown>()) : Effect.fail(error)),
+          );
+        if (Option.isNone(bodyOption)) return null;
+        const parsed = yield* decodeApiResponse(submittedEquipmentCommandSchema, 'invalid command response')(bodyOption.value);
         const fields: string[] = [];
         if (!commandIdentityMatches(fabId, parsed.fabId)) fields.push('fabId');
         if (!commandIdentityMatches(commandId, parsed.commandId)) fields.push('commandId');
@@ -57,17 +145,15 @@ export function createHttpCommandGateway(options: HttpCommandGatewayOptions): Ht
           outcome: parsed.outcome,
           occurredAt: parsed.occurredAt,
         } satisfies CommandResultEvent;
-      }).pipe(
-        Effect.catchTag('HttpFailure', (error) => (error.status === 404 ? Effect.succeed(null) : Effect.fail(error))),
-      ),
+      }),
     );
 
   const listFabCommands = (
     siteId: string,
     fabId: string,
     filter: CommandRecoveryFilter,
-  ): Promise<CommandRecoveryList> =>
-    run(
+  ): Effect.Effect<CommandRecoveryList, CommandGatewayError> =>
+    asCommandGateway(
       Effect.gen(function* () {
         const path = baseUrl +
           '/sites/' + encodeURIComponent(siteId) +
@@ -94,23 +180,25 @@ export function createHttpCommandGateway(options: HttpCommandGatewayOptions): Ht
   const getCommandJournalPage = (
     siteId: string,
     fabId: string,
-    cursor: CommandJournalQuery = {},
-  ): Promise<CommandJournalPage> =>
-    run(
+    query: CommandJournalQuery,
+  ): Effect.Effect<CommandJournalPage, CommandGatewayError> =>
+    asCommandGateway(
       Effect.gen(function* () {
         const search = new URLSearchParams();
-        if (cursor.afterSequence !== undefined) search.set('afterSequence', `${cursor.afterSequence}`);
-        if (cursor.limit !== undefined) {
-          const limit = Math.min(Math.max(Math.trunc(cursor.limit), 1), MAX_COMMAND_JOURNAL_LIMIT);
-          search.set('limit', `${limit}`);
-        } else {
-          search.set('limit', `${DEFAULT_COMMAND_JOURNAL_LIMIT}`);
-        }
+        search.set('epoch', query.epoch);
+        search.set('afterSequence', `${query.afterSequence}`);
+        const limit = query.limit === undefined
+          ? DEFAULT_COMMAND_JOURNAL_LIMIT
+          : Math.min(Math.max(Math.trunc(query.limit), 1), MAX_COMMAND_JOURNAL_LIMIT);
+        search.set('limit', `${limit}`);
         const path = baseUrl +
           '/sites/' + encodeURIComponent(siteId) +
           '/fabs/' + encodeURIComponent(fabId) +
           '/command-journal?' + search.toString();
-        const body = yield* transport.fetchJson(path);
+        const body = yield* transport.fetchJson(path).pipe(
+          Effect.catch((error: ApiError): Effect.Effect<unknown, CommandGatewayError> =>
+            error._tag === 'IdempotencyConflict' ? epochMismatchFailure(error) : Effect.fail(gatewayFailure(error))),
+        );
         const parsed = yield* decodeCommandJournalPage(body).pipe(
           Effect.mapError((cause) => new InvalidServerResponse('invalid command journal page: ' + cause.message, cause)),
         );
@@ -123,11 +211,10 @@ export function createHttpCommandGateway(options: HttpCommandGatewayOptions): Ht
           firstRetainedSequence: parsed.firstRetainedSequence,
           latestSequence: parsed.latestSequence,
           events: parsed.events,
+          nextAfterSequence: parsed.nextAfterSequence,
         } satisfies CommandJournalPage;
       }),
     );
 
   return { getCommandStatus, listFabCommands, getCommandJournalPage };
 }
-
-export type HttpCommandGatewayError = ApiError;

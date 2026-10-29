@@ -15,14 +15,25 @@ export class NetworkUnavailable extends Error {
   readonly _tag = 'NetworkUnavailable';
   constructor(readonly cause: unknown) { super(cause instanceof Error ? cause.message : 'Network unavailable'); }
 }
+/**
+ * The physical request was aborted without the caller's init.signal being the
+ * cause: the fiber was interrupted (timeout/dispose). Gateway implementations map
+ * this to CommandRequestAborted — cancellation is not a business failure.
+ */
+export class RequestAborted extends Error {
+  readonly _tag = 'RequestAborted';
+  constructor(readonly cause: unknown) { super(cause instanceof Error ? cause.message : 'Request aborted'); }
+}
 export class HttpFailure extends Error {
   readonly _tag = 'HttpFailure';
-  constructor(readonly status: number, message: string) { super(message); }
+  /** Parsed ProblemDetails body when the error response was JSON; undefined otherwise. */
+  constructor(readonly status: number, message: string, readonly body?: unknown) { super(message); }
 }
 export class IdempotencyConflict extends Error {
   readonly _tag = 'IdempotencyConflict';
   readonly status = 409;
-  constructor(message: string) { super(message); }
+  /** Parsed ProblemDetails body when the error response was JSON; undefined otherwise. */
+  constructor(message: string, readonly body?: unknown) { super(message); }
 }
 export class InvalidServerResponse extends Error {
   readonly _tag = 'InvalidServerResponse';
@@ -36,7 +47,7 @@ export class InvalidRequest extends Error {
   readonly _tag = 'InvalidRequest';
   constructor(message: string, readonly cause?: unknown) { super(message); }
 }
-export type ApiError = NetworkUnavailable | HttpFailure | IdempotencyConflict | InvalidServerResponse | CommandIdentityMismatch | InvalidRequest;
+export type ApiError = NetworkUnavailable | RequestAborted | HttpFailure | IdempotencyConflict | InvalidServerResponse | CommandIdentityMismatch | InvalidRequest;
 export interface HttpTransportOptions { readonly fetchImpl?: FetchLike; }
 export interface HttpTransport {
   fetchText(path: string, init?: RequestInit): Effect.Effect<string, ApiError>;
@@ -51,6 +62,21 @@ export const decodeApiResponse = <S extends Schema.ConstraintDecoder<unknown>>(s
       new InvalidServerResponse(label + ': ' + cause.message, cause)));
 
 const defaultFetch: FetchLike = (target, init) => fetch(target, init);
+
+/** True for the raw abort rejection of an interrupted fetch (never a business failure). */
+function isAbortCause(cause: unknown): boolean {
+  if (typeof cause !== 'object' || cause === null || !('name' in cause)) return false;
+  return cause.name === 'AbortError';
+}
+
+/** ProblemDetails bodies are parsed only when the gateway actually sent JSON; never coerced. */
+function parseProblemBody(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
 
 /** The development identity secret must only ever be attached by the server-side proxy. */
 const FORBIDDEN_IDENTITY_HEADERS: ReadonlyMap<string, string> = new Map([
@@ -114,12 +140,17 @@ export function createHttpTransport(options: HttpTransportOptions = {}): HttpTra
           signal: init.signal ? AbortSignal.any([signal, init.signal]) : signal });
         return { response, raw: await response.text() };
       },
-      catch: cause => new NetworkUnavailable(cause),
+      // A caller-initiated init.signal abort keeps the historical interrupt exit;
+      // the fiber-interruption abort is a typed RequestAborted (cancellation) error.
+      catch: cause => isAbortCause(cause) && !init.signal?.aborted
+        ? new RequestAborted(cause)
+        : new NetworkUnavailable(cause),
     }).pipe(Effect.catchTag('NetworkUnavailable', error => init.signal?.aborted ? Effect.interrupt : Effect.fail(error)));
     if (!response.ok) {
       const detail = problemDetail(raw);
       const message = '请求失败（HTTP ' + response.status + '）' + (detail ? '：' + detail : '');
-      return yield* Effect.fail(response.status === 409 ? new IdempotencyConflict(message) : new HttpFailure(response.status, message));
+      const body = parseProblemBody(raw);
+      return yield* Effect.fail(response.status === 409 ? new IdempotencyConflict(message, body) : new HttpFailure(response.status, message, body));
     }
     return raw;
   });

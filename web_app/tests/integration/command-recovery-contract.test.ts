@@ -37,12 +37,9 @@ it('prefers non-terminal events for per-command overflow too', () => {
 
 it('turns a capacity eviction into a coalesced authoritative reconciliation', async () => {
   const source = new FakeCommandEventSource();
-  let queries = 0;
   const gateway = fakeCommandGateway({
-    getCommandStatus: async (fabId, commandId) => {
-      queries += 1;
-      return commandResult({ fabId, commandId, revision: 5, outcome: 'succeeded' });
-    },
+    getCommandStatus: async (fabId, commandId) =>
+      commandResult({ fabId, commandId, revision: 5, outcome: 'succeeded' }),
   });
   const fab = createTestFab({ source, gateway });
   fabs.push(fab);
@@ -51,12 +48,15 @@ it('turns a capacity eviction into a coalesced authoritative reconciliation', as
   source.emit(commandResult({ fabId: 'fab-a', commandId: 'cmd-1', revision: 1, outcome: 'executing' }));
   runtime.trackCommand('cmd-1');
   await Promise.resolve();
-  const before = queries;
+  const listCallsBefore = gateway.listCalls.length;
   // 300 uncorrelated terminal results overflow the 256-entry recovery queue.
   for (let index = 0; index < 300; index += 1) {
     source.emit(commandResult({ fabId: 'fab-a', commandId: 'other-' + index, revision: 1, outcome: 'succeeded' }));
   }
   expect(runtime.recoveryDroppedCount).toBeGreaterThan(0);
   expect(runtime.lastRecoveryEviction).toBeDefined();
-  await expect.poll(() => queries, { timeout: 1_000 }).toBeGreaterThan(before);
+  // ADR-010 §4: an eviction keeps Dirty and the authoritative list is the recovery
+  // entry point; there is no silent per-command status sweep.
+  await expect.poll(() => gateway.listCalls.length, { timeout: 1_000 }).toBeGreaterThan(listCallsBefore);
+  expect(runtime.recoveryState.phase).toBe('Healthy');
 });

@@ -1,7 +1,6 @@
 import { expect, it } from 'vitest';
-import { CommandReconciler } from '@/runtime/command-reconciler';
 import { XStateCommandWorkflowAdapter } from '@/runtime/xstate-command-workflow-adapter';
-import { commandResult, fakeCommandGateway } from '../support/command-fakes.ts';
+import { commandResult } from '../support/command-fakes.ts';
 
 const fabId = 'fab-a';
 const commandId = 'cmd-1';
@@ -34,14 +33,13 @@ it('ignores duplicate, stale and post-terminal revisions before reaching the act
   workflow.dispose();
 });
 
-it('uses the authoritative reconciler to converge a workflow after a disconnect', async () => {
-  const gateway = fakeCommandGateway({
-    getCommandStatus: async () => commandResult({ fabId, commandId, revision: 5, outcome: 'succeeded' }),
-  });
-  const reconciler = new CommandReconciler(gateway);
-  const workflow = new XStateCommandWorkflowAdapter(fabId, commandId, reconciler);
+it('does not reconcile through the workflow adapter: the scheduler is the only authority (ADR-011 §2.2)', async () => {
+  // Direct per-workflow reconciliation would bypass the FAB physical budget,
+  // timeout and stale-result guard, so the adapter owns no network authority.
+  const workflow = new XStateCommandWorkflowAdapter(fabId, commandId);
   workflow.receive(commandResult({ fabId, commandId, revision: 1, outcome: 'accepted' }));
   await workflow.reconcile(commandId);
-  expect(workflow.state).toBe('succeeded');
+  expect(workflow.state, 'adapter.reconcile is a no-op; only the scheduler converges').toBe('accepted');
+  expect(workflow.context.revision).toBe(1);
   workflow.dispose();
 });
