@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Fab.App;
+namespace Fab.Contracts;
 
 /// <summary>
 /// One durable command-journal event (SQLite <c>journal</c> row). The SSE payload exposes only

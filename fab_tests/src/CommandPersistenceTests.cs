@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Fab.App;
+using Fab.Contracts;
 using Fab.Site;
 using Microsoft.Data.Sqlite;
 using Xunit;

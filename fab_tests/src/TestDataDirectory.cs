@@ -1,4 +1,5 @@
 using Fab.App;
+using Fab.Contracts;
 using Microsoft.Data.Sqlite;
 
 namespace Fab.Tests;

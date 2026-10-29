@@ -335,12 +335,14 @@
       "fab_app": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Data.Sqlite": "[10.0.14, )",
           "fab_shared": "[1.0.0, )"
         }
       },
       "fab_shared": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Data.Sqlite": "[10.0.14, )"
+        }
       }
     }
   }

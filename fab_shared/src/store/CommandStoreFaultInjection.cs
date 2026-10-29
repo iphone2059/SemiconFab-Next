@@ -1,4 +1,4 @@
-namespace Fab.App;
+namespace Fab.Contracts;
 
 /// <summary>
 /// Named durable-transaction boundaries used by the fault-injection acceptance matrix (ADR-012

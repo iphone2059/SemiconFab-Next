@@ -27,6 +27,9 @@
   -- outbox: 与命令同事务写入，供重复提交的响应重放与恢复查询；开发实现中 response_json 即 outbox。
   ```
 
+- **项目归属（Round 2 架构门禁）**：实现位于共享内核 `fab_shared/src/store/`（命名空间 `Fab.Contracts`），`Microsoft.Data.Sqlite` 的 `PackageReference` 只出现在 `fab_shared.csproj`（显式 Version；fab_shared 允许显式包依赖）。`fab_app` 保持 **零 PackageReference**（framework 全部由 Web SDK 提供），因此 `tools/check_architecture.py` 的“fab_app 不得有 PackageReference / fab_shared 不得引用项目”门禁 **未放宽、未豁免**；`fab_tests` 经 ProjectReference 传递获得 store 类型。
+- 生产目标（不在本轮实现）：PostgreSQL 同 schema + 事务/唯一约束 + outbox；迁移路径保持 DTO/服务层不变。
+
 ### 2.2 提交事务（原子）
 
 - `Submit`：单个事务内 (a) 查/写 idempotency（唯一约束冲突时读取原 response 并按 payload_hash 判 replay/conflict）；(b) 写 command；(c) 写 journal accepted 行；(d) 更新 site_state.latest_sequence/epoch。`COMMIT` 成功后才返回 202。

@@ -10,16 +10,26 @@
 
 | 类别 | 文件 |
 | --- | --- |
-| 事务化存储（新增） | `fab_app/src/SqliteCommandStore.cs`（SQLite WAL 单事务实现）、`fab_app/src/CommandStoreFaultInjection.cs`（`ICommandStoreFaultInjector` seam + 注入点常量） |
-| 存储契约（重定义） | `fab_app/src/CommandStore.cs`（`CommitSubmit/CommitAdvance/CommitRetention` 事务语义、outbox 记录、Persistence 记录；删除三文件协议辅助类型） |
+| 事务化存储（新增） | `fab_shared/src/store/SqliteCommandStore.cs`（SQLite WAL 单事务实现）、`fab_shared/src/store/CommandStoreFaultInjection.cs`（`ICommandStoreFaultInjector` seam + 注入点常量） |
+| 存储契约（重定义） | `fab_shared/src/store/CommandStore.cs`（`CommitSubmit/CommitAdvance/CommitRetention` 事务语义、outbox 记录、Persistence 记录；删除三文件协议辅助类型） |
 | 删除旧协议 | `fab_app/src/FileCommandStore.cs` 已删除（无兼容迁移、无双写） |
 | 集成/端点 | `fab_app/src/EquipmentCommandService.cs`（全部写路径经单事务 store；唯一键幂等、response_json 重放、epoch 感知分页、nextAfterSequence）、`fab_app/src/ApiHost.cs`（SQLite DI、journal 必填 epoch/400/409、503 映射） |
-| 包/锁 | `fab_app/fab_app.csproj`（`Microsoft.Data.Sqlite` 10.0.14）、`fab_app/packages.lock.json`、`fab_tests/packages.lock.json`（restore 更新，转 LF） |
+| 包/锁 | `fab_shared/fab_shared.csproj`（`Microsoft.Data.Sqlite` 10.0.14，显式 Version）、`fab_shared/packages.lock.json`、`fab_app/packages.lock.json`（仅项目引用）、`fab_tests/packages.lock.json`（restore 更新，均转 LF）；**fab_app 保持零 PackageReference** |
 | 契约/生成物 | `contracts/json-schema/contracts.schema.json`（`nextAfterSequence`、`JournalEpochMismatchDto`）、`contracts/openapi/openapi.json`（生成）、`tools/generate_contracts.py`（epoch 必填参数、400/409 响应）、`fab_shared/src/Generated/Contracts.g.cs`、`web_app/src/generated/contracts.generated.ts`、`tools/generated-artifacts.json`（经 Lead 授权 `--update`）、两个 contracts README |
 | 前端 schema（仅允许的两个文件） | `web_app/src/api/command-recovery.schema.ts`、`web_app/tests/api/command-recovery-schema.test.ts` |
 | 测试 | 新增 `fab_tests/src/CommandFaultInjectionTests.cs`、`fab_tests/src/TestFaultInjector.cs`；重写 `CommandPersistenceTests.cs`、`CommandRecoveryApiTests.cs`；适配 `TestDataDirectory.cs`、`CommandRetentionTests.cs` |
 
 未触碰：`web_app` 其他文件（runtime/api/gateway 归 F2/F4）、`runtime/**`、`scripts/**`、`.github/**`、`package.json`/pnpm lock。
+
+## 1.1 项目归属（Round 2 verify 架构门禁修复）
+
+Round 2 最终 verify 在 `tools/check_architecture.py:71` 失败：`fab_app must stay package-free (framework from Web SDK)`。修复方式不是放宽门禁，而是把持久化实现放到共享内核：
+
+- 三个存储文件位于 `fab_shared/src/store/`（`CommandStore.cs`、`SqliteCommandStore.cs`、`CommandStoreFaultInjection.cs`），命名空间 `Fab.Contracts`（`fab_shared` 仅允许 `Fab.Simulation` / `Fab.Ids` / `Fab.Contracts` 三个命名空间，store 属 contract 语义）。
+- `Microsoft.Data.Sqlite` 10.0.14 的 `<PackageReference ... Version="10.0.14" />` 放在 `fab_shared/fab_shared.csproj`；`fab_app/fab_app.csproj` 恢复为零 `PackageReference`（仅 `ProjectReference fab_shared` + Web SDK framework），门禁未加任何豁免。
+- `fab_app`（`EquipmentCommandService`、`ApiHost`）与 `fab_tests` 通过既有 `using Fab.Contracts;` / 项目引用消费 store；`dotnet restore` 更新 `fab_shared/packages.lock.json`（新增包图）与 `fab_app`/`fab_tests` lock，均保持 LF。
+
+门禁原始输出见 §7。
 
 ## 2. 事务化存储实现（ADR-012 2.1/2.2）
 
@@ -138,6 +148,14 @@ Found 0 warnings and 0 errors.
 ```
 > git diff --check        # 无空白错误（lock 文件已转 LF）
 ```
+
+```text
+> python tools/check_architecture.py
+PASS: Task 1 final-state checks (flat src layout, generated-artifact region, deprecated dependencies, ARCH-11 high-frequency boundaries).
+PASS: 3 independent .NET projects (fab_shared + fab_app + fab_tests) / 1 self-contained frontend project; flat layout, reference rules, DAG and module records.
+```
+
+`fab_app/fab_app.csproj` 仅含 `ProjectReference ../fab_shared/fab_shared.csproj` 与 Content，无 `PackageReference`；`fab_shared/fab_shared.csproj` 的 `Microsoft.Data.Sqlite` 带显式 Version，符合门禁第 31 行要求。
 
 ## 8. 前端 schema 变更（供 F2/F4 消费）
 

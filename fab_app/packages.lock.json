@@ -3,8 +3,7 @@
   "dependencies": {
     "net11.0": {
       "Microsoft.Data.Sqlite": {
-        "type": "Direct",
-        "requested": "[10.0.14, )",
+        "type": "Transitive",
         "resolved": "10.0.14",
         "contentHash": "muyroan6rKrf0omZL8UF7Kw5uOGp/yBg1L/XWvkFN3WhKaNtK2IWqRZw93nIwVqjhTVDO0l4CEGhHIh+mb+sKg==",
         "dependencies": {
@@ -49,7 +48,10 @@
         }
       },
       "fab_shared": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Data.Sqlite": "[10.0.14, )"
+        }
       }
     }
   }

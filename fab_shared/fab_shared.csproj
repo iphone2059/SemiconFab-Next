@@ -9,6 +9,11 @@
     <RootNamespace>Fab</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Transactional durable command store (ADR-012). fab_app must stay package-free: the
+         Web SDK supplies its framework, while the shared kernel owns explicit-version packages. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+  </ItemGroup>
+  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 </Project>

@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 
-namespace Fab.App;
+namespace Fab.Contracts;
 
 /// <summary>
 /// Development command store backed by one SQLite database (ADR-012 2.1): WAL journal mode,

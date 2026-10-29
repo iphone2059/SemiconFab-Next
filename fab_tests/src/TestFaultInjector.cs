@@ -1,4 +1,5 @@
 using Fab.App;
+using Fab.Contracts;
 
 namespace Fab.Tests;
 
