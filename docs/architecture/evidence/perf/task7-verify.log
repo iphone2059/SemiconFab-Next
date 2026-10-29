@@ -1,0 +1,439 @@
+Contracts: C# / TypeScript match JSON Schema.
+Twin translations stable: 281 entries, 9 collisions, 308 source pairs
+static-structure-packed.generated.ts is up to date (1721390 bytes).
+PASS: 3 generated artifact(s) registered in tools/generated-artifacts.json; generator commands, source inputs and output sha256 all match the committed tree.
+Frozen asset contracts PASS
+Frozen asset contracts PASS
+✔ frozen reference data and elevation assets pass their build contracts (2.656ms)
+✔ invalid equipment geometry and duplicate identities fail (3.0398ms)
+✔ unmatched localization and invalid OEM identity fail (3.3043ms)
+✔ unsafe SVG event attributes and script tags fail (1.9399ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 108.9202
+PASS: Task 1 final-state checks (flat src layout, generated-artifact region, deprecated dependencies, ARCH-11 high-frequency boundaries).
+PASS: 3 independent .NET projects (fab_shared + fab_app + fab_tests) / 1 self-contained frontend project; flat layout, reference rules, DAG and module records.
+PASS: development key generation and reuse
+PASS: supported and unsupported Node requirements
+Preparing pnpm 12.15.0 in C:\Users\han_qingyu\AppData\Local\Temp\fab startup tests 433ec5ad21324b5c8bc29f5eb7e54c7a\local tooling ...
+Preparing pnpm 12.15.0 in C:\Users\han_qingyu\AppData\Local\Temp\fab startup tests 433ec5ad21324b5c8bc29f5eb7e54c7a\failed tooling ...
+PASS: matching pnpm, mismatched/missing pnpm bootstrap and local reuse
+Checking and installing frontend dependencies from pnpm-lock.yaml ...
+Checking and installing frontend dependencies from pnpm-lock.yaml ...
+Checking and installing frontend dependencies from pnpm-lock.yaml ...
+PASS: first-clone dependency install, development tools and failed install handling
+PASS: occupied ports are rejected without stopping their listener
+PASS: paths, quotes, trailing backslashes and empty process arguments
+PASS: owned process tree cleanup releases child processes and ports
+PASS: isolated startup flow (ready); no application/browser started
+PASS: isolated startup flow (api-only); no application/browser started
+PASS: isolated startup flow (sdk-mismatch); no application/browser started
+PASS: isolated startup flow (node-mismatch); no application/browser started
+PASS: isolated startup flow (install-failure); no application/browser started
+PASS: isolated startup flow (proxy-failure); no application/browser started
+PASS: caller environment is restored exactly (no blank variables)
+........
+----------------------------------------------------------------------
+Ran 8 tests in 1.705s
+
+OK
+✔ a canvas and RAF callbacks cannot substitute for an initialized renderer (1.1576ms)
+✔ requires actual engine frames, draw calls, readiness and clean GPU diagnostics (0.6665ms)
+✔ default dev gate keeps the historical p95 behavior and messages (0.3079ms)
+✔ 60hz profile enforces p95 and p99 frame budgets (0.157ms)
+✔ 60hz requires a finite p99 sample (0.2031ms)
+✔ heap growth fails only under a configured heap budget (0.1573ms)
+✔ configured heap budgets fail closed without a finite heap metric (0.1972ms)
+✔ profile failure ordering keeps p99, heap, boot, then GPU errors (0.1666ms)
+✔ custom profile honors explicit p95/p99 thresholds (0.2075ms)
+✔ readiness and first-frame thresholds are opt-in (0.2558ms)
+✔ maxFrames caps the required frame count (0.1343ms)
+✔ profile thresholds resolve to documented defaults (0.4874ms)
+✔ render_perf CLI rejects unknown profiles and bad thresholds before launching Chrome (106.2725ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 194.9765
+{"transformVersion": "semiconfab-legacy-import-v1", "importId": "c76486dc1c8049c9e5cb6d43b16c383e1d79dada1b5071c07ba35c12469f51cf", "inputCount": 253, "acceptedCount": 253, "rejectedCount": 0, "counts": {"catalog": 253, "oem": 116, "osat": 86, "prices": 167, "bom": 103, "layout": 121}, "issues": [], "snapshotSha256": "90c16a18c5143672bf74b7849083e16ef821a6e5e5860b22ca327cd03d0bae5c", "files": [{"path": "catalog.json", "bytes": 691042, "sha256": "b21829a25baed932a96b373478d764dd80a84fab6ce4ce53c978a985230af4e7"}, {"path": "data/semiconductor_equipment_database.json", "bytes": 69137, "sha256": "a650d187876e4579764cd22ae80653b99280b9e24407bf0b7f437f7e14d01b61"}, {"path": "data/osat-86-ground-truth.json", "bytes": 86651, "sha256": "7dc2da0e4055317cff19dd39dc9fa4ec0a4947e0ce49d62fd0c83c41c327c418"}, {"path": "data/price_estimates.json", "bytes": 54234, "sha256": "b8ed3e89918eef0ee80d863b8f4cd01e9d8fa5891f4b0b99b9064156e63ac8ed"}, {"path": "data/twin_bom_costs.json", "bytes": 58813, "sha256": "d89d59da3a371f4efaee7f2f16ce2572c2e595deadaef28e9454f33bb2093fd0"}, {"path": "twin/layout-default.json", "bytes": 30972, "sha256": "5b1d03f741ec6733fd33bc058b88132dcf3d8caa9657cbebe3dcdf5ef3d3334e"}, {"path": "schema.json", "bytes": 11515, "sha256": "dd108062a103a775bff8eeeb5a629c719b6ecc0598f59678594c715ed1dd43e5"}, {"path": "LICENSE", "bytes": 4637, "sha256": "8e6982187c93b0a47cb126cc83f697e17f34f62bfa1006000bc94d45bae43225"}]}
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+C:\Program Files\dotnet\sdk\11.0.100-rc.3.26522.148\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(385,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [C:\Users\han_qingyu\SemiconFab-Next\.local\worktrees\effect4-flat\fab_app\fab_app.csproj]
+  fab_shared -> C:\Users\han_qingyu\SemiconFab-Next\.local\worktrees\effect4-flat\fab_shared\bin\Release\net11.0\fab_shared.dll
+  fab_app -> C:\Users\han_qingyu\SemiconFab-Next\.local\worktrees\effect4-flat\fab_app\bin\Release\net11.0\fab_app.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:00.41
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+C:\Program Files\dotnet\sdk\11.0.100-rc.3.26522.148\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(385,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [C:\Users\han_qingyu\SemiconFab-Next\.local\worktrees\effect4-flat\fab_shared\fab_shared.csproj]
+  fab_shared -> C:\Users\han_qingyu\SemiconFab-Next\.local\worktrees\effect4-flat\fab_shared\bin\Release\net11.0\fab_shared.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:00.21
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+C:\Program Files\dotnet\sdk\11.0.100-rc.3.26522.148\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(385,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [C:\Users\han_qingyu\SemiconFab-Next\.local\worktrees\effect4-flat\fab_tests\fab_tests.csproj]
+C:\Program Files\dotnet\sdk\11.0.100-rc.3.26522.148\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(385,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [C:\Users\han_qingyu\SemiconFab-Next\.local\worktrees\effect4-flat\fab_shared\fab_shared.csproj]
+  fab_shared -> C:\Users\han_qingyu\SemiconFab-Next\.local\worktrees\effect4-flat\fab_shared\bin\Release\net11.0\fab_shared.dll
+  fab_app -> C:\Users\han_qingyu\SemiconFab-Next\.local\worktrees\effect4-flat\fab_app\bin\Release\net11.0\fab_app.dll
+  fab_tests -> C:\Users\han_qingyu\SemiconFab-Next\.local\worktrees\effect4-flat\fab_tests\bin\Release\net11.0\fab_tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:00.93
+Test run for C:\Users\han_qingyu\SemiconFab-Next\.local\worktrees\effect4-flat\fab_tests\bin\Release\net11.0\fab_tests.dll (.NETCoreApp,Version=v11.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   180, Skipped:     0, Total:   180, Duration: 8 s - fab_tests.dll (net11.0)
+Agent skills awaiting approval: @tanstack/react-router.
+Run "pnpm approve" to review them.
+✓ Lockfile passes supply-chain policies (verified 38m ago)
+Lockfile is up to date, resolution step is skipped
+Done in 33ms using pnpm v12.15.0
+$ tsc --noEmit
+Found 0 warnings and 0 errors.
+Finished in 125ms on 201 files with 88 rules using 20 threads.
+$ node ../tools/check_frozen_assets.mjs
+Frozen asset contracts PASS
+$ vitest run
+
+ RUN  v5.0.5 C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app
+
+ ✓ tests/rendering/lite-backend-recovery.test.ts (14 tests) 932ms
+ ✓ tests/domain/amhs-timeline-production.test.ts (5 tests) 1156ms
+   ✓ keeps cumulative completed counts without unbounded history, matching the frozen totals 645ms
+ ✓ tests/rendering/lite-runtime.test.ts (31 tests) 1428ms
+ ✓ tests/domain/personnel-timeline.test.ts (12 tests) 2456ms
+   ✓ bounds production history by default while keeping cumulative counters (1h run) 801ms
+   ✓ records the full trace only when explicitly enabled, with one arrival edge per waypoint visit 965ms
+ ✓ tests/domain/amhs-timeline.test.ts (2 tests) 984ms
+   ✓ reproduces the frozen-source AMHS traffic vectors for a declared scenario 582ms
+   ✓ keeps the hard no-overtake spacing and idle-state LED contract 399ms
+ ✓ tests/architecture/static-structure-pack.test.ts (12 tests) 3984ms
+   ✓ registers every committed generated artifact with generator command, source inputs and sha256 301ms
+   ✓ reports the committed generated tree as up to date and fails a stale registry checksum 903ms
+   ✓ fails the registry checker when a committed generated artifact is not registered 545ms
+   ✓ re-records exactly the committed registry with --update (registry is current) 481ms
+   ✓ regenerates the committed packed artifact byte-for-byte from the frozen source asset 310ms
+   ✓ detects a hand-edited (stale) packed artifact with --check 361ms
+   ✓ every node-based registered generator reports its committed artifact as fresh 681ms
+ ✓ tests/architecture/architecture-import-graph.test.ts (8 tests) 4331ms
+ ✓ tests/integration/route-code-splitting.test.ts (3 tests) 5663ms
+   ✓ A15: the production build emits a separate Twin page chunk for the 3D route 5653ms
+ ✓ tests/integration/proxy.test.ts (1 test) 5627ms
+   ✓ injects only the server key and replaces a browser-supplied key in a real proxy request 5615ms
+ ✓ tests/domain/research-replay.test.ts (6 tests) 580ms
+   ✓ ResearchReplay.parse boundaries (4)
+     ✓ parses a 200k-event stream without argument-count RangeError and reports the max timestamp 564ms
+ ✓ tests/rendering/lite-static-structure.test.ts (8 tests) 3362ms
+   ✓ retains every frozen static mesh and its actual world matrix and rendered bounds 1387ms
+   ✓ preserves frozen triangle vertices, normals, UVs and indices rather than replacing pipes or detailed facilities with boxes 707ms
+   ✓ keeps PBR/Standard colors, opacity, specular and emissive inputs and native curtain transmission 433ms
+   ✓ splits opaque batches by the precomputed X-Ray utility class of their frozen source entities 381ms
+ ✓ tests/architecture/architecture-contract-rules.test.ts (9 tests) 7268ms
+   ✓ R7: generic base modules never import features/** (assembly roots exempt) 2471ms
+   ✓ R8: domain/** is free of ambient clock/random/DOM/timer/network and only uses assets reference data 512ms
+   ✓ R11: generated artifacts are registered with one generator, source data and a current checksum 316ms
+   ✓ R11: an unregistered generated file and a deleted registered file both fail the checker 620ms
+   ✓ R14: no unlicensed any / as any / undocumented as unknown as / fake response coercion 371ms
+ ✓ tests/domain/cleanroom-pressure.test.ts (8 tests) 541ms
+   ✓ matches the field over a seeded random grid 429ms
+ ✓ tests/rendering/lite-environment.test.ts (10 tests) 5286ms
+   ✓ retains the exact seeded 1500-particle generator and pressure update, including hidden-layer clocks 2018ms
+   ✓ keeps the original post-move pressure-band colour semantics on every airflow frame 2672ms
+ ✓ tests/components/modal.test.tsx (9 tests) 1844ms
+   ✓ names the native dialog and restores the focused opener after Escape 672ms
+ ✓ tests/rendering/lite-facility.test.ts (1 test) 431ms
+   ✓ restores every frozen source airlock/mat/FFU geometric part at its exact source bounds 428ms
+ ✓ tests/integration/runtime-bootstrap.test.tsx (7 tests) 1407ms
+   ✓ does not hold idle FAB telemetry/command SSE connections on the workbench route 392ms
+ ✓ tests/api/resource.test.tsx (7 tests) 825ms
+ ✓ tests/integration/twin-research-parse-error.test.tsx (1 test) 1458ms
+   ✓ A16: shows a distinct visible research parse error when ResearchReplay.parse throws 1452ms
+ ✓ tests/rendering/lite-xray-batches.test.ts (2 tests) 371ms
+ ✓ tests/state/atom-preferences.test.tsx (5 tests) 1166ms
+   ✓ initializes a supplied registry from current storage on its first preference read 782ms
+stderr | tests/rendering/scene-port-lifecycle.test.ts > reports a failed mount once, releases resources and suppresses every late callback
+[lite] runtime failed Error: 模型资产加载失败
+    at C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/tests/rendering/scene-port-lifecycle.test.ts:202:19
+    at file:///C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35
+    at file:///C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26
+    at file:///C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)
+    at file:///C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)
+    at file:///C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3904:64 
+
+ ✓ tests/integration/router-page-state.test.tsx (3 tests) 1347ms
+   ✓ preserves Twin research and locale deep links during initial hydration 1069ms
+stderr | tests/rendering/scene-port-lifecycle.test.ts > a failed recoverable rebuild reports a terminal failure after the recovering event
+[lite] runtime failed Error: 重建静态场景失败
+    at Object.mocks.worldFactory (C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/tests/rendering/scene-port-lifecycle.test.ts:325:11)
+    at C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/tests/rendering/scene-port-lifecycle.test.ts:66:31
+    at Mock (file:///C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/spy.DDMXghXv.js:353:40)
+    at Object.compose (C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/src/rendering/lite-backend.ts:240:30)
+    at C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/tests/rendering/scene-port-lifecycle.test.ts:47:40
+    at C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/tests/rendering/scene-port-lifecycle.test.ts:58:5
+    at Mock (file:///C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/spy.DDMXghXv.js:353:40)
+    at createInstance (C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/src/rendering/lite-backend.ts:236:18)
+    at restart (C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/src/rendering/lite-backend.ts:272:15) 
+
+ ✓ tests/rendering/scene-port-lifecycle.test.ts (9 tests) 323ms
+ ✓ tests/integration/twin-spc-strip.test.tsx (1 test) 2068ms
+   ✓ renders split control/spec SPC judgements in the layout inspector strip 2062ms
+ ✓ tests/integration/equipment-status-pipeline.test.tsx (1 test) 2448ms
+   ✓ A02: SSE frames publish through one throttled projection instead of rendering per frame 2430ms
+ ✓ tests/integration/telemetry-render.test.tsx (3 tests) 2599ms
+   ✓ does not reapply a preset on GPU recovery but applies it on viewport reload and view change 1466ms
+   ✓ keeps paused DEMO states isolated while consuming telemetry in live mode 1051ms
+ ✓ tests/features/catalog/catalog-export.test.tsx (7 tests) 1678ms
+   ✓ catalog page export integration (2)
+     ✓ downloads the catalog through the revocable lifecycle and releases the URL 1299ms
+     ✓ releases a pending download URL when the page unmounts before the deferred task 311ms
+ ✓ tests/integration/fab-runtime-batch23.test.ts (11 tests) 370ms
+ ✓ tests/rendering/lite-tool-states.test.ts (9 tests) 208ms
+ ✓ tests/rendering/lite-selection.test.ts (12 tests) 332ms
+ ✓ tests/features/twin/twin-keyboard.test.tsx (7 tests) 1626ms
+   ✓ defers Escape to an open Modal and keeps camera shortcuts inert while it owns focus 931ms
+ ✓ tests/features/workbench/workbench-selection.test.ts (6 tests) 1793ms
+   ✓ does not render cached run details or totals belonging to another site 884ms
+   ✓ remounts the single FAB command console when its site scope changes 367ms
+ ✓ tests/realtime/realtime-transport.test.ts (9 tests) 228ms
+ ✓ tests/architecture/feature-ui-ownership.test.ts (3 tests) 188ms
+ ✓ tests/architecture/architecture-boundaries.test.ts (6 tests) 163ms
+ ✓ tests/features/twin/fab-viewer-callbacks.test.tsx (6 tests) 887ms
+   ✓ invokes the latest scene callbacks without remounting the GPU scene 417ms
+ ✓ tests/features/workbench/workbench-command-scope.test.tsx (5 tests) 897ms
+   ✓ ignores a previous site-scope completion after rebinding the same FAB in place 399ms
+ ✓ tests/integration/twin-fab-scope.test.tsx (4 tests) 5218ms
+   ✓ scopes status REST + SSE to the single configured canonical route FAB 2311ms
+   ✓ A01: remounting the AppRuntime provider clears projections while the FAB high-water survives 1842ms
+   ✓ A02: an SSE frame rejected by the ordered consumer never reaches the FAB-scoped resource Atom 473ms
+   ✓ A01: a disconnected status stream is labelled CACHE, never LIVE 587ms
+ ✓ tests/rendering/source-orbit-input.test.ts (9 tests) 140ms
+ ✓ tests/architecture/effect-runtime-boundary.test.ts (2 tests) 184ms
+ ✓ tests/rendering/lite-equipment.test.ts (4 tests) 215ms
+ ✓ tests/integration/equipment-status-scope-cycle.test.tsx (1 test) 5653ms
+   ✓ keeps Query cache and ordering across same-FAB remounts while detaching old SSE generations 5646ms
+ ✓ tests/api/api-command-schema.test.ts (20 tests) 205ms
+ ✓ tests/integration/command-actor-scope.test.tsx (3 tests) 163ms
+ ✓ tests/integration/fab-runtime.test.ts (10 tests) 143ms
+ ✓ tests/features/workbench/workbench-submission.test.tsx (4 tests) 247ms
+ ✓ tests/domain/wafer-timeline.test.ts (11 tests) 95ms
+ ✓ tests/integration/command-concurrency.test.ts (1 test) 118ms
+ ✓ tests/integration/router-resource.test.tsx (4 tests) 128ms
+ ✓ tests/api/api-transport.test.ts (13 tests) 113ms
+ ✓ tests/api/api-queries.test.ts (7 tests) 122ms
+stdout | tests/performance/telemetry-load.test.ts > sustains 500/2000/5000-entity frames at 60Hz within a generous CPU/heap budget
+┌─────────┬─────────┬───────────┬────────────────────┬─────────────────────┐
+│ (index) │ samples │ frameSize │ elapsedMs          │ heapDeltaMb         │
+├─────────┼─────────┼───────────┼────────────────────┼─────────────────────┤
+│ 0       │ 500     │ 1000      │ 14.697099999999978 │ 0.8605499267578125  │
+│ 1       │ 2000    │ 4000      │ 20.176000000000045 │ -2.2808609008789062 │
+│ 2       │ 5000    │ 10000     │ 33.616300000000024 │ 1.501312255859375   │
+└─────────┴─────────┴───────────┴────────────────────┴─────────────────────┘
+
+ ✓ tests/api/sites-queries.test.ts (7 tests) 100ms
+ ✓ tests/performance/telemetry-load.test.ts (1 test) 82ms
+ ✓ tests/architecture/resource-ownership.test.ts (4 tests) 129ms
+ ✓ tests/realtime/telemetry-runtime.test.ts (30 tests) 94ms
+ ✓ tests/api/effect-http.test.ts (10 tests) 102ms
+ ✓ tests/features/twin/inspector-process.test.tsx (4 tests) 291ms
+ ✓ tests/contract/command-correlation.test.ts (5 tests) 111ms
+ ✓ tests/domain/tour-timeline.test.ts (5 tests) 112ms
+ ✓ tests/architecture/source-layout.test.ts (2 tests) 98ms
+ ✓ tests/features/workbench/twin-entry.test.tsx (1 test) 166ms
+ ✓ tests/components/original-icons.test.ts (3 tests) 57ms
+ ✓ tests/architecture/legacy-dependency-gate.test.ts (2 tests) 118ms
+ ✓ tests/domain/tool-state-projection.test.ts (12 tests) 21ms
+ ✓ tests/api/response-contracts.test.ts (6 tests) 103ms
+ ✓ tests/integration/runtime-replacement.test.tsx (1 test) 304ms
+   ✓ re-subscribes to the replacement runtime instead of keeping a disposed one 301ms
+ ✓ tests/domain/twin-equipment.test.ts (7 tests) 35ms
+ ✓ tests/components/class-names.test.ts (5 tests) 40ms
+ ✓ tests/api/command-http.test.ts (4 tests) 102ms
+ ✓ tests/realtime/equipment-status-protocol.test.ts (9 tests) 29ms
+ ✓ tests/rendering/lite-motion.test.ts (16 tests) 14539ms
+   ✓ maps the seeded source traffic clock onto every vehicle without a second simulation clock 5920ms
+   ✓ matches all frozen personnel keyframes and shares their air shower clock 2620ms
+   ✓ projects source hoist/cable/FOUP/LED states and preserves AMHS hidden state during updates 2096ms
+   ✓ uploads only the changed instance slots while a pool population is stable 321ms
+   ✓ locates every arc sample boundary exactly like the removed linear scan 330ms
+   ✓ keeps the frozen vehicle projection vectors at every sampled source tick 1750ms
+   ✓ keeps the hidden AMHS simulation identical while skipping instance projection and restores it on re-show 586ms
+ ✓ tests/rendering/lite-effects.test.ts (13 tests) 76ms
+ ✓ tests/integration/command-recovery-contract.test.ts (3 tests) 82ms
+ ✓ tests/integration/twin-subscription-isolation.test.tsx (8 tests) 8312ms
+   ✓ updates the AMHS readout from its own subscription without rerendering TwinContent/FabViewport 2226ms
+   ✓ keeps 20 Hz wafer-frame updates inside the wafer HUD child 621ms
+   ✓ keeps sidebar, OEM dialog, archive query and inspector-MES branches out of TwinContent/FabViewport 393ms
+   ✓ keeps YMS hover, die-map inputs and the header yield pill out of TwinContent/FabViewport 1065ms
+   ✓ unit-renders the extracted YMS panel against the page slice 459ms
+   ✓ keeps ~60 Hz tour HUD frames inside the tour card 3349ms
+ ✓ tests/integration/command-transport-failure.test.ts (1 test) 93ms
+ ✓ tests/integration/app-runtime.test.tsx (5 tests) 262ms
+ ✓ tests/domain/process-control.test.ts (20 tests) 26ms
+ ✓ tests/contract/command-workflow.test.ts (3 tests) 44ms
+ ✓ tests/domain/wafer-scenario.test.ts (3 tests) 18ms
+ ✓ tests/rendering/lite-lighting.test.ts (9 tests) 60ms
+ ✓ tests/realtime/equipment-status.test.ts (5 tests) 26ms
+ ✓ tests/realtime/realtime-frame-buffer.test.ts (12 tests) 31ms
+(node:29328) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/integration/resource-cache.test.tsx (4 tests) 34ms
+ ✓ tests/features/catalog/catalog-page.test.tsx (4 tests) 64ms
+ ✓ tests/integration/command-event-bridge.test.ts (7 tests) 41ms
+ ✓ tests/integration/command-projection-identity.test.tsx (1 test) 221ms
+ ✓ tests/api/equipment-status-bridge.test.ts (6 tests) 22ms
+ ✓ tests/contract/command-identity-contract.test.ts (1 test) 19ms
+ ✓ tests/rendering/amhs-stats.test.ts (5 tests) 10ms
+ ✓ tests/architecture/oxc-react-compiler.test.ts (4 tests) 20ms
+ ✓ tests/features/twin/twin-state.test.ts (7 tests) 20ms
+ ✓ tests/integration/url-mapping.test.ts (3 tests) 9ms
+ ✓ tests/application/coalesced-dispatcher.test.ts (2 tests) 17ms
+ ✓ tests/domain/wafer-route.test.ts (5 tests) 23ms
+ ✓ tests/realtime/fab-telemetry-registry.test.ts (7 tests) 19ms
+stdout | tests/performance/telemetry-frame-buffer.test.ts > sustains 100k typed-array frame writes within a generous CPU budget
+telemetry-frame-buffer: 100000 writes x 8 floats in 7.34 ms (13621009 frames/s)
+
+ ✓ tests/performance/telemetry-frame-buffer.test.ts (1 test) 19ms
+ ✓ tests/features/catalog/catalog-data.test.ts (6 tests) 28ms
+ ✓ tests/architecture/remaining-state.test.ts (6 tests) 32ms
+ ✓ tests/architecture/ui-atoms.test.ts (3 tests) 23ms
+ ✓ tests/domain/wafer-map.test.ts (3 tests) 17ms
+ ✓ tests/realtime/realtime-protocol.test.ts (3 tests) 24ms
+ ✓ tests/features/twin/tool-state-merge.test.ts (9 tests) 17ms
+ ✓ tests/support/png-support.test.ts (3 tests) 14ms
+ ✓ tests/state/preferences.test.ts (3 tests) 10ms
+ ✓ tests/realtime/equipment-status-epoch.test.ts (5 tests) 12ms
+ ✓ tests/domain/tour-scenario.test.ts (2 tests) 12ms
+ ✓ tests/domain/twin-spatial.test.ts (4 tests) 11ms
+ ✓ tests/domain/fab-yield.test.ts (4 tests) 14ms
+ ✓ tests/integration/router-search.test.ts (5 tests) 21ms
+ ✓ tests/domain/scenario.test.ts (3 tests) 9ms
+ ✓ tests/support/perf-metrics.test.ts (2 tests) 8ms
+ ✓ tests/application/state-sync.test.ts (1 test) 5ms
+ ✓ tests/contract/command-recovery.test.ts (7 tests) 12ms
+ ✓ tests/architecture/feature-atoms.test.ts (2 tests) 8ms
+ ✓ tests/features/twin/twin-page-store-scope.test.ts (4 tests) 12ms
+ ✓ tests/features/twin/twin-i18n.test.ts (4 tests) 7ms
+ ✓ tests/rendering/lite-shadow.test.ts (2 tests) 16ms
+ ✓ tests/rendering/lite-cut-plane.test.ts (4 tests) 10ms
+ ✓ tests/rendering/lite-camera.test.ts (4 tests) 8ms
+ ✓ tests/features/twin/tour-controller.test.tsx (6 tests) 68ms
+ ✓ tests/features/twin/wafer-playback-registry.test.tsx (3 tests) 51ms
+ ✓ tests/architecture/route-tree-generation.test.ts (3 tests) 5ms
+
+ Test Files  122 passed (122)
+      Tests  726 passed (726)
+   Start at  23:06:20
+   Duration  21.08s (import 37%, tests 33%, environment 26%, transform 3%, worker 1%)
+
+    Isolate  122 workers spawned · ~1.11s startup each (spawn + environment, per file)
+             at least ~6.01s faster with isolate: false — reuses workers across files instead of one per file
+
+$ node ../tools/check_frozen_assets.mjs
+Frozen asset contracts PASS
+$ vite build
+vite v8.3.5 building client environment for production...
+transforming...
+[plugin vite:react-compiler] (BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause
+
+  > react-compiler(Todo): (BuildHIR::lowerStatement) Handle TryStatement with
+  | a finalizer ('finally') clause
+    ,-[C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/src/workbench/use-run-submission.ts:92:6]
+ 91 |       if (accepts(token)) workbenchActions.submitErrorSet(registry, errorMessage(error));
+ 92 |     } finally {
+    :      ^^^^^^^^^
+ 93 |       if (accepts(token)) setSubmitting(false);
+    `----
+  help: Rewrite the highlighted code using syntax supported by React
+        Compiler
+  note: React Compiler skipped optimizing this component or hook
+
+[plugin vite:react-compiler] (BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause
+
+  > react-compiler(Todo): (BuildHIR::lowerStatement) Handle TryStatement with
+  | a finalizer ('finally') clause
+     ,-[C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/src/workbench/use-command-console.ts:130:6]
+ 129 |       update((previous) => ({ ...previous, error: cause instanceof Error ? cause.message : '命令提交失败' }));
+ 130 |     } finally {
+     :      ^^^^^^^^^
+ 131 |       if (isCurrentScope()) update((previous) => ({ ...previous, busy: false }));
+     `----
+  help: Rewrite the highlighted code using syntax supported by React
+        Compiler
+  note: React Compiler skipped optimizing this component or hook
+
+[plugin vite:react-compiler] (BuildHIR::lowerExpression) Handle Import expressions
+
+  > react-compiler(Todo): (BuildHIR::lowerExpression) Handle Import
+  | expressions
+     ,-[C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/src/twin/twin-viewer.tsx:108:10]
+ 107 |     });
+ 108 |     void import('@/rendering/lite-backend')
+     :          ^^^^^^
+ 109 |       .then(async ({ createLiteBackend }) => {
+     `----
+  help: Rewrite the highlighted code using syntax supported by React
+        Compiler
+  note: React Compiler skipped optimizing this component or hook
+
+[plugin vite:react-compiler] React rule suppression prevents optimization
+
+  x react-compiler(Suppression): React rule suppression prevents optimization
+     ,-[C:/Users/han_qingyu/SemiconFab-Next/.local/worktrees/effect4-flat/web_app/src/twin/use-tour-controller.ts:244:5]
+ 243 |     // stop() only reads refs; the scopeKey transition is the actual trigger.
+ 244 |     // eslint-disable-next-line react-hooks/exhaustive-deps
+     :     ^^^^^^^^^^^^^^^^^^^^^^^^^^^|^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     :                                `-- Found React rule suppression
+ 245 |   }, [scopeKey, registry]);
+     `----
+  help: Remove the suppression and address the reported React rule violation
+  note: React Compiler has skipped optimizing this component because one or
+           more React ESLint rules were disabled. React Compiler only works
+           when your components follow all the rules of React, disabling
+           them may result in unexpected or incorrect behavior. Found
+           suppression `eslint-disable-next-line react-hooks/exhaustive-
+           deps`
+
+✓ 1737 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                               0.65 kB │ gzip:   0.39 kB
+dist/assets/telemetry.worker-BXuP41hJ.js      2.60 kB
+dist/assets/legacy-LICENSE-CSEy9_Bq.txt       4.63 kB │ gzip:   1.74 kB
+dist/assets/index-DMLM5948.css              121.09 kB │ gzip:  20.95 kB
+dist/assets/rolldown-runtime-XKyaHtl9.js      0.72 kB │ gzip:   0.42 kB
+dist/assets/index-Bc4C5XD2.js               230.00 kB │ gzip:  77.04 kB
+dist/assets/gpu-B6EZQgwV.js                 392.64 kB │ gzip: 128.36 kB
+dist/assets/react-WWxCYaA2.js               440.88 kB │ gzip: 142.00 kB
+dist/assets/twin-page-DO4yz9yy.js           455.87 kB │ gzip: 128.91 kB
+dist/assets/lite-backend-BMKaXHo0.js      1,795.20 kB │ gzip: 179.04 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 806ms
+VERIFY_EXIT=0
