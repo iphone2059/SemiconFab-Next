@@ -1,6 +1,6 @@
 # SemiconFab Next：Effect 4 与单层源码目录重构（已实施）
 
-**状态：** 已实施并完成 Task 0–6 验收（2026-10-29，分支 `refactor/effect4-flat-20261029`）。本目录是当前事实来源；旧的“设计草案/待批准”表述已被本页取代。
+**状态：** 2026-10-29 起进入第二轮“正确性优先”重构：Phase A 已冻结新目标规范 `05-correctness-first-target-spec.md` 与 ADR-006/007/008/09；`01`–`04` 中与新规范冲突的资源/命令/恢复描述以 `05`–`09` 为准。Task 0–7（`refactor/effect4-flat-20261029`）的 726 PASS 仅作历史证据，不再代表新架构已通过。
 **基线：** 远端 `main` 的 `4fc8a94a3f10d185c8bef7929349ac6ccb2b8792`（独立 worktree `.local/worktrees/effect4-baseline` 仅用于 A/B）。
 **范围：** 仅 `web_app` 前端；后端不变，Babylon Lite + WebGPU-only 产品约束不变。
 **验收证据：** `docs/architecture/evidence/`；浏览器 e2e：`docs/perf/effect4-e2e.json`；性能/GPU：`docs/architecture/evidence/perf/`。
@@ -20,6 +20,11 @@
 | `evidence/effect4-task6-rxjs-removal.md` | RxJS→Effect Stream/PubSub 迁移证据 |
 | `evidence/effect4-task7-react-compiler.md` | Rust/Oxc React Compiler 接入、规则修复、A/B 与边界 |
 | `reviews/2026-10-29-effect-consolidation-design-review.md` | 方案评审历史（不作为当前事实） |
+| `05-correctness-first-target-spec.md` | 第二轮重构冻结规范（正确性优先） |
+| `06-adr-resource-state-machine.md` | ADR-006：资源身份、状态机、提交协议（Phase B 冻结接口） |
+| `07-adr-scope-identity-model.md` | ADR-007：Scope 树、身份模型、调度器/有界流/唯一投影（Phase C 冻结接口） |
+| `08-adr-command-durable-recovery.md` | ADR-008：后端持久恢复与权威契约（Phase D 冻结接口） |
+| `09-gap-register-and-gates.md` | 缺口登记 G01–G20、阶段门禁、环境约束 |
 
 ## 已实施的核心决定
 
