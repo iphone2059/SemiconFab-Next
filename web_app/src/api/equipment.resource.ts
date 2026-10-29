@@ -1,17 +1,18 @@
 import { queryOptions } from '@tanstack/react-query';
-import { z } from 'zod';
+import { Effect, Schema } from 'effect';
+import { nonEmptyString, nonNegativeInteger } from '@/api/primitives.schema';
 import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
 import { acceptEquipmentStatusSnapshot } from '@/api/equipment-status-bridge';
-import { httpTransport } from '@/api/http.transport';
+import { httpTransport, decodeApiResponse } from '@/api/http.transport';
 import { queryKeys } from '@/api/query-keys';
 
-const equipmentStatusSchema = z.object({
-  siteId: z.string().min(1),
-  fabId: z.string().min(1),
-  generatedAt: z.string().min(1),
-  sequence: z.number().int().nonnegative(),
-  epoch: z.number().int().nonnegative(),
-  tools: z.array(z.object({ state: z.string().min(1) })).min(1),
+const equipmentStatusSchema = Schema.Struct({
+  siteId: nonEmptyString,
+  fabId: nonEmptyString,
+  generatedAt: nonEmptyString,
+  sequence: nonNegativeInteger,
+  epoch: nonNegativeInteger,
+  tools: Schema.Array(Schema.Struct({ state: nonEmptyString })).pipe(Schema.mutable).check(Schema.isMinLength(1)),
 });
 
 /**
@@ -24,11 +25,7 @@ export const equipmentStatusQueryOptions = (siteId: string, fabId: string) =>
   queryOptions({
     queryKey: queryKeys.equipment.status(siteId, fabId),
     queryFn: async ({ client, signal }) => {
-      const payload = await httpTransport.fetchJson(
-        `/api/v1/sites/${encodeURIComponent(siteId)}/fabs/${encodeURIComponent(fabId)}/equipment-status`,
-        { signal },
-      );
-      const snapshot: EquipmentStatusSnapshot = equipmentStatusSchema.parse(payload);
+      const snapshot: EquipmentStatusSnapshot = await Effect.runPromise(fetchEquipmentStatus(siteId, fabId), { signal });
       const scope = { siteId, fabId };
       // One acceptance boundary shared with SSE: the bridge performs the ordered
       // check and is the only place that writes the FAB-scoped cache entry.
@@ -49,3 +46,7 @@ export const equipmentStatusQueryOptions = (siteId: string, fabId: string) =>
 
 /** The Query key that the SSE bridge writes into; exported to avoid ad-hoc keys. */
 export const equipmentStatusQueryKey = (siteId: string, fabId: string) => queryKeys.equipment.status(siteId, fabId);
+
+export const fetchEquipmentStatus = (siteId: string, fabId: string) => httpTransport.fetchJson(
+  `/api/v1/sites/${encodeURIComponent(siteId)}/fabs/${encodeURIComponent(fabId)}/equipment-status`,
+).pipe(Effect.flatMap(decodeApiResponse(equipmentStatusSchema, 'invalid equipment-status response')));

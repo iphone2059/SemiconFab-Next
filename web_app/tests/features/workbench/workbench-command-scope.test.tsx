@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { Effect } from 'effect';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
@@ -10,7 +11,7 @@ import type { SubmitEquipmentCommandInput, SubmittedEquipmentCommand } from '@/a
 // The HTTP boundary is deferred so each case can decide when (and for which
 // console lifetime) a submission resolves.
 const mutation = vi.hoisted(() => ({ submitEquipmentCommand: vi.fn() }));
-vi.mock('../../../src/api/commands.mutation', () => ({ submitEquipmentCommand: mutation.submitEquipmentCommand }));
+vi.mock('@/api/commands.mutation', () => ({ submitEquipmentCommand: mutation.submitEquipmentCommand }));
 const submit = mutation.submitEquipmentCommand;
 
 interface FakeRuntime {
@@ -84,7 +85,7 @@ afterEach(() => {
 it('ignores a previous site-scope completion after rebinding the same FAB in place', async () => {
   const { registry, runtime } = createRegistry();
   const pending = deferred<SubmittedEquipmentCommand>();
-  submit.mockReturnValueOnce(pending.promise);
+  submit.mockReturnValueOnce(Effect.promise(() => pending.promise));
   const console = renderConsole(registry, 'site-a', 'fab-a');
   fireEvent.submit(console.form());
   await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
@@ -118,7 +119,7 @@ it('ignores a previous site-scope completion after rebinding the same FAB in pla
 it('ignores a previous site-scope failure after rebinding the same FAB in place', async () => {
   const { registry, runtime } = createRegistry();
   const pending = deferred<SubmittedEquipmentCommand>();
-  submit.mockReturnValueOnce(pending.promise);
+  submit.mockReturnValueOnce(Effect.promise(() => pending.promise));
   const console = renderConsole(registry, 'site-a', 'fab-a');
   fireEvent.submit(console.form());
   await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
@@ -141,7 +142,7 @@ it('ignores a previous site-scope failure after rebinding the same FAB in place'
 it('drops a completion whose console lifetime ended (keyed remount)', async () => {
   const { registry, runtime } = createRegistry();
   const pending = deferred<SubmittedEquipmentCommand>();
-  submit.mockReturnValueOnce(pending.promise);
+  submit.mockReturnValueOnce(Effect.promise(() => pending.promise));
   const console = renderConsole(registry, 'site-a', 'fab-a');
   fireEvent.submit(console.form());
   await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
@@ -160,7 +161,7 @@ it('drops a completion whose console lifetime ended (keyed remount)', async () =
 
 it('reuses the idempotency key only while retrying the same command identity', async () => {
   const { registry } = createRegistry();
-  submit.mockRejectedValue(new Error('submit failed'));
+  submit.mockReturnValue(Effect.fail(new Error('submit failed')));
   const console = renderConsole(registry, 'site-a', 'fab-a');
 
   fireEvent.submit(console.form());
@@ -200,7 +201,7 @@ it('reuses the idempotency key only while retrying the same command identity', a
 
 it('tracks a submission on the configured FAB and drops its row when the site scope changes', async () => {
   const { registry, runtime } = createRegistry();
-  submit.mockResolvedValueOnce(accepted('cmd-a-1'));
+  submit.mockReturnValueOnce(Effect.succeed(accepted('cmd-a-1')));
   const console = renderConsole(registry, 'site-a', 'fab-a');
   fireEvent.submit(console.form());
 

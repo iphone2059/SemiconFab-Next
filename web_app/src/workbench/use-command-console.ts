@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { submitEquipmentCommand } from '@/api/commands.mutation';
 import { createEquipmentCommandIdempotencyKey } from '@/api/command.schema';
@@ -111,7 +112,7 @@ export function useCommandConsole({ siteId, fabId }: { siteId: string; fabId: st
       : createEquipmentCommandIdempotencyKey();
     update((previous) => ({ ...previous, busy: true, error: '', pendingKey: { identity, key: idempotencyKey } }));
     try {
-      const submitted = await submitEquipmentCommand({ siteId, fabId, equipmentId, action, idempotencyKey });
+      const submitted = await Effect.runPromise(submitEquipmentCommand({ siteId, fabId, equipmentId, action, idempotencyKey }));
       // A completion for a replaced scope must not enter the new FAB's page, its
       // tracked list, or its runtime.
       if (!isCurrentScope()) return;

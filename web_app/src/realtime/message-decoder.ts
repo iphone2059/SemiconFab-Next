@@ -1,40 +1,41 @@
-import { z } from 'zod';
+import { Option, Schema } from 'effect';
+import { finiteNumber, nonEmptyString, nonNegativeInteger } from '@/api/primitives.schema';
 import type { AlarmEvent, CommandResultEvent, TelemetryFrame } from '@/contracts/command-events.contract';
 
 export const COMMAND_RESULT_TOPIC = 'command.result';
 export const ALARM_TOPIC = 'alarm.event';
 export const TELEMETRY_TOPIC = 'telemetry.frame';
 
-const envelopeSchema = z.object({
-  topic: z.string().min(1),
-  sequence: z.number().int().nonnegative().optional(),
-  payload: z.unknown(),
+const envelopeSchema = Schema.Struct({
+  topic: nonEmptyString,
+  sequence: Schema.optional(nonNegativeInteger),
+  payload: Schema.Unknown,
 });
 
-const commandResultSchema = z.object({
-  fabId: z.string().min(1),
-  commandId: z.string().min(1),
-  revision: z.number().int().nonnegative(),
-  outcome: z.enum(['accepted', 'executing', 'succeeded', 'failed', 'cancelled']),
-  occurredAt: z.string().min(1),
+const commandResultSchema = Schema.Struct({
+  fabId: nonEmptyString,
+  commandId: nonEmptyString,
+  revision: nonNegativeInteger,
+  outcome: Schema.Literals(['accepted', 'executing', 'succeeded', 'failed', 'cancelled']),
+  occurredAt: nonEmptyString,
 });
 
-const alarmSchema = z.object({
-  fabId: z.string().min(1),
-  alarmId: z.string().min(1),
-  severity: z.enum(['info', 'warning', 'critical']),
-  message: z.string(),
-  occurredAt: z.string().min(1),
+const alarmSchema = Schema.Struct({
+  fabId: nonEmptyString,
+  alarmId: nonEmptyString,
+  severity: Schema.Literals(['info', 'warning', 'critical']),
+  message: Schema.String,
+  occurredAt: nonEmptyString,
 });
 
-const telemetrySchema = z.object({
-  fabId: z.string().min(1),
-  sequence: z.number().int().nonnegative(),
-  capturedAt: z.string().min(1),
-  samples: z.array(z.object({
-    entityId: z.string().min(1),
-    values: z.record(z.string(), z.number()),
-  })),
+const telemetrySchema = Schema.Struct({
+  fabId: nonEmptyString,
+  sequence: nonNegativeInteger,
+  capturedAt: nonEmptyString,
+  samples: Schema.Array(Schema.Struct({
+    entityId: nonEmptyString,
+    values: Schema.Record(Schema.String, finiteNumber),
+  })).pipe(Schema.mutable),
 });
 
 export type DecodedRealtimeMessage =
@@ -68,23 +69,23 @@ export class MessageDecoder {
         throw new RealtimeDecodeError('realtime message was not JSON');
       }
     }
-    const envelope = envelopeSchema.safeParse(value);
-    if (!envelope.success) throw new RealtimeDecodeError('invalid realtime envelope');
-    const { topic, sequence, payload } = envelope.data;
+    const envelope = Schema.decodeUnknownOption(envelopeSchema)(value);
+    if (Option.isNone(envelope)) throw new RealtimeDecodeError('invalid realtime envelope');
+    const { topic, sequence, payload } = envelope.value;
     if (topic === COMMAND_RESULT_TOPIC) {
-      const parsed = commandResultSchema.safeParse(payload);
-      if (!parsed.success) throw new RealtimeDecodeError('invalid command result payload', topic);
-      return { kind: 'command', topic, sequence, event: parsed.data };
+      const parsed = Schema.decodeUnknownOption(commandResultSchema)(payload);
+      if (Option.isNone(parsed)) throw new RealtimeDecodeError('invalid command result payload', topic);
+      return { kind: 'command', topic, sequence, event: parsed.value };
     }
     if (topic === ALARM_TOPIC) {
-      const parsed = alarmSchema.safeParse(payload);
-      if (!parsed.success) throw new RealtimeDecodeError('invalid alarm payload', topic);
-      return { kind: 'alarm', topic, sequence, event: parsed.data };
+      const parsed = Schema.decodeUnknownOption(alarmSchema)(payload);
+      if (Option.isNone(parsed)) throw new RealtimeDecodeError('invalid alarm payload', topic);
+      return { kind: 'alarm', topic, sequence, event: parsed.value };
     }
     if (topic === TELEMETRY_TOPIC) {
-      const parsed = telemetrySchema.safeParse(payload);
-      if (!parsed.success) throw new RealtimeDecodeError('invalid telemetry payload', topic);
-      return { kind: 'telemetry', topic, sequence, event: parsed.data };
+      const parsed = Schema.decodeUnknownOption(telemetrySchema)(payload);
+      if (Option.isNone(parsed)) throw new RealtimeDecodeError('invalid telemetry payload', topic);
+      return { kind: 'telemetry', topic, sequence, event: parsed.value };
     }
     throw new RealtimeDecodeError('unknown realtime topic', topic);
   }

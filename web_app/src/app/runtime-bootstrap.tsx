@@ -1,3 +1,4 @@
+import { Effect, Option } from 'effect';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { CommandEventSource } from '@/contracts/command-events.contract';
@@ -55,7 +56,10 @@ export function RuntimeBootstrap({ children }: { children: ReactNode }) {
           ),
       );
     }
-    const gateway = typeof fetch === 'function' ? createHttpCommandGateway() : undefined;
+    const httpGateway = typeof fetch === 'function' ? createHttpCommandGateway() : undefined;
+    // Transitional UI composition edge; Task 4 replaces the legacy recovery contract.
+    const gateway = httpGateway && { getCommandStatus: (fabId: string, commandId: string) =>
+      Effect.runPromise(httpGateway.getCommandStatus(fabId, commandId)).then(Option.getOrNull) };
     const factory = new FabRuntimeFactory({
       sourceFor: (fabId) => sourceByFab.get(fabId) ?? createPendingCommandEventSource(),
       gateway,

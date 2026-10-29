@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { useEffect, useMemo, useRef, type FormEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { CreateRunRequest, SiteDto } from '@/contracts/app-contracts';
@@ -34,7 +35,7 @@ export function useRunSubmission(site: SiteDto, form: WorkbenchFormState): RunSu
   const submissionScope = useMemo(() => new ScopeGate(), []);
   const pending = useRef<PendingSubmission | undefined>(undefined);
   const mutation = useMutation({
-    mutationFn: createRun,
+    mutationFn: (input: Parameters<typeof createRun>[0]) => Effect.runPromise(createRun(input)),
     // The server list/detail/results refresh after acceptance.
     onSuccess: () => {
       void invalidateRuns(queryClient);

@@ -1,4 +1,5 @@
-import { z } from 'zod';
+import { Effect, Option, Schema } from 'effect';
+import { finiteNumber } from '@/api/primitives.schema';
 
 /**
  * Search params parsed on every canonical route. Every known key is optional and
@@ -15,23 +16,19 @@ import { z } from 'zod';
  * features/catalog/search.ts), so this generic router utility never imports a
  * feature. Pages no longer read `location` for product state.
  */
-const textParam = z.union([z.string(), z.number(), z.boolean()]).optional().catch(undefined);
-
-export const routerSearchSchema = z.looseObject({
-  lang: textParam,
-  theme: z.enum(['dark', 'light']).optional().catch(undefined),
-  siteId: textParam,
-  modal: textParam,
-  mode: textParam,
-  perf: textParam,
-  domain: textParam,
-  category: textParam,
-  q: textParam,
-  hideDrafts: textParam,
-  compare: textParam,
-});
-
-export type RouterSearch = z.infer<typeof routerSearchSchema>;
+const textParam = Schema.optional(Schema.Union([Schema.String, finiteNumber, Schema.Boolean])).pipe(
+  Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
+);
+const themeParam = Schema.optional(Schema.Literals(['dark', 'light'])).pipe(
+  Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
+);
+export const routerSearchSchema = Schema.StructWithRest(Schema.Struct({
+  lang: textParam, theme: themeParam, siteId: textParam, modal: textParam,
+  mode: textParam, perf: textParam, domain: textParam, category: textParam,
+  q: textParam, hideDrafts: textParam, compare: textParam,
+}), [Schema.Record(Schema.String, Schema.Unknown)]);
+export type RouterSearch = typeof routerSearchSchema.Type;
+export const decodeRouterSearch = Schema.decodeUnknownSync(routerSearchSchema);
 
 /** Coerce a validated router search value into display text. */
 export function searchText(value: unknown): string | undefined {

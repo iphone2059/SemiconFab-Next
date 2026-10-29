@@ -2,7 +2,7 @@ import { createRootRouteWithContext, Outlet, type ErrorComponentProps } from '@t
 import type { QueryClient } from '@tanstack/react-query';
 import type { AppRuntime } from '@/app/app-runtime';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { routerSearchSchema } from './route-search';
+import { decodeRouterSearch } from './route-search';
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -40,7 +40,7 @@ const RootNotFound = () => (
  * every canonical path; there are no legacy aliases or redirects.
  */
 export const rootRoute = createRootRouteWithContext<RouterContext>()({
-  validateSearch: routerSearchSchema,
+  validateSearch: decodeRouterSearch,
   component: RootComponent,
   errorComponent: RootError,
   notFoundComponent: RootNotFound,

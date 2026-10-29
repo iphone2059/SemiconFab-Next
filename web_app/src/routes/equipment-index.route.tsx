@@ -2,14 +2,14 @@ import { useCallback } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import { CatalogPage } from '@/catalog/catalog-page';
 import type { RouterSearch } from './route-search';
-import { routerSearchSchema } from './route-search';
+import { decodeRouterSearch } from './route-search';
 import { equipmentRoute } from './equipment.route';
 
 /** Canonical equipment catalog URL. The router owns URL/search state. */
 export const equipmentIndexRoute = createRoute({
   getParentRoute: () => equipmentRoute,
   path: '/',
-  validateSearch: routerSearchSchema,
+  validateSearch: decodeRouterSearch,
   component: EquipmentCatalogRoute,
 });
 

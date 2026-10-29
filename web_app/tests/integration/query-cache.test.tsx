@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -7,7 +8,7 @@ import { sitesQueryOptions } from '@/api/sites.resource';
 import { equipmentStatusQueryOptions, equipmentStatusQueryKey } from '@/api/equipment.resource';
 import { acceptEquipmentStatusSnapshot } from '@/api/equipment-status-bridge';
 import { runsQueryOptions } from '@/api/runs.resource';
-import { createRun, invalidateRuns } from '@/api/runs.mutation';
+import { createRun as createRunEffect, invalidateRuns } from '@/api/runs.mutation';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
 import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
 
@@ -22,6 +23,8 @@ import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protoc
  * - A02/A03: REST frames pass the same per-scope ordered acceptance gate as SSE;
  *   a rejected/delayed frame can never regress the FAB-scoped cache entry.
  */
+
+const createRun = (...args: Parameters<typeof createRunEffect>) => Effect.runPromise(createRunEffect(...args));
 
 const SITES_V1 = [{ siteId: 'site-1', code: 'SITE-1', templateHash: 'hash-1', fabs: [{ fabId: 'FAB-01', code: 'FAB-01' }] }];
 const SITES_V2 = [{ siteId: 'site-1', code: 'SITE-1', templateHash: 'hash-2', fabs: [{ fabId: 'FAB-01', code: 'FAB-01' }] }];

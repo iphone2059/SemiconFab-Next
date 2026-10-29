@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { searchToQueryString } from '@/routes/route-search';
+import { decodeRouterSearch, searchToQueryString } from '@/routes/route-search';
 import { catalogSearchFrom, catalogSearchPatch } from '@/catalog/catalog-search';
 import { twinModalFrom, twinModeFrom, twinSiteIdFrom } from '@/twin/twin-search';
 
@@ -54,4 +54,18 @@ it('coerces valid Twin deep-link params and rejects malformed ones', () => {
   expect(twinModalFrom({ modal: 'bogus' })).toBeUndefined();
   expect(twinSiteIdFrom({ siteId: 123 })).toBe('123');
   expect(twinSiteIdFrom({})).toBeUndefined();
+});
+
+// A malformed known field must not discard another valid field or an unknown debug key.
+it('preserves unknown search keys while falling back only invalid product fields', () => {
+  const search = decodeRouterSearch({ theme: 'sepia', q: ['bad'], lang: true, siteId: 123,
+    debug: { trace: true }, custom: ['a', 'b'] });
+  expect(search).toEqual({ theme: undefined, q: undefined, lang: true, siteId: 123,
+    debug: { trace: true }, custom: ['a', 'b'] });
+  expect(decodeRouterSearch({ theme: 'light', perf: 0 })).toEqual({ theme: 'light', perf: 0 });
+});
+
+it('falls back non-finite search numbers without losing valid text and debug values', () => {
+  expect(decodeRouterSearch({ q: NaN, siteId: Infinity, lang: 'en-US', debug: Infinity }))
+    .toEqual({ q: undefined, siteId: undefined, lang: 'en-US', debug: Infinity });
 });

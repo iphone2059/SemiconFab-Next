@@ -3,7 +3,7 @@ import { createMemoryHistory, createRootRouteWithContext, createRoute, createRou
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { sitesQueryOptions } from '@/api/sites.resource';
-import { routerSearchSchema } from '@/routes/route-search';
+import { decodeRouterSearch } from '@/routes/route-search';
 
 /**
  * RQ-01/RQ-05 acceptance coverage on a synthetic route tree. The product route
@@ -103,7 +103,7 @@ it('deduplicates overlapping ensureQueryData/fetchQuery calls into one in-flight
 });
 it('validates search params on a canonical path without any redirect', async () => {
   const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-    validateSearch: routerSearchSchema,
+    validateSearch: decodeRouterSearch,
     component: () => <Outlet />,
   });
   const homeRoute = createRoute({

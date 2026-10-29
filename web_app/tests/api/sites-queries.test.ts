@@ -1,5 +1,8 @@
+import { Effect } from 'effect';
 import { afterEach, expect, it, vi } from 'vitest';
-import { fetchSites, findSiteByFabId, sitesQueryOptions } from '@/api/sites.resource';
+import { fetchSites as fetchSitesEffect, findSiteByFabId, sitesQueryOptions } from '@/api/sites.resource';
+
+const fetchSites = (...args: Parameters<typeof fetchSitesEffect>) => Effect.runPromise(fetchSitesEffect(...args));
 
 const sites = [
   { siteId: 'site-1', code: 'SITE-1', templateHash: 'hash-1', fabs: [{ fabId: 'FAB-01', code: 'FAB-01' }] },
@@ -16,7 +19,7 @@ it('fetches sites through the relative URL with RTK-equivalent transport options
   expect(result).toEqual(sites);
   expect(fetcher).toHaveBeenCalledTimes(1);
   expect(fetcher.mock.calls[0][0]).toBe('/api/v1/sites');
-  expect(fetcher.mock.calls[0][1]).toEqual({ credentials: 'same-origin', cache: 'no-store' });
+  expect(fetcher.mock.calls[0][1]).toMatchObject({ credentials: 'same-origin', cache: 'no-store', signal: expect.any(AbortSignal) });
 });
 
 it('exposes one query-key/staleTime contract for every sites consumer', () => {

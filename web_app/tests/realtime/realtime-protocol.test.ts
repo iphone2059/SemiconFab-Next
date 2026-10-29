@@ -30,3 +30,11 @@ it('rejects malformed and unknown frames without swallowing the error type', () 
   expect(() => decoder.decode(JSON.stringify({ topic: COMMAND_RESULT_TOPIC, payload: { revision: -1 } }))).toThrow(/payload/);
   expect(() => new MessageDecoder(20).decode('x'.repeat(21))).toThrow(/size/);
 });
+
+it('rejects non-finite telemetry values instead of admitting invalid numeric samples', () => {
+  const decoder = new MessageDecoder();
+  for (const temp of [NaN, Infinity, -Infinity]) {
+    expect(() => decoder.decode({ topic: TELEMETRY_TOPIC, payload: { fabId: 'fab', sequence: 1,
+      capturedAt: 'now', samples: [{ entityId: 'e1', values: { temp } }] } })).toThrow(/telemetry payload/);
+  }
+});

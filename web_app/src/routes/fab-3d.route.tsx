@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import { requireFabSites } from '@/routes/route-data';
 import type { RouterSearch } from './route-search';
-import { routerSearchSchema } from './route-search';
+import { decodeRouterSearch } from './route-search';
 import { rootRoute } from './root.route';
 
 // Vite server/build parameters stay frozen (ARCH G-01); the Twin page graph is split
@@ -21,7 +21,7 @@ function FabSceneLoading() {
 export const fab3dRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/fabs/$fabId/3d',
-  validateSearch: routerSearchSchema,
+  validateSearch: decodeRouterSearch,
   loader: async ({ context, params }) => {
     const site = await requireFabSites(context.queryClient, params.fabId);
     return { fabId: params.fabId, siteId: site.siteId };

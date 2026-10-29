@@ -2,7 +2,7 @@ import { createRoute } from '@tanstack/react-router';
 import { sitesQueryOptions } from '@/api/sites.resource';
 import WorkbenchApp from '@/workbench/workbench';
 import { rootRoute } from './root.route';
-import { routerSearchSchema } from './route-search';
+import { decodeRouterSearch } from './route-search';
 
 /**
  * Canonical workbench URL. The Query cache is warmed here so WorkbenchApp renders
@@ -12,7 +12,7 @@ import { routerSearchSchema } from './route-search';
 export const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  validateSearch: routerSearchSchema,
+  validateSearch: decodeRouterSearch,
   loader: async ({ context }) => {
     try {
       await context.queryClient.ensureQueryData(sitesQueryOptions());

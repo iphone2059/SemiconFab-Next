@@ -1,102 +1,101 @@
-import { z } from 'zod';
-import type { CreateRunRequest, FabScenario, RunResult, RunSummary, FabExecutionSummary, FabSimulationResult, SimulationEventDto, ScenarioDefinition } from '@/contracts/app-contracts';
+import { Schema } from 'effect';
+import { nonEmptyString, offsetDateTime } from '@/api/primitives.schema';
 
 /**
  * The generated .NET wire contracts are authoritative. This is the single runtime
  * decoder for list/detail/create/results; unknown nested records may not enter Query.
  */
-const executionSchema: z.ZodType<FabExecutionSummary> = z.object({
-  fabId: z.string().min(1),
-  code: z.string().min(1),
-  status: z.string().min(1),
-  completedLots: z.string(),
-  totalLots: z.string(),
-  simulationTimeUs: z.string(),
-  traceHash: z.string().nullable(),
-  error: z.string().nullable(),
+const executionSchema = Schema.Struct({
+  fabId: nonEmptyString,
+  code: nonEmptyString,
+  status: nonEmptyString,
+  completedLots: Schema.String,
+  totalLots: Schema.String,
+  simulationTimeUs: Schema.String,
+  traceHash: Schema.NullOr(Schema.String),
+  error: Schema.NullOr(Schema.String),
 });
 
-export const runSummarySchema: z.ZodType<RunSummary> = z.object({
-  runId: z.string().min(1),
-  siteId: z.string().min(1),
-  status: z.string().min(1),
-  version: z.string().min(1),
-  createdAtUtc: z.iso.datetime({ offset: true }),
-  executions: z.array(executionSchema),
+export const runSummarySchema = Schema.Struct({
+  runId: nonEmptyString,
+  siteId: nonEmptyString,
+  status: nonEmptyString,
+  version: nonEmptyString,
+  createdAtUtc: offsetDateTime,
+  executions: Schema.Array(executionSchema).pipe(Schema.mutable),
 });
 
-export const runListSchema: z.ZodType<RunSummary[]> = z.array(runSummarySchema);
+export const runListSchema = Schema.Array(runSummarySchema).pipe(Schema.mutable);
 
-const simulationEventSchema: z.ZodType<SimulationEventDto> = z.object({
-  fabId: z.string().min(1),
-  entityId: z.string().min(1),
-  kind: z.string().min(1),
-  simulationTimeUs: z.string(),
-  sequence: z.string(),
+const simulationEventSchema = Schema.Struct({
+  fabId: nonEmptyString,
+  entityId: nonEmptyString,
+  kind: nonEmptyString,
+  simulationTimeUs: Schema.String,
+  sequence: Schema.String,
 });
 
-const fabResultSchema: z.ZodType<FabSimulationResult> = z.object({
-  fabId: z.string().min(1),
-  completedLots: z.string(),
-  totalLots: z.string(),
-  simulationTimeUs: z.string(),
-  busyTimeUs: z.string(),
-  traceHash: z.string(),
-  events: z.array(simulationEventSchema),
+const fabResultSchema = Schema.Struct({
+  fabId: nonEmptyString,
+  completedLots: Schema.String,
+  totalLots: Schema.String,
+  simulationTimeUs: Schema.String,
+  busyTimeUs: Schema.String,
+  traceHash: Schema.String,
+  events: Schema.Array(simulationEventSchema).pipe(Schema.mutable),
 });
 
-export const runResultSchema: z.ZodType<RunResult> = z.object({
-  runId: z.string().min(1),
-  fabs: z.array(fabResultSchema),
+export const runResultSchema = Schema.Struct({
+  runId: nonEmptyString,
+  fabs: Schema.Array(fabResultSchema).pipe(Schema.mutable),
 });
 
 /** Follow FabSimulation.Validate in fab_shared; no legacy/coerced wire values. */
-const uuidD = z.string().regex(/^[a-fA-F0-9]{8}-(?:[a-fA-F0-9]{4}-){3}[a-fA-F0-9]{12}$/)
-  .refine((value) => value.replaceAll('-', '') !== '00000000000000000000000000000000', 'UUID must be nonzero');
+const uuidD = Schema.String.check(Schema.isPattern(/^[a-fA-F0-9]{8}-(?:[a-fA-F0-9]{4}-){3}[a-fA-F0-9]{12}$/),
+  Schema.makeFilter((value: string) => value.replaceAll('-', '') !== '00000000000000000000000000000000' || 'UUID must be nonzero'));
 const uint64Max = 18446744073709551615n;
 const int64Max = 9223372036854775807n;
-const isCanonicalDecimal = (value: string) => /^(0|[1-9][0-9]*)$/.test(value) && value.length <= 20;
-const decimal = (limit: bigint, positive: boolean) => z.string()
-  .regex(/^(0|[1-9][0-9]*)$/)
-  .max(20)
-  .refine((value) =>
-    isCanonicalDecimal(value) &&
-    BigInt(value) <= limit &&
-    (!positive || BigInt(value) > 0n), 'Decimal exceeds its wire range');
+const decimal = (limit: bigint, positive: boolean) => Schema.String.check(Schema.makeFilter((value: string) =>
+  /^(0|[1-9][0-9]*)$/.test(value) && value.length <= 20 && BigInt(value) <= limit && (!positive || BigInt(value) > 0n)
+    || 'Decimal exceeds its wire range'));
 
-const fabScenarioSchema: z.ZodType<FabScenario> = z.object({
+const fabScenarioSchema = Schema.Struct({
   fabId: uuidD,
-  code: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
-  lotCount: z.number().int().min(1).max(10000),
+  code: Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{1,64}$/)),
+  lotCount: Schema.Number.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 10000 })),
   processTimeUs: decimal(int64Max, true),
 });
 
-const scenarioDefinitionSchema: z.ZodType<ScenarioDefinition> = z.object({
-  contractVersion: z.literal(1),
+const scenarioDefinitionSchema = Schema.Struct({
+  contractVersion: Schema.Literal(1),
   siteId: uuidD,
-  mode: z.literal('INDEPENDENT'),
+  mode: Schema.Literal('INDEPENDENT'),
   masterSeed: decimal(uint64Max, false),
   durationUs: decimal(int64Max, true),
   warmupUs: decimal(int64Max, false),
-  fabs: z.array(fabScenarioSchema).min(1).max(32),
-}).superRefine((scenario, ctx) => {
-  if (isCanonicalDecimal(scenario.warmupUs) && isCanonicalDecimal(scenario.durationUs) &&
-      BigInt(scenario.warmupUs) >= BigInt(scenario.durationUs))
-    ctx.addIssue({ code: 'custom', path: ['warmupUs'], message: 'Warmup must precede duration' });
-  const ids = new Set<string>();
-  const codes = new Set<string>();
-  scenario.fabs.forEach((fab, index) => {
+  fabs: Schema.Array(fabScenarioSchema).pipe(Schema.mutable).check(Schema.isBetweenLength(1, 32)),
+}).check(Schema.makeFilter(scenario => {
+  if (BigInt(scenario.warmupUs) >= BigInt(scenario.durationUs)) return 'Warmup must precede duration';
+  const ids = new Set<string>(), codes = new Set<string>();
+  for (const fab of scenario.fabs) {
     const id = fab.fabId.toLowerCase(), code = fab.code.toLowerCase();
-    if (ids.has(id)) ctx.addIssue({ code: 'custom', path: ['fabs', index, 'fabId'], message: 'Duplicate FAB ID' });
-    if (codes.has(code)) ctx.addIssue({ code: 'custom', path: ['fabs', index, 'code'], message: 'Duplicate FAB code' });
-    ids.add(id);
-    codes.add(code);
-    if (isCanonicalDecimal(fab.processTimeUs) && Number.isInteger(fab.lotCount) &&
-        fab.lotCount > 0 && (BigInt(fab.processTimeUs) + BigInt(fab.processTimeUs) / 10n) * BigInt(fab.lotCount) > int64Max)
-      ctx.addIssue({ code: 'custom', path: ['fabs', index, 'processTimeUs'], message: 'Worst-case completion exceeds Int64' });
-  });
-});
+    if (ids.has(id)) return 'Duplicate FAB ID';
+    if (codes.has(code)) return 'Duplicate FAB code';
+    ids.add(id); codes.add(code);
+    if ((BigInt(fab.processTimeUs) + BigInt(fab.processTimeUs) / 10n) * BigInt(fab.lotCount) > int64Max)
+      return 'Worst-case completion exceeds Int64';
+  }
+  return true;
+}));
 
-export const createRunRequestSchema: z.ZodType<CreateRunRequest> = z.object({
+export const createRunRequestSchema = Schema.Struct({
   scenario: scenarioDefinitionSchema,
 });
+
+export const decodeRunSummary = Schema.decodeUnknownEffect(runSummarySchema);
+
+export const decodeRunList = Schema.decodeUnknownEffect(runListSchema);
+
+export const decodeRunResult = Schema.decodeUnknownEffect(runResultSchema);
+
+export const decodeCreateRunRequest = Schema.decodeUnknownEffect(createRunRequestSchema);

@@ -1,15 +1,18 @@
+import { Effect } from 'effect';
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { equipmentStatusQueryKey, equipmentStatusQueryOptions } from '@/api/equipment.resource';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
 import { runsQueryOptions, runQueryOptions, runResultsQueryOptions } from '@/api/runs.resource';
-import { createRun } from '@/api/runs.mutation';
+import { createRun as createRunEffect } from '@/api/runs.mutation';
 
 /**
  * Transport parity for the M2 Query modules: the RTK fetchBaseQuery contract
  * (same-origin, no-store, relative URL, no browser dev key) and ProblemDetails
  * handling move to fetchJson/fetchText without changing observable behavior.
  */
+
+const createRun = (...args: Parameters<typeof createRunEffect>) => Effect.runPromise(createRunEffect(...args));
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
 /** A real FAB frame always carries one valid state per layout tool. */
@@ -87,8 +90,8 @@ it('rejects an invalid payload before it reaches the cache', async () => {
   vi.stubGlobal('fetch', async () => jsonResponse({ siteId: 'site-1', generatedAt: 'now', tools: [{ state: 'UP' }] }));
   await expect(client().fetchQuery(equipmentStatusQueryOptions('site-1', 'fab-1'))).rejects.toThrow(/fabId/);
 });
-it('A03: keeps the additive server epoch through the zod REST schema', async () => {
-  // zod strips unknown keys by default, so the epoch must be part of the schema or
+it('A03: keeps the additive server epoch through the Effect REST schema', async () => {
+  // Schema strips unknown keys by default, so the epoch must be part of the schema or
   // REST frames would lose the only field that orders server generations.
   vi.stubGlobal('fetch', async () => jsonResponse({
     siteId: 'site-1', fabId: 'fab-1', generatedAt: '2026-10-27T00:00:00Z',

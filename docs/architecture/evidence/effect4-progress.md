@@ -13,8 +13,8 @@
 | Task 0 基线与文件归属冻结 | 完成（含 4fc8a94 真实性能基线；浏览器功能基线仍待 Task 6 e2e） | `b946996`；`effect4-task0-baseline.md` / `effect4-task0-performance-baseline.md` / `evidence/perf/` |
 | Task 1 单层目录 + code-based routing | 完成，全量门禁通过 | `0d6ff12`；`docs/architecture/evidence/effect4-task1-flat-layout.md` |
 | Task 2 Effect AppRuntime / 单一 AtomRegistry | 完成 | Task 2 evidence；全量 verify.ps1 PASS（109 文件/675 测试） |
-| Task 3 Effect Schema + HTTP transport | 下一任务 | 旧分支 `refactor/effect-consolidation-20261029` @ be1da31 有可复用实现，需移植到扁平路径 |
-| Task 4 Zustand→Atom + XState/Effect 命令契约 | 未开始 | — |
+| Task 3 Effect Schema + HTTP transport | 完成 | `effect4-task3-effect-schema-http.md`；Zod 已从源码/依赖/锁文件移除；111 文件/691 测试 PASS |
+| Task 4 Zustand→Atom + XState/Effect 命令契约 | 下一任务 | — |
 | Task 5 Query→Resource Atom + resource-policy | 未开始 | — |
 | Task 6 Effect Stream/SSE/REST + 依赖清零 + 验收 | 未开始 | — |
 

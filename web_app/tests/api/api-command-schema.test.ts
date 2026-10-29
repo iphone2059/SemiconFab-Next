@@ -1,5 +1,6 @@
+import { Effect, Exit, Schema } from 'effect';
 import { expect, it, vi } from 'vitest';
-import { submitEquipmentCommand } from '@/api/commands.mutation';
+import { submitEquipmentCommand as submitEquipmentCommandEffect } from '@/api/commands.mutation';
 import type { CommandOutcome } from '@/contracts/command-events.contract';
 import {
   MAX_ACTION_LENGTH,
@@ -11,6 +12,8 @@ import {
   submittedEquipmentCommandSchema,
   type SubmitEquipmentCommandInput,
 } from '@/api/command.schema';
+
+const submitEquipmentCommand = (...args: Parameters<typeof submitEquipmentCommandEffect>) => Effect.runPromise(submitEquipmentCommandEffect(...args));
 
 /**
  * R-03 boundary contract for `POST /api/v1/sites/{siteId:guid}/commands`.
@@ -174,7 +177,7 @@ it('surfaces ProblemDetails details for a rejected submission', async () => {
   await expect(submitEquipmentCommand(request(), proxy)).rejects.toThrow(/502[\s\S]*Bad gateway/);
 });
 
-it('propagates a network failure unchanged', async () => {
+it('preserves network failure details in the typed API failure', async () => {
   const fetchImpl = vi.fn(async () => { throw new TypeError('Failed to fetch command endpoint'); });
   await expect(submitEquipmentCommand(request(), fetchImpl)).rejects.toThrow(/Failed to fetch command endpoint/);
 });
@@ -186,13 +189,13 @@ it('ignores additive server fields instead of copying them into the DTO', async 
 });
 
 it('validates the submission input independently of the response', async () => {
-  expect(submitEquipmentCommandInputSchema.parse(request())).toEqual(request());
+  expect(Schema.decodeUnknownSync(submitEquipmentCommandInputSchema)(request())).toEqual(request());
   for (const field of ['siteId', 'fabId', 'equipmentId', 'action', 'idempotencyKey']) {
-    expect(submitEquipmentCommandInputSchema.safeParse({ ...request(), [field]: '' }).success, field).toBe(false);
+    expect(Exit.isSuccess(Schema.decodeUnknownExit(submitEquipmentCommandInputSchema)({ ...request(), [field]: '' })), field).toBe(false);
   }
   const withoutKey: Record<string, unknown> = { ...request() };
   delete withoutKey.idempotencyKey;
-  expect(submitEquipmentCommandInputSchema.safeParse(withoutKey).success).toBe(false);
+  expect(Exit.isSuccess(Schema.decodeUnknownExit(submitEquipmentCommandInputSchema)(withoutKey))).toBe(false);
   const fetchImpl = respond(acceptedBody());
   await expect(submitEquipmentCommand({ ...request(), siteId: '' }, fetchImpl)).rejects.toBeInstanceOf(Error);
   expect(fetchImpl).not.toHaveBeenCalled();
@@ -200,50 +203,50 @@ it('validates the submission input independently of the response', async () => {
 
 it('enforces the backend id/action/idempotency-key limits', () => {
   const tooLong = (length: number) => 'x'.repeat(length);
-  expect(submitEquipmentCommandInputSchema.safeParse({ ...request(), equipmentId: tooLong(MAX_EQUIPMENT_ID_LENGTH + 1) }).success).toBe(false);
-  expect(submitEquipmentCommandInputSchema.safeParse({ ...request(), action: tooLong(MAX_ACTION_LENGTH + 1) }).success).toBe(false);
-  expect(submitEquipmentCommandInputSchema.safeParse({ ...request(), idempotencyKey: tooLong(MAX_IDEMPOTENCY_KEY_LENGTH + 1) }).success).toBe(false);
-  expect(submitEquipmentCommandInputSchema.safeParse({ ...request(), idempotencyKey: 'idem-\n1' }).success).toBe(false);
-  expect(submitEquipmentCommandInputSchema.safeParse({ ...request(), equipmentId: tooLong(MAX_EQUIPMENT_ID_LENGTH) }).success).toBe(true);
-  expect(submitEquipmentCommandInputSchema.safeParse({ ...request(), action: tooLong(MAX_ACTION_LENGTH) }).success).toBe(true);
-  expect(submitEquipmentCommandInputSchema.safeParse({ ...request(), idempotencyKey: tooLong(MAX_IDEMPOTENCY_KEY_LENGTH) }).success).toBe(true);
+  expect(Exit.isSuccess(Schema.decodeUnknownExit(submitEquipmentCommandInputSchema)({ ...request(), equipmentId: tooLong(MAX_EQUIPMENT_ID_LENGTH + 1) }))).toBe(false);
+  expect(Exit.isSuccess(Schema.decodeUnknownExit(submitEquipmentCommandInputSchema)({ ...request(), action: tooLong(MAX_ACTION_LENGTH + 1) }))).toBe(false);
+  expect(Exit.isSuccess(Schema.decodeUnknownExit(submitEquipmentCommandInputSchema)({ ...request(), idempotencyKey: tooLong(MAX_IDEMPOTENCY_KEY_LENGTH + 1) }))).toBe(false);
+  expect(Exit.isSuccess(Schema.decodeUnknownExit(submitEquipmentCommandInputSchema)({ ...request(), idempotencyKey: 'idem-\n1' }))).toBe(false);
+  expect(Exit.isSuccess(Schema.decodeUnknownExit(submitEquipmentCommandInputSchema)({ ...request(), equipmentId: tooLong(MAX_EQUIPMENT_ID_LENGTH) }))).toBe(true);
+  expect(Exit.isSuccess(Schema.decodeUnknownExit(submitEquipmentCommandInputSchema)({ ...request(), action: tooLong(MAX_ACTION_LENGTH) }))).toBe(true);
+  expect(Exit.isSuccess(Schema.decodeUnknownExit(submitEquipmentCommandInputSchema)({ ...request(), idempotencyKey: tooLong(MAX_IDEMPOTENCY_KEY_LENGTH) }))).toBe(true);
 });
 
 it('mints distinct idempotency keys accepted by the input schema', () => {
   const first = createEquipmentCommandIdempotencyKey();
   const second = createEquipmentCommandIdempotencyKey();
   expect(first).not.toBe(second);
-  expect(submitEquipmentCommandInputSchema.safeParse({ ...request(), idempotencyKey: first }).success).toBe(true);
+  expect(Exit.isSuccess(Schema.decodeUnknownExit(submitEquipmentCommandInputSchema)({ ...request(), idempotencyKey: first }))).toBe(true);
 });
 
 it('strictly types the response outcome and revision', () => {
-  const parsed = submittedEquipmentCommandSchema.parse(acceptedBody());
+  const parsed = Schema.decodeUnknownSync(submittedEquipmentCommandSchema)(acceptedBody());
   const outcome: CommandOutcome = parsed.outcome;
   expect(outcome).toBe('accepted');
   expect(parsed.revision).toBe(0);
   for (const revision of [NaN, Infinity, -Infinity, 1.5, -1]) {
-    expect(submittedEquipmentCommandSchema.safeParse(acceptedBody({ revision })).success, String(revision)).toBe(false);
+    expect(Exit.isSuccess(Schema.decodeUnknownExit(submittedEquipmentCommandSchema)(acceptedBody({ revision }))), String(revision)).toBe(false);
   }
   for (const illegal of ['rejected', 'success', 'ACCEPTED', '']) {
-    expect(submittedEquipmentCommandSchema.safeParse(acceptedBody({ outcome: illegal })).success, illegal).toBe(false);
+    expect(Exit.isSuccess(Schema.decodeUnknownExit(submittedEquipmentCommandSchema)(acceptedBody({ outcome: illegal }))), illegal).toBe(false);
   }
   for (const legal of ['accepted', 'executing', 'succeeded', 'failed', 'cancelled']) {
-    expect(submittedEquipmentCommandSchema.safeParse(acceptedBody({ outcome: legal })).success, legal).toBe(true);
+    expect(Exit.isSuccess(Schema.decodeUnknownExit(submittedEquipmentCommandSchema)(acceptedBody({ outcome: legal }))), legal).toBe(true);
   }
 });
 
 it('requires an ISO-8601 timestamp with an explicit offset', () => {
   for (const occurredAt of ['2026-10-27T00:00:00.0000000+00:00', '2026-10-27T00:00:00Z', '2026-10-27T08:30:00.123+08:00']) {
-    expect(submittedEquipmentCommandSchema.safeParse(acceptedBody({ occurredAt })).success, occurredAt).toBe(true);
+    expect(Exit.isSuccess(Schema.decodeUnknownExit(submittedEquipmentCommandSchema)(acceptedBody({ occurredAt }))), occurredAt).toBe(true);
   }
-  for (const occurredAt of ['2026-10-27T00:00:00', '2026-10-27', 'not-a-date', '']) {
-    expect(submittedEquipmentCommandSchema.safeParse(acceptedBody({ occurredAt })).success, occurredAt).toBe(false);
+  for (const occurredAt of ['2026-10-27T00:00:00', '2026-10-27T00:00Z', '2026-10-27T00:00+08:00', '2026-02-30T00:00:00Z', '2026-10-27', 'not-a-date', '']) {
+    expect(Exit.isSuccess(Schema.decodeUnknownExit(submittedEquipmentCommandSchema)(acceptedBody({ occurredAt }))), occurredAt).toBe(false);
   }
 });
 
 it('binds response identity to the submitted context with documented GUID normalization', () => {
   const submitted = request();
-  const response = submittedEquipmentCommandSchema.parse(acceptedBody());
+  const response = Schema.decodeUnknownSync(submittedEquipmentCommandSchema)(acceptedBody());
   expect(commandIdentityMismatches(submitted, response)).toEqual([]);
   expect(commandIdentityMismatches({ ...submitted, fabId: FAB_ID.toUpperCase() }, response)).toEqual([]);
   expect(commandIdentityMismatches({ ...submitted, siteId: OTHER_SITE_ID }, response)).toEqual(['siteId']);

@@ -18,7 +18,8 @@
  * a 'undefined'-style string or a NaN revision, and the parsed response is returned with
  * the precise protocol types.
  */
-import { z } from 'zod';
+import { Schema } from 'effect';
+import { nonEmptyString, nonNegativeInteger, offsetDateTime } from '@/api/primitives.schema';
 import type { CommandOutcome } from '@/contracts/command-events.contract';
 
 /** Limits enforced by EquipmentCommandService.TryValidate/TryValidateIdempotencyKey. */
@@ -45,52 +46,22 @@ const GUID_HEX = /^[0-9a-f]{32}$/i;
 /** char.IsControl equivalent used by EquipmentCommandService.TryValidateIdempotencyKey. */
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/;
 
-/** One logical equipment command submission. Retries must reuse idempotencyKey. */
-export interface SubmitEquipmentCommandInput {
-  readonly siteId: string;
-  readonly fabId: string;
-  readonly equipmentId: string;
-  readonly action: string;
-  /** Stable key for one logical command; retries must reuse it. */
-  readonly idempotencyKey: string;
-}
-
-/** Authoritative accepted command state returned by the backend. */
-export interface SubmittedEquipmentCommand {
-  readonly commandId: string;
-  readonly siteId: string;
-  readonly fabId: string;
-  readonly equipmentId: string;
-  readonly action: string;
-  readonly revision: number;
-  readonly outcome: CommandOutcome;
-  readonly occurredAt: string;
-}
-
-export const submitEquipmentCommandInputSchema: z.ZodType<SubmitEquipmentCommandInput> = z.object({
-  siteId: z.string().min(1),
-  fabId: z.string().min(1),
-  equipmentId: z.string().min(1).max(MAX_EQUIPMENT_ID_LENGTH),
-  action: z.string().min(1).max(MAX_ACTION_LENGTH),
-  idempotencyKey: z
-    .string()
-    .min(1)
-    .max(MAX_IDEMPOTENCY_KEY_LENGTH)
-    .refine((key) => !CONTROL_CHARACTERS.test(key), {
-      message: 'idempotencyKey must not contain control characters',
-    }),
+export const submitEquipmentCommandInputSchema = Schema.Struct({
+  siteId: nonEmptyString, fabId: nonEmptyString,
+  equipmentId: nonEmptyString.check(Schema.isMaxLength(MAX_EQUIPMENT_ID_LENGTH)),
+  action: nonEmptyString.check(Schema.isMaxLength(MAX_ACTION_LENGTH)),
+  idempotencyKey: nonEmptyString.check(Schema.isMaxLength(MAX_IDEMPOTENCY_KEY_LENGTH),
+    Schema.makeFilter((key: string) => !CONTROL_CHARACTERS.test(key) || 'idempotencyKey must not contain control characters')),
 });
-
-export const submittedEquipmentCommandSchema: z.ZodType<SubmittedEquipmentCommand> = z.object({
-  commandId: z.string().min(1),
-  siteId: z.string().min(1),
-  fabId: z.string().min(1),
-  equipmentId: z.string().min(1),
-  action: z.string().min(1),
-  revision: z.number().int().nonnegative(),
-  outcome: z.enum(COMMAND_OUTCOMES),
-  occurredAt: z.iso.datetime({ offset: true }),
+export const submittedEquipmentCommandSchema = Schema.Struct({
+  commandId: nonEmptyString, siteId: nonEmptyString, fabId: nonEmptyString,
+  equipmentId: nonEmptyString, action: nonEmptyString,
+  revision: nonNegativeInteger, outcome: Schema.Literals(COMMAND_OUTCOMES), occurredAt: offsetDateTime,
 });
+export const decodeSubmitEquipmentCommandInput = Schema.decodeUnknownEffect(submitEquipmentCommandInputSchema);
+export const decodeSubmittedEquipmentCommand = Schema.decodeUnknownEffect(submittedEquipmentCommandSchema);
+export type SubmitEquipmentCommandInput = typeof submitEquipmentCommandInputSchema.Type;
+export type SubmittedEquipmentCommand = typeof submittedEquipmentCommandSchema.Type;
 
 /** Identity fields that bind a response to the submission it answers. */
 export type CommandIdentityField = 'siteId' | 'fabId' | 'equipmentId' | 'action';

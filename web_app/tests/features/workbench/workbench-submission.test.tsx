@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { Effect } from 'effect';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, type ReactNode } from 'react';
@@ -13,7 +14,7 @@ import {
 
 // The HTTP boundary is mocked so each case controls when a submission resolves.
 const api = vi.hoisted(() => ({ createRun: vi.fn(), invalidateRuns: vi.fn() }));
-vi.mock('../../../src/api/runs.mutation', () => ({
+vi.mock('@/api/runs.mutation', () => ({
   createRun: api.createRun,
   invalidateRuns: api.invalidateRuns,
 }));
@@ -88,7 +89,7 @@ afterEach(() => {
 
 it('reuses the idempotency key only for an unchanged retry scenario', async () => {
   workbenchActions.siteIdSet('site-a');
-  api.createRun.mockRejectedValue(new Error('submit failed'));
+  api.createRun.mockReturnValue(Effect.fail(new Error('submit failed')));
   const harness = renderHarness(site('site-a'));
 
   fireEvent.submit(harness.form());
@@ -113,7 +114,7 @@ it('reuses the idempotency key only for an unchanged retry scenario', async () =
 it('applies a completion only while the submitted site is still active', async () => {
   workbenchActions.siteIdSet('site-a');
   const pending = deferred<RunSummary>();
-  api.createRun.mockReturnValueOnce(pending.promise);
+  api.createRun.mockReturnValueOnce(Effect.promise(() => pending.promise));
   const harness = renderHarness(site('site-a'));
   fireEvent.submit(harness.form());
   await waitFor(() => expect(api.createRun).toHaveBeenCalledTimes(1));
@@ -136,7 +137,7 @@ it('applies a completion only while the submitted site is still active', async (
 it('drops a completion whose submitting component unmounted', async () => {
   workbenchActions.siteIdSet('site-a');
   const pending = deferred<RunSummary>();
-  api.createRun.mockReturnValueOnce(pending.promise);
+  api.createRun.mockReturnValueOnce(Effect.promise(() => pending.promise));
   const harness = renderHarness(site('site-a'));
   fireEvent.submit(harness.form());
   await waitFor(() => expect(api.createRun).toHaveBeenCalledTimes(1));
@@ -152,7 +153,7 @@ it('drops a completion whose submitting component unmounted', async () => {
 
 it('selects the created run after an accepted submission for the active site', async () => {
   workbenchActions.siteIdSet('site-a');
-  api.createRun.mockResolvedValueOnce(run('run-accepted'));
+  api.createRun.mockReturnValueOnce(Effect.succeed(run('run-accepted')));
   const harness = renderHarness(site('site-a'));
   fireEvent.submit(harness.form());
 
