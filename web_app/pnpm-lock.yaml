@@ -169,12 +169,18 @@ importers:
       '@babylonjs/lite':
         specifier: 1.36.0
         version: 1.36.0
+      '@effect/atom-react':
+        specifier: 4.0.7
+        version: 4.0.7(effect@4.0.7)(react@19.3.1)(scheduler@0.28.0)
       '@tanstack/react-query':
         specifier: 5.105.0
         version: 5.105.0(@types/react@19.3.0)(react@19.3.1)
       '@tanstack/react-router':
         specifier: 1.170.46
         version: 1.170.46(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      effect:
+        specifier: 4.0.7
+        version: 4.0.7
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -297,6 +303,13 @@ packages:
   '@csstools/css-tokenizer@4.0.2':
     resolution: {integrity: sha512-OoKoR0f76dCY666JlcbhmVTs2drYj1GUXZTYTcbUgJjh9Nv41aFfZ21bPQTERm5+L5cBDo466NltB2lplS5GBw==}
     engines: {node: '>=20.19.0'}
+
+  '@effect/atom-react@4.0.7':
+    resolution: {integrity: sha512-9jQFhzl4lL79XmhTr4uHHZtDU2/Z9sBe7YpKZwc9/a6bGuO2DbmynJ4i+M97OIgOAqYjZVsiiNAXj2aeVbCSJg==}
+    peerDependencies:
+      effect: ^4.0.7
+      react: '>=19.0.0 <20.0.0'
+      scheduler: '>=0.25.0 <0.29.0'
 
   '@exodus/bytes@1.16.0':
     resolution: {integrity: sha512-IcpW84uEn3N7ETtNZMlxKhfl6Pec8rUNGOTBtWbK1FKhJxIFAptZyVrvVRVBimAJxJCgc3PxepxkdWWG4DVzfA==}
@@ -699,6 +712,9 @@ packages:
 
   dom-accessibility-api@0.5.16:
     resolution: {integrity: sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg==}
+
+  effect@4.0.7:
+    resolution: {integrity: sha512-47CiUzNAmeLr40pDT9vKMxxtB8o3bdpZEKU4IUM3fVxsK2GYzPsV7fQoZP0I41A308BZd71nMxqJ0KRh3s9u2g==}
 
   entities@8.1.0:
     resolution: {integrity: sha512-kxL7msIffSuh9aaFAMD7rxAIuTRMAHMeBtgHW2yUdWw732ZNh4MehkF2gdjvtdmikkaIP9bFDDJOPlsvm7avrA==}
@@ -1165,6 +1181,12 @@ snapshots:
 
   '@csstools/css-tokenizer@4.0.2': {}
 
+  '@effect/atom-react@4.0.7(effect@4.0.7)(react@19.3.1)(scheduler@0.28.0)':
+    dependencies:
+      effect: 4.0.7
+      react: 19.3.1
+      scheduler: 0.28.0
+
   '@exodus/bytes@1.16.0': {}
 
   '@jridgewell/resolve-uri@3.1.2': {}
@@ -1422,6 +1444,8 @@ snapshots:
   detect-libc@2.1.2: {}
 
   dom-accessibility-api@0.5.16: {}
+
+  effect@4.0.7: {}
 
   entities@8.1.0: {}
 

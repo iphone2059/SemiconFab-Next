@@ -12,11 +12,18 @@
 |---|---|---|
 | Task 0 基线与文件归属冻结 | 完成（性能/浏览器基线待补） | `b946996`；`docs/architecture/evidence/effect4-task0-*.md` |
 | Task 1 单层目录 + code-based routing | 完成，全量门禁通过 | `0d6ff12`；`docs/architecture/evidence/effect4-task1-flat-layout.md` |
-| Task 2 Effect AppRuntime / 单一 AtomRegistry | 未开始 | — |
-| Task 3 Effect Schema + HTTP transport | 未开始（旧分支有可复用实现，需移植到扁平路径） | 旧分支 `refactor/effect-consolidation-20261029` @ be1da31 参考 |
+| Task 2 Effect AppRuntime / 单一 AtomRegistry | 完成 | Task 2 evidence；全量 verify.ps1 PASS（109 文件/675 测试） |
+| Task 3 Effect Schema + HTTP transport | 下一任务 | 旧分支 `refactor/effect-consolidation-20261029` @ be1da31 有可复用实现，需移植到扁平路径 |
 | Task 4 Zustand→Atom + XState/Effect 命令契约 | 未开始 | — |
 | Task 5 Query→Resource Atom + resource-policy | 未开始 | — |
 | Task 6 Effect Stream/SSE/REST + 依赖清零 + 验收 | 未开始 | — |
+
+## Task 2 后事实
+
+- `src/app/app-runtime.ts` 是组合根：单一 `AtomRegistry`（`defaultIdleTTL: 300s`）、共享 `ManagedRuntime`/Layer、`runPromise/runSync/runFork` 执行边界、幂等异步 `dispose`；`applicationRuntime` 默认实例由入口导入。
+- `AppProviders` 把同一 registry 注入 `RegistryContext`,并通过 `AppRuntimeProvider` 暴露 runtime；`createAppRouter(runtime)` 把同一 runtime 注入 RouterContext（与过渡 QueryClient 共存）。
+- 新增 `tests/architecture/effect-runtime-boundary.test.ts`：`Effect.run*`/`AtomRegistry.make`/`ManagedRuntime.make`/`RegistryContext.Provider` 仅允许在组合根文件。
+- 新增 5 个 AppRuntime 生命周期测试（隔离/单次 Layer/dispose/Fiber 中断/StrictMode 共享）。
 
 ## Task 1 后事实
 

@@ -1,18 +1,23 @@
 import { createRouter } from '@tanstack/react-router';
 import { queryClient } from '@/api/query-client';
+import { applicationRuntime, type AppRuntime } from '@/app/app-runtime';
 import { routeTree } from './route-tree';
 
 /**
- * Code-based route tree: no file-generation plugin and no generated route tree.
- * URL/search ownership stays with TanStack Router; data freshness belongs to the
- * Query cache (ensureQueryData in loaders) until the resource-atom migration.
+ * One router factory bound to one AppRuntime. The product entry point and tests
+ * use the same factory; the exported router instance is the application default
+ * shared by RouterProvider and the provider tree.
  */
-export const router = createRouter({
-  routeTree,
-  context: { queryClient },
-  defaultPreload: 'intent',
-  defaultPreloadStaleTime: 0,
-});
+export function createAppRouter(runtime: AppRuntime<never>) {
+  return createRouter({
+    routeTree,
+    context: { queryClient, appRuntime: runtime },
+    defaultPreload: 'intent',
+    defaultPreloadStaleTime: 0,
+  });
+}
+
+export const router = createAppRouter(applicationRuntime);
 
 declare module '@tanstack/react-router' {
   interface Register {

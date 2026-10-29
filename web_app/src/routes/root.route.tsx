@@ -1,10 +1,13 @@
 import { createRootRouteWithContext, Outlet, type ErrorComponentProps } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
+import type { AppRuntime } from '@/app/app-runtime';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { routerSearchSchema } from './route-search';
 
 export interface RouterContext {
   queryClient: QueryClient;
+  /** The single application-owned runtime/registry shared with the React tree. */
+  appRuntime: AppRuntime<never>;
 }
 
 function RootComponent() {
