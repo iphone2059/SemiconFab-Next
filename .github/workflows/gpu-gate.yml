@@ -1,0 +1,47 @@
+name: gpu-gate
+
+# Requires a self-hosted Windows GPU runner with a working WebGPU adapter
+# (label set: self-hosted, windows, gpu). GitHub-hosted runners have no GPU,
+# so this gate cannot run there; the limitation is registered in
+# docs/architecture/09-gap-register-and-gates.md and local runs must keep
+# the raw logs tied to the commit SHA.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'web_app/src/rendering/**'
+      - 'web_app/src/realtime/telemetry*'
+      - 'web_app/src/app/**'
+      - 'tools/gpu_gate.mjs'
+      - 'scripts/gpu-gate.ps1'
+  pull_request:
+    paths:
+      - 'web_app/src/rendering/**'
+      - 'web_app/src/realtime/telemetry*'
+      - 'web_app/src/app/**'
+      - 'tools/gpu_gate.mjs'
+      - 'scripts/gpu-gate.ps1'
+
+jobs:
+  webgpu-gate:
+    runs-on: [self-hosted, windows, gpu]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run WebGPU gate
+        shell: pwsh
+        run: ./scripts/gpu-gate.ps1 -Out "docs/architecture/evidence/gpu/gpu-gate-$env:GITHUB_SHA.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gpu-gate-evidence
+          path: docs/architecture/evidence/gpu/
