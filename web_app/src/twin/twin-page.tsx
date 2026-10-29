@@ -13,7 +13,8 @@ import { researchClock } from '@/domain/simulation-research-replay';
 import { createTwinUiState, projectTwinSceneState, type EntryMode } from '@/twin/twin-state';
 import { classNames } from '@/components/class-names';
 import type { RouterSearch } from '@/routes/route-search';
-import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
+import { twinAmhsActions } from '@/twin/twin-amhs.atom';
+import { twinPageAtom } from '@/twin/twin-page.atom';
 import { twinDemoAtom, twinDemoActions } from '@/twin/twin-demo.atom';
 import { twinUiAtom, twinUiActions } from '@/twin/twin-ui.atom';
 import { createCoalescedDispatcher } from '@/lib/coalesced-dispatcher';
@@ -123,7 +124,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   useTwinDemoClock(ui.statusSource, demo.playing);
 
   // Owner object: its timer/coalescing identity must survive renders.
-  const amhsBatcher = useMemo(() => createCoalescedDispatcher<AmhsStats>((stats) => twinPageActions.amhsSet(registry, stats), 100), [registry]);
+  const amhsBatcher = useMemo(() => createCoalescedDispatcher<AmhsStats>((stats) => twinAmhsActions.amhsSet(registry, stats), 100), [registry]);
   useEffect(() => () => amhsBatcher.cancel(), [amhsBatcher, registry]);
 
   // The scene frame loop reads the Effect Atom snapshots directly for demo/live modes.

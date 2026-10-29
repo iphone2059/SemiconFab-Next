@@ -18,18 +18,18 @@ export function initialLocale(): Preferences {
   };
 }
 
-export interface LocaleStoreState extends Preferences {}
+export interface LocaleState extends Preferences {}
 
 // Initialize at the first read in each registry, including an injected registry
 // created after this module was loaded. A module-time preference snapshot goes stale.
 export const localeAtom = Atom.writable(
   () => initialLocale(),
-  (context, value: LocaleStoreState) => context.setSelf(value),
+  (context, value: LocaleState) => context.setSelf(value),
 ).pipe(Atom.keepAlive);
 
 export const localeActions = {
   preferencesSet: (registry: AtomRegistry.AtomRegistry, payload: Preferences): void => registry.set(localeAtom, payload),
   languageSet: (registry: AtomRegistry.AtomRegistry, language: TwinLanguage): void => registry.update(localeAtom, state => ({ ...state, language })),
-  languageToggled: (registry: AtomRegistry.AtomRegistry): void => registry.update(localeAtom,  (state): LocaleStoreState => ({ ...state, language: state.language === 'zh' ? 'en' : 'zh' })),
-  themeToggled: (registry: AtomRegistry.AtomRegistry): void => registry.update(localeAtom,  (state): LocaleStoreState => ({ ...state, theme: state.theme === 'light' ? 'dark' : 'light' })),
+  languageToggled: (registry: AtomRegistry.AtomRegistry): void => registry.update(localeAtom,  (state): LocaleState => ({ ...state, language: state.language === 'zh' ? 'en' : 'zh' })),
+  themeToggled: (registry: AtomRegistry.AtomRegistry): void => registry.update(localeAtom,  (state): LocaleState => ({ ...state, theme: state.theme === 'light' ? 'dark' : 'light' })),
 };

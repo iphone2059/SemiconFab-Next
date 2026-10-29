@@ -2,23 +2,26 @@ import { useAtomValue } from '@effect/atom-react';
 import * as Atom from 'effect/reactivity/Atom';
 import { shallowRecordEqual } from '@/state/atom-equality';
 import { localeAtom } from '@/state/locale.atom';
-import { runtimeAtom } from '@/state/runtime-store';
+import { viewerSessionAtom } from '@/state/viewer.atom';
 import { twinDemoAtom } from '@/twin/twin-demo.atom';
 import { twinPageAtom } from '@/twin/twin-page.atom';
+import { twinPageUiAtom } from '@/twin/twin-page-ui.atom';
 import { twinUiAtom } from '@/twin/twin-ui.atom';
+import { twinYmsAtom } from '@/twin/twin-yms.atom';
 import { useTwinLocale } from '@/twin/twin-i18n';
 
 /**
- * The exact store slices TwinContent renders, kept in one place so the
- * subscription granularity stays auditable (and cheap):
+ * The exact slices TwinContent renders, kept in one place so the subscription
+ * granularity stays auditable (and cheap).
  *
  * - UI: only the branches the page layout reads. Wafer playing/speed live with
  *   the wafer HUD child so its 20 Hz frames never rerender the page.
  * - DEMO: states feed the scene projection; keys feed the sidebar/inspector.
- *   referenceLights/yieldJitter are only used by the extracted yield children.
- * - Page: only the fields TwinContent itself renders. The wafer HUD, AMHS
- *   readouts, YMS dialog and yield pill own their slices in children, so their
- *   high-frequency or nested updates never rerender this page or FabViewport.
+ * - FAB: the FAB-scoped server/session projection (status feed, tool states, MES).
+ * - PAGE UI: overlays/preferences; merged with FAB for the layout only.
+ * - YMS open: the YMS tool owns its own atom; the layout only renders the toggle.
+ * - Viewer: the rendering-scope session atom; hover/selection-sync are separate
+ *   atoms with their own subscribers and never rerender this page.
  */
 export function useTwinSlices() {
 
@@ -26,10 +29,11 @@ export function useTwinSlices() {
   const theme = useAtomValue(localeAtom, (state) => state.theme);
   const ui = useAtomValue(twinContentUiAtom);
   const demo = useAtomValue(twinContentDemoAtom);
-  const page = useAtomValue(twinContentPageAtom);
-  const status = useAtomValue(runtimeAtom, state => state.viewer.status);
-  const lifecycle = useAtomValue(runtimeAtom, state => state.viewer.lifecycle);
-  const viewerEpoch = useAtomValue(runtimeAtom, state => state.viewer.epoch);
+  const fab = useAtomValue(twinFabSliceAtom);
+  const overlays = useAtomValue(twinOverlaySliceAtom);
+  const ymsOpen = useAtomValue(twinYmsAtom, (state) => state.open);
+  const { status, lifecycle, epoch: viewerEpoch } = useAtomValue(viewerSessionAtom);
+  const page = { ...fab, ...overlays, ymsOpen };
   return { t, language, toggleLanguage, theme, ui, demo, page, status, lifecycle, viewerEpoch };
 }
 
@@ -58,18 +62,20 @@ const twinContentDemoAtom = Atom.map(twinDemoAtom, (state) => ({
     scenarioId: state.scenarioId,
   })).pipe(Atom.withEquality(shallowRecordEqual));
 
-const twinContentPageAtom = Atom.map(twinPageAtom, (state) => ({
+const twinFabSliceAtom = Atom.map(twinPageAtom, (state) => ({
     siteId: state.siteId,
     siteError: state.siteError,
     liveToolStates: state.liveToolStates,
     replayBase: state.replayBase,
     statusFeed: state.statusFeed,
+    mesJobs: state.mesJobs,
+  })).pipe(Atom.withEquality(shallowRecordEqual));
+
+const twinOverlaySliceAtom = Atom.map(twinPageUiAtom, (state) => ({
     selected: state.selected,
     selection: state.selection,
-    mesJobs: state.mesJobs,
     layerPreferences: state.layerPreferences,
     infoDialog: state.infoDialog,
     showResearchUtil: state.showResearchUtil,
     onboardingDontShow: state.onboardingDontShow,
-    ymsOpen: state.yms.open,
   })).pipe(Atom.withEquality(shallowRecordEqual));

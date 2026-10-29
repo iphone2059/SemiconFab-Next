@@ -2,7 +2,7 @@ import { useAtomValue } from '@effect/atom-react';
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { runtimeAtom, runtimeActions } from '@/state/runtime-store';
+import { runtimeAtom, runtimeActions } from '@/state/runtime.atom';
 
 function FatalError() {
 

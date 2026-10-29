@@ -3,7 +3,7 @@ import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { useTwinLocale } from '@/twin/twin-i18n';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react';
-import { runtimeAtom, runtimeActions } from '@/state/runtime-store';
+import { viewerActions, viewerHoverAtom, viewerSessionAtom } from '@/state/viewer.atom';
 import { createCoalescedDispatcher } from '@/lib/coalesced-dispatcher';
 import type { FabDto, SiteDto } from '@/contracts/app-contracts';
 import type {
@@ -59,11 +59,11 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
   useLayoutEffect(() => { translator.current = t; }, [t]);
   const fabCode = useRef(fab.code);
   useLayoutEffect(() => { fabCode.current = fab.code; }, [fab.code]);
-  const status = useAtomValue(runtimeAtom, state => state.viewer.status);
+  const status = useAtomValue(viewerSessionAtom, state => state.status);
   // Control flow uses the discrete lifecycle only; `status` is display copy for the HUD.
-  const lifecycle = useAtomValue(runtimeAtom, state => state.viewer.lifecycle);
-  const generation = useAtomValue(runtimeAtom, state => state.viewer.generation);
-  const hoveredTool = useAtomValue(runtimeAtom, state => state.viewer.hover);
+  const lifecycle = useAtomValue(viewerSessionAtom, state => state.lifecycle);
+  const generation = useAtomValue(viewerSessionAtom, state => state.generation);
+  const hoveredTool = useAtomValue(viewerHoverAtom);
   const ready = lifecycle === 'ready';
 
   useEffect(() => {
@@ -73,23 +73,23 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
     // Stable viewer identity across the whole mount/abort lifetime; lifecycle events carry
     // display copy separately so the store can keep epoch-guarded control state.
     const epoch = crypto.randomUUID();
-    runtimeActions.viewerMounted(registry, epoch);
+    viewerActions.viewerMounted(registry, epoch);
     const reportLifecycle = (event: SceneLifecycleEvent) => {
       if (controller.signal.aborted) return;
       if (event.type === 'failed') failedReported = true;
-      runtimeActions.viewerLifecycleReceived(registry, { epoch, event });
+      viewerActions.viewerLifecycleReceived(registry, { epoch, event });
       callbacks.current.onStatusChange?.(event.message);
     };
     let scene: ScenePort | undefined;
     let failedReported = false;
     const hoverBatcher = createCoalescedDispatcher<HoveredTool | undefined>(hover => {
-      runtimeActions.viewerHoverReceived(registry, { epoch, hover });
+      viewerActions.viewerHoverReceived(registry, { epoch, hover });
     }, 50);
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       hoverBatcher.cancel();
       facade.current?.clearSelection();
-      runtimeActions.viewerHoverCleared(registry);
+      viewerActions.viewerHoverCleared(registry);
     };
     window.addEventListener('keydown', onKeyDown);
     const mountOptions = (): SceneMountOptions => ({
@@ -128,7 +128,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
       controller.abort();
       hoverBatcher.cancel();
       window.removeEventListener('keydown', onKeyDown);
-      runtimeActions.viewerUnmounted(registry, epoch);
+      viewerActions.viewerUnmounted(registry, epoch);
       if (facade.current === scene) facade.current = undefined;
       scene?.dispose();
     };
@@ -142,7 +142,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
       getCameraPose: () => facade.current?.getCameraPose() ?? null,
       zoom: (deltaY) => facade.current?.zoom(deltaY),
       resize: () => facade.current?.resize(),
-      reload: () => { runtimeActions.viewerReloadRequested(registry); },
+      reload: () => { viewerActions.viewerReloadRequested(registry); },
       selectTool: (index, focus) => facade.current?.selectTool(index, focus),
       clearSelection: () => facade.current?.clearSelection(),
       setLayer: (layer, visible) => facade.current?.setLayer(layer, visible),
@@ -192,7 +192,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
         <strong>{hovered.vendor} {hovered.model}</strong>
         <span>{t(FAB_TOOL_STATE_META[toolStates[hovered.index] ?? hovered.state].label)} · #{hovered.index + 1}</span>
       </div>}
-      {!ready && <div className="twin-render-status" role="status">{status}<button type="button" onClick={() => runtimeActions.viewerReloadRequested(registry)}>{t("重新加载")}</button></div>}
+      {!ready && <div className="twin-render-status" role="status">{status}<button type="button" onClick={() => viewerActions.viewerReloadRequested(registry)}>{t("重新加载")}</button></div>}
     </div>
   );
 });

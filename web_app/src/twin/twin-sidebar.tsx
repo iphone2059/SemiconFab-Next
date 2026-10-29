@@ -4,7 +4,7 @@ import { useContext } from 'react';
 
 import { classNames } from '@/components/class-names';
 import { useTwinLocale } from '@/twin/twin-i18n';
-import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
+import { twinPageUiAtom, twinPageUiActions } from '@/twin/twin-page-ui.atom';
 import { ORIGINAL_TWIN_UI, filterOriginalOem, filterReferenceEquipment, localizedEquipment, type TwinSelection } from '@/domain/original-twin-data';
 import type { FabToolState } from '@/domain/fab-layout';
 import { OriginalIcon } from '@/components/original-icons';
@@ -32,12 +32,12 @@ export function TwinSidebar({selection,states,badgeCount=67,onSelect,onArchitect
 }) {
   const registry = useContext(RegistryContext);
   const {language}=useTwinLocale(); const zh=language==='zh';
-  const {tab,query,category,segment,stateFilter,switched}=useAtomValue(twinPageAtom, state=>state.sidebar);
-  const setTab=(value:'fab'|'oem')=>twinPageActions.sidebarTabSet(registry, value);
-  const setQuery=(value:string)=>twinPageActions.sidebarQuerySet(registry, value);
-  const setCategory=(value:string)=>twinPageActions.sidebarCategorySet(registry, value);
-  const setSegment=(value:string)=>twinPageActions.sidebarSegmentSet(registry, value);
-  const setStateFilter=(value:string)=>twinPageActions.sidebarStateFilterToggle(registry, value);
+  const {tab,query,category,segment,stateFilter,switched}=useAtomValue(twinPageUiAtom, state=>state.sidebar);
+  const setTab=(value:'fab'|'oem')=>twinPageUiActions.sidebarTabSet(registry, value);
+  const setQuery=(value:string)=>twinPageUiActions.sidebarQuerySet(registry, value);
+  const setCategory=(value:string)=>twinPageUiActions.sidebarCategorySet(registry, value);
+  const setSegment=(value:string)=>twinPageUiActions.sidebarSegmentSet(registry, value);
+  const setStateFilter=(value:string)=>twinPageUiActions.sidebarStateFilterToggle(registry, value);
   const equipment=(filterReferenceEquipment({query,category,state:stateFilter,language,states}));
   const oem=(filterOriginalOem(query,segment));
   const counts: Record<FabToolState, number> = { running: 0, idle: 0, down: 0, maint: 0 };

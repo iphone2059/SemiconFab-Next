@@ -1,0 +1,491 @@
+{
+  "generatedAt": "2026-10-29T16:42:06.320Z",
+  "commit": "pending",
+  "mode": "on",
+  "webUrl": "http://127.0.0.1:4173",
+  "apiUrl": "http://127.0.0.1:5080",
+  "browser": "Chrome/155.0.8059.86",
+  "fixtures": {
+    "sites": 1,
+    "fabs": 1,
+    "catalogItems": 253,
+    "fabId": "37793fb6-5679-b7a3-3fef-d970433697c1"
+  },
+  "scenarios": [
+    {
+      "id": "P1",
+      "name": "Workbench production shell renders from the built bundle",
+      "steps": [
+        {
+          "description": "workbench shell renders",
+          "expected": "run form visible",
+          "actual": "present",
+          "pass": true
+        },
+        {
+          "description": "production build served HTML shell",
+          "expected": "main element",
+          "actual": "1",
+          "pass": true
+        },
+        {
+          "description": "sites document loaded through the production preview /api proxy",
+          "expected": "FAB card",
+          "actual": "fab visible=true",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "actual": "all assertions passed",
+      "consoleErrors": [],
+      "network": {
+        "total": 10,
+        "eventSources": 0,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/runs",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": "docs\\architecture\\evidence\\screenshots\\P1.png",
+      "limitations": []
+    },
+    {
+      "id": "P2",
+      "name": "Equipment catalog search/filter in production",
+      "steps": [
+        {
+          "description": "catalog search narrows rows",
+          "expected": "fewer than 40",
+          "actual": "6",
+          "pass": true
+        },
+        {
+          "description": "catalog page stays interactive",
+          "expected": "no fatal error",
+          "actual": "true",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "actual": "all assertions passed",
+      "consoleErrors": [],
+      "network": {
+        "total": 9,
+        "eventSources": 0,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/catalog",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": []
+    },
+    {
+      "id": "P3",
+      "name": "Deep-linked language/theme survive production refresh",
+      "steps": [
+        {
+          "description": "refresh keeps lang/theme query",
+          "expected": "lang=en&theme=dark",
+          "actual": "http://127.0.0.1:4173/equipment?lang=en-US&theme=dark",
+          "pass": true
+        },
+        {
+          "description": "dark theme from URL is applied",
+          "expected": "dark class/token",
+          "actual": "true",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "actual": "all assertions passed",
+      "consoleErrors": [],
+      "network": {
+        "total": 19,
+        "eventSources": 0,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/catalog",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "count": 2
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": []
+    },
+    {
+      "id": "P4",
+      "name": "Run form validation + accepted submit through the production bundle",
+      "steps": [
+        {
+          "description": "invalid form surfaces a submission error state",
+          "expected": ">=1 alert",
+          "actual": "1",
+          "pass": true
+        },
+        {
+          "description": "accepted submit leaves no form error",
+          "expected": "0 alerts",
+          "actual": "0",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "actual": "all assertions passed",
+      "consoleErrors": [],
+      "network": {
+        "total": 16,
+        "eventSources": 0,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/runs",
+            "count": 5
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/runs/72749e28-387b-497e-999b-cd39fcfa298b",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/runs/72749e28-387b-497e-999b-cd39fcfa298b/results",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [
+        "Run completion timing depends on the local backend; the assertion is the absence of a validation/submit error, matching the dev e2e baseline."
+      ]
+    },
+    {
+      "id": "P5",
+      "name": "Twin WebGPU scene, no WebGL fallback, tool selection and DEMO clock",
+      "steps": [
+        {
+          "description": "scene reports WebGPU lifecycle",
+          "expected": "footer contains WebGPU",
+          "actual": "WebGPU\nFAB-01 · single FAB\nAMHS OHT 00/24\n121 RUN · 0 IDLE · 0 DOWN · 0 MAINT",
+          "pass": true
+        },
+        {
+          "description": "canvas has a WebGPU context and no WebGL fallback",
+          "expected": "webgpu=true webgl=false",
+          "actual": "{\"webgpu\":true,\"webgl\":false,\"webgl2\":false}",
+          "pass": true
+        },
+        {
+          "description": "tool selection opens the inspector",
+          "expected": "inspector visible",
+          "actual": "1",
+          "pass": true
+        },
+        {
+          "description": "DEMO clock advances (Atom subscription path)",
+          "expected": "cycle label changes",
+          "actual": "#2 -> #3",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "actual": "all assertions passed",
+      "consoleErrors": [],
+      "network": {
+        "total": 16,
+        "eventSources": 2,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/assets/telemetry.worker-BXuP41hJ.js",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status/stream",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/telemetry/stream",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [
+        "Production fixture exposes one FAB; the cross-FAB matrix is covered by integration suites. GPU device-loss recovery is the gpu gate, not this functional run."
+      ]
+    },
+    {
+      "id": "P6",
+      "name": "Twin realtime REST + SSE feed is LIVE",
+      "steps": [
+        {
+          "description": "SSE status source can be selected",
+          "expected": "sse-live option present",
+          "actual": "true",
+          "pass": true
+        },
+        {
+          "description": "REST equipment snapshot requested",
+          "expected": ">=1 equipment-status request",
+          "actual": "1",
+          "pass": true
+        },
+        {
+          "description": "SSE connection established",
+          "expected": ">=1 EventSource",
+          "actual": "2",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "actual": "all assertions passed",
+      "consoleErrors": [],
+      "network": {
+        "total": 14,
+        "eventSources": 2,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/assets/telemetry.worker-BXuP41hJ.js",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status/stream",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/telemetry/stream",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [
+        "SSE reconnect/failure injection is covered by the dev functional suite and integration tests; this production run asserts the live transport is real."
+      ]
+    },
+    {
+      "id": "P7",
+      "name": "Unknown FAB route fails closed in production",
+      "steps": [
+        {
+          "description": "unknown FAB shows the route error",
+          "expected": "FAB 不存在",
+          "actual": "工作台无法显示数据\n\nFAB 不存在：unknown-fab\n\n重新加载",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "actual": "all assertions passed",
+      "consoleErrors": [
+        "console: Error: FAB 不存在：unknown-fab\n    at Wf (http://127.0.0.1:4173/assets/index-BNaxjjRz.js:3:240675)\n    at async loader (http://127.0.0.1:4173/assets/index-BNaxjjRz.js:3:241174)\n    at async fn (http://127.0.0.1:4173/assets/react-3Dcbn-Qc.js:11:24506)"
+      ],
+      "network": {
+        "total": 8,
+        "eventSources": 0,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": []
+    },
+    {
+      "id": "P8",
+      "name": "Page exit/re-enter leaves no duplicate event streams",
+      "steps": [
+        {
+          "description": "re-entry leaves at most one active stream per URL",
+          "expected": "duplicates<=0",
+          "actual": "active=2 duplicates=0",
+          "pass": true
+        },
+        {
+          "description": "first twin lifetime opened SSE streams",
+          "expected": ">=1 EventSource",
+          "actual": "2",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "actual": "all assertions passed",
+      "consoleErrors": [],
+      "network": {
+        "total": 42,
+        "eventSources": 4,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites",
+            "count": 3
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "count": 3
+          },
+          {
+            "url": "http://127.0.0.1:4173/assets/telemetry.worker-BXuP41hJ.js",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status",
+            "count": 3
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status/stream",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/telemetry/stream",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/runs",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/runs/72749e28-387b-497e-999b-cd39fcfa298b",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/runs/72749e28-387b-497e-999b-cd39fcfa298b/results",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [
+        "Stream duplication is measured from active EventSource request ids; timer/actor disposal is covered by unit suites."
+      ]
+    },
+    {
+      "id": "P9",
+      "name": "External-Atom-only hook updates its projection (compiler workaround)",
+      "steps": [
+        {
+          "description": "Atom projection advanced past the waiting placeholder",
+          "expected": "succeeded · rev",
+          "actual": "succeeded · rev 2",
+          "pass": true
+        },
+        {
+          "description": "no projection row stayed at the memoized waiting state",
+          "expected": "no 等待 SSE 事件…",
+          "actual": "false",
+          "pass": true
+        }
+      ],
+      "pass": true,
+      "actual": "all assertions passed",
+      "consoleErrors": [],
+      "network": {
+        "total": 15,
+        "eventSources": 1,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/runs",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/runs/72749e28-387b-497e-999b-cd39fcfa298b",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/runs/72749e28-387b-497e-999b-cd39fcfa298b/results",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/commands",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/commands/f3e32e54-aa35-4916-9ee0-b948ae42c90a",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4173/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/commands/stream?fabId=37793fb6-5679-b7a3-3fef-d970433697c1",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": []
+    }
+  ],
+  "passed": 9,
+  "failed": 0
+}

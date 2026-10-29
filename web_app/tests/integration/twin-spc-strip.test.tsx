@@ -12,14 +12,14 @@ import { TwinPage } from '@/twin/twin-page';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
 import { buildTelemetry, computeSpc } from '@/domain/fab-process-control';
 
-import { twinPageActions } from '@/twin/twin-page.atom';
+import { twinPageUiActions } from '@/twin/twin-page-ui.atom';
 import { twinDemoActions } from '@/twin/twin-demo.atom';
 
 import { localeAtom } from '@/state/locale.atom';
 
 // The hardware boundary stays out of this render test: only the inline layout
 // SPC strip is measured.
-vi.mock('../../src/features/twin/fab-viewer', async () => {
+vi.mock('@/twin/twin-viewer', async () => {
   const React = await import('react');
   return {
     FabViewport: React.forwardRef(function MockFabViewport(_props: unknown, _ref: unknown) {
@@ -54,14 +54,18 @@ afterEach(() => {
 });
 
 it('renders split control/spec SPC judgements in the layout inspector strip', () => {
-  render(<ResourceTestProviders runtime={client}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
+  const view = render(<ResourceTestProviders runtime={client}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
+  // G14: the doubled GPU boundary must actually apply. The real FabViewport would
+  // render a <canvas>; the mock renders the scene div only.
+  expect(view.container.querySelector('.scene.twin-canvas')).not.toBeNull();
+  expect(view.container.querySelector('canvas')).toBeNull();
   const tool = FAB_LAYOUT[0];
   act(() => {
-    twinPageActions.selectedSet(registry, {
+    twinPageUiActions.selectedSet(registry, {
       index: 0, x: tool.x, z: tool.z, width: tool.width, depth: tool.depth, height: tool.height,
       category: tool.category, vendor: tool.vendor, model: tool.model, state: 'running',
     });
-    twinPageActions.selectionSet(registry, { kind: 'layout', index: 0 });
+    twinPageUiActions.selectionSet(registry, { kind: 'layout', index: 0 });
   });
 
   const strip = document.querySelector('.twin-spc');

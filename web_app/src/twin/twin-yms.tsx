@@ -8,7 +8,7 @@ import type { FabToolState } from '@/domain/fab-layout';
 import { computeFabYield, DEFAULT_YIELD_INPUT, scenarioStates, YIELD_SCENARIOS, type YieldInput } from '@/domain/fab-yield';
 import { ORIGINAL_TWIN_UI } from '@/domain/original-twin-data';
 import { twinDemoAtom } from '@/twin/twin-demo.atom';
-import { twinPageActions, twinPageAtom } from '@/twin/twin-page.atom';
+import { twinYmsActions, twinYmsAtom } from '@/twin/twin-yms.atom';
 import { resolveScenario } from '@/domain/simulation-twin-equipment';
 import {
   BIN_COLORS, BIN_LABELS, WM811K_DEFECT_METADATA, generateWaferMap, stdfSummary, theoreticalYieldModels, waferMetrics,
@@ -60,7 +60,7 @@ export function TwinYieldPill({ toolStates }: YmsProjectionProps) {
   const { fabYield } = useFabYieldProjection(toolStates);
   return (
     <>
-      <button id="header-yield-val" className="twin-yield-pill" type="button" title="Cascading Yield Model" onClick={() => { twinPageActions.ymsOpenSet(registry, true); twinPageActions.ymsTabSet(registry, 'yield'); }}>{(fabYield.totalYield * 100).toFixed(2)}%⌄</button>
+      <button id="header-yield-val" className="twin-yield-pill" type="button" title="Cascading Yield Model" onClick={() => { twinYmsActions.ymsOpenSet(registry, true); twinYmsActions.ymsTabSet(registry, 'yield'); }}>{(fabYield.totalYield * 100).toFixed(2)}%⌄</button>
       <span id="header-wpm-val" className="twin-throughput">{fabYield.wpm.toLocaleString('en-US')}<small>{t("片/月")}</small></span>
     </>
   );
@@ -75,7 +75,7 @@ const WaferDieMap = function WaferDieMap({ dies }: { dies: readonly WaferDie[] }
   return (
     <>
       {dies.map((die) => (
-        <rect key={`${die.r}-${die.c}`} x={160 + die.dx - 5.15} y={160 + die.dy - 5.15} width={10.3} height={10.3} rx={1.5} fill={BIN_COLORS[die.bin]} stroke="#fff" strokeWidth={0.3} onMouseEnter={() => twinPageActions.ymsHoverDieSet(registry, { r: die.r, c: die.c, bin: die.bin })} onMouseLeave={() => twinPageActions.ymsHoverDieSet(registry, undefined)} />
+        <rect key={`${die.r}-${die.c}`} x={160 + die.dx - 5.15} y={160 + die.dy - 5.15} width={10.3} height={10.3} rx={1.5} fill={BIN_COLORS[die.bin]} stroke="#fff" strokeWidth={0.3} onMouseEnter={() => twinYmsActions.ymsHoverDieSet(registry, { r: die.r, c: die.c, bin: die.bin })} onMouseLeave={() => twinYmsActions.ymsHoverDieSet(registry, undefined)} />
       ))}
     </>
   );
@@ -98,31 +98,31 @@ export function TwinYmsPanel({ toolStates }: YmsProjectionProps) {
   const yieldModels = (theoreticalYieldModels(dieArea, defectD0, clusterAlpha));
   const stdf = (stdfSummary(waferDies, waferPattern));
 
-  const selectWaferPattern = (value: DefectPattern) => twinPageActions.ymsRandomize(registry, value);
-  const setDieArea = (value: number) => twinPageActions.ymsDieAreaSet(registry, value);
-  const setDefectD0 = (value: number) => twinPageActions.ymsDefectD0Set(registry, value);
-  const setClusterAlpha = (value: number) => twinPageActions.ymsClusterAlphaSet(registry, value);
+  const selectWaferPattern = (value: DefectPattern) => twinYmsActions.ymsRandomize(registry, value);
+  const setDieArea = (value: number) => twinYmsActions.ymsDieAreaSet(registry, value);
+  const setDefectD0 = (value: number) => twinYmsActions.ymsDefectD0Set(registry, value);
+  const setClusterAlpha = (value: number) => twinYmsActions.ymsClusterAlphaSet(registry, value);
   const setYieldInput = (value: YieldInput | ((current: YieldInput) => YieldInput)) => {
-    if (typeof value === 'function') twinPageActions.ymsYieldInputSet(registry, value(yieldInput));
-    else twinPageActions.ymsYieldInputSet(registry, value);
+    if (typeof value === 'function') twinYmsActions.ymsYieldInputSet(registry, value(yieldInput));
+    else twinYmsActions.ymsYieldInputSet(registry, value);
   };
-  const setStdfCopied = (value: boolean) => twinPageActions.ymsStdfCopiedSet(registry, value);
+  const setStdfCopied = (value: boolean) => twinYmsActions.ymsStdfCopiedSet(registry, value);
   function chooseYieldScenario(id: string): void {
-    twinPageActions.ymsYieldScenarioSet(registry, id);
+    twinYmsActions.ymsYieldScenarioSet(registry, id);
     const scenario = YIELD_SCENARIOS.find((entry) => entry.id === id);
-    twinPageActions.ymsYieldInputSet(registry, scenario ? { purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime } : DEFAULT_YIELD_INPUT);
+    twinYmsActions.ymsYieldInputSet(registry, scenario ? { purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime } : DEFAULT_YIELD_INPUT);
   }
 
   return (
     <Modal backdropClassName="twin-yms-backdrop" className="twin-yms" label="YMS yield management"
-      onClose={() => twinPageActions.ymsOpenSet(registry, false)}>
+      onClose={() => twinYmsActions.ymsOpenSet(registry, false)}>
         <header className="twin-yms-head">
           <div><ModalTitle asChild><strong>YMS · YIELD MANAGEMENT</strong></ModalTitle><span>WM-811K SPATIAL CLASSIFIER · 8-STAGE CASCADING YIELD</span></div>
           <nav>
-            <button type="button" className={ymsTab === 'map' ? 'active' : ''} onClick={() => twinPageActions.ymsTabSet(registry, 'map')}>Wafer Map</button>
-            <button type="button" className={ymsTab === 'yield' ? 'active' : ''} onClick={() => twinPageActions.ymsTabSet(registry, 'yield')}>Yield Waterfall</button>
+            <button type="button" className={ymsTab === 'map' ? 'active' : ''} onClick={() => twinYmsActions.ymsTabSet(registry, 'map')}>Wafer Map</button>
+            <button type="button" className={ymsTab === 'yield' ? 'active' : ''} onClick={() => twinYmsActions.ymsTabSet(registry, 'yield')}>Yield Waterfall</button>
           </nav>
-          <button type="button" className="twin-yms-close" aria-label={t("关闭 YMS")} onClick={() => twinPageActions.ymsOpenSet(registry, false)}>×</button>
+          <button type="button" className="twin-yms-close" aria-label={t("关闭 YMS")} onClick={() => twinYmsActions.ymsOpenSet(registry, false)}>×</button>
         </header>
 
         {ymsTab === 'map' ? (
@@ -204,9 +204,9 @@ BIN_SUMMARY: Bin1=${waferAnalytics.bins[1]}, Bin2=${waferAnalytics.bins[2]}, Bin
   );
 }
 
-const yieldPreferencesAtom = Atom.map(twinPageAtom, (state) => ({
-    yieldInput: state.yms.yieldInput,
-    yieldScenario: state.yms.yieldScenario,
+const yieldPreferencesAtom = Atom.map(twinYmsAtom, (state) => ({
+    yieldInput: state.yieldInput,
+    yieldScenario: state.yieldScenario,
   })).pipe(Atom.withEquality(shallowRecordEqual));
 
 const yieldDemoAtom = Atom.map(twinDemoAtom, (state) => ({
@@ -215,13 +215,13 @@ const yieldDemoAtom = Atom.map(twinDemoAtom, (state) => ({
     yieldJitter: state.yieldJitter,
   })).pipe(Atom.withEquality(shallowRecordEqual));
 
-const waferMapPreferencesAtom = Atom.map(twinPageAtom, (state) => ({
-    tab: state.yms.tab,
-    pattern: state.yms.pattern,
-    seed: state.yms.seed,
-    hoverDie: state.yms.hoverDie,
-    dieArea: state.yms.dieArea,
-    defectD0: state.yms.defectD0,
-    clusterAlpha: state.yms.clusterAlpha,
-    stdfCopied: state.yms.stdfCopied,
+const waferMapPreferencesAtom = Atom.map(twinYmsAtom, (state) => ({
+    tab: state.tab,
+    pattern: state.pattern,
+    seed: state.seed,
+    hoverDie: state.hoverDie,
+    dieArea: state.dieArea,
+    defectD0: state.defectD0,
+    clusterAlpha: state.clusterAlpha,
+    stdfCopied: state.stdfCopied,
   })).pipe(Atom.withEquality(shallowRecordEqual));

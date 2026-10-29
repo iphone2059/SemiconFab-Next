@@ -1,5 +1,5 @@
 import { useAtomValue } from '@effect/atom-react';
-import { twinPageAtom } from '@/twin/twin-page.atom';
+import { twinAmhsAtom } from '@/twin/twin-amhs.atom';
 import { twinUiAtom } from '@/twin/twin-ui.atom';
 
 /**
@@ -11,17 +11,17 @@ import { twinUiAtom } from '@/twin/twin-ui.atom';
 export function AmhsOhtReadout() {
 
   const research = useAtomValue(twinUiAtom, (state) => state.entryMode === 'research');
-  const active = useAtomValue(twinPageAtom, (state) => state.amhs?.active ?? 0);
-  const total = useAtomValue(twinPageAtom, (state) => state.amhs?.total ?? 24);
+  const active = useAtomValue(twinAmhsAtom, (state) => state?.active ?? 0);
+  const total = useAtomValue(twinAmhsAtom, (state) => state?.total ?? 24);
   return <span>{research ? 'JSONL display only' : `AMHS OHT ${String(active).padStart(2, '0')}/${total}`}</span>;
 }
 
 /** Research replay variant of the same AMHS slice. */
 export function AmhsResearchBadge() {
 
-  const completed = useAtomValue(twinPageAtom, (state) => state.amhs?.completed ?? 0);
-  const averageDelivery = useAtomValue(twinPageAtom, (state) => state.amhs?.avgDelivery);
-  const active = useAtomValue(twinPageAtom, (state) => state.amhs?.active ?? 0);
+  const completed = useAtomValue(twinAmhsAtom, (state) => state?.completed ?? 0);
+  const averageDelivery = useAtomValue(twinAmhsAtom, (state) => state?.avgDelivery);
+  const active = useAtomValue(twinAmhsAtom, (state) => state?.active ?? 0);
   return (
     <div id="research-amhs-badge" className="twin-research-amhs">AMHS SIMULATED · jobs {completed} · avg {averageDelivery?.toFixed(1) ?? '—'} s · active {active}/24</div>
   );

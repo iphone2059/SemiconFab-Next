@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import type { CutAxis, XRayFilter } from '@/contracts/scene.port';
-import type { ViewerLifecycle } from '@/state/runtime-store';
+import type { ViewerLifecycle } from '@/state/viewer.atom';
 import type { FabLevel, TwinView } from '@/twin/twin-state';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
 import type { TwinLanguage } from '@/twin/twin-i18n';

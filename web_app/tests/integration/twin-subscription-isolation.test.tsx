@@ -17,6 +17,10 @@ import { createMesJob } from '@/domain/fab-process-control';
 import { TwinLocaleProvider } from '@/twin/twin-i18n';
 import { twinUiActions } from '@/twin/twin-ui.atom';
 import { twinPageActions } from '@/twin/twin-page.atom';
+import { twinPageUiActions } from '@/twin/twin-page-ui.atom';
+import { twinWaferActions } from '@/twin/twin-wafer.atom';
+import { twinYmsActions } from '@/twin/twin-yms.atom';
+import { twinAmhsActions } from '@/twin/twin-amhs.atom';
 import { twinDemoActions } from '@/twin/twin-demo.atom';
 
 import { localeAtom } from '@/state/locale.atom';
@@ -77,11 +81,11 @@ it('updates the AMHS readout from its own subscription without rerendering TwinC
   expect(document.querySelector('#bottom-hud-footer')?.textContent).toContain('AMHS OHT 00/24');
   const before = viewport.renders;
 
-  act(() => twinPageActions.amhsSet(registry, amhs()));
+  act(() => twinAmhsActions.amhsSet(registry, amhs()));
   expect(screen.getByText('AMHS OHT 07/24')).toBeTruthy();
   expect(viewport.renders, 'AMHS statistics must not rerender TwinContent/FabViewport').toBe(before);
 
-  act(() => twinPageActions.amhsSet(registry, amhs({ active: 11, completed: 21, avgDelivery: 6.2 })));
+  act(() => twinAmhsActions.amhsSet(registry, amhs({ active: 11, completed: 21, avgDelivery: 6.2 })));
   expect(screen.getByText('AMHS OHT 11/24')).toBeTruthy();
   expect(viewport.renders).toBe(before);
 });
@@ -90,7 +94,7 @@ it('unit-renders the extracted AMHS readouts against the page slice', () => {
   render(<><AmhsOhtReadout /><AmhsResearchBadge /></>);
   expect(screen.getByText('AMHS OHT 00/24')).toBeTruthy();
 
-  act(() => twinPageActions.amhsSet(registry, amhs()));
+  act(() => twinAmhsActions.amhsSet(registry, amhs()));
   expect(screen.getByText('AMHS OHT 07/24')).toBeTruthy();
   expect(document.querySelector('#research-amhs-badge')?.textContent)
     .toBe('AMHS SIMULATED · jobs 12 · avg 8.5 s · active 7/24');
@@ -109,11 +113,11 @@ it('keeps 20 Hz wafer-frame updates inside the wafer HUD child', () => {
   expect(screen.getByText('正在加载 A/B/C 路线…')).toBeTruthy();
   const opened = viewport.renders;
 
-  act(() => twinPageActions.waferFrameReceived(registry, { product: 'A', index: 0, hud: hud(), completed: false }));
+  act(() => twinWaferActions.waferFrameReceived(registry, { product: 'A', index: 0, hud: hud(), completed: false }));
   expect(document.querySelector('#wafer-route-badge')?.textContent).toBe('Product A · 120 Steps');
   expect(viewport.renders, 'wafer frames must not rerender TwinContent/FabViewport').toBe(opened);
 
-  act(() => twinPageActions.waferFrameReceived(registry, {
+  act(() => twinWaferActions.waferFrameReceived(registry, {
     product: 'B', index: 1, hud: hud({ step: 'Step 2/104', width: '1.9%', badge: 'Product B · 104 Steps' }), completed: true,
   }));
   expect(document.querySelector('#wafer-route-badge')?.textContent).toBe('Product B · 104 Steps');
@@ -140,7 +144,7 @@ it('unit-renders the extracted wafer HUD rows from the page slice', () => {
   );
   expect(document.querySelector('#wafer-step-readout')).toBeNull();
 
-  act(() => twinPageActions.waferFrameReceived(registry, { product: 'A', index: 0, hud: hud(), completed: false }));
+  act(() => twinWaferActions.waferFrameReceived(registry, { product: 'A', index: 0, hud: hud(), completed: false }));
   expect(document.querySelector('#wafer-step-readout')?.textContent).toBe('Step 1/120');
   expect(document.querySelector('#wafer-status-readout')?.textContent).toBe('Navigating...');
   expect(document.querySelector('#wafer-progress-bar')?.getAttribute('style')).toBe('width: 0.8%;');
@@ -148,7 +152,7 @@ it('unit-renders the extracted wafer HUD rows from the page slice', () => {
   expect(document.querySelector('#wafer-recipe-val')?.textContent).toBe('REC_LITHO_193I');
   expect(document.querySelector('#wafer-bay-val')?.textContent).toBe(hud().bay);
 
-  act(() => twinPageActions.waferFollowSet(registry, false));
+  act(() => twinWaferActions.waferFollowSet(registry, false));
   expect(document.querySelector('#wafer-cam-text')?.textContent).toBe('自由视角');
 });
 
@@ -156,16 +160,16 @@ it('keeps sidebar, OEM dialog, archive query and inspector-MES branches out of T
   renderTwin();
   const settled = viewport.renders;
 
-  act(() => twinPageActions.sidebarQuerySet(registry, 'ASML'));
+  act(() => twinPageUiActions.sidebarQuerySet(registry, 'ASML'));
   // The sidebar owns its slice, so the filtered query updates without touching the page.
   expect((document.querySelector('#search-input') as HTMLInputElement).value).toBe('ASML');
   expect(viewport.renders, 'sidebar branch must not rerender TwinContent/FabViewport').toBe(settled);
 
   act(() => {
-    twinPageActions.oemDialogQuerySet(registry, 'ASML');
-    twinPageActions.oemDialogSegmentSet(registry, 'Lithography');
-    twinPageActions.oemDialogVendorSet(registry, 'ASML');
-    twinPageActions.archQuerySet(registry, 'xray');
+    twinPageUiActions.oemDialogQuerySet(registry, 'ASML');
+    twinPageUiActions.oemDialogSegmentSet(registry, 'Lithography');
+    twinPageUiActions.oemDialogVendorSet(registry, 'ASML');
+    twinPageUiActions.archQuerySet(registry, 'xray');
     twinPageActions.inspectorMesSet(registry, { id: FAB_LAYOUT[0].recordId, job: createMesJob(FAB_LAYOUT[0], 0, 1000) });
   });
   expect(viewport.renders, 'OEM/archive/inspector-MES branches must not rerender TwinContent/FabViewport').toBe(settled);
@@ -181,7 +185,7 @@ it('keeps YMS hover, die-map inputs and the header yield pill out of TwinContent
   // Cross-die hover lands in the page store at pointer frequency. A14: only the
   // YMS child may rerender; TwinContent and its FabViewport stay untouched.
   for (const die of [{ r: 3, c: 4, bin: 1 as const }, { r: 7, c: 8, bin: 2 as const }, { r: 11, c: 12, bin: 3 as const }]) {
-    act(() => twinPageActions.ymsHoverDieSet(registry, die));
+    act(() => twinYmsActions.ymsHoverDieSet(registry, die));
     expect(document.querySelector('.twin-wafer-hover')?.textContent).toBe(`Die [R${die.r}, C${die.c}] · ${die.bin === 1 ? 'Pass (Prime Die)' : die.bin === 2 ? 'Bin 2: Parametric Fail' : 'Bin 3: Functional Hard Fail'}`);
     expect(viewport.renders, 'YMS hover must not rerender TwinContent/FabViewport').toBe(opened);
   }
@@ -195,12 +199,12 @@ it('keeps YMS hover, die-map inputs and the header yield pill out of TwinContent
   // The header yield pill now owns the cascading-yield subscription; changing a
   // yield input still updates the subbar value without touching the viewport.
   const yieldBefore = document.querySelector('#header-yield-val')?.textContent;
-  act(() => twinPageActions.ymsYieldInputSet(registry, { purity: 5, health: 90, lagTime: 1 }));
+  act(() => twinYmsActions.ymsYieldInputSet(registry, { purity: 5, health: 90, lagTime: 1 }));
   expect(document.querySelector('#header-yield-val')?.textContent).not.toBe(yieldBefore);
   expect(viewport.renders, 'yield inputs must not rerender TwinContent/FabViewport').toBe(opened);
 
   // A genuine page-level field (dialog mode) still rerenders TwinContent and the viewport.
-  act(() => twinPageActions.infoDialogSet(registry, 'database'));
+  act(() => twinPageUiActions.infoDialogSet(registry, 'database'));
   expect(document.querySelector('#oem-database-modal')).not.toBeNull();
   expect(viewport.renders, 'page-level store fields must still rerender the page').toBeGreaterThan(opened);
 });
@@ -215,14 +219,14 @@ it('unit-renders the extracted YMS panel against the page slice', () => {
   expect(document.querySelector('.twin-wafer-hover')?.textContent).toMatch(/^300 mm · \d+ dies · Notch 180°$/);
   expect(document.querySelector('.twin-stdf')?.textContent).toContain('TotalDies=');
 
-  act(() => twinPageActions.ymsHoverDieSet(registry, { r: 5, c: 6, bin: 5 }));
+  act(() => twinYmsActions.ymsHoverDieSet(registry, { r: 5, c: 6, bin: 5 }));
   expect(document.querySelector('.twin-wafer-hover')?.textContent).toBe('Die [R5, C6] · Bin 5: Interconnect Short/Open');
 
-  act(() => twinPageActions.ymsRandomize(registry, 'ring'));
+  act(() => twinYmsActions.ymsRandomize(registry, 'ring'));
   expect(document.querySelector('.twin-yms-pattern b')?.textContent).toBe('Edge-Ring Excursion');
   expect(document.querySelector('.twin-yield-models')?.textContent).toContain('Cluster α');
 
-  act(() => twinPageActions.ymsTabSet(registry, 'yield'));
+  act(() => twinYmsActions.ymsTabSet(registry, 'yield'));
   expect(document.querySelector('.twin-yield-view')).not.toBeNull();
   expect(document.querySelector('.twin-yield-summary')?.textContent).toContain('OVERALL FAB YIELD');
   expect(document.querySelector('.twin-yield-summary')?.textContent).toContain('BOTTLENECK');

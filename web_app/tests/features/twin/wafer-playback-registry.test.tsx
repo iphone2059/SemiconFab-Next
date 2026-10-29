@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { WaferProduct, WaferRouteStep } from '@/domain/wafer-route';
 import { useWaferPlayback } from '@/twin/use-wafer-playback';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
-import { twinPageAtom, type TwinPageState } from '@/twin/twin-page.atom';
+import { twinWaferAtom, type WaferUiState } from '@/twin/twin-wafer.atom';
 import { twinUiActions, twinUiAtom } from '@/twin/twin-ui.atom';
 import { localeActions, localeAtom } from '@/state/locale.atom';
 import { createTestRuntime, seedWaferRoutes, ResourceTestProviders, type AppRuntime } from '../../support/resource-test-runtime.tsx';
@@ -86,60 +86,60 @@ it('discards the previous timeline and HUD when the replacement registry is inac
   const hook = mountPlayback();
   act(() => { hook.result.current.changeWaferProduct('B'); hook.result.current.setWaferSpeed(16); });
   stepFrames(2);
-  expect(first.get(twinPageAtom).wafer).toMatchObject({ product: 'B', index: 1 });
-  const oldFrame = first.get(twinPageAtom).wafer;
-  const freshFrame = second.get(twinPageAtom).wafer;
+  expect(first.get(twinWaferAtom)).toMatchObject({ product: 'B', index: 1 });
+  const oldFrame = first.get(twinWaferAtom);
+  const freshFrame = second.get(twinWaferAtom);
 
   hook.replaceRegistry();
 
-  expect(second.get(twinPageAtom).wafer).toBe(freshFrame);
-  expect(second.get(twinPageAtom).wafer.hud).toBeUndefined();
+  expect(second.get(twinWaferAtom)).toBe(freshFrame);
+  expect(second.get(twinWaferAtom).hud).toBeUndefined();
   expect(second.get(twinUiAtom).wafer).toMatchObject({ active: false, playing: false, speed: 1 });
   expect(frames.size).toBe(0);
-  expect(first.get(twinPageAtom).wafer).toBe(oldFrame);
+  expect(first.get(twinWaferAtom)).toBe(oldFrame);
   act(() => hook.result.current.startWafer());
-  expect(second.get(twinPageAtom).wafer).toMatchObject({ product: 'A', index: 0 });
+  expect(second.get(twinWaferAtom)).toMatchObject({ product: 'A', index: 0 });
   stepFrames(2);
-  expect(second.get(twinPageAtom).wafer.index).toBe(0);
+  expect(second.get(twinWaferAtom).index).toBe(0);
 });
 
 it('starts an active replacement registry with its own product and speed', () => {
   twinUiActions.waferOpen(second);
   twinUiActions.waferSpeedSet(second, 4);
-  second.update(twinPageAtom, (state): TwinPageState => ({ ...state, wafer: { ...state.wafer, product: 'C' } }));
+  second.update(twinWaferAtom, (state): WaferUiState => ({ ...state, product: 'C' }));
   const hook = mountPlayback();
   act(() => { hook.result.current.changeWaferProduct('B'); hook.result.current.setWaferSpeed(16); });
   stepFrames(2);
-  expect(first.get(twinPageAtom).wafer).toMatchObject({ product: 'B', index: 1 });
-  const oldFrame = first.get(twinPageAtom).wafer;
+  expect(first.get(twinWaferAtom)).toMatchObject({ product: 'B', index: 1 });
+  const oldFrame = first.get(twinWaferAtom);
 
   hook.replaceRegistry();
 
-  expect(second.get(twinPageAtom).wafer).toMatchObject({ product: 'C', index: 0, completed: false });
-  expect(second.get(twinPageAtom).wafer.hud?.badge).toBe('Product C · 3 Steps');
+  expect(second.get(twinWaferAtom)).toMatchObject({ product: 'C', index: 0, completed: false });
+  expect(second.get(twinWaferAtom).hud?.badge).toBe('Product C · 3 Steps');
   expect(second.get(twinUiAtom).wafer.speed).toBe(4);
   expect(frames.size).toBe(1);
   stepFrames(2);
-  expect(second.get(twinPageAtom).wafer.index).toBe(0);
+  expect(second.get(twinWaferAtom).index).toBe(0);
   stepFrames(3);
-  expect(second.get(twinPageAtom).wafer.index).toBe(1);
-  expect(first.get(twinPageAtom).wafer).toBe(oldFrame);
+  expect(second.get(twinWaferAtom).index).toBe(1);
+  expect(first.get(twinWaferAtom)).toBe(oldFrame);
 });
 
 it('preserves product and progress across same-registry pause, speed, locale and rerenders', () => {
   const hook = mountPlayback();
   act(() => { hook.result.current.changeWaferProduct('B'); hook.result.current.setWaferSpeed(16); });
   stepFrames(2);
-  expect(first.get(twinPageAtom).wafer).toMatchObject({ product: 'B', index: 1 });
+  expect(first.get(twinWaferAtom)).toMatchObject({ product: 'B', index: 1 });
   act(() => hook.result.current.toggleWaferPlay());
   stepFrames(5);
-  expect(first.get(twinPageAtom).wafer.index).toBe(1);
+  expect(first.get(twinWaferAtom).index).toBe(1);
   act(() => { hook.result.current.setWaferSpeed(1); localeActions.languageSet(first, 'zh'); });
   hook.rerender();
-  expect(first.get(twinPageAtom).wafer).toMatchObject({ product: 'B', index: 1 });
+  expect(first.get(twinWaferAtom)).toMatchObject({ product: 'B', index: 1 });
   expect(first.get(twinUiAtom).wafer).toMatchObject({ playing: false, speed: 1 });
   expect(frames.size).toBe(1);
   act(() => hook.result.current.toggleWaferPlay());
   stepFrames(2);
-  expect(first.get(twinPageAtom).wafer).toMatchObject({ product: 'B', index: 1 });
+  expect(first.get(twinWaferAtom)).toMatchObject({ product: 'B', index: 1 });
 });

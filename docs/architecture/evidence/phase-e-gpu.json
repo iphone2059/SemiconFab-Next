@@ -1,0 +1,203 @@
+{
+  "generatedAt": "2026-10-29T16:55:52.293Z",
+  "commit": "pending",
+  "webUrl": "http://127.0.0.1:4173",
+  "apiUrl": "http://127.0.0.1:5080",
+  "fabId": "37793fb6-5679-b7a3-3fef-d970433697c1",
+  "durationSeconds": 120,
+  "minCycles": 3,
+  "chromium": "Chrome/155.0.8059.86",
+  "adapter": {
+    "vendor": "nvidia",
+    "architecture": "ampere",
+    "device": "",
+    "description": ""
+  },
+  "contexts": {
+    "footer": "WebGPU FAB-01 · 单 FAB AMHS OHT 00/24 121 RUN · 0 IDLE · 0 DOWN · 0 MAINT",
+    "renderStatus": "",
+    "webgpu": true,
+    "webgl": false,
+    "webgl2": false,
+    "ready": true
+  },
+  "injectionMethod": "perf.forceDeviceLoss",
+  "initial": {
+    "status": "ready",
+    "statuses": [
+      "initializing",
+      "ready"
+    ],
+    "losses": 0,
+    "recoveries": 0,
+    "lastStatus": "WebGPU · 程序化 FAB · 121 台设备",
+    "devices": 1
+  },
+  "cycles": [
+    {
+      "cycle": 1,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 0,
+        "recoveries": 0,
+        "devices": 1
+      },
+      "after": {
+        "losses": 1,
+        "recoveries": 1,
+        "devices": 3,
+        "status": "ready"
+      },
+      "statuses": [
+        "initializing",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 817
+    },
+    {
+      "cycle": 2,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 1,
+        "recoveries": 1,
+        "devices": 3
+      },
+      "after": {
+        "losses": 2,
+        "recoveries": 2,
+        "devices": 5,
+        "status": "ready"
+      },
+      "statuses": [
+        "initializing",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 776
+    },
+    {
+      "cycle": 3,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 2,
+        "recoveries": 2,
+        "devices": 5
+      },
+      "after": {
+        "losses": 3,
+        "recoveries": 3,
+        "devices": 7,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 787
+    }
+  ],
+  "heapSamples": [
+    {
+      "at": "2026-10-29T16:55:59.092Z",
+      "cycle": 3,
+      "jsHeapUsedMb": 42.99,
+      "taskDurationMs": 1672
+    }
+  ],
+  "lifecycleTrace": [
+    "device:created#1",
+    "lost:destroyed",
+    "device:created#2",
+    "lost:destroyed",
+    "device:created#3",
+    "lost:destroyed",
+    "device:created#4",
+    "lost:destroyed",
+    "device:created#5",
+    "lost:destroyed",
+    "device:created#6",
+    "lost:destroyed",
+    "device:created#7",
+    "lost:unknown",
+    "device:created#8",
+    "lost:destroyed",
+    "device:created#9"
+  ],
+  "auxiliaryProbe": {
+    "method": "Browser.crashGpuProcess",
+    "injected": true,
+    "recovered": true,
+    "before": {
+      "status": "ready",
+      "statuses": [
+        "initializing",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "losses": 3,
+      "recoveries": 3,
+      "lastStatus": "WebGPU · 程序化 FAB · 121 台设备",
+      "devices": 7
+    },
+    "after": {
+      "status": "ready",
+      "statuses": [
+        "initializing",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "losses": 4,
+      "recoveries": 4,
+      "lastStatus": "WebGPU · 程序化 FAB · 121 台设备",
+      "devices": 9
+    }
+  },
+  "consoleErrors": [],
+  "limitations": [],
+  "pass": true,
+  "screenshot": "docs\\architecture\\evidence\\screenshots\\gpu-ready.png",
+  "finalState": {
+    "footer": "WebGPU FAB-01 · 单 FAB AMHS OHT 00/24 121 RUN · 0 IDLE · 0 DOWN · 0 MAINT",
+    "renderStatus": "",
+    "webgpu": true,
+    "webgl": false,
+    "webgl2": false,
+    "ready": true
+  },
+  "recoveries": {
+    "injected": 3,
+    "recovered": 3,
+    "sawLoss": 3
+  },
+  "finishedAt": "2026-10-29T16:56:02.149Z"
+}

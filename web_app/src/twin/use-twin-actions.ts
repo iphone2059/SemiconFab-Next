@@ -6,9 +6,12 @@ import { FAB_LAYOUT, type FabToolState } from '@/domain/fab-layout';
 import { ORIGINAL_TWIN_UI, type TwinSelection } from '@/domain/original-twin-data';
 import { applyMesAction, createMesJob, type MesAction, type MesJob } from '@/domain/fab-process-control';
 import { YIELD_SCENARIOS } from '@/domain/fab-yield';
-import { runtimeActions, runtimeAtom } from '@/state/runtime-store';
+import { viewerActions, viewerSelectionSyncAtom } from '@/state/viewer.atom';
 import { twinDemoActions } from '@/twin/twin-demo.atom';
-import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
+import { twinPageActions } from '@/twin/twin-page.atom';
+import { twinPageUiAtom, twinPageUiActions } from '@/twin/twin-page-ui.atom';
+import { twinWaferActions } from '@/twin/twin-wafer.atom';
+import { twinYmsActions } from '@/twin/twin-yms.atom';
 import { twinUiActions } from '@/twin/twin-ui.atom';
 import type { EntryMode, FabLevel, TwinView } from '@/twin/twin-state';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
@@ -77,22 +80,22 @@ export function useTwinActions({
   startTour,
 }: TwinActionsParams): TwinActions {
   const registry = useContext(RegistryContext);
-  const setSelected = (value?: PickedTool) => twinPageActions.selectedSet(registry, value);
-  const setSelection = (value?: TwinSelection) => twinPageActions.selectionSet(registry, value);
+  const setSelected = (value?: PickedTool) => twinPageUiActions.selectedSet(registry, value);
+  const setSelection = (value?: TwinSelection) => twinPageUiActions.selectionSet(registry, value);
   const setReplayBase = (value: readonly FabToolState[]) => twinPageActions.replayBaseSet(registry, value);
-  const setInfoDialog = (value: 'architecture' | 'database' | null) => twinPageActions.infoDialogSet(registry, value);
-  const toggleResearchUtil = () => twinPageActions.showResearchUtilToggled(registry);
-  const setOnboardingDontShow = (value: boolean) => twinPageActions.onboardingDontShowSet(registry, value);
-  const setYmsOpen = (value: boolean) => twinPageActions.ymsOpenSet(registry, value);
-  const setYmsTab = (value: 'map' | 'yield') => twinPageActions.ymsTabSet(registry, value);
-  const setWaferFollow = (value: boolean) => twinPageActions.waferFollowSet(registry, value);
+  const setInfoDialog = (value: 'architecture' | 'database' | null) => twinPageUiActions.infoDialogSet(registry, value);
+  const toggleResearchUtil = () => twinPageUiActions.showResearchUtilToggled(registry);
+  const setOnboardingDontShow = (value: boolean) => twinPageUiActions.onboardingDontShowSet(registry, value);
+  const setYmsOpen = (value: boolean) => twinYmsActions.ymsOpenSet(registry, value);
+  const setYmsTab = (value: 'map' | 'yield') => twinYmsActions.ymsTabSet(registry, value);
+  const setWaferFollow = (value: boolean) => twinWaferActions.waferFollowSet(registry, value);
   const setMesJobs = (updater: (current: Record<number, MesJob>) => Record<number, MesJob>) => {
     const next = updater(mesJobs);
     for (const [index, job] of Object.entries(next)) twinPageActions.mesJobSet(registry, { index: Number(index), job });
   };
   const setLayers = (updater: (current: Record<SceneLayer, boolean>) => Record<SceneLayer, boolean>) => {
     const next = updater(layerPreferences);
-    for (const layer of Object.keys(next) as SceneLayer[]) if (next[layer] !== layerPreferences[layer]) twinPageActions.layerToggled(registry, layer);
+    for (const layer of Object.keys(next) as SceneLayer[]) if (next[layer] !== layerPreferences[layer]) twinPageUiActions.layerToggled(registry, layer);
   };
 
   function setMode(value: EntryMode): void {
@@ -157,9 +160,9 @@ export function useTwinActions({
       setSelected(undefined);
       if (catalogIndex >= 0) {
         const token = crypto.randomUUID();
-        runtimeActions.viewerSelectionSyncStarted(registry, token);
+        viewerActions.viewerSelectionSyncStarted(registry, token);
         scene.current?.selectTool(catalogIndex, false);
-        window.setTimeout(() => runtimeActions.viewerSelectionSyncFinished(registry, token), 0);
+        window.setTimeout(() => viewerActions.viewerSelectionSyncFinished(registry, token), 0);
       }
       else scene.current?.clearSelection();
       if (row?.level === 'B1') { twinUiActions.levelSet(registry, 'B1'); flyLevel('B1'); scene.current?.setDual(false); scene.current?.setBasement(true); }
@@ -171,11 +174,11 @@ export function useTwinActions({
 
   function handleToolChange(tool?: PickedTool): void {
     setSelected(tool);
-    const sync = registry.get(runtimeAtom).viewer.selectionSync;
-    if (sync) { runtimeActions.viewerSelectionSyncFinished(registry, sync); return; }
+    const sync = registry.get(viewerSelectionSyncAtom);
+    if (sync) { viewerActions.viewerSelectionSyncFinished(registry, sync); return; }
     // A05: the scene keeps this callback across renders, so read the latest
     // selection from the store instead of the render closure.
-    const currentSelection = registry.get(twinPageAtom).selection;
+    const currentSelection = registry.get(twinPageUiAtom).selection;
     if (tool && currentSelection?.kind === 'reference' && FAB_LAYOUT[tool.index]?.recordId === currentSelection.id) return;
     if (tool) setSelection({ kind: 'layout', index: tool.index });
     else if (currentSelection?.kind === 'layout') setSelection(undefined);
@@ -199,8 +202,8 @@ export function useTwinActions({
     if (!scenario) return;
     twinUiActions.sourceSet(registry, 'demo');
     twinDemoActions.scenarioApplied(registry, scenario);
-    twinPageActions.ymsYieldScenarioSet(registry, 'live');
-    twinPageActions.ymsYieldInputSet(registry, { purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime });
+    twinYmsActions.ymsYieldScenarioSet(registry, 'live');
+    twinYmsActions.ymsYieldInputSet(registry, { purity: scenario.purity, health: scenario.health, lagTime: scenario.lagTime });
   }
 
   function dismissOnboarding(): void {

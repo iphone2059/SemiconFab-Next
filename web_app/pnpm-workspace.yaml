@@ -1,9 +1,16 @@
 # pnpm 12 settings file (not a workspace definition; ADR-0001 flat layout is unchanged).
-# No release-age exceptions are currently required.
-
-# @vitejs/plugin-react@6.1.2 declares oxc-transform-react ^0.152.0. The
-# 2026-10-29 candidate is 0.156.0; the Oxc transform API and Windows native
-# binding were validated by build/tests, so allow this explicit peer range.
-peerDependencyRules:
-  allowedVersions:
-    oxc-transform-react: "0.156.0"
+# No release-age exceptions are required.
+#
+# Oxc peer compatibility (maintained compatibility patch, CORE-011/G15):
+# @vitejs/plugin-react@6.1.2 declares oxc-transform-react ^0.152.0 while this
+# repository locks 0.156.0 (upstream devDependencies already use ^0.155.0; no
+# published plugin release declares 0.156 yet). The installed package manifest is
+# widened to the verified range by the maintained patch below instead of a
+# peerDependencyRules bypass. Note: `pnpm peers check` still reads the upstream
+# registry manifest recorded in the lockfile and therefore reports "^0.152.0";
+# compatibility is proven executably by tools/compiler_compat.mjs (real transform
+# through the plugin-consumed API), by tests/architecture/oxc-react-compiler.test.ts,
+# by the ON/OFF production bundle equivalence harness and by frozen-install CI.
+# Evidence: docs/architecture/evidence/phase-e-compiler.md.
+patchedDependencies:
+  '@vitejs/plugin-react@6.1.2': patches/@vitejs__plugin-react@6.1.2.patch

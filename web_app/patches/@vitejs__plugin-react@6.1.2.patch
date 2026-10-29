@@ -1,0 +1,13 @@
+diff --git a/package.json b/package.json
+index c761137b747b8ccd6832033eced8b1bca317f178..04780a14a9c45986d94b8b9e42d9daefa63deb86 100644
+--- a/package.json
++++ b/package.json
+@@ -59,7 +59,7 @@
+   "peerDependencies": {
+     "@rolldown/plugin-babel": "^0.1.7 || ^0.2.0",
+     "babel-plugin-react-compiler": "^1.0.0",
+-    "oxc-transform-react": "^0.152.0",
++    "oxc-transform-react": ">=0.152.0 <0.157.0",
+     "vite": "^8.0.0"
+   },
+   "peerDependenciesMeta": {

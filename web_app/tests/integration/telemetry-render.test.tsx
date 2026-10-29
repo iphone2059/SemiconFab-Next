@@ -16,7 +16,7 @@ import { TelemetryRuntime } from '@/realtime/telemetry-runtime';
 import { createTelemetryWorkerHandler } from '@/realtime/telemetry-worker.logic';
 
 
-import { runtimeActions, runtimeAtom } from '@/state/runtime-store';
+import { viewerActions, viewerSessionAtom } from '@/state/viewer.atom';
 import { twinDemoActions, twinDemoAtom } from '@/twin/twin-demo.atom';
 import { twinUiActions } from '@/twin/twin-ui.atom';
 import type { FabToolState } from '@/domain/fab-layout';
@@ -47,11 +47,11 @@ it('does not reapply a preset on GPU recovery but applies it on viewport reload 
   const view = render(<ResourceTestProviders runtime={client}><TwinPage fabId="fab-1" /></ResourceTestProviders>);
   try {
     await waitFor(() => expect(sceneViews()).toHaveLength(1));
-    const epoch = registry.get(runtimeAtom).viewer.epoch!;
-    act(() => runtimeActions.viewerLifecycleReceived(registry, { epoch, event: { type: 'recovering', message: 'GPU 设备已丢失', cause: 'device-lost' } }));
-    act(() => runtimeActions.viewerLifecycleReceived(registry, { epoch, event: { type: 'ready', message: 'WebGPU · ready' } }));
+    const epoch = registry.get(viewerSessionAtom).epoch!;
+    act(() => viewerActions.viewerLifecycleReceived(registry, { epoch, event: { type: 'recovering', message: 'GPU 设备已丢失', cause: 'device-lost' } }));
+    act(() => viewerActions.viewerLifecycleReceived(registry, { epoch, event: { type: 'ready', message: 'WebGPU · ready' } }));
     expect(sceneViews()).toHaveLength(1);
-    act(() => runtimeActions.viewerReloadRequested(registry));
+    act(() => viewerActions.viewerReloadRequested(registry));
     await waitFor(() => expect(backend.instances).toHaveLength(2));
     await waitFor(() => expect(sceneViews()).toHaveLength(2));
     act(() => twinUiActions.viewSet(registry, 'top'));

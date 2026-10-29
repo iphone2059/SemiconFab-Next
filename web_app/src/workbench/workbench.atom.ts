@@ -35,9 +35,12 @@ const reducers = {
     ? state
     : { ...state, siteId, fabIndex: 0, runId: '', submitError: '' },
   fabIndexSet: (state: WorkbenchState, fabIndex: number) => state.fabIndex === fabIndex ? state : { ...state, fabIndex },
-  runsReceived: (state: WorkbenchState, payload: { siteId: string; runIds: string[] }) => state.siteId === payload.siteId && !state.runId
-    ? { ...state, runId: payload.runIds[0] ?? '' }
-    : state,
+  /** Idempotent: an unchanged first run id must not notify subscribers (no render loop). */
+  runsReceived: (state: WorkbenchState, payload: { siteId: string; runIds: string[] }) => {
+    if (state.siteId !== payload.siteId || state.runId) return state;
+    const nextRunId = payload.runIds[0] ?? '';
+    return nextRunId === state.runId ? state : { ...state, runId: nextRunId };
+  },
   runIdSet: (state: WorkbenchState, runId: string) => ({ ...state, runId, submitError: '' }),
   formFieldSet: (state: WorkbenchState, payload: { field: keyof WorkbenchFormState; value: string }) => ({
     ...state,

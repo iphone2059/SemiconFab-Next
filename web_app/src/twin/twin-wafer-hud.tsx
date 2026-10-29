@@ -1,6 +1,6 @@
 import { useAtomValue } from '@effect/atom-react';
 import { OriginalIcon } from '@/components/original-icons';
-import { twinPageAtom } from '@/twin/twin-page.atom';
+import { twinWaferAtom } from '@/twin/twin-wafer.atom';
 import { twinUiAtom } from '@/twin/twin-ui.atom';
 import type { WaferProduct } from '@/domain/wafer-route';
 import { useTwinLocale } from '@/twin/twin-i18n';
@@ -26,10 +26,10 @@ export interface TwinWaferHudProps {
 export function TwinWaferHud({ routesReady, error, onClose, onProductChange, onTogglePlay, onSpeedChange, onFollowChange, onReplay }: TwinWaferHudProps) {
 
   const { t } = useTwinLocale();
-  const product = useAtomValue(twinPageAtom, (state) => state.wafer.product);
-  const hud = useAtomValue(twinPageAtom, (state) => state.wafer.hud);
-  const completed = useAtomValue(twinPageAtom, (state) => state.wafer.completed);
-  const follow = useAtomValue(twinPageAtom, (state) => state.wafer.follow);
+  const product = useAtomValue(twinWaferAtom, (state) => state.product);
+  const hud = useAtomValue(twinWaferAtom, (state) => state.hud);
+  const completed = useAtomValue(twinWaferAtom, (state) => state.completed);
+  const follow = useAtomValue(twinWaferAtom, (state) => state.follow);
   const playing = useAtomValue(twinUiAtom, (state) => state.wafer.playing);
   const speed = useAtomValue(twinUiAtom, (state) => state.wafer.speed);
   return (

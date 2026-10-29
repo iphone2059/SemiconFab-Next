@@ -1,0 +1,639 @@
+{
+  "generatedAt": "2026-10-29T16:40:59.970Z",
+  "commit": "pending",
+  "provider": "win32-x64",
+  "chrome": "Chrome/155.0.8059.86",
+  "auth": {
+    "sites": 1,
+    "devKeyProvided": true,
+    "unauthorizedResponses": 0
+  },
+  "browserVersions": {
+    "on": "Chrome/155.0.8059.86",
+    "off": "Chrome/155.0.8059.86"
+  },
+  "apiUrl": {
+    "on": "http://127.0.0.1:5121",
+    "off": "http://127.0.0.1:5122"
+  },
+  "fabId": "37793fb6-5679-b7a3-3fef-d970433697c1",
+  "builds": {
+    "on": {
+      "artifactMarker": 6,
+      "files": 16,
+      "durationMs": 860,
+      "hashes": {
+        "assets/gpu-B6EZQgwV.js": "efd0368160a211a20fb51ac577ba5b681d3512ba9a11c72b7a462d40bc19cd03",
+        "assets/index-BNaxjjRz.js": "2adb1011a01d6a7313cbf2200b3d5a68b8573a0889dd135db80ff4ff66ce10c9",
+        "assets/index-DMLM5948.css": "cc66812f90f4a52abe849b80e174a8b0f7b531c40ccfc334f73c7e761086894c",
+        "assets/legacy-LICENSE-CSEy9_Bq.txt": "8e6982187c93b0a47cb126cc83f697e17f34f62bfa1006000bc94d45bae43225",
+        "assets/lite-backend-CHisi6B3.js": "324705c35fde07d06ca372164798a015fa4e0bd3399df43ea043d905aa2aaf17",
+        "assets/react-3Dcbn-Qc.js": "56b7f827865c0bdb4e3f2cecc993d94a3152d8f506751b4b5cbf61fba32f9632",
+        "assets/rolldown-runtime-XKyaHtl9.js": "29046fccce7db47b8392f1c5a68fc7cfbea77c8ec64d07fe1a85f75ab87d0a30",
+        "assets/telemetry.worker-BXuP41hJ.js": "48502deddce6c9d794d0fd1ee0e28ee5cc8b0550a1c4ff5247a73c2c7f0d54af",
+        "assets/twin-page-Cw_cNQaa.js": "11422b952145d48a9d57d61429b76e267db8653d680cbc209de3e755808ba543",
+        "favicon.ico": "8543f2707b2b96c90fc5098a7c1c7dff9e0d45b56ae12228f3ed5168edf4932a",
+        "index.html": "4b4da0934c1ffaaa6ae3034a17250774b697323298beb0919228ec59f028b49c",
+        "licenses/clsx.txt": "19bd63c4ce629080f9b5d86ab74f6f5d215a588108ccf36cedaf3b08971d8ea7",
+        "licenses/lucide-LICENSE.txt": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+        "licenses/semiconfab-LICENSE.txt": "8e6982187c93b0a47cb126cc83f697e17f34f62bfa1006000bc94d45bae43225",
+        "twin/events-t1-fifo.jsonl": "0ce3325cc328239f29409c6c1936e31762257f6024fe57867a3030ebd777eb60",
+        "twin/routes.json": "bc99f0a4dc08a3651d4ea2e1ce39fd1a16617095de098373042ff7a755963ff8"
+      }
+    },
+    "off": {
+      "artifactMarker": 6,
+      "files": 16,
+      "durationMs": 764,
+      "hashes": {
+        "assets/gpu-B6EZQgwV.js": "9013e58baad91b4d61c3784642c80549a1aa8a76e6a27e492f0f8ac5ad5e2932",
+        "assets/index-DMLM5948.css": "cc66812f90f4a52abe849b80e174a8b0f7b531c40ccfc334f73c7e761086894c",
+        "assets/index-DsqcrN5o.js": "6bfe88ebc451aca5e9be31d88aaa320a6f1594014d57438b715baa355a7b2a53",
+        "assets/legacy-LICENSE-CSEy9_Bq.txt": "8e6982187c93b0a47cb126cc83f697e17f34f62bfa1006000bc94d45bae43225",
+        "assets/lite-backend-DWCGl3UP.js": "a674b512b3da0dc668387f7f4ae20ea5b7722794dd31446c0011a7b48188b95c",
+        "assets/react-BKaDdqJq.js": "0c14db850df9f8fa3b8eab6ed6694c6d6d7e9fbf3bde63e8688b48324a654b35",
+        "assets/rolldown-runtime-XKyaHtl9.js": "5758edfd8eb2bf7353709091699baec032c6636adc5f957f5bca3bbe1ad53511",
+        "assets/telemetry.worker-BXuP41hJ.js": "48502deddce6c9d794d0fd1ee0e28ee5cc8b0550a1c4ff5247a73c2c7f0d54af",
+        "assets/twin-page-C2waIf6-.js": "b54b0bcca4b907e253165210f1645a520ebb2270ce5e2b35e8d03a5bfcdcd539",
+        "favicon.ico": "8543f2707b2b96c90fc5098a7c1c7dff9e0d45b56ae12228f3ed5168edf4932a",
+        "index.html": "ec80e168aba8693dcecbf7c9338372a3c13adc2aab9862971bd5df5294ba73c8",
+        "licenses/clsx.txt": "19bd63c4ce629080f9b5d86ab74f6f5d215a588108ccf36cedaf3b08971d8ea7",
+        "licenses/lucide-LICENSE.txt": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+        "licenses/semiconfab-LICENSE.txt": "8e6982187c93b0a47cb126cc83f697e17f34f62bfa1006000bc94d45bae43225",
+        "twin/events-t1-fifo.jsonl": "0ce3325cc328239f29409c6c1936e31762257f6024fe57867a3030ebd777eb60",
+        "twin/routes.json": "bc99f0a4dc08a3651d4ea2e1ce39fd1a16617095de098373042ff7a755963ff8"
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "id": "empty-list",
+      "description": "Empty equipment result list (empty state DOM)",
+      "steps": [
+        "empty-catalog"
+      ]
+    },
+    {
+      "id": "run-submit",
+      "description": "Workbench run validation + accepted submit",
+      "steps": [
+        "invalid-submit",
+        "accepted-submit"
+      ]
+    },
+    {
+      "id": "bigint",
+      "description": "BigInt completed-lot aggregate (moved out of component per Task 7 workaround)",
+      "steps": [
+        "bigint-visible-aggregate"
+      ]
+    },
+    {
+      "id": "closure-capture",
+      "description": "Stale-closure safety: selecting two tools updates the inspector to the latest",
+      "steps": [
+        "first-tool",
+        "second-tool"
+      ]
+    },
+    {
+      "id": "dynamic-import-gpu",
+      "description": "Dynamic-imported WebGPU scene mounts (async import boundary)",
+      "steps": [
+        "gpu-ready",
+        "no-webgl-fallback",
+        "gpu-lifecycle-trace"
+      ]
+    },
+    {
+      "id": "atom-subscriptions",
+      "description": "Effect/Atom subscription updates: DEMO source clock + feed state",
+      "steps": [
+        "demo-playing",
+        "demo-paused"
+      ]
+    },
+    {
+      "id": "fab-switch",
+      "description": "FAB identity switch/reload keeps one scene lifetime",
+      "steps": [
+        "fab-loaded",
+        "fab-switched"
+      ]
+    },
+    {
+      "id": "external-mutable-registry",
+      "description": "External mutable telemetry/AMHS registry read stays subscribed",
+      "steps": [
+        "registry-readouts",
+        "readout-visible"
+      ]
+    },
+    {
+      "id": "external-atom-hook",
+      "description": "External-Atom-only hook projection (compiler memoization limitation workaround)",
+      "steps": [
+        "projection-terminal",
+        "no-memoized-waiting-state"
+      ]
+    },
+    {
+      "id": "workbench-root",
+      "description": "Workbench root mount has no React update-depth loop (compiler-OFF regression)",
+      "steps": [
+        "root-mounted"
+      ]
+    }
+  ],
+  "traces": {
+    "on": {
+      "empty-list": [
+        {
+          "step": "empty-catalog",
+          "path": "/equipment?lang=en-US&theme=light&q=no-such-vendor-zzz",
+          "dom": "SEMICONFABNEXT Workbench Catalog Compare 中文 ◐ EQUIPMENT INTELLIGENCE Understand the fab, one tool at a time. Front-end & OSAT equipment · Original specifications, provenance and estimates # equipment records Migrated from the original catalog. L1 / draft are legacy labels; estimates are dated reference ranges. All equipment FAB OSAT Load local JSON Export catalog Search equipment Category All categories CMP Dry etch Inspection Ion implantation Lithography Metrology OSAT ATE OSAT bumping / RDL OSAT dicing OSAT die attach OSAT flip chip OSAT inspection OSAT molding OSAT prober OSAT singulation OSAT test handler OSAT wire bonding Other Packaging Resist track Test Thermal processing Thin film deposition Wet clean Hide draft records Compare # / # # tools found SNAPSHOT <sha> Compare Equipment Category Legacy level / completeness Estimated price / USD Details No matching tools. Adjust the filters. Previous # / # Next SEMICONFAB NEXT · Data license Original data & provenance preserved · Catalog independent of Run state",
+          "business": "No matching tools. Adjust the filters. | EQUIPMENT INTELLIGENCE Understand the fab, one tool at a time. Front-end & OSAT equipment · Original specifications, provenance and estimates # equipment records Migrated from the original catalog. L1 / draft are legacy labels; estimates are dated reference ranges. All equipment FAB OSAT Load local JSON Export catalog Search equipment Category All categories CMP Dry etch Inspection Ion implantation Lithography Metrology OSAT ATE OSAT bumping / RDL OSAT dicing OSAT die attach OSAT flip chip OSAT inspection OSAT molding OSAT prober OSAT singulation OSAT test handler OSAT wire bonding Other Packaging Resist track Test Thermal processing Thin film deposition Wet clean Hide draft records Compare # / # # tools found SNAPSHOT <sha> Compare Equipment Category Legacy level / completeness Estimated price / USD Details No matching tools. Adjust the filters. Previous # / # Next SEMICONFAB NEXT · Data license Original data & provenance preserved · Catalog independent of Run state",
+          "http": [
+            "GET /api/v1/catalog",
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands"
+          ]
+        }
+      ],
+      "run-submit": [
+        {
+          "step": "invalid-submit",
+          "path": "/",
+          "dom": "F SEMICONFAB SIMULATION WORKSPACE 工作空间 ▦ 基地总览 ▷ 仿真运行 ▤ 设备目录 ◇ #D FAB XSTATE RUNTIMES # FAB · v6 DEVELOPMENT SLICE 确定性离散事件仿真 独立 FAB · 本地开发模式 开发环境 工作空间 / 基地总览 REST / HTTP 轮询 DEV OPERATIONS OVERVIEW 基地仿真工作台 / # 从场景参数到执行结果，让每一次仿真清晰可追溯。 当前基地 DEMO-SITE ⓘ 开发切片 合成 FIFO 加工模型 · 数据来自本地 API / Worker。 v0.# 设备命令 HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。 设备 equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# 动作 START STOP PAUSE 下发命令 还没有命令。提交后，accepted → executing → succeeded 由后端模拟 SSE 推进。 FAB # FAB-# · 独立执行域 当前运行 — 选择或创建一个 Run 完成 Lot — 仅展示后端已提交的完整结果 运行模式 独立仿真 INDEPENDENT · 合成 FIFO 模型 新建仿真 # 个 FAB · 独立执行域。 ◇ 合成 FIFO · 单设备加工模型 Lot 数 单 Lot 加工 / μs 仿真时域 / μs 预热时长 / μs 主随机种子 整数微秒 · 权威 DES 在后端执行 不包含共享产能或真实工艺模型。 参数必须为非负十进制整数；时间单位为微秒。 创建并运行 ↗ FAB 执行概览 HTTP 全量快照 · 每 # 秒查询 · 无二进制实时流 AWAITING RUN # FAB-# 独立执行域 待选择 Run 完成 / 总 Lot — 仿真时间 / μs — 等待后端提交结果 运行记录 站点范围内的持久化 Run；点击查看执行状态与完整结果。 运行标识 创建时间 FAB 数 状态 操作 暂无运行记录。创建一次仿真，开始查看后端结果。 SEMICONFAB NEXT 后端权威仿真 · WebGPU 视图 · 明确的模型边界",
+          "business": "参数必须为非负十进制整数；时间单位为微秒。",
+          "http": [
+            "GET /api/v1/runs",
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands"
+          ]
+        },
+        {
+          "step": "accepted-submit",
+          "path": "/",
+          "dom": "F SEMICONFAB SIMULATION WORKSPACE 工作空间 ▦ 基地总览 ▷ 仿真运行 ▤ 设备目录 ◇ #D FAB XSTATE RUNTIMES # FAB · v6 DEVELOPMENT SLICE 确定性离散事件仿真 独立 FAB · 本地开发模式 开发环境 工作空间 / 基地总览 REST / HTTP 轮询 DEV OPERATIONS OVERVIEW 基地仿真工作台 / # 从场景参数到执行结果，让每一次仿真清晰可追溯。 当前基地 DEMO-SITE ⓘ 开发切片 合成 FIFO 加工模型 · 数据来自本地 API / Worker。 v0.# 设备命令 HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。 设备 equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# 动作 START STOP PAUSE 下发命令 还没有命令。提交后，accepted → executing → succeeded 由后端模拟 SSE 推进。 FAB # FAB-# · 独立执行域 当前运行 已完成 版本 # 完成 Lot # 仅展示后端已提交的完整结果 运行模式 独立仿真 INDEPENDENT · 合成 FIFO 模型 新建仿真 # 个 FAB · 独立执行域。 ◇ 合成 FIFO · 单设备加工模型 Lot 数 单 Lot 加工 / μs 仿真时域 / μs 预热时长 / μs 主随机种子 整数微秒 · 权威 DES 在后端执行 不包含共享产能或真实工艺模型。 创建并运行 ↗ FAB 执行概览 HTTP 全量快照 · 每 # 秒查询 · 无二进制实时流 RUN / <id> # FAB-# 独立执行域 已完成 完成 / 总 Lot # / # 仿真时间 / μs #,#,# # 轨迹 SHA <sha>… 运行记录 站点范围内的持久化 Run；点击查看执行状态与完整结果。 运行标识 创建时间 FAB 数 状态 操作 <id> #/#/# #:#:# # 已完成 当前运行 → SEMICONFAB NEXT 后端权威仿真 · WebGPU 视图 · 明确的模型边界",
+          "business": "|",
+          "http": [
+            "GET /api/v1/runs",
+            "GET /api/v1/runs/<uuid>",
+            "GET /api/v1/runs/<uuid>/results",
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "POST /api/v1/runs"
+          ]
+        }
+      ],
+      "bigint": [
+        {
+          "step": "bigint-visible-aggregate",
+          "path": "/",
+          "business": "/ 01 | v0.1 | HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。 | equipment-0 | equipment-1 | equipment-2 | equipment-3 | equipment-4 | equipment-5 | equipment-6 | equipment-7 | equipment-8 | equipment-9 | equipment-10 | equipment-11 | equipment-12 | equipment-13 | equipment-14 | equipment-15 | 01 | FAB-01 · 独立执行域 | 版本 3 | 3 | 1 个 FAB · 独立执行域。 | HTTP 全量快照 · 每 1.5 秒查询 · 无二进制实时流 | RUN / 2509d928 | 01 | FAB",
+          "dom": "F SEMICONFAB SIMULATION WORKSPACE 工作空间 ▦ 基地总览 ▷ 仿真运行 ▤ 设备目录 ◇ #D FAB XSTATE RUNTIMES # FAB · v6 DEVELOPMENT SLICE 确定性离散事件仿真 独立 FAB · 本地开发模式 开发环境 工作空间 / 基地总览 REST / HTTP 轮询 DEV OPERATIONS OVERVIEW 基地仿真工作台 / # 从场景参数到执行结果，让每一次仿真清晰可追溯。 当前基地 DEMO-SITE ⓘ 开发切片 合成 FIFO 加工模型 · 数据来自本地 API / Worker。 v0.# 设备命令 HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。 设备 equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# 动作 START STOP PAUSE 下发命令 还没有命令。提交后，accepted → executing → succeeded 由后端模拟 SSE 推进。 FAB # FAB-# · 独立执行域 当前运行 已完成 版本 # 完成 Lot # 仅展示后端已提交的完整结果 运行模式 独立仿真 INDEPENDENT · 合成 FIFO 模型 新建仿真 # 个 FAB · 独立执行域。 ◇ 合成 FIFO · 单设备加工模型 Lot 数 单 Lot 加工 / μs 仿真时域 / μs 预热时长 / μs 主随机种子 整数微秒 · 权威 DES 在后端执行 不包含共享产能或真实工艺模型。 创建并运行 ↗ FAB 执行概览 HTTP 全量快照 · 每 # 秒查询 · 无二进制实时流 RUN / <id> # FAB-# 独立执行域 已完成 完成 / 总 Lot # / # 仿真时间 / μs #,#,# # 轨迹 SHA <sha>… 运行记录 站点范围内的持久化 Run；点击查看执行状态与完整结果。 运行标识 创建时间 FAB 数 状态 操作 <id> #/#/# #:#:# # 已完成 当前运行 → SEMICONFAB NEXT 后端权威仿真 · WebGPU 视图 · 明确的模型边界",
+          "http": [
+            "GET /api/v1/runs",
+            "GET /api/v1/runs/<uuid>",
+            "GET /api/v1/runs/<uuid>/results",
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands"
+          ]
+        }
+      ],
+      "closure-capture": [
+        {
+          "step": "first-tool",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO 准备 WebGPU 视图…Reload Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database FAB REFERENCE · B1 × Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# Subfab Utilities Running Vendor Trumpf / ASML Model Trumpf Laser System #W EUV Gen-# Dimensions (m) # × # × # Weight ~# Tons Location Subfab Laser & Vacuum Vault (B1) Source tier — Category Generic Shell · Pending VerificationTrumpf Laser System #W EUV Gen-# The high-energy optical powerhouse behind High-NA EUV lithography. Housed in the B1 subfab utility basement, this multi-stage pulsed CO2 laser amplifier fires high-frequency laser pulses into molten tin droplets in the scanner chamber above to generate #nm extreme ultraviolet radiation. SPECIFICATIONS Beam Delivery Evacuated optical transport tube penetrating to L1 scanner Cooling Medium Process Cooling Water (PCW) # L/min closed loop Intermediate Focus Power #W+ EUV at IF Laser Pulse Frequency # kHz pulsed CO2 amplification Peak Optical Power > # kW continuous pulse burst Power Consumption ~# MW electrical grid feed Linked tool · fe.litho.euv.# RUNNING IDLE DOWN MAINT SOURCE Installed in the B1 subfab optical laser vault directly beneath the High-NA EUV Scanner #cycle, connected via vertical beam transport conduit. Completeness — Record status — FDC TELEMETRY # SOH Primary Output # kW Cooling Water Flow # L/min Utility Header Pressure # bar Abatement Efficiency # % SEMI MES · E40 / E87 / E94 TRACKED_IN CARRIER FOUP-AMHS-# RECIPE RCP-SUBF-#NM-V2.# STEP Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) WAFER SLOT # / # Track-In Track-Out Hold PROCESS CAPABILITY CONTROL · IN CONTROL SPEC · OUT OF SPEC Cp # Cpk # SIGMA # σ Implemented Nelson rules No violation: Rule #–# of Nelson # monitored Grid: #m × #m · Subfab: -#m 准备 WebGPU 视图… FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV)",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        },
+        {
+          "step": "second-tool",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO 正在加载原版设备模型…Reload Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database FAB REFERENCE · B1 × High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) Subfab Utilities Running Vendor Fab Infrastructure Model Seismic & Acoustic Heavy Plinth (VC-E Class) Dimensions (m) # × # × # Weight ~# Tons Reinforced Concrete Location Subfab Laser & Vacuum Vault (B1) Source tier — Category Generic Shell · Pending VerificationSeismic & Acoustic Heavy Plinth (VC-E Class) Massive reinforced concrete foundation block isolated by pneumatic dampers from the rest of the fab building, preventing floor vibrations and acoustic noise from perturbing High-NA # sub-nanometer overlay accuracy. SPECIFICATIONS Bedrock Anchors Deep reinforced pilings drilled to solid bedrock Damping System Pneumatic air-springs with active piezo velocity feedback Foundation Mass # Tons dense high-damping concrete Vibration Class VC-E (< # µm/s RMS criterion) Linked tool · fe.litho.euv.# RUNNING IDLE DOWN MAINT SOURCE Spanning from subfab slab at y = -#m upwards to support the High-NA scanner. Completeness — Record status — FDC TELEMETRY # SOH Primary Output # MΩ·cm Cooling Water Flow # L/min Utility Header Pressure # bar Abatement Efficiency # % SEMI MES · E40 / E87 / E94 TRACKED_IN CARRIER FOUP-AMHS-# RECIPE RCP-SUBF-#NM-V2.# STEP High-NA EUV Active VC-E Foundation Plinth WAFER SLOT # / # Track-In Track-Out Hold PROCESS CAPABILITY CONTROL · IN CONTROL SPEC · OUT OF SPEC Cp # Cpk # SIGMA # σ Implemented Nelson rules No violation: Rule #–# of Nelson # monitored Grid: #m × #m · Subfab: -#m 正在加载原版设备模型… FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "High-NA EUV Active VC-E Foundation Plinth",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        }
+      ],
+      "dynamic-import-gpu": [
+        {
+          "step": "gpu-ready",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT | DEMO",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        },
+        {
+          "step": "no-webgl-fallback",
+          "path": "/",
+          "business": "{\"webgpu\":true,\"webgl\":false}",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        },
+        {
+          "step": "gpu-lifecycle-trace",
+          "path": "/",
+          "business": "[]",
+          "dom": "",
+          "http": []
+        }
+      ],
+      "atom-subscriptions": [
+        {
+          "step": "demo-playing",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "Ⅱ #cycle | #cycle | DEMO",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        },
+        {
+          "step": "demo-paused",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm ▶ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "▶ #cycle | #cycle | DEMO",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        }
+      ],
+      "fab-switch": [
+        {
+          "step": "fab-loaded",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        },
+        {
+          "step": "fab-switched",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        }
+      ],
+      "external-mutable-registry": [
+        {
+          "step": "registry-readouts",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT | DEMO | Grid: #m × #m · Subfab: -#m",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        },
+        {
+          "step": "readout-visible",
+          "path": "/",
+          "business": "worker-targets=1",
+          "dom": "",
+          "http": []
+        }
+      ],
+      "external-atom-hook": [
+        {
+          "step": "projection-terminal",
+          "path": "/",
+          "business": "succeeded · rev #",
+          "dom": "F SEMICONFAB SIMULATION WORKSPACE 工作空间 ▦ 基地总览 ▷ 仿真运行 ▤ 设备目录 ◇ #D FAB XSTATE RUNTIMES # FAB · v6 DEVELOPMENT SLICE 确定性离散事件仿真 独立 FAB · 本地开发模式 开发环境 工作空间 / 基地总览 REST / HTTP 轮询 DEV OPERATIONS OVERVIEW 基地仿真工作台 / # 从场景参数到执行结果，让每一次仿真清晰可追溯。 当前基地 DEMO-SITE ⓘ 开发切片 合成 FIFO 加工模型 · 数据来自本地 API / Worker。 v0.# 设备命令 HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。 设备 equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# 动作 START STOP PAUSE 下发命令 <id> succeeded · rev # FAB # FAB-# · 独立执行域 当前运行 已完成 版本 # 完成 Lot # 仅展示后端已提交的完整结果 运行模式 独立仿真 INDEPENDENT · 合成 FIFO 模型 新建仿真 # 个 FAB · 独立执行域。 ◇ 合成 FIFO · 单设备加工模型 Lot 数 单 Lot 加工 / μs 仿真时域 / μs 预热时长 / μs 主随机种子 整数微秒 · 权威 DES 在后端执行 不包含共享产能或真实工艺模型。 创建并运行 ↗ FAB 执行概览 HTTP 全量快照 · 每 # 秒查询 · 无二进制实时流 RUN / <id> # FAB-# 独立执行域 已完成 完成 / 总 Lot # / # 仿真时间 / μs #,#,# # 轨迹 SHA <sha>… 运行记录 站点范围内的持久化 Run；点击查看执行状态与完整结果。 运行标识 创建时间 FAB 数 状态 操作 <id> #/#/# #:#:# # 已完成 当前运行 → SEMICONFAB NEXT 后端权威仿真 · WebGPU 视图 · 明确的模型边界",
+          "http": [
+            "GET /api/v1/commands/<uuid>",
+            "GET /api/v1/runs",
+            "GET /api/v1/runs/<uuid>",
+            "GET /api/v1/runs/<uuid>/results",
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/commands/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "POST /api/v1/sites/<uuid>/commands"
+          ]
+        },
+        {
+          "step": "no-memoized-waiting-state",
+          "path": "/",
+          "business": "waiting=false",
+          "dom": "",
+          "http": []
+        }
+      ],
+      "workbench-root": [
+        {
+          "step": "root-mounted",
+          "path": "/",
+          "business": "updateDepthErrors=0",
+          "dom": "F SEMICONFAB SIMULATION WORKSPACE 工作空间 ▦ 基地总览 ▷ 仿真运行 ▤ 设备目录 ◇ #D FAB XSTATE RUNTIMES # FAB · v6 DEVELOPMENT SLICE 确定性离散事件仿真 独立 FAB · 本地开发模式 开发环境 工作空间 / 基地总览 REST / HTTP 轮询 DEV OPERATIONS OVERVIEW 基地仿真工作台 / # 从场景参数到执行结果，让每一次仿真清晰可追溯。 当前基地 DEMO-SITE ⓘ 开发切片 合成 FIFO 加工模型 · 数据来自本地 API / Worker。 v0.# 设备命令 HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。 设备 equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# 动作 START STOP PAUSE 下发命令 还没有命令。提交后，accepted → executing → succeeded 由后端模拟 SSE 推进。 FAB # FAB-# · 独立执行域 当前运行 已完成 版本 # 完成 Lot # 仅展示后端已提交的完整结果 运行模式 独立仿真 INDEPENDENT · 合成 FIFO 模型 新建仿真 # 个 FAB · 独立执行域。 ◇ 合成 FIFO · 单设备加工模型 Lot 数 单 Lot 加工 / μs 仿真时域 / μs 预热时长 / μs 主随机种子 整数微秒 · 权威 DES 在后端执行 不包含共享产能或真实工艺模型。 创建并运行 ↗ FAB 执行概览 HTTP 全量快照 · 每 # 秒查询 · 无二进制实时流 RUN / <id> # FAB-# 独立执行域 已完成 完成 / 总 Lot # / # 仿真时间 / μs #,#,# # 轨迹 SHA <sha>… 运行记录 站点范围内的持久化 Run；点击查看执行状态与完整结果。 运行标识 创建时间 FAB 数 状态 操作 <id> #/#/# #:#:# # 已完成 当前运行 → SEMICONFAB NEXT 后端权威仿真 · WebGPU 视图 · 明确的模型边界",
+          "http": [
+            "GET /api/v1/runs",
+            "GET /api/v1/runs/<uuid>",
+            "GET /api/v1/runs/<uuid>/results",
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands"
+          ]
+        }
+      ]
+    },
+    "off": {
+      "empty-list": [
+        {
+          "step": "empty-catalog",
+          "path": "/equipment?lang=en-US&theme=light&q=no-such-vendor-zzz",
+          "dom": "SEMICONFABNEXT Workbench Catalog Compare 中文 ◐ EQUIPMENT INTELLIGENCE Understand the fab, one tool at a time. Front-end & OSAT equipment · Original specifications, provenance and estimates # equipment records Migrated from the original catalog. L1 / draft are legacy labels; estimates are dated reference ranges. All equipment FAB OSAT Load local JSON Export catalog Search equipment Category All categories CMP Dry etch Inspection Ion implantation Lithography Metrology OSAT ATE OSAT bumping / RDL OSAT dicing OSAT die attach OSAT flip chip OSAT inspection OSAT molding OSAT prober OSAT singulation OSAT test handler OSAT wire bonding Other Packaging Resist track Test Thermal processing Thin film deposition Wet clean Hide draft records Compare # / # # tools found SNAPSHOT <sha> Compare Equipment Category Legacy level / completeness Estimated price / USD Details No matching tools. Adjust the filters. Previous # / # Next SEMICONFAB NEXT · Data license Original data & provenance preserved · Catalog independent of Run state",
+          "business": "No matching tools. Adjust the filters. | EQUIPMENT INTELLIGENCE Understand the fab, one tool at a time. Front-end & OSAT equipment · Original specifications, provenance and estimates # equipment records Migrated from the original catalog. L1 / draft are legacy labels; estimates are dated reference ranges. All equipment FAB OSAT Load local JSON Export catalog Search equipment Category All categories CMP Dry etch Inspection Ion implantation Lithography Metrology OSAT ATE OSAT bumping / RDL OSAT dicing OSAT die attach OSAT flip chip OSAT inspection OSAT molding OSAT prober OSAT singulation OSAT test handler OSAT wire bonding Other Packaging Resist track Test Thermal processing Thin film deposition Wet clean Hide draft records Compare # / # # tools found SNAPSHOT <sha> Compare Equipment Category Legacy level / completeness Estimated price / USD Details No matching tools. Adjust the filters. Previous # / # Next SEMICONFAB NEXT · Data license Original data & provenance preserved · Catalog independent of Run state",
+          "http": [
+            "GET /api/v1/catalog",
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands"
+          ]
+        }
+      ],
+      "run-submit": [
+        {
+          "step": "invalid-submit",
+          "path": "/",
+          "dom": "F SEMICONFAB SIMULATION WORKSPACE 工作空间 ▦ 基地总览 ▷ 仿真运行 ▤ 设备目录 ◇ #D FAB XSTATE RUNTIMES # FAB · v6 DEVELOPMENT SLICE 确定性离散事件仿真 独立 FAB · 本地开发模式 开发环境 工作空间 / 基地总览 REST / HTTP 轮询 DEV OPERATIONS OVERVIEW 基地仿真工作台 / # 从场景参数到执行结果，让每一次仿真清晰可追溯。 当前基地 DEMO-SITE ⓘ 开发切片 合成 FIFO 加工模型 · 数据来自本地 API / Worker。 v0.# 设备命令 HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。 设备 equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# 动作 START STOP PAUSE 下发命令 还没有命令。提交后，accepted → executing → succeeded 由后端模拟 SSE 推进。 FAB # FAB-# · 独立执行域 当前运行 — 选择或创建一个 Run 完成 Lot — 仅展示后端已提交的完整结果 运行模式 独立仿真 INDEPENDENT · 合成 FIFO 模型 新建仿真 # 个 FAB · 独立执行域。 ◇ 合成 FIFO · 单设备加工模型 Lot 数 单 Lot 加工 / μs 仿真时域 / μs 预热时长 / μs 主随机种子 整数微秒 · 权威 DES 在后端执行 不包含共享产能或真实工艺模型。 参数必须为非负十进制整数；时间单位为微秒。 创建并运行 ↗ FAB 执行概览 HTTP 全量快照 · 每 # 秒查询 · 无二进制实时流 AWAITING RUN # FAB-# 独立执行域 待选择 Run 完成 / 总 Lot — 仿真时间 / μs — 等待后端提交结果 运行记录 站点范围内的持久化 Run；点击查看执行状态与完整结果。 运行标识 创建时间 FAB 数 状态 操作 暂无运行记录。创建一次仿真，开始查看后端结果。 SEMICONFAB NEXT 后端权威仿真 · WebGPU 视图 · 明确的模型边界",
+          "business": "参数必须为非负十进制整数；时间单位为微秒。",
+          "http": [
+            "GET /api/v1/runs",
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands"
+          ]
+        },
+        {
+          "step": "accepted-submit",
+          "path": "/",
+          "dom": "F SEMICONFAB SIMULATION WORKSPACE 工作空间 ▦ 基地总览 ▷ 仿真运行 ▤ 设备目录 ◇ #D FAB XSTATE RUNTIMES # FAB · v6 DEVELOPMENT SLICE 确定性离散事件仿真 独立 FAB · 本地开发模式 开发环境 工作空间 / 基地总览 REST / HTTP 轮询 DEV OPERATIONS OVERVIEW 基地仿真工作台 / # 从场景参数到执行结果，让每一次仿真清晰可追溯。 当前基地 DEMO-SITE ⓘ 开发切片 合成 FIFO 加工模型 · 数据来自本地 API / Worker。 v0.# 设备命令 HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。 设备 equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# 动作 START STOP PAUSE 下发命令 还没有命令。提交后，accepted → executing → succeeded 由后端模拟 SSE 推进。 FAB # FAB-# · 独立执行域 当前运行 已完成 版本 # 完成 Lot # 仅展示后端已提交的完整结果 运行模式 独立仿真 INDEPENDENT · 合成 FIFO 模型 新建仿真 # 个 FAB · 独立执行域。 ◇ 合成 FIFO · 单设备加工模型 Lot 数 单 Lot 加工 / μs 仿真时域 / μs 预热时长 / μs 主随机种子 整数微秒 · 权威 DES 在后端执行 不包含共享产能或真实工艺模型。 创建并运行 ↗ FAB 执行概览 HTTP 全量快照 · 每 # 秒查询 · 无二进制实时流 RUN / <id> # FAB-# 独立执行域 已完成 完成 / 总 Lot # / # 仿真时间 / μs #,#,# # 轨迹 SHA <sha>… 运行记录 站点范围内的持久化 Run；点击查看执行状态与完整结果。 运行标识 创建时间 FAB 数 状态 操作 <id> #/#/# #:#:# # 已完成 当前运行 → SEMICONFAB NEXT 后端权威仿真 · WebGPU 视图 · 明确的模型边界",
+          "business": "|",
+          "http": [
+            "GET /api/v1/runs",
+            "GET /api/v1/runs/<uuid>",
+            "GET /api/v1/runs/<uuid>/results",
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "POST /api/v1/runs"
+          ]
+        }
+      ],
+      "bigint": [
+        {
+          "step": "bigint-visible-aggregate",
+          "path": "/",
+          "business": "/ 01 | v0.1 | HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。 | equipment-0 | equipment-1 | equipment-2 | equipment-3 | equipment-4 | equipment-5 | equipment-6 | equipment-7 | equipment-8 | equipment-9 | equipment-10 | equipment-11 | equipment-12 | equipment-13 | equipment-14 | equipment-15 | 01 | FAB-01 · 独立执行域 | 版本 3 | 3 | 1 个 FAB · 独立执行域。 | HTTP 全量快照 · 每 1.5 秒查询 · 无二进制实时流 | RUN / aa037289 | 01 | FAB",
+          "dom": "F SEMICONFAB SIMULATION WORKSPACE 工作空间 ▦ 基地总览 ▷ 仿真运行 ▤ 设备目录 ◇ #D FAB XSTATE RUNTIMES # FAB · v6 DEVELOPMENT SLICE 确定性离散事件仿真 独立 FAB · 本地开发模式 开发环境 工作空间 / 基地总览 REST / HTTP 轮询 DEV OPERATIONS OVERVIEW 基地仿真工作台 / # 从场景参数到执行结果，让每一次仿真清晰可追溯。 当前基地 DEMO-SITE ⓘ 开发切片 合成 FIFO 加工模型 · 数据来自本地 API / Worker。 v0.# 设备命令 HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。 设备 equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# 动作 START STOP PAUSE 下发命令 还没有命令。提交后，accepted → executing → succeeded 由后端模拟 SSE 推进。 FAB # FAB-# · 独立执行域 当前运行 已完成 版本 # 完成 Lot # 仅展示后端已提交的完整结果 运行模式 独立仿真 INDEPENDENT · 合成 FIFO 模型 新建仿真 # 个 FAB · 独立执行域。 ◇ 合成 FIFO · 单设备加工模型 Lot 数 单 Lot 加工 / μs 仿真时域 / μs 预热时长 / μs 主随机种子 整数微秒 · 权威 DES 在后端执行 不包含共享产能或真实工艺模型。 创建并运行 ↗ FAB 执行概览 HTTP 全量快照 · 每 # 秒查询 · 无二进制实时流 RUN / <id> # FAB-# 独立执行域 已完成 完成 / 总 Lot # / # 仿真时间 / μs #,#,# # 轨迹 SHA <sha>… 运行记录 站点范围内的持久化 Run；点击查看执行状态与完整结果。 运行标识 创建时间 FAB 数 状态 操作 <id> #/#/# #:#:# # 已完成 当前运行 → SEMICONFAB NEXT 后端权威仿真 · WebGPU 视图 · 明确的模型边界",
+          "http": [
+            "GET /api/v1/runs",
+            "GET /api/v1/runs/<uuid>",
+            "GET /api/v1/runs/<uuid>/results",
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands"
+          ]
+        }
+      ],
+      "closure-capture": [
+        {
+          "step": "first-tool",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO 准备 WebGPU 视图…Reload Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database FAB REFERENCE · B1 × Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# Subfab Utilities Running Vendor Trumpf / ASML Model Trumpf Laser System #W EUV Gen-# Dimensions (m) # × # × # Weight ~# Tons Location Subfab Laser & Vacuum Vault (B1) Source tier — Category Generic Shell · Pending VerificationTrumpf Laser System #W EUV Gen-# The high-energy optical powerhouse behind High-NA EUV lithography. Housed in the B1 subfab utility basement, this multi-stage pulsed CO2 laser amplifier fires high-frequency laser pulses into molten tin droplets in the scanner chamber above to generate #nm extreme ultraviolet radiation. SPECIFICATIONS Beam Delivery Evacuated optical transport tube penetrating to L1 scanner Cooling Medium Process Cooling Water (PCW) # L/min closed loop Intermediate Focus Power #W+ EUV at IF Laser Pulse Frequency # kHz pulsed CO2 amplification Peak Optical Power > # kW continuous pulse burst Power Consumption ~# MW electrical grid feed Linked tool · fe.litho.euv.# RUNNING IDLE DOWN MAINT SOURCE Installed in the B1 subfab optical laser vault directly beneath the High-NA EUV Scanner #cycle, connected via vertical beam transport conduit. Completeness — Record status — FDC TELEMETRY # SOH Primary Output # kW Cooling Water Flow # L/min Utility Header Pressure # bar Abatement Efficiency # % SEMI MES · E40 / E87 / E94 TRACKED_IN CARRIER FOUP-AMHS-# RECIPE RCP-SUBF-#NM-V2.# STEP Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) WAFER SLOT # / # Track-In Track-Out Hold PROCESS CAPABILITY CONTROL · IN CONTROL SPEC · OUT OF SPEC Cp # Cpk # SIGMA # σ Implemented Nelson rules No violation: Rule #–# of Nelson # monitored Grid: #m × #m · Subfab: -#m 准备 WebGPU 视图… FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV)",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        },
+        {
+          "step": "second-tool",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO 正在加载原版设备模型…Reload Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database FAB REFERENCE · B1 × High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) Subfab Utilities Running Vendor Fab Infrastructure Model Seismic & Acoustic Heavy Plinth (VC-E Class) Dimensions (m) # × # × # Weight ~# Tons Reinforced Concrete Location Subfab Laser & Vacuum Vault (B1) Source tier — Category Generic Shell · Pending VerificationSeismic & Acoustic Heavy Plinth (VC-E Class) Massive reinforced concrete foundation block isolated by pneumatic dampers from the rest of the fab building, preventing floor vibrations and acoustic noise from perturbing High-NA # sub-nanometer overlay accuracy. SPECIFICATIONS Bedrock Anchors Deep reinforced pilings drilled to solid bedrock Damping System Pneumatic air-springs with active piezo velocity feedback Foundation Mass # Tons dense high-damping concrete Vibration Class VC-E (< # µm/s RMS criterion) Linked tool · fe.litho.euv.# RUNNING IDLE DOWN MAINT SOURCE Spanning from subfab slab at y = -#m upwards to support the High-NA scanner. Completeness — Record status — FDC TELEMETRY # SOH Primary Output # MΩ·cm Cooling Water Flow # L/min Utility Header Pressure # bar Abatement Efficiency # % SEMI MES · E40 / E87 / E94 TRACKED_IN CARRIER FOUP-AMHS-# RECIPE RCP-SUBF-#NM-V2.# STEP High-NA EUV Active VC-E Foundation Plinth WAFER SLOT # / # Track-In Track-Out Hold PROCESS CAPABILITY CONTROL · IN CONTROL SPEC · OUT OF SPEC Cp # Cpk # SIGMA # σ Implemented Nelson rules No violation: Rule #–# of Nelson # monitored Grid: #m × #m · Subfab: -#m 正在加载原版设备模型… FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "High-NA EUV Active VC-E Foundation Plinth",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        }
+      ],
+      "dynamic-import-gpu": [
+        {
+          "step": "gpu-ready",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT | DEMO",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        },
+        {
+          "step": "no-webgl-fallback",
+          "path": "/",
+          "business": "{\"webgpu\":true,\"webgl\":false}",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        },
+        {
+          "step": "gpu-lifecycle-trace",
+          "path": "/",
+          "business": "[]",
+          "dom": "",
+          "http": []
+        }
+      ],
+      "atom-subscriptions": [
+        {
+          "step": "demo-playing",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "Ⅱ #cycle | #cycle | DEMO",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        },
+        {
+          "step": "demo-paused",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm ▶ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "▶ #cycle | #cycle | DEMO",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        }
+      ],
+      "fab-switch": [
+        {
+          "step": "fab-loaded",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        },
+        {
+          "step": "fab-switched",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        }
+      ],
+      "external-mutable-registry": [
+        {
+          "step": "registry-readouts",
+          "path": "/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d?mode=engineer&lang=en-US&theme=light",
+          "dom": "#mm Semiconductor Fab Advanced Pilot Line Mode: Visitor Engineer Research L1 B1 Dual Explode Tour AMHS FFU Roof/HVAC Subfab Heatmap Airflow X-Ray English #⌄ #,# wpm Ⅱ #cycle Nominal Baseline (HVM) Litho Overlay Drift Etch Chamber RF Alarm Cleanroom Preventive Maintenance Cascade Equipment Bottleneck AI-APC Yield Optimization Sprint YMS Wafer Map Section Follow a wafer SSE DEMO Fab Tools (#) OEM Catalog (#) All Lithography Etch Thin Film Subfab Utilities Facility & Airlock Implant/Thermal CMP/Cleans Metrology Packaging Logistics # Running # Idle # Down # PM Subfab Utilities Running Trumpf Trumpf Pulsed CO2 Drive Laser Vault (High-NA EUV) Trumpf Laser System #W EUV Gen-# #×#m Subfab Utilities Running Fab High-NA EUV Active VC-E Foundation Plinth Seismic & Acoustic Heavy Plinth (VC-E Class) #×#m Subfab Utilities Running Edwards Edwards iXH EUV High-Vacuum Roots Pump Station #cycle Edwards iXH6045H #×#m Subfab Utilities Running Edwards Edwards iXH Vacuum Pumping Skid #cycle (# NA EUV) Edwards iXH6045H Skid #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Edwards Point-of-Use Burn-Wet Gas Scrubber #cycle (Etch Bay) Atlas TCS Point-of-Use Thermal Scrubber #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Pfeiffer Harsh Chemical Dry Vacuum Pump Skid #cycle (Etch) Pfeiffer A404H Harsh Process Dry Pump #×#m Subfab Utilities Running Entegris Ultra-High Purity Pyrophoric & Toxic Gas Manifold (VMB) VMB-# Ultra-Clean Gas Distribution Panel #×#m Subfab Utilities Running Ebara Heated Foreline ALD/CVD Multi-Stage Dry Vacuum Station Ebara EV-S Series Heated Roots Pump #×#m Subfab Utilities Running SMC Dual-Circuit Electrostatic Chuck Chiller & RF Generator Skid #cycle Thermo-Chiller HRS090 & Paramount RF Generator #×#m Subfab Utilities Running Kurita Ultra-Pure Water (UPW) Polishing Loop Substation UPW Mega-Fab Polishing Loop Manifold (# MΩ·cm) #×#m Facility & Architecture Running Esco Cleanroom Main Air Shower Airlock Tunnel AirShow-DualPass Pro (# m #×#m Facility & Architecture Running Terra Litho Bay #nm UV-Safe Air Shower Airlock LithoSafe-AmberLock ISO-# Chamber #×#m CMP Chemical Mechanical Planarization Bay Running Ebara Ebara F-REX300 F-REX300 #×#m Ion Implantation Bay Running SRII SRII SRII-#M SRII-#M #×#m Advanced #D/#D Packaging Bay Running BESI BESI Datacon # EVO Datacon # EVO #×#m Advanced #D/#D Packaging Bay Running ACMR ACMR Ultra ECP #d Ultra ECP #d #×#m Catalog Tools: # (# L1 · # Drafts) Open Arch · Full Database Grid: #m × #m · Subfab: -#m WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT First visit ·#/# × One single-FAB cleanroom # tools, dual-loop OHT, ceiling FFUs and Subfab share one scene. Don't show again Skip Previous Next",
+          "business": "WebGPU FAB-# · single FAB AMHS OHT #/# # RUN · # IDLE · # DOWN · # MAINT | DEMO | Grid: #m × #m · Subfab: -#m",
+          "http": [
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/telemetry/stream"
+          ]
+        },
+        {
+          "step": "readout-visible",
+          "path": "/",
+          "business": "worker-targets=1",
+          "dom": "",
+          "http": []
+        }
+      ],
+      "external-atom-hook": [
+        {
+          "step": "projection-terminal",
+          "path": "/",
+          "business": "succeeded · rev #",
+          "dom": "F SEMICONFAB SIMULATION WORKSPACE 工作空间 ▦ 基地总览 ▷ 仿真运行 ▤ 设备目录 ◇ #D FAB XSTATE RUNTIMES # FAB · v6 DEVELOPMENT SLICE 确定性离散事件仿真 独立 FAB · 本地开发模式 开发环境 工作空间 / 基地总览 REST / HTTP 轮询 DEV OPERATIONS OVERVIEW 基地仿真工作台 / # 从场景参数到执行结果，让每一次仿真清晰可追溯。 当前基地 DEMO-SITE ⓘ 开发切片 合成 FIFO 加工模型 · 数据来自本地 API / Worker。 v0.# 设备命令 HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。 设备 equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# 动作 START STOP PAUSE 下发命令 <id> succeeded · rev # FAB # FAB-# · 独立执行域 当前运行 已完成 版本 # 完成 Lot # 仅展示后端已提交的完整结果 运行模式 独立仿真 INDEPENDENT · 合成 FIFO 模型 新建仿真 # 个 FAB · 独立执行域。 ◇ 合成 FIFO · 单设备加工模型 Lot 数 单 Lot 加工 / μs 仿真时域 / μs 预热时长 / μs 主随机种子 整数微秒 · 权威 DES 在后端执行 不包含共享产能或真实工艺模型。 创建并运行 ↗ FAB 执行概览 HTTP 全量快照 · 每 # 秒查询 · 无二进制实时流 RUN / <id> # FAB-# 独立执行域 已完成 完成 / 总 Lot # / # 仿真时间 / μs #,#,# # 轨迹 SHA <sha>… 运行记录 站点范围内的持久化 Run；点击查看执行状态与完整结果。 运行标识 创建时间 FAB 数 状态 操作 <id> #/#/# #:#:# # 已完成 当前运行 → SEMICONFAB NEXT 后端权威仿真 · WebGPU 视图 · 明确的模型边界",
+          "http": [
+            "GET /api/v1/commands/<uuid>",
+            "GET /api/v1/runs",
+            "GET /api/v1/runs/<uuid>",
+            "GET /api/v1/runs/<uuid>/results",
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/commands/stream",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/equipment-status",
+            "POST /api/v1/sites/<uuid>/commands"
+          ]
+        },
+        {
+          "step": "no-memoized-waiting-state",
+          "path": "/",
+          "business": "waiting=false",
+          "dom": "",
+          "http": []
+        }
+      ],
+      "workbench-root": [
+        {
+          "step": "root-mounted",
+          "path": "/",
+          "business": "updateDepthErrors=0",
+          "dom": "F SEMICONFAB SIMULATION WORKSPACE 工作空间 ▦ 基地总览 ▷ 仿真运行 ▤ 设备目录 ◇ #D FAB XSTATE RUNTIMES # FAB · v6 DEVELOPMENT SLICE 确定性离散事件仿真 独立 FAB · 本地开发模式 开发环境 工作空间 / 基地总览 REST / HTTP 轮询 DEV OPERATIONS OVERVIEW 基地仿真工作台 / # 从场景参数到执行结果，让每一次仿真清晰可追溯。 当前基地 DEMO-SITE ⓘ 开发切片 合成 FIFO 加工模型 · 数据来自本地 API / Worker。 v0.# 设备命令 HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。 设备 equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# equipment-# 动作 START STOP PAUSE 下发命令 还没有命令。提交后，accepted → executing → succeeded 由后端模拟 SSE 推进。 FAB # FAB-# · 独立执行域 当前运行 已完成 版本 # 完成 Lot # 仅展示后端已提交的完整结果 运行模式 独立仿真 INDEPENDENT · 合成 FIFO 模型 新建仿真 # 个 FAB · 独立执行域。 ◇ 合成 FIFO · 单设备加工模型 Lot 数 单 Lot 加工 / μs 仿真时域 / μs 预热时长 / μs 主随机种子 整数微秒 · 权威 DES 在后端执行 不包含共享产能或真实工艺模型。 创建并运行 ↗ FAB 执行概览 HTTP 全量快照 · 每 # 秒查询 · 无二进制实时流 RUN / <id> # FAB-# 独立执行域 已完成 完成 / 总 Lot # / # 仿真时间 / μs #,#,# # 轨迹 SHA <sha>… 运行记录 站点范围内的持久化 Run；点击查看执行状态与完整结果。 运行标识 创建时间 FAB 数 状态 操作 <id> #/#/# #:#:# # 已完成 当前运行 → SEMICONFAB NEXT 后端权威仿真 · WebGPU 视图 · 明确的模型边界",
+          "http": [
+            "GET /api/v1/runs",
+            "GET /api/v1/runs/<uuid>",
+            "GET /api/v1/runs/<uuid>/results",
+            "GET /api/v1/sites",
+            "GET /api/v1/sites/<uuid>/fabs/<uuid>/commands"
+          ]
+        }
+      ]
+    }
+  },
+  "differences": [],
+  "scenarioFailures": [],
+  "equal": true,
+  "limitations": [
+    "Wall-clock timers are real (not frozen); comparison is on quiescent step DOM/business state and HTTP surface, so execution counts and timings may differ while semantics must not.",
+    "Deterministic Math.random/crypto.randomUUID are injected; live SSE content comes from the single-FAB local fixture and is compared by DOM business text with numeric volatility normalized.",
+    "GPU device-loss/recovery semantics are covered by tools/gpu_gate.mjs (CORE-012), not by the compiler equivalence trace."
+  ],
+  "comparisonNotes": [
+    "Comparison re-evaluated offline from recorded raw traces; backend-generated identity tokens (run/command ids, SHA displays) are normalized as identity, not business semantics."
+  ]
+}

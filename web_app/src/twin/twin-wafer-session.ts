@@ -1,6 +1,6 @@
 import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import { twinUiActions } from '@/twin/twin-ui.atom';
-import { twinPageActions } from '@/twin/twin-page.atom';
+import { twinWaferActions } from '@/twin/twin-wafer.atom';
 
 /**
  * Application-level wafer session close.
@@ -17,5 +17,5 @@ import { twinPageActions } from '@/twin/twin-page.atom';
 export function closeWaferSession(registry: AtomRegistry.AtomRegistry): void {
   twinUiActions.waferClose(registry);
   twinUiActions.waferPlay(registry, false);
-  twinPageActions.waferFrameCleared(registry);
+  twinWaferActions.waferFrameCleared(registry);
 }

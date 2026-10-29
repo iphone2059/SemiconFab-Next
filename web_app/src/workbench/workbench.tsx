@@ -53,9 +53,14 @@ function Workbench({ site }: { site: SiteDto }) {
   const result = resultView.data;
   const runError = runView.error !== undefined ? errorMessage(runView.error) : resultView.error !== undefined ? errorMessage(resultView.error) : '';
   const { submit, submitting } = useRunSubmission(site, form);
+  // The runs projection is a freshly filtered array on every render; using it as an
+  // effect dependency would re-dispatch on every Atom notification. The stable key
+  // is the semantic dependency (which run ids belong to this site), so the effect
+  // runs only when the data actually changed — independent of compiler memoization.
+  const runIdsKey = scopedRuns.map((value) => value.runId).join('|');
   useEffect(() => {
-    workbenchActions.runsReceived(registry, { siteId: site.siteId, runIds: scopedRuns.map((value) => value.runId) });
-  }, [scopedRuns, site.siteId, registry]);
+    workbenchActions.runsReceived(registry, { siteId: site.siteId, runIds: runIdsKey === '' ? [] : runIdsKey.split('|') });
+  }, [runIdsKey, site.siteId, registry]);
   const setField = (field: keyof WorkbenchFormState, value: string) =>
     workbenchActions.formFieldSet(registry, { field, value });
   const displayedRun = run?.runId === runId && run.siteId === site.siteId ? run : undefined;
