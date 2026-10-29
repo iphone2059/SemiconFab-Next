@@ -18,7 +18,7 @@ export function fetchSites(fetcher?: FetchLike): Effect.Effect<SiteDto[], ApiErr
 
 /** Static sites definition (30s freshness, 5min idle TTL). */
 export const sitesDefinition = defineResource({
-  key: 'sites',
+  identity: { kind: 'sites', version: 1, key: 'sites' },
   load: fetchSites(),
   policy: RESOURCE_POLICIES.sites,
 });

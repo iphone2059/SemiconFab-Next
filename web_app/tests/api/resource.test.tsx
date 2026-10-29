@@ -10,6 +10,7 @@ import { defineResource } from '@/api/resource';
 import { useResource } from '@/api/use-resource';
 import { RESOURCE_POLICIES } from '@/api/resource-policy';
 import { catalogDefinition } from '@/api/catalog.resource';
+import { equipmentStatusDefinition } from '@/api/equipment.resource';
 import { researchEventsDefinition } from '@/api/research.resource';
 import { runDefinition, runKey, runResultsDefinition, runsDefinition } from '@/api/runs.resource';
 import { sitesDefinition } from '@/api/sites.resource';
@@ -39,7 +40,7 @@ describe('ResourceManager', () => {
     const manager = client.resources;
     let loads = 0;
     const definition = defineResource({
-      key: 'single-flight',
+      identity: { kind: 'single-flight', version: 1, key: 'single-flight' },
       load: Effect.suspend(() => { loads += 1; return Effect.sleep('20 millis').pipe(Effect.as(loads)); }),
       policy: { freshnessMs: 500, idleTtlMs: 300_000 },
     });
@@ -58,7 +59,7 @@ describe('ResourceManager', () => {
     const manager = client.resources;
     let loads = 0;
     const definition = defineResource({
-      key: 'refresh-semantics',
+      identity: { kind: 'refresh-semantics', version: 1, key: 'refresh-semantics' },
       load: Effect.suspend(() => {
         loads += 1;
         return loads === 1 ? Effect.succeed('old') : loads === 2 ? Effect.sleep('20 millis').pipe(Effect.as('new')) : Effect.fail(new Error('refresh failed'));
@@ -88,7 +89,7 @@ describe('ResourceManager', () => {
     const manager = client.resources;
     let loads = 0;
     const definition = defineResource({
-      key: 'idle-ttl',
+      identity: { kind: 'idle-ttl', version: 1, key: 'idle-ttl' },
       load: Effect.suspend(() => { loads += 1; return Effect.succeed(loads); }),
       policy: { freshnessMs: Number.POSITIVE_INFINITY, idleTtlMs: 20 },
     });
@@ -110,7 +111,7 @@ describe('ResourceManager', () => {
     const manager = client.resources;
     let loads = 0;
     const makeDefinition = (key: string) => defineResource({
-      key,
+      identity: { kind: 'api-probe', version: 1, key },
       load: Effect.suspend(() => { loads += 1; return Effect.succeed(key + ':' + loads); }),
       policy: { freshnessMs: 0, idleTtlMs: 300_000 },
     });
@@ -131,8 +132,11 @@ describe('ResourceManager', () => {
     expect(researchEventsDefinition.policy.idleTtlMs).toBe(600_000);
     expect(waferRoutesDefinition.policy.freshnessMs).toBe(Number.POSITIVE_INFINITY);
     expect(runsDefinition.policy.pollMs).toBe(1500);
-    expect(runDefinition('run-a').key).toBe(runKey('run-a'));
-    expect(runDefinition('run-a').key).not.toBe(runDefinition('run-b').key);
+    expect(runDefinition('run-a').identity.key).toBe(runKey('run-a'));
+    expect(runDefinition('run-a').identity).toMatchObject({ kind: 'run-detail', version: 1 });
+    expect(runDefinition('run-a').identity.key).not.toBe(runDefinition('run-b').identity.key);
+    expect(sitesDefinition.identity).toMatchObject({ kind: 'sites', version: 1 });
+    expect(equipmentStatusDefinition('site-1', 'fab-1').identity).toMatchObject({ kind: 'equipment-status', version: 1 });
     expect(runResultsDefinition('run-a').policy.pollMs).toBeUndefined();
   });
 });
@@ -145,7 +149,7 @@ describe('useResource binding', () => {
     const client = runtime();
     let loads = 0;
     const definition = defineResource({
-      key: 'hooked',
+      identity: { kind: 'hooked', version: 1, key: 'hooked' },
       load: Effect.suspend(() => { loads += 1; return Effect.succeed(loads); }),
       policy: { freshnessMs: 0, idleTtlMs: 300_000, pollMs: 20 },
     });
@@ -167,7 +171,7 @@ describe('useResource binding', () => {
     const manager = client.resources;
     let calls = 0;
     const definition = defineResource({
-      key: 'toggle',
+      identity: { kind: 'toggle', version: 1, key: 'toggle' },
       load: Effect.suspend(() => { calls += 1; return Effect.succeed('value'); }),
       policy: { freshnessMs: 0, idleTtlMs: 300_000 },
     });

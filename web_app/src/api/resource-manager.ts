@@ -3,27 +3,33 @@ import * as AsyncResult from 'effect/reactivity/AsyncResult';
 import * as Atom from 'effect/reactivity/Atom';
 import {
   ResourceCapacityError,
+  ResourceDefinitionConflictError,
   type CommitDecision,
   type IgnoreReason,
   type ResourceCommitContext,
   type ResourceDefinition,
+  type ResourceDefinitionConflictField,
   type ResourceDiagnostic,
   type ResourceHandle,
+  type ResourceIdentity,
   type ResourceInFlight,
   type ResourceKey,
   type ResourceManager,
   type ResourceManagerHost,
   type ResourceManagerStats,
+  type ResourcePolicy,
   type ResourceRuntime,
 } from '@/api/resource';
 
 type AnyResult = AsyncResult.AsyncResult<unknown, unknown>;
 type AnyWritable = Atom.Writable<AnyResult, AnyResult>;
 
-/** ADR-006 §2.7: soft capacity triggers idle LRU eviction before a new identity is admitted. */
+/**
+ * ADR-013 §1.3: a single hard capacity. Reaching it first evicts zero-subscriber
+ * entries by idle-LRU order; if no space is reclaimed the new identity is rejected.
+ * There is no second, unreachable waterline.
+ */
 const MAX_ENTRIES = 256;
-/** ADR-006 §2.7: hard capacity always rejects; even all-retained entries cannot exceed it. */
-const MAX_ENTRIES_HARD = 512;
 /** ADR-006 §2.4.6: bounded Ignore diagnostics (newest last). */
 const MAX_DIAGNOSTICS = 32;
 
@@ -39,6 +45,8 @@ const scopeClosedError = (key: ResourceKey): Error => new Error('Resource scope 
 
 interface ManagerEntry {
   readonly key: ResourceKey;
+  /** Typed identity admitted at creation; every later handle() must be compatible. */
+  readonly identity: ResourceIdentity;
   readonly definition: ResourceDefinition<unknown, unknown>;
   readonly atom: AnyWritable;
   readonly handle: ResourceHandle<unknown, unknown>;
@@ -135,6 +143,9 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
 
   const stopPolling = (entry: ManagerEntry): void => {
     entry.polling = false;
+    // ADR-013 §1.4: releasing the poll owner invalidates every fork callback that
+    // captured the previous ResourceScope generation.
+    entry.scopeGeneration += 1;
     const fiber = entry.pollFiber;
     entry.pollFiber = undefined;
     if (fiber) void host.services.runPromise(Fiber.interrupt(fiber)).catch(() => undefined);
@@ -183,6 +194,7 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
     if (!Number.isFinite(pollMs) || pollMs <= 0) return;
     entry.polling = true;
     const scope = entry.scope;
+    const startedGeneration = entry.scopeGeneration;
     const loop = Effect.gen(function* () {
       while (!isDisposed() && !entry.removed) {
         yield* Effect.sleep(pollMs);
@@ -193,7 +205,14 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
     const fiberPromise = host.services.runPromise(Effect.forkIn(loop, scope));
     void fiberPromise
       .then((fiber) => {
-        if (entry.removed || !entry.polling) {
+        // ADR-013 §1.4: a resolved fork is the poll owner only if the same entry,
+        // the same polling intent, the same generation and the same ResourceScope
+        // are still current. Anything else is a stale fiber: interrupt, never store.
+        const stale = entry.removed ||
+          !entry.polling ||
+          entry.scopeGeneration !== startedGeneration ||
+          entry.scope !== scope;
+        if (stale) {
           void host.services.runPromise(Fiber.interrupt(fiber)).catch(() => undefined);
           return;
         }
@@ -204,8 +223,8 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
 
   const ensureCapacity = (key: ResourceKey): void => {
     if (entries.size < MAX_ENTRIES) return;
-    // Soft limit: evict zero-subscriber entries by idle LRU order (ADR-006 §2.7
-    // only excludes retained entries; an un-retained prefetch may be cancelled).
+    // ADR-013 §1.3: reaching the single hard limit first releases zero-subscriber
+    // entries by idle LRU order; only entries that cannot be freed force a rejection.
     const evictable = [...entries.values()]
       .filter((candidate) => candidate.subscribers === 0)
       .sort((left, right) => left.accessSeq - right.accessSeq);
@@ -213,12 +232,7 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
       if (entries.size < MAX_ENTRIES) break;
       releaseEntry(candidate);
     }
-    if (entries.size >= MAX_ENTRIES_HARD) {
-      record(key, 'read', 'capacity');
-      throw new ResourceCapacityError(key, entries.size);
-    }
     if (entries.size >= MAX_ENTRIES) {
-      // Still above the soft limit means every remaining entry is retained/in-flight.
       record(key, 'read', 'capacity');
       throw new ResourceCapacityError(key, entries.size);
     }
@@ -229,9 +243,10 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
       () => AsyncResult.initial<unknown, unknown>(),
       (context, value) => context.setSelf(value),
     ).pipe(Atom.setIdleTTL(Duration.millis(definition.policy.idleTtlMs)));
-    const handle: ResourceHandle<unknown, unknown> = { key: definition.key, atom: writable, definition };
+    const handle: ResourceHandle<unknown, unknown> = { key: definition.identity.key, atom: writable, definition };
     const entry: ManagerEntry = {
-      key: definition.key,
+      key: definition.identity.key,
+      identity: definition.identity,
       definition,
       atom: writable,
       handle,
@@ -255,6 +270,32 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
     entriesByHandle.set(handle, entry);
     armIdleTimer(entry);
     return entry;
+  };
+
+  /**
+   * ADR-013 §1.2: a same-key definition must match the admitted typed identity
+   * (kind/version/key) and the policy contract; otherwise throw instead of
+   * silently reusing an unrelated Atom. A TTL-released key may be recreated with a
+   * different identity because the entry no longer exists.
+   */
+  const assertDefinitionCompatible = (
+    entry: ManagerEntry,
+    incoming: ResourceIdentity,
+    candidatePolicy: ResourcePolicy,
+  ): void => {
+    const existing = entry.identity;
+    const conflict = (field: ResourceDefinitionConflictField): never => {
+      throw new ResourceDefinitionConflictError(incoming.key, existing, incoming, field);
+    };
+    if (existing.kind !== incoming.kind) conflict('kind');
+    if (existing.version !== incoming.version) conflict('version');
+    if (existing.key !== incoming.key) conflict('key');
+    const admitted = entry.definition.policy;
+    if (admitted.freshnessMs !== candidatePolicy.freshnessMs ||
+        admitted.idleTtlMs !== candidatePolicy.idleTtlMs ||
+        admitted.pollMs !== candidatePolicy.pollMs) {
+      conflict('policy');
+    }
   };
 
   const resolveEntry = (handle: object): ManagerEntry | undefined => entriesByHandle.get(handle);
@@ -318,6 +359,7 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
     if (entry.removed) return ignore(entry.key, 'read', 'scope-closed', requestId);
     if (entry.currentRequestId !== requestId) return ignore(entry.key, 'read', 'stale-request', requestId);
     const current = host.registry.get(entry.atom);
+    const superseded = baselineWriteSeq !== entry.writeSeq;
     const context: ResourceCommitContext<unknown> = {
       current,
       origin: 'read',
@@ -328,12 +370,18 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
     };
     let next = value;
     if (entry.definition.accept) {
+      // ADR-013 §1.1: version/epoch-aware resources still decide for themselves
+      // (a genuinely newer read may win; stale device frames are rejected there).
       const decision = entry.definition.accept(value, context);
       if (decision._tag === 'Ignore') {
         record(entry.key, 'read', decision.reason, requestId);
         return decision;
       }
       next = decision.value;
+    } else if (superseded) {
+      // ADR-013 §1.1 / CR-05: a generic GET that started before an accepted
+      // mutation/recovery write must never overwrite that newer authoritative value.
+      return ignore(entry.key, 'read', 'superseded-write', requestId);
     }
     writeAccepted(entry, next, requestId);
     return { _tag: 'Publish', value: next };
@@ -371,14 +419,15 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
     runtime: host.runtime,
     handle<A, E>(definition: ResourceDefinition<A, E>): ResourceHandle<A, E> {
       if (isDisposed()) throw disposeError();
-      const existing = entries.get(definition.key);
+      const existing = entries.get(definition.identity.key);
       if (existing) {
         touch(existing);
+        assertDefinitionCompatible(existing, definition.identity, definition.policy);
         // R14 justification: manager entries store handles with erased type parameters (the
         // manager is the only owner; A/E are compile-time-only and cannot be recovered from a Map).
         return existing.handle as unknown as ResourceHandle<A, E>;
       }
-      ensureCapacity(definition.key);
+      ensureCapacity(definition.identity.key);
       // R14 justification: the entry map is heterogeneous by design; the definition's load/accept
       // closures keep their concrete A/E through the closure, and every public handle() call
       // restores the caller's A/E at this single type-erasure boundary.

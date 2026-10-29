@@ -11,7 +11,7 @@ export const fetchWaferRoutes = () => httpTransport.fetchJson('/twin/routes.json
 
 /** Static wafer-routes definition; freshness is infinite, retention 10 minutes. */
 export const waferRoutesDefinition = defineResource({
-  key: 'wafer-routes',
+  identity: { kind: 'wafer-routes', version: 1, key: 'wafer-routes' },
   load: fetchWaferRoutes(),
   policy: RESOURCE_POLICIES.waferRoutes,
 });

@@ -25,7 +25,7 @@ it('shares one request and owns exactly one polling fiber for two consumers', as
   runtimes.push(runtime);
   let loads = 0;
   const definition = defineResource({
-    key: 'polled-resource',
+    identity: { kind: 'polled-resource', version: 1, key: 'polled-resource' },
     load: Effect.suspend(() => {
       loads += 1;
       return Effect.succeed(loads);
@@ -70,7 +70,7 @@ it('a loader ensure and a mounted consumer share the same in-flight read', async
   runtimes.push(runtime);
   let loads = 0;
   const definition = defineResource({
-    key: 'loader-shared',
+    identity: { kind: 'loader-shared', version: 1, key: 'loader-shared' },
     load: Effect.suspend(() => {
       loads += 1;
       return Effect.suspend(() => Effect.succeed(loads)).pipe(Effect.delay('10 millis'));

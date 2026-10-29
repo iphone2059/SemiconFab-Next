@@ -18,7 +18,7 @@ afterEach(async () => {
 });
 
 const dynamicDefinition = (index: number, idleTtlMs: number) => defineResource({
-  key: 'run\u0000id-' + index,
+  identity: { kind: 'run-detail', version: 1, key: 'run\u0000id-' + index },
   load: Effect.succeed(index),
   policy: { freshnessMs: 0, idleTtlMs },
 });

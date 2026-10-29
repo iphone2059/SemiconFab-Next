@@ -24,7 +24,7 @@ it('fetches sites through the relative URL with RTK-equivalent transport options
 
 it('exposes one freshness/idle-TTL policy for every sites consumer', () => {
   expect(sitesDefinition.policy).toEqual({ freshnessMs: 30_000, idleTtlMs: 300_000 });
-  expect(sitesDefinition.key).toBe('sites');
+  expect(sitesDefinition.identity).toEqual({ kind: 'sites', version: 1, key: 'sites' });
 });
 
 it('surfaces non-2xx ProblemDetails as a descriptive Error', async () => {

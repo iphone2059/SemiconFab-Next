@@ -104,7 +104,7 @@ it('route files never fetch directly; they compose the AppRuntime resource manag
   expect(routeData).toContain('runtime.resources.ensure(runtime.resources.handle(sitesDefinition))');
 });
 
-it('every remote resource module exports an immutable ResourceDefinition and no import-time Atom', () => {
+it('every remote resource module exports an immutable typed ResourceDefinition and no import-time Atom', () => {
   const resourceFiles = readdirSync(join(sourceRoot, 'api'))
     .filter((name) => name.endsWith('.resource.ts'))
     .map((name) => 'api/' + name);
@@ -112,6 +112,10 @@ it('every remote resource module exports an immutable ResourceDefinition and no 
   for (const path of resourceFiles) {
     const text = read(join(sourceRoot, path));
     if (!/Definition\b/.test(text)) violations.push(path + ' exports no immutable ResourceDefinition');
+    // ADR-013 §1.2: every definition carries a typed identity (kind + version + key).
+    if (!/identity:\s*\{[^}]*kind:\s*'[^']+'[^}]*version:\s*\d+[^}]*key:/s.test(text)) {
+      violations.push(path + ' definition is missing the typed identity { kind, version, key }');
+    }
     if (!/RESOURCE_POLICIES\./.test(text)) violations.push(path + ' does not use the central resource policy table');
     if (/Atom\.(?:writable|make)\s*[(<]/.test(text)) violations.push(path + ' creates an Atom at module scope');
     if (/\bmakeResource\b|\bresourceFamily\b/.test(text)) violations.push(path + ' uses the removed resource factory API');

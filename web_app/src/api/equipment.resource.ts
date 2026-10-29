@@ -85,7 +85,7 @@ export function commitEquipmentStatusSnapshot(
 export function equipmentStatusDefinition(siteId: string, fabId: string) {
   const scope: EquipmentStatusScope = { siteId, fabId };
   return defineResource({
-    key: equipmentStatusKey(siteId, fabId),
+    identity: { kind: 'equipment-status', version: 1, key: equipmentStatusKey(siteId, fabId) },
     load: fetchEquipmentStatus(siteId, fabId),
     policy: RESOURCE_POLICIES.equipmentStatus,
     accept: (next: EquipmentStatusSnapshot, context: ResourceCommitContext<EquipmentStatusSnapshot>) =>

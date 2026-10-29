@@ -29,7 +29,7 @@ const deferred = <T,>(): Deferred<T> => {
 };
 
 const controlledDefinition = (loads: Deferred<number>[]) => defineResource({
-  key: 'shared-key',
+  identity: { kind: 'shared-key', version: 1, key: 'shared-key' },
   load: Effect.suspend(() => {
     const gate = deferred<number>();
     loads.push(gate);

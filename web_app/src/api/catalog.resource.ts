@@ -11,7 +11,7 @@ export const fetchCatalog = (): Effect.Effect<CatalogPageDto, ApiError> => httpT
 
 /** Static catalog definition (60s freshness). */
 export const catalogDefinition = defineResource({
-  key: 'catalog',
+  identity: { kind: 'catalog', version: 1, key: 'catalog' },
   load: fetchCatalog(),
   policy: RESOURCE_POLICIES.catalog,
 });

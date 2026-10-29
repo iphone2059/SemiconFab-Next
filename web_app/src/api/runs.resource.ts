@@ -10,7 +10,7 @@ export const fetchRunResults = (runId: string) => httpTransport.fetchJson(`/api/
 
 /** Static runs-list definition (1.5s polling while at least one consumer is retained). */
 export const runsDefinition = defineResource({
-  key: 'runs',
+  identity: { kind: 'runs', version: 1, key: 'runs' },
   load: fetchRuns(),
   policy: RESOURCE_POLICIES.runs,
 });
@@ -25,14 +25,14 @@ export const runResultsKey = (runId: string): ResourceKey => 'run-results\u0000'
  * caches the definition handle by key and reclaims it on idle TTL (ADR-006 §2.7).
  */
 export const runDefinition = (runId: string) => defineResource({
-  key: runKey(runId),
+  identity: { kind: 'run-detail', version: 1, key: runKey(runId) },
   load: fetchRun(runId),
   policy: RESOURCE_POLICIES.runDetail,
 });
 
 /** Dynamic Run-results definition (only requested once the backend reports COMPLETED). */
 export const runResultsDefinition = (runId: string) => defineResource({
-  key: runResultsKey(runId),
+  identity: { kind: 'run-results', version: 1, key: runResultsKey(runId) },
   load: fetchRunResults(runId),
   policy: RESOURCE_POLICIES.runResults,
 });

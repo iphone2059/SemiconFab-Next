@@ -59,9 +59,24 @@ export interface ResourceCommitContext<A> {
   readonly scopeGeneration: number;
 }
 
+/**
+ * Typed resource identity (ADR-013 §1.2). The manager stores the identity of the
+ * admitted definition and rejects a same-key definition with a different
+ * kind/version/policy instead of silently reusing an unrelated Atom.
+ */
+export interface ResourceIdentity {
+  /** Resource family, e.g. 'sites' | 'run-detail' | 'equipment-status'. */
+  readonly kind: string;
+  /** Schema/semantics revision of this kind (bump on incompatible change). */
+  readonly version: number;
+  /** Canonical per-instance key (ADR-006 §2.1). */
+  readonly key: ResourceKey;
+}
+
 /** Immutable resource definition. Static resources export one; dynamic ones are manager-cached. */
 export interface ResourceDefinition<A, E> {
-  readonly key: ResourceKey;
+  /** Typed identity: kind + version + canonical key (ADR-013 §1.2). */
+  readonly identity: ResourceIdentity;
   readonly load: Effect.Effect<A, E, never>;
   readonly policy: ResourcePolicy;
   /**
@@ -143,6 +158,29 @@ export class ResourceCapacityError extends Error {
   constructor(readonly key: ResourceKey, readonly capacity: number) {
     super('Resource capacity exhausted (' + capacity + ') for key: ' + key);
     this.name = 'ResourceCapacityError';
+  }
+}
+
+/** Fields whose disagreement makes a same-key definition incompatible (ADR-013 §1.2). */
+export type ResourceDefinitionConflictField = 'kind' | 'version' | 'key' | 'policy';
+
+/**
+ * Raised by handle() when an existing manager entry for the same canonical key was
+ * admitted with a different typed identity or an incompatible policy. Silent
+ * generic-erasure reuse of the old handle is forbidden (CR-07).
+ */
+export class ResourceDefinitionConflictError extends Error {
+  constructor(
+    readonly key: ResourceKey,
+    readonly existing: ResourceIdentity,
+    readonly incoming: ResourceIdentity,
+    readonly field: ResourceDefinitionConflictField,
+  ) {
+    super(
+      'Resource definition conflict for key "' + key + '" (' + field + '): existing ' +
+      existing.kind + '@v' + existing.version + ' vs incoming ' + incoming.kind + '@v' + incoming.version,
+    );
+    this.name = 'ResourceDefinitionConflictError';
   }
 }
 

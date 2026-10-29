@@ -20,7 +20,7 @@ it('RES-05: explicit invalidation refreshes only the affected resource', async (
   const manager = runtime.resources;
   let loads = 0;
   const makeDefinition = (key: string) => defineResource({
-    key,
+    identity: { kind: 'cache-probe', version: 1, key },
     load: Effect.suspend(() => { loads += 1; return Effect.succeed(key + ':' + loads); }),
     policy: { freshnessMs: 0, idleTtlMs: 300_000 },
   });
@@ -61,7 +61,7 @@ it('RES-08: a failed refresh retains the previous success while reporting the ty
   const manager = runtime.resources;
   let calls = 0;
   const definition = defineResource({
-    key: 'retained-failure',
+    identity: { kind: 'retained-failure', version: 1, key: 'retained-failure' },
     load: Effect.suspend(() => {
       calls += 1;
       return calls === 1 ? Effect.succeed('old') : Effect.fail(new Error('boom'));
