@@ -1,7 +1,8 @@
 # 实施状态（V2.1 最终）
 
 - 状态：**Effect 4 / 单层目录 / code-based routing 重构已完成并验收（2026-10-29，分支 `refactor/effect4-flat-20261029`，受测代码提交见本文件 A4 证据与 `docs/architecture/evidence/effect4-task6-performance-a4.md`（Task 0–6 提交索引见 `evidence/effect4-progress.md`））。** 当前事实以本文件“Effect 4 重构终态”章节与 `docs/architecture/README.md` 为准；下方“V2.1 历史状态/里程碑”保留当日审计轨迹，其中 TanStack Query/Zustand/RxJS/Zod、生成式路由树与 `features/` 目录已被 2026-10-29 重构取代。\
-- Effect 4 终态验证：前端 **120 文件 / 718 测试 PASS**；`./scripts/verify.ps1` exit 0；浏览器 e2e **10/10 PASS**（`docs/perf/effect4-e2e.json`）；A/B 性能/GPU 证据见 `docs/architecture/evidence/perf/`。\
+- React Compiler（Task 7）：Rust/Oxc `oxc-transform-react@0.156.0` + Oxlint correctness 门禁；**122 文件 / 726 测试 PASS**；真实浏览器 e2e OFF/ON 各 30/30 PASS；证据 `docs/architecture/evidence/effect4-task7-react-compiler.md`。
+- Effect 4 终态验证：前端 **122 文件 / 726 测试 PASS**；`./scripts/verify.ps1` exit 0；浏览器 e2e **10/10 PASS**（`docs/perf/effect4-e2e.json`）；A/B 性能/GPU 证据见 `docs/architecture/evidence/perf/`。\
 - 历史 V2.1 状态（截至 2026-10-28）：M0–M6、review 修复与 R-01…R-14 递归整改已完成；PostgreSQL/Outbox/生产身份因基础设施缺失保留边界。
 - 最后验证（提交前）：
   - 契约/架构检查 PASS

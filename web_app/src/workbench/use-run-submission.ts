@@ -37,7 +37,7 @@ export function useRunSubmission(site: SiteDto, form: WorkbenchFormState): RunSu
   const registry = useContext(RegistryContext);
   const appRuntime = useAppRuntime();
   const [submitting, setSubmitting] = useState(false);
-  const submissionScope = useMemo(() => new ScopeGate(), [registry]);
+  const submissionScope = useMemo(() => new ScopeGate(), []);
   const pending = useRef<PendingSubmission | undefined>(undefined);
   useEffect(() => () => submissionScope.dispose(), [submissionScope, registry]);
 

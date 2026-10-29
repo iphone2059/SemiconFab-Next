@@ -12,13 +12,21 @@ import type { TelemetryRuntime } from '@/realtime/telemetry-runtime';
  */
 export class FabTelemetryRegistry {
   private readonly runtimes = new Map<string, TelemetryRuntime>();
+  private readonly listeners = new Set<() => void>();
   /** Mounted-consumer count per FAB; a runtime is live only while its count is > 0. */
   private readonly consumers = new Map<string, number>();
 
   replaceAll(next: ReadonlyMap<string, TelemetryRuntime>): void {
     this.stopAll();
     for (const [fabId, runtime] of next) this.runtimes.set(fabId, runtime);
+    this.emit();
   }
+
+  /** Registry-generation subscription used by React's external-store hook. */
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  };
 
   get(fabId: string | undefined): TelemetryRuntime | undefined {
     return fabId ? this.runtimes.get(fabId) : undefined;
@@ -55,6 +63,7 @@ export class FabTelemetryRegistry {
 
   disposeAll(): void {
     this.stopAll();
+    this.emit();
   }
 
   get size(): number {
@@ -69,5 +78,9 @@ export class FabTelemetryRegistry {
     for (const runtime of this.runtimes.values()) runtime.stop();
     this.runtimes.clear();
     this.consumers.clear();
+  }
+
+  private emit(): void {
+    for (const listener of this.listeners) listener();
   }
 }

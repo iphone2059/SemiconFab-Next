@@ -31,6 +31,8 @@ export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode
   const signature = useRef('');
   const sitesResourceView = useResource(appRuntime, sitesResource);
   const sites = sitesResourceView.data;
+  const projectionRegistry = appRuntime.registry;
+  const runPromise = appRuntime.runPromise;
 
   useEffect(() => {
     if (!sites) return;
@@ -60,12 +62,12 @@ export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode
     const httpGateway = typeof fetch === 'function' ? createHttpCommandGateway() : undefined;
     // Transitional UI composition edge; Task 4 replaces the legacy recovery contract.
     const gateway = httpGateway && { getCommandStatus: (fabId: string, commandId: string) =>
-      appRuntime.runPromise(httpGateway.getCommandStatus(fabId, commandId)).then(Option.getOrNull) };
+      runPromise(httpGateway.getCommandStatus(fabId, commandId)).then(Option.getOrNull) };
     const factory = new FabRuntimeFactory({
       sourceFor: (fabId) => sourceByFab.get(fabId) ?? createPendingCommandEventSource(),
       gateway,
       lazyCommandSubscription: true,
-      projectionRegistry: appRuntime.registry,
+      projectionRegistry,
     });
     for (const fab of fabs) registry.register(factory.create(fab.fabId));
 
@@ -93,7 +95,7 @@ export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode
     // Registry mutations are not React state; re-render once so consumers
     // (command console/sidebar) see the assembled runtimes.
     setRuntimeVersion((value) => value + 1);
-  }, [sites, registry, telemetryRegistry]);
+  }, [sites, registry, telemetryRegistry, projectionRegistry, runPromise]);
 
   useEffect(() => () => {
     lifecycle.current?.dispose();

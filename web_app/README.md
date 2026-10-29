@@ -2,6 +2,8 @@
 
 SemiconFab-Next 唯一 Web 前端：Vite + React 单页站点。**Effect 4 + 严格单层 `src/<module>/<file>` + code-based routing** 重构已完成；无 Zustand/TanStack Query/Zod/RxJS/router plugin。
 
+React Compiler 使用 **Rust/Oxc**：`@vitejs/plugin-react@6.1.2` 的 `compiler` 选项驱动 `oxc-transform-react@0.156.0`（experimental，非 Babel）；`oxlint@1.90.0` 的 React correctness 规则作为静态门禁。
+
 当前产品与所有测试仅使用一个活动 FAB（FAB-01）。按 FAB 装配的 Runtime/遥测/设备状态、复合身份与集合契约保留，支持将来扩展；当前不要求多 FAB 部署/验收。
 
 ## 目录（实际）
@@ -39,6 +41,7 @@ web_app/
 node node_modules/pnpm/bin/pnpm.mjs typecheck
 node node_modules/pnpm/bin/pnpm.mjs test
 node node_modules/pnpm/bin/pnpm.mjs build
+pnpm lint   # oxlint src；verify.ps1 也会执行
 pnpm e2e   # 真实浏览器功能验收，产物 docs/perf/effect4-e2e.json
 ```
 

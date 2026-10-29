@@ -14,12 +14,13 @@ SemiconFab-Next 是 SemiconFab 的下一代实现：后端保持扁平、独立�
 
 ## 技术栈
 
-- React 19 + Vite 8 + TypeScript 7
+- React 19 + Vite 8 + TypeScript 7（React Compiler：Rust/Oxc `oxc-transform-react@0.156.0`，experimental）
+- Oxlint correctness 门禁（React/React Hooks 规则，0 errors 才可合并）
 - Effect 4（`effect@4.0.7`、`@effect/atom-react@4.0.7`）：AppRuntime、AtomRegistry、Resource Atom、Effect Stream/Scope
 - TanStack Router 1.170（**code-based route tree**；无 router plugin）
 - XState 6 Alpha（命令工作流，Scope 管理 actor 生命周期）
 - Babylon Lite 1.36（WebGPU-only）
-- 已移除：Zustand、TanStack Query、Zod、RxJS、`@tanstack/router-plugin`
+- 已移除：Zustand、TanStack Query、Zod、RxJS、`@tanstack/router-plugin`；未使用 Babel React Compiler 管线
 
 ## 项目清单
 
@@ -70,4 +71,7 @@ cd web_app; pnpm e2e
 # 渲染/GPU 与遥测压力（需已启动 dev 栈）
 node tools/render_perf.mjs --url http://127.0.0.1:5173/fabs/<fabId>/3d --frames 600 --profile dev
 node tools/telemetry_stress.mjs --url http://127.0.0.1:5173/tests/telemetry-stress.html --seconds 8 --rate 60
+
+# React Compiler 静态门禁（web_app）
+cd web_app; pnpm lint
 ```

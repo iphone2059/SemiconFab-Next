@@ -228,7 +228,7 @@ export function useTourController({
   /** Manual camera input stops the tour; identity follows the owned stop(). */
   const cancelTourIfRunning = useCallback((): void => {
     if (lifecycleRef.current !== 'IDLE') stop();
-  }, [stop, registry]);
+  }, [stop]);
 
   // Page unmount releases the loop/timeline/HUD through the same stop(). The
   // cleanup captures the stop identity (and therefore the scheduler) of the

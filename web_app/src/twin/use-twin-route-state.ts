@@ -60,6 +60,11 @@ export function useTwinRouteState({
   const appRuntime = useAppRuntime();
   const sitesView = useResource(appRuntime, sitesResource);
   const searchQuery = searchToQueryString(search ?? {});
+  const searchMode = search?.mode;
+  const searchLang = search?.lang;
+  const searchTheme = search?.theme;
+  const routeModal = twinModalFrom(search ?? {});
+  const legacySiteId = twinSiteIdFrom(search ?? {});
 
   // URL is the owner of persisted language/theme overrides; the store is synced
   // from the router search and writes back through it (no history/location use).
@@ -72,29 +77,27 @@ export function useTwinRouteState({
   }, [searchQuery, registry]);
 
   useEffect(() => {
-    const requested = twinModeFrom(search ?? {});
+    const requested = twinModeFrom(searchMode === undefined ? {} : { mode: searchMode });
     if (requested && registry.get(twinUiAtom).entryMode !== requested) twinUiActions.modeSet(registry, requested);
-  }, [search?.mode, registry]);
+  }, [searchMode, registry]);
 
   useEffect(() => {
     if (registry.get(twinUiAtom).entryMode !== mode) return;
-    const patch = { mode };
-    if (searchToQueryString({ ...(search ?? {}), ...patch }) !== searchQuery) onSearchChange?.(patch, true);
-  }, [mode, onSearchChange, search, searchQuery, registry]);
+    if (searchMode !== mode) onSearchChange?.({ mode }, true);
+  }, [mode, onSearchChange, searchMode, registry]);
 
   useEffect(() => {
     const current = registry.get(localeAtom);
     if (current.language !== language || current.theme !== theme) return;
-    const patch = { lang: languageTag(language), theme };
-    if (searchToQueryString({ ...(search ?? {}), ...patch }) !== searchQuery) onSearchChange?.(patch, true);
-  }, [language, theme, onSearchChange, search, searchQuery, registry]);
+    const lang = languageTag(language);
+    if (searchLang !== lang || searchTheme !== theme) onSearchChange?.({ lang, theme }, true);
+  }, [language, theme, onSearchChange, searchLang, searchTheme, registry]);
 
   useEffect(() => {
     if (!sitesView.data) return;
     // Canonical route identity (/fabs/$fabId/3d) wins over the transitional
     // ?siteId= compatibility parameter; the legacy parameter is still honoured
     // when the route does not carry a FAB id.
-    const legacySiteId = twinSiteIdFrom(search ?? {});
     let next: SiteDto | undefined;
     if (fabId) {
       next = sitesView.data.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
@@ -115,7 +118,7 @@ export function useTwinRouteState({
     // selects one FAB, it never rejects the site for having more than one.
     if (registry.get(twinPageAtom).siteId !== next.siteId) twinPageActions.siteIdSet(registry, next.siteId);
     if (registry.get(twinPageAtom).siteError !== undefined) twinPageActions.siteErrorSet(registry, undefined);
-  }, [sitesView.data, siteId, fabId, t, registry, sitesView.error]);
+  }, [sitesView.data, siteId, fabId, legacySiteId, t, registry, sitesView.error]);
 
   useEffect(() => {
     if (sitesView.error === undefined) return;
@@ -123,28 +126,26 @@ export function useTwinRouteState({
   }, [sitesView.error, t, registry]);
 
   useEffect(() => {
-    const modal = twinModalFrom(search ?? {});
-    if (modal === 'database' || modal === 'catalog') twinPageActions.infoDialogSet(registry, 'database');
-    else if (modal === 'arch') twinPageActions.infoDialogSet(registry, 'architecture');
-    else if (modal === 'yms') { twinPageActions.ymsOpenSet(registry, true); twinPageActions.ymsTabSet(registry, 'map'); }
-  }, [search?.modal, registry]);
+    if (routeModal === 'database' || routeModal === 'catalog') twinPageActions.infoDialogSet(registry, 'database');
+    else if (routeModal === 'arch') twinPageActions.infoDialogSet(registry, 'architecture');
+    else if (routeModal === 'yms') { twinPageActions.ymsOpenSet(registry, true); twinPageActions.ymsTabSet(registry, 'map'); }
+  }, [routeModal, registry]);
 
   useEffect(() => {
     try {
-      const modal = twinModalFrom(search ?? {});
-      if (!modal && localStorage.getItem(ONBOARDING_KEY) !== '1') twinUiActions.onboardingOpen(registry);
+      if (!routeModal && localStorage.getItem(ONBOARDING_KEY) !== '1') twinUiActions.onboardingOpen(registry);
     } catch {
       // Storage may be blocked; the page still works without onboarding memory.
     }
-  }, [search?.modal, registry]);
+  }, [routeModal, registry]);
 
   const site = useMemo(() => {
     const sites = sitesView.data;
     if (!sites) return undefined;
     if (fabId) return sites.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
     return sites.find((value) => value.siteId === siteId) ?? sites[0];
-  }, [sitesView.data, siteId, fabId, registry]);
-  const selectedFabId = useMemo(() => fabId ?? site?.fabs[0]?.fabId, [fabId, site, registry]);
+  }, [sitesView.data, siteId, fabId]);
+  const selectedFabId = useMemo(() => fabId ?? site?.fabs[0]?.fabId, [fabId, site]);
   const fab = useMemo(
     () => site ? site.fabs.find((value) => value.fabId === selectedFabId) ?? site.fabs[0] : undefined,
     [site, selectedFabId],

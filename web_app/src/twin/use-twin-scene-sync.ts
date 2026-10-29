@@ -55,7 +55,7 @@ export function useTwinSceneSync({
   // pose, so only a fresh epoch/reload or a requested view change re-applies it.
   const appliedCameraView = useRef<{ epoch: string | undefined; view: TwinView } | undefined>(undefined);
 
-  useEffect(() => { scene.current?.setLanguage(language); }, [language, lifecycle]);
+  useEffect(() => { scene.current?.setLanguage(language); }, [language, lifecycle, scene]);
 
   useEffect(() => {
     if (lifecycle !== 'ready') return;
@@ -66,7 +66,7 @@ export function useTwinSceneSync({
     scene.current?.setExplodeFactor(exploded ? explodePercent / 100 : 0, exploded);
     scene.current?.setCutPlane(cutActive, cutAxis, cutPosition, cutInvert);
     scene.current?.setXRayFilter(xrayFilter);
-  }, [lifecycle, basement, level, exploded, explodePercent, cutActive, cutAxis, cutPosition, cutInvert, xrayFilter]);
+  }, [lifecycle, basement, level, exploded, explodePercent, cutActive, cutAxis, cutPosition, cutInvert, xrayFilter, scene]);
 
   useEffect(() => {
     if (lifecycle !== 'ready') return;
@@ -74,7 +74,7 @@ export function useTwinSceneSync({
     // pose. Only a fresh mount/reload or a requested view change applies a preset.
     if (appliedCameraView.current?.epoch !== viewerEpoch || appliedCameraView.current?.view !== view) scene.current?.setView(view);
     appliedCameraView.current = { epoch: viewerEpoch, view };
-  }, [lifecycle, view, viewerEpoch]);
+  }, [lifecycle, view, viewerEpoch, scene]);
 
   useEffect(() => {
     if (lifecycle !== 'ready') return;
@@ -85,5 +85,5 @@ export function useTwinSceneSync({
     // cancelTourIfRunning is stable (identity follows the owned scheduler), so
     // listing it cannot re-run this effect per render while the closure can never
     // be stale.
-  }, [lifecycle, tourActive, cancelTourIfRunning]);
+  }, [lifecycle, tourActive, cancelTourIfRunning, scene]);
 }

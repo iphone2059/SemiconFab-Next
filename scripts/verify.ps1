@@ -40,7 +40,10 @@ Set-Location -LiteralPath (Join-Path (Get-Location) 'web_app')
 $fabPnpmVersion = ((Get-Content -LiteralPath 'package.json' -Raw | ConvertFrom-Json).packageManager -replace '^pnpm@', '')
 $fabNode = (Get-Command node.exe -ErrorAction Stop).Source
 $fabPnpmEntry = $null
-$fabPnpmCandidates = @((Join-Path (Get-Location) 'node_modules\pnpm\bin\pnpm.mjs'))
+$fabPnpmCandidates = @(
+    (Join-Path (Get-Location) 'node_modules\pnpm\bin\pnpm.mjs'),
+    (Join-Path $PSScriptRoot "..\.local\tooling\pnpm\$fabPnpmVersion\node_modules\pnpm\bin\pnpm.mjs")
+)
 foreach ($fabPnpmCommand in @(Get-Command pnpm.cmd -All -ErrorAction SilentlyContinue)) {
     $fabPnpmCandidates += Join-Path (Split-Path -Parent $fabPnpmCommand.Source) 'node_modules\pnpm\bin\pnpm.mjs'
 }
@@ -58,6 +61,9 @@ function Invoke-FabPinnedPnpm {
 Invoke-FabPinnedPnpm -FabArguments @('install', '--frozen-lockfile')
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 Invoke-FabPinnedPnpm -FabArguments @('typecheck')
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
+# Task 7 static gate: React Compiler correctness rules must be clean.
+Invoke-FabPinnedPnpm -FabArguments @('exec', 'oxlint', 'src')
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 Invoke-FabPinnedPnpm -FabArguments @('test')
 if ($LASTEXITCODE) { exit $LASTEXITCODE }

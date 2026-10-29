@@ -52,10 +52,10 @@ export function TwinInfoDialog({ mode, onClose, onSelectOem }: { mode: 'architec
   const oemDialog = useAtomValue(twinPageAtom, (state) => state.oemDialog);
   const archQuery = useAtomValue(twinPageAtom, (state) => state.archQuery);
   const allOem = ORIGINAL_TWIN_UI.oem;
-  const segments = useMemo(() => [...new Set(allOem.map((row) => row.segment))], [allOem, registry]);
-  const vendors = useMemo(() => [...new Set(allOem.map((row) => row.vendor))].sort(), [allOem, registry]);
+  const segments = useMemo(() => [...new Set(allOem.map((row) => row.segment))], [allOem]);
+  const vendors = useMemo(() => [...new Set(allOem.map((row) => row.vendor))].sort(), [allOem]);
   const oemRows = useMemo(() => filterOriginalOem(oemDialog.query, oemDialog.segment)
-    .filter((row) => oemDialog.vendor === 'ALL' || row.vendor === oemDialog.vendor), [oemDialog, registry]);
+    .filter((row) => oemDialog.vendor === 'ALL' || row.vendor === oemDialog.vendor), [oemDialog]);
   const archText = ARCH_LAYERS.map((row) => `${row.title} ${row.body} ${row.tools.flat().join(' ')}`).join(' ')
     + DATA_ROWS.flat().join(' ');
   const showArch = !archQuery.trim() || archText.toLowerCase().includes(archQuery.trim().toLowerCase());

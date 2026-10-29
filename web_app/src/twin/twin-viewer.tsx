@@ -2,7 +2,7 @@ import { useAtomValue } from '@effect/atom-react';
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { useTwinLocale } from '@/twin/twin-i18n';
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react';
 import { runtimeAtom, runtimeActions } from '@/state/runtime-store';
 import { createCoalescedDispatcher } from '@/lib/coalesced-dispatcher';
 import type { FabDto, SiteDto } from '@/contracts/app-contracts';
@@ -47,11 +47,18 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
   // scene callback through a ref so the current props handlers are invoked
   // instead of the first render's closures (which capture a stale selection).
   const callbacks = useRef({ onToolChange, onStatusChange, onAmhsStatsChange });
-  callbacks.current = { onToolChange, onStatusChange, onAmhsStatsChange };
+  useLayoutEffect(() => { callbacks.current = { onToolChange, onStatusChange, onAmhsStatsChange }; }, [onToolChange, onStatusChange, onAmhsStatsChange]);
   const canvas = useRef<HTMLCanvasElement>(null);
   const facade = useRef<ScenePort | undefined>(undefined);
   const frameSource = useRef({ getToolStates, toolStates });
-  frameSource.current = { getToolStates, toolStates };
+  useLayoutEffect(() => { frameSource.current = { getToolStates, toolStates }; }, [getToolStates, toolStates]);
+  // The GPU mount lifetime is deliberately longer than a language/FAB-code change;
+  // read the latest translator/code through layout-updated refs instead of adding
+  // them to the mount effect (a dependency change there would recreate the scene).
+  const translator = useRef(t);
+  useLayoutEffect(() => { translator.current = t; }, [t]);
+  const fabCode = useRef(fab.code);
+  useLayoutEffect(() => { fabCode.current = fab.code; }, [fab.code]);
   const status = useAtomValue(runtimeAtom, state => state.viewer.status);
   // Control flow uses the discrete lifecycle only; `status` is display copy for the HUD.
   const lifecycle = useAtomValue(runtimeAtom, state => state.viewer.lifecycle);
@@ -88,7 +95,7 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
     const mountOptions = (): SceneMountOptions => ({
       viewerId: epoch,
       canvas: element,
-      fabs: [{ fabId: fab.fabId, code: fab.code, position: [0, 0, 0] }],
+      fabs: [{ fabId: fab.fabId, code: fabCode.current, position: [0, 0, 0] }],
       signal: controller.signal,
       callbacks: {
         onLifecycle: reportLifecycle,
@@ -109,12 +116,12 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
         // lifecycle event must not leave the viewer silently initializing forever.
         if (outcome.status === 'failed' && !failedReported) {
           const error = outcome.error;
-          reportLifecycle({ type: 'failed', message: error instanceof Error ? error.message : t("场景初始化失败"), error });
+          reportLifecycle({ type: 'failed', message: error instanceof Error ? error.message : translator.current("场景初始化失败"), error });
         }
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
-          reportLifecycle({ type: 'failed', message: error instanceof Error ? error.message : t("场景初始化失败"), error });
+          reportLifecycle({ type: 'failed', message: error instanceof Error ? error.message : translator.current("场景初始化失败"), error });
         }
       });
     return () => {

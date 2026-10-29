@@ -1,6 +1,6 @@
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import { waferRoutesResource } from '@/api/wafer.resource';
 import { useResource } from '@/api/use-resource';
@@ -14,6 +14,12 @@ import { twinUiAtom, twinUiActions } from '@/twin/twin-ui.atom';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
 import type { TwinLanguage } from '@/twin/twin-i18n';
 import { closeWaferSession } from '@/twin/twin-wafer-session';
+
+/** Renderer cleanup is outside the hook so the RAF effect cleanup owns no memoized ref closure. */
+function clearWaferScene(scene: RefObject<FabViewportHandle | null>): void {
+  scene.current?.setWaferPoint(0, 0, 0, false, false);
+  scene.current?.setWaferTrail([]);
+}
 
 export interface TwinWaferPlaybackParams {
   scene: RefObject<FabViewportHandle | null>;
@@ -63,7 +69,7 @@ export function useWaferPlayback({ scene, waferActive, language, endTour, t }: T
     waferHudRef.current = null;
   }, [registry]);
 
-  function syncWaferHud(): void {
+  const syncWaferHud = useCallback((): void => {
     const controller = waferTimelineRef.current;
     if (!controller) return;
     const frame = controller.readFrame();
@@ -73,7 +79,7 @@ export function useWaferPlayback({ scene, waferActive, language, endTour, t }: T
         hud: frame.hud, completed: controller.readStats().completed });
     }
     if (frame.playing !== registry.get(twinUiAtom).wafer.playing) twinUiActions.waferPlay(registry, frame.playing);
-  }
+  }, [registry]);
 
   useEffect(() => {
     if (!waferActive || !waferRoutes) return;
@@ -112,15 +118,14 @@ export function useWaferPlayback({ scene, waferActive, language, endTour, t }: T
     return () => {
       cancelAnimationFrame(frame);
       controller.close();
-      scene.current?.setWaferPoint(0, 0, 0, false, false);
-      scene.current?.setWaferTrail([]);
+      clearWaferScene(scene);
     };
-  }, [waferActive, waferRoutes, registry]);
+  }, [waferActive, waferRoutes, registry, scene, syncWaferHud]);
 
   useEffect(() => {
     waferTimelineRef.current?.setLanguage(language === 'zh' ? 'zh-CN' : 'en');
     syncWaferHud();
-  }, [language, registry]);
+  }, [language, registry, syncWaferHud]);
 
   function startWafer(): void {
     endTour();

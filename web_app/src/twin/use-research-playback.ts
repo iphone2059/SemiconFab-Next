@@ -82,7 +82,7 @@ export function useResearchPlayback({
     return () => window.clearInterval(timer);
   }, [researchPlaying, research, researchSpeed, registry]);
 
-  const researchSnapshot = useMemo(() => research?.snapshot(researchTime), [research, researchTime, registry]);
+  const researchSnapshot = useMemo(() => research?.snapshot(researchTime), [research, researchTime]);
   const replayProjection = useMemo(
     () => researchSnapshot ? projectReplayStates(researchSnapshot, replayBase) : undefined,
     [researchSnapshot, replayBase],

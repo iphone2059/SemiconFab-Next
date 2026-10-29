@@ -1,2 +1,9 @@
 # pnpm 12 settings file (not a workspace definition; ADR-0001 flat layout is unchanged).
 # No release-age exceptions are currently required.
+
+# @vitejs/plugin-react@6.1.2 declares oxc-transform-react ^0.152.0. The
+# 2026-10-29 candidate is 0.156.0; the Oxc transform API and Windows native
+# binding were validated by build/tests, so allow this explicit peer range.
+peerDependencyRules:
+  allowedVersions:
+    oxc-transform-react: "0.156.0"

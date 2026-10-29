@@ -32,9 +32,8 @@ export function OriginalInspector({selection,states,onClose,onManualKey,onSelect
   const telemetry = useAtomValue(twinDemoAtom, state=>processEquipment ? state.telemetry[processEquipment.id] : undefined);
   const spc = useMemo(()=>telemetry?computeSpc(telemetry.history,telemetry.sensors[0],(states[equipment?.id??'']??'running')==='down'):undefined,[telemetry,states,equipment?.id]);
   const storedMes=useAtomValue(twinPageAtom, state=>equipment ? state.inspectorMes[equipment.id] : undefined);
-  const initialMes=useMemo(()=>processEquipment?createProcessMesJob(processEquipment, Date.now()):undefined,[processEquipment]);
-  const mes=storedMes??initialMes;
-  useEffect(()=>{if(processEquipment&&initialMes&&!storedMes)twinPageActions.inspectorMesSet(registry, {id:processEquipment.id,job:initialMes});},[processEquipment,initialMes,storedMes]);
+  const mes=storedMes;
+  useEffect(()=>{if(processEquipment&&!storedMes)twinPageActions.inspectorMesSet(registry, {id:processEquipment.id,job:createProcessMesJob(processEquipment, Date.now())});},[processEquipment,storedMes,registry]);
   const setMes=(update:(current:MesJob|undefined)=>MesJob|undefined)=>{const job=update(mes)??mes;if(equipment&&job)twinPageActions.inspectorMesSet(registry, {id:equipment.id,job});};
   if(selection.kind==='layout')return null;
   if(selection.kind==='oem'&&oem) {

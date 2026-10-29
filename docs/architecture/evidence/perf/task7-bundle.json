@@ -1,0 +1,127 @@
+{
+  "generatedAt": "2026-10-29T15:00:25.215Z",
+  "baseline": {
+    "label": "compiler-off",
+    "commit": "06a933e",
+    "buildMs": 900,
+    "generatedAt": "2026-10-29T14:58:38.890Z",
+    "assetsDir": "C:\\Users\\han_qingyu\\SemiconFab-Next\\.local\\worktrees\\effect4-flat\\.local\\worktrees\\effect4-compiler-off\\web_app\\dist\\assets",
+    "files": [
+      {
+        "name": "gpu-C-NLGAJB.js",
+        "rawBytes": 392709,
+        "gzipBytes": 129206
+      },
+      {
+        "name": "index-8ovPP1vQ.js",
+        "rawBytes": 197222,
+        "gzipBytes": 62735
+      },
+      {
+        "name": "index-DMLM5948.css",
+        "rawBytes": 121099,
+        "gzipBytes": 20863
+      },
+      {
+        "name": "legacy-LICENSE-CSEy9_Bq.txt",
+        "rawBytes": 4637,
+        "gzipBytes": 1739
+      },
+      {
+        "name": "lite-backend-BdR3Xrvd.js",
+        "rawBytes": 1795261,
+        "gzipBytes": 170149
+      },
+      {
+        "name": "react-r_aAcsMh.js",
+        "rawBytes": 440745,
+        "gzipBytes": 140359
+      },
+      {
+        "name": "rolldown-runtime-XKyaHtl9.js",
+        "rawBytes": 726,
+        "gzipBytes": 429
+      },
+      {
+        "name": "telemetry.worker-BXuP41hJ.js",
+        "rawBytes": 2601,
+        "gzipBytes": 961
+      },
+      {
+        "name": "twin-page-BA9yzKT3.js",
+        "rawBytes": 409070,
+        "gzipBytes": 106973
+      }
+    ],
+    "totals": {
+      "jsRawBytes": 3238334,
+      "jsGzipBytes": 610812,
+      "cssRawBytes": 121099,
+      "cssGzipBytes": 20863,
+      "allRawBytes": 3364070,
+      "allGzipBytes": 633414
+    }
+  },
+  "compilerOn": {
+    "label": "oxc-transform-react 0.156.0",
+    "buildMs": 954,
+    "generatedAt": "2026-10-29T14:58:39.003Z",
+    "assetsDir": "C:\\Users\\han_qingyu\\SemiconFab-Next\\.local\\worktrees\\effect4-flat\\web_app\\dist\\assets",
+    "files": [
+      {
+        "name": "gpu-B6EZQgwV.js",
+        "rawBytes": 392648,
+        "gzipBytes": 127232
+      },
+      {
+        "name": "index-Bc4C5XD2.js",
+        "rawBytes": 230003,
+        "gzipBytes": 76294
+      },
+      {
+        "name": "index-DMLM5948.css",
+        "rawBytes": 121099,
+        "gzipBytes": 20863
+      },
+      {
+        "name": "legacy-LICENSE-CSEy9_Bq.txt",
+        "rawBytes": 4637,
+        "gzipBytes": 1739
+      },
+      {
+        "name": "lite-backend-BMKaXHo0.js",
+        "rawBytes": 1795208,
+        "gzipBytes": 170124
+      },
+      {
+        "name": "react-WWxCYaA2.js",
+        "rawBytes": 440889,
+        "gzipBytes": 140438
+      },
+      {
+        "name": "rolldown-runtime-XKyaHtl9.js",
+        "rawBytes": 726,
+        "gzipBytes": 429
+      },
+      {
+        "name": "telemetry.worker-BXuP41hJ.js",
+        "rawBytes": 2601,
+        "gzipBytes": 961
+      },
+      {
+        "name": "twin-page-DO4yz9yy.js",
+        "rawBytes": 455871,
+        "gzipBytes": 128118
+      }
+    ],
+    "totals": {
+      "jsRawBytes": 3317946,
+      "jsGzipBytes": 643596,
+      "cssRawBytes": 121099,
+      "cssGzipBytes": 20863,
+      "allRawBytes": 3443682,
+      "allGzipBytes": 666198
+    }
+  },
+  "note": "Same Vite 8.3.5 production build; OFF from detached worktree at 06a933e; ON from compiler branch working tree. Gzip measured per emitted asset."
+}

@@ -2,7 +2,7 @@ import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { OriginalIcon } from '@/components/original-icons';
 import { TwinLocaleProvider } from '@/twin/twin-i18n';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import type { AmhsStats, CutAxis } from '@/contracts/scene.port';
 import { FAB_TOOL_STATE_META, type FabToolState } from '@/domain/fab-layout';
 import { YIELD_SCENARIOS } from '@/domain/fab-yield';
@@ -83,8 +83,10 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const telemetry = useFabTelemetry(selectedFabId);
   // The tour controller is scoped to the viewer it writes to: a FAB switch or a
   // viewer recreation (new epoch) must stop the running tour, not drive the new scene.
-  const tour = useTourController({ scene, language, scopeKey: `${selectedFabId ?? ''}:${viewerEpoch ?? ''}` });
-  const wafer = useWaferPlayback({ scene, waferActive, language, endTour: tour.finishTour, t });
+  const {
+    tourHudRef, tourHudSeed, startTour, endTour, previousTour, advanceTour, finishTour, cancelTourIfRunning,
+  } = useTourController({ scene, language, scopeKey: `${selectedFabId ?? ''}:${viewerEpoch ?? ''}` });
+  const wafer = useWaferPlayback({ scene, waferActive, language, endTour: finishTour, t });
   const {
     research, loading: researchLoading, error: researchError, parseError: researchParseError,
     snapshot: researchSnapshot, replayProjection,
@@ -111,12 +113,12 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const { selectedTelemetry, selectedSpc, selectedMes, spcPlot } = useTwinProcessProjection({ selected, toolStates, mesJobs });
   const actions = useTwinActions({
     scene, mode, view, level, exploded, selected, mesJobs, layerPreferences, toolStates,
-    onboardingDontShow, startTour: tour.startTour,
+    onboardingDontShow, startTour,
   });
   useTwinSceneSync({
     scene, lifecycle, viewerEpoch, view, language, level, basement, exploded, explodePercent,
     cutActive, cutAxis, cutPosition, cutInvert, xrayFilter,
-    tourActive: ui.tour.active, cancelTourIfRunning: tour.cancelTourIfRunning,
+    tourActive: ui.tour.active, cancelTourIfRunning,
   });
   useTwinKeyboard({ onEscape: actions.escape, setCamera: actions.setCamera });
   useTwinDemoClock(ui.statusSource, demo.playing);
@@ -127,8 +129,8 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   // The scene frame loop reads the Effect Atom snapshots directly for demo/live modes.
   // Research replay keeps its derived array in a ref until the query state lands.
   const directToolStates = useRef<readonly FabToolState[]>(toolStates);
-  directToolStates.current = toolStates;
-  const mergeToolStates = useMemo(createToolStateMerger, [registry]);
+  useLayoutEffect(() => { directToolStates.current = toolStates; }, [toolStates]);
+  const mergeToolStates = useMemo(() => createToolStateMerger(), []);
   const getToolStates = useMemo(() => (): readonly FabToolState[] => {
     if (registry.get(twinUiAtom).entryMode === 'research') return directToolStates.current;
     if (registry.get(twinUiAtom).statusSource === 'demo') return registry.get(twinDemoAtom).states;
@@ -143,7 +145,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     const counts = { running: 0, idle: 0, down: 0, maint: 0 };
     for (const state of toolStates) counts[state] += 1;
     return counts;
-  }, [toolStates, registry]);
+  }, [toolStates]);
   const pressure = cleanroomPressureField(selected?.x ?? 0, selected?.z ?? 0);
 
   if (error) {
@@ -181,7 +183,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
             <button type="button" aria-label="Airlock" title="Focus Cleanroom Air Shower" onClick={() => actions.setCamera('airshower')}><OriginalIcon name="airlock" /></button>
             <button id="btn-focus-patrol" type="button" aria-label={t("跟踪巡检工程师")} title={t("跟踪巡检工程师")} onClick={() => scene.current?.focusPatrol()}><OriginalIcon name="user-check" /></button>
           </div>
-          <button id="btn-cinematic-tour" type="button" className={`twin-tour${tourStep !== undefined ? ' active' : ''}`} aria-pressed={tourStep !== undefined} onClick={() => { if (tourStep === undefined) tour.startTour(); else tour.endTour(); }}><OriginalIcon name="tour" />{tourStep === undefined ? 'Tour' : 'Stop'}</button>
+          <button id="btn-cinematic-tour" type="button" className={`twin-tour${tourStep !== undefined ? ' active' : ''}`} aria-pressed={tourStep !== undefined} onClick={() => { if (tourStep === undefined) startTour(); else endTour(); }}><OriginalIcon name="tour" />{tourStep === undefined ? 'Tour' : 'Stop'}</button>
           <div className="twin-layers" aria-label={t("图层")}>
             {LAYER_LABELS.filter(({ layer }) => layer !== 'airflow').map(({ layer, label }) => (
               <button id={layer === 'amhs' ? 'btn-toggle-oht' : layer === 'ceiling' ? 'btn-toggle-ceiling' : layer === 'roof' ? 'btn-toggle-roof' : layer === 'heatmap' ? 'btn-toggle-heatmap' : 'btn-toggle-piping'} type="button" key={layer} className={layers[layer] ? 'active' : ''} aria-pressed={!!layers[layer]} onClick={() => actions.toggleLayer(layer)}><OriginalIcon name={layer === 'amhs' ? 'amhs' : layer === 'ceiling' || layer === 'roof' ? 'ffu' : 'heatmap'} />{layer === 'heatmap' ? t("气流热力图") : label}</button>
@@ -250,7 +252,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
           toolStates={toolStates}
           onToolChange={actions.handleToolChange}
           onAmhsStatsChange={amhsBatcher.push}
-          onCameraInteraction={() => { tour.cancelTourIfRunning(); wafer.clearFollowOnCameraInteraction(); }}
+          onCameraInteraction={() => { cancelTourIfRunning(); wafer.clearFollowOnCameraInteraction(); }}
           getToolStates={getToolStates}
           layers={layers}
           explodeFactor={level === 'EXPLODED' ? explodePercent / 100 : 0}
@@ -444,12 +446,12 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
 
         {tourStep !== undefined && TOUR_STOPS[tourStep] && (
           <TwinTourHud
-            ref={tour.tourHudRef}
+            ref={tourHudRef}
             tourStep={tourStep}
-            initialHud={tour.tourHudSeed}
-            onEnd={tour.endTour}
-            onPrev={tour.previousTour}
-            onNext={tour.advanceTour}
+            initialHud={tourHudSeed}
+            onEnd={endTour}
+            onPrev={previousTour}
+            onNext={advanceTour}
           />
         )}
 

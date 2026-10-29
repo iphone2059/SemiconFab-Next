@@ -78,6 +78,20 @@ node tools/bundle_metrics.mjs --dir <worktree>/web_app/dist/assets --out docs/ar
 - 汇总与边界：`docs/architecture/evidence/effect4-task6-performance-a4.md`（3 轮交替 A/B、bundle、连接/Worker/heap、A0–A4 对照）。
 - 浏览器功能证据：`docs/perf/effect4-e2e.json`（`pnpm e2e` 生成，含每场景网络与性能字段）。
 
+## React Compiler 门禁（Task 7）
+
+```powershell
+cd web_app
+pnpm lint                  # oxlint src（React correctness，0 errors）
+pnpm typecheck
+pnpm test                  # 含 tests/architecture/oxc-react-compiler.test.ts 直接 transform fixture
+pnpm build                 # Oxc React Compiler（reportDiagnostics: true）
+```
+
+- 实现：`@vitejs/plugin-react` 的 `compiler` → `oxc-transform-react@0.156.0`（Rust/Oxc，非 Babel，experimental）。
+- `verify.ps1` 在 typecheck 后强制运行 `oxlint src`；compiler fixture 属 Vitest 套件。
+- 证据：`docs/architecture/evidence/perf/task7-*.json` 与 `docs/architecture/evidence/effect4-task7-react-compiler.md`。
+
 ## 前端架构门禁
 
 - `web_app/tests/architecture/architecture-boundaries.test.ts`：通用正则边界规则（分层 import、XState/工作流实现隔离等）。

@@ -77,7 +77,7 @@ export function useCommandConsole({ siteId, fabId }: { siteId: string; fabId: st
   // Render-time refs let a submission continuation detect a replaced scope or an
   // unmounted console without adding per-render objects to the async formula.
   const scopeRef = useRef(scope);
-  scopeRef.current = scope;
+  useLayoutEffect(() => { scopeRef.current = scope; }, [scope]);
   const aliveRef = useRef(true);
   // Layout-effect cleanup runs synchronously on unmount, before a late promise
   // reaction can reach setStored/runtime.trackCommand.

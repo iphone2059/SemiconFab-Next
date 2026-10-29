@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { PickedTool } from '@/contracts/scene.port';
 import { FAB_LAYOUT, type FabToolState } from '@/domain/fab-layout';
-import { buildTelemetry, computeSpc, createMesJob, type MesJob, type SpcResult, type Telemetry } from '@/domain/fab-process-control';
+import { buildTelemetry, computeSpc, type MesJob, type SpcResult, type Telemetry } from '@/domain/fab-process-control';
 
 export interface SpcPlot {
   points: string;
@@ -31,7 +31,7 @@ export interface TwinProcessProjection {
 export function useTwinProcessProjection({ selected, toolStates, mesJobs }: TwinProcessProjectionParams): TwinProcessProjection {
   const selectedTelemetry = useMemo(
     () => selected ? buildTelemetry(FAB_LAYOUT[selected.index], selected.index) : undefined,
-    [selected?.index],
+    [selected],
   );
   const selectedSpc = useMemo(
     () => selectedTelemetry
@@ -39,7 +39,9 @@ export function useTwinProcessProjection({ selected, toolStates, mesJobs }: Twin
       : undefined,
     [selectedTelemetry, toolStates, selected?.index],
   );
-  const selectedMes = selected ? mesJobs[selected.index] ?? createMesJob(FAB_LAYOUT[selected.index], selected.index, Date.now()) : undefined;
+  // No impure fallback during render: the inspector effect materializes a demo MES
+  // job once, and this projection reads the Atom-owned value only.
+  const selectedMes = selected ? mesJobs[selected.index] : undefined;
   const spcPlot = useMemo<SpcPlot | undefined>(() => {
     if (!selectedTelemetry) return undefined;
     const values = selectedTelemetry.history;

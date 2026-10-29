@@ -1,0 +1,835 @@
+{
+  "generatedAt": "2026-10-29T15:03:21.561Z",
+  "target": "http://127.0.0.1:5185",
+  "browser": "Chrome/155.0.8059.86",
+  "commit": null,
+  "fixtures": {
+    "sites": 1,
+    "fabs": 1,
+    "catalogItems": 253
+  },
+  "scenarios": [
+    {
+      "id": "S1",
+      "name": "Sites success / failure / retry",
+      "startUrl": "http://127.0.0.1:5185/",
+      "steps": [
+        {
+          "description": "sites request failure renders retryable workbench alert",
+          "expected": "站点 API 错误 alert",
+          "actual": "站点 API 错误：Failed to fetch。请检查 API、Worker 与服务器端开发密钥配置。重试",
+          "pass": true
+        },
+        {
+          "description": "retry recovers the sites document and FAB card",
+          "expected": "FAB-01 rendered",
+          "actual": "FAB card visible, alert count=0",
+          "pass": true
+        }
+      ],
+      "expected": "see steps",
+      "actual": "all assertions passed",
+      "pass": true,
+      "consoleErrors": [
+        "log: Failed to load resource: net::ERR_FAILED",
+        "log: Failed to load resource: net::ERR_FAILED"
+      ],
+      "network": {
+        "total": 132,
+        "eventSources": 0,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-runtime.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-registry.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/app/telemetry-provider.tsx",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-worker-factory.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/api/commands.mutation.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites",
+            "count": 3
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/runs",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/runs/36601b9e-5f0c-4486-96bd-f9fa3372ad3a",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/runs/36601b9e-5f0c-4486-96bd-f9fa3372ad3a/results",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [],
+      "performance": {
+        "jsHeapUsedMb": 27.06,
+        "taskDurationMs": 213.9,
+        "activeEventSources": 0,
+        "workerTargets": 0,
+        "reactCommits": 14
+      }
+    },
+    {
+      "id": "S2",
+      "name": "Equipment catalog filter/search/view",
+      "startUrl": "http://127.0.0.1:5185/equipment",
+      "steps": [
+        {
+          "description": "search narrows the catalog",
+          "expected": "fewer rows than 40",
+          "actual": "6",
+          "pass": true
+        },
+        {
+          "description": "view switch renders the compare view",
+          "expected": "catalog comparison rendered",
+          "actual": "url=http://127.0.0.1:5185/equipment/compare?lang=en-US&theme=light&q=Canon&compare=3acd7b05-e6e8-5312-bb5b-045e7dd3074b%2Ce3021724-ec73-534e-be7c-ba3374f4ddb8%2Cfc2170cf-ce41-599f-82a5-d3e3676bcd65 comparison=1",
+          "pass": true
+        }
+      ],
+      "expected": "see steps",
+      "actual": "all assertions passed",
+      "pass": true,
+      "consoleErrors": [],
+      "network": {
+        "total": 128,
+        "eventSources": 0,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-runtime.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-registry.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/app/telemetry-provider.tsx",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-worker-factory.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/api/commands.mutation.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/catalog",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [],
+      "performance": {
+        "jsHeapUsedMb": 39.33,
+        "taskDurationMs": 409.4,
+        "activeEventSources": 0,
+        "workerTargets": 0,
+        "reactCommits": 22
+      }
+    },
+    {
+      "id": "S3",
+      "name": "URL search language/theme refresh/back/forward",
+      "startUrl": "http://127.0.0.1:5185/equipment?lang=en&theme=dark",
+      "steps": [
+        {
+          "description": "English locale from URL renders catalog labels",
+          "expected": "All equipment",
+          "actual": "present",
+          "pass": true
+        },
+        {
+          "description": "refresh preserves lang/theme query",
+          "expected": "lang=en&theme=dark",
+          "actual": "http://127.0.0.1:5185/equipment?lang=en-US&theme=dark",
+          "pass": true
+        },
+        {
+          "description": "history.back leaves the deep link theme",
+          "expected": "theme=dark absent",
+          "actual": "http://127.0.0.1:5185/equipment/compare?lang=en-US&theme=light&q=Canon&compare=3acd7b05-e6e8-5312-bb5b-045e7dd3074b%2Ce3021724-ec73-534e-be7c-ba3374f4ddb8%2Cfc2170cf-ce41-599f-82a5-d3e3676bcd65",
+          "pass": true
+        },
+        {
+          "description": "history.forward restores the deep link",
+          "expected": "theme=dark",
+          "actual": "http://127.0.0.1:5185/equipment?lang=en-US&theme=dark",
+          "pass": true
+        }
+      ],
+      "expected": "see steps",
+      "actual": "all assertions passed",
+      "pass": true,
+      "consoleErrors": [
+        "log: WebSocket connection to 'ws://127.0.0.1:5185/?token=-lHeV5uusxea' failed: Page entered Back-Forward Cache.",
+        "log: WebSocket connection to 'ws://127.0.0.1:5185/?token=-lHeV5uusxea' failed: Page entered Back-Forward Cache."
+      ],
+      "network": {
+        "total": 257,
+        "eventSources": 0,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-runtime.ts",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-registry.ts",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/app/telemetry-provider.tsx",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-worker-factory.ts",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/api/commands.mutation.ts",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/catalog",
+            "count": 2
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [],
+      "performance": {
+        "jsHeapUsedMb": 44.07,
+        "taskDurationMs": 2.2,
+        "activeEventSources": 0,
+        "workerTargets": 0,
+        "reactCommits": 6
+      }
+    },
+    {
+      "id": "S4",
+      "name": "Workbench validation/duplicate/error/submit",
+      "startUrl": "http://127.0.0.1:5185/",
+      "steps": [
+        {
+          "description": "invalid form surfaces a submission error state",
+          "expected": ">=1 alert",
+          "actual": "1",
+          "pass": true
+        },
+        {
+          "description": "duplicate click is ignored while the first POST is in flight",
+          "expected": "1 POST /runs",
+          "actual": "1",
+          "pass": true
+        },
+        {
+          "description": "accepted submit leaves no form error",
+          "expected": "no submit error alert",
+          "actual": "0",
+          "pass": true
+        }
+      ],
+      "expected": "see steps",
+      "actual": "all assertions passed",
+      "pass": true,
+      "consoleErrors": [],
+      "network": {
+        "total": 159,
+        "eventSources": 0,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-runtime.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-registry.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/app/telemetry-provider.tsx",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-worker-factory.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/api/commands.mutation.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/runs",
+            "count": 16
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/runs/36601b9e-5f0c-4486-96bd-f9fa3372ad3a",
+            "count": 13
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/runs/36601b9e-5f0c-4486-96bd-f9fa3372ad3a/results",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/runs/39f31999-368a-42e1-b4e6-598dafba35e4",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/runs/39f31999-368a-42e1-b4e6-598dafba35e4/results",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [
+        "Accepted-submit timing depends on the local DES API; the POST count and absence of an error alert are asserted instead of a specific run duration."
+      ],
+      "performance": {
+        "jsHeapUsedMb": 40.86,
+        "taskDurationMs": 912.4,
+        "activeEventSources": 0,
+        "workerTargets": 0,
+        "reactCommits": 69
+      }
+    },
+    {
+      "id": "S5",
+      "name": "Catalog import/export",
+      "startUrl": "http://127.0.0.1:5185/equipment?lang=en",
+      "steps": [
+        {
+          "description": "invalid JSON import surfaces a parse error",
+          "expected": "UUID error visible",
+          "actual": "true",
+          "pass": true
+        },
+        {
+          "description": "valid JSON import shows local preview and restore action",
+          "expected": "restore button",
+          "actual": "present",
+          "pass": true
+        },
+        {
+          "description": "export triggers a JSON download",
+          "expected": "download file present",
+          "actual": "downloads.htm (1).crdownload,downloads.htm.crdownload",
+          "pass": true
+        }
+      ],
+      "expected": "see steps",
+      "actual": "all assertions passed",
+      "pass": true,
+      "consoleErrors": [],
+      "network": {
+        "total": 128,
+        "eventSources": 0,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-runtime.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-registry.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/app/telemetry-provider.tsx",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-worker-factory.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/api/commands.mutation.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/catalog",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [
+        "Downloaded file is asserted by presence in the CDP download directory; its contents are covered by catalog-export unit tests."
+      ],
+      "performance": {
+        "jsHeapUsedMb": 38.02,
+        "taskDurationMs": 366.7,
+        "activeEventSources": 0,
+        "workerTargets": 0,
+        "reactCommits": 12
+      }
+    },
+    {
+      "id": "S6",
+      "name": "Twin DEMO playback / wafer / research",
+      "startUrl": "http://127.0.0.1:5185/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d",
+      "steps": [
+        {
+          "description": "DEMO clock advances while playing",
+          "expected": "cycle label changes",
+          "actual": "#1 -> #2",
+          "pass": true
+        },
+        {
+          "description": "DEMO pause stops the clock",
+          "expected": "aria-pressed=false",
+          "actual": "paused",
+          "pass": true
+        },
+        {
+          "description": "wafer playback starts",
+          "expected": "follow-wafer active",
+          "actual": "active",
+          "pass": true
+        },
+        {
+          "description": "research mode enters REPLAY feed",
+          "expected": "REPLAY",
+          "actual": "visible",
+          "pass": true
+        }
+      ],
+      "expected": "see steps",
+      "actual": "all assertions passed",
+      "pass": true,
+      "consoleErrors": [],
+      "network": {
+        "total": 384,
+        "eventSources": 2,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-runtime.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-registry.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/app/telemetry-provider.tsx",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-worker-factory.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/api/commands.mutation.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/twin/twin-equipment-status-pipeline.tsx",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/equipment-status.transport.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/equipment-status.protocol.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/equipment-status.gate.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry.worker.ts?worker_file&type=module",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status/stream",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/telemetry/stream",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [],
+      "performance": {
+        "jsHeapUsedMb": 86.4,
+        "taskDurationMs": 1095.9,
+        "activeEventSources": 2,
+        "workerTargets": 1,
+        "reactCommits": 24
+      }
+    },
+    {
+      "id": "S7",
+      "name": "Twin realtime REST/SSE reconnect",
+      "startUrl": "http://127.0.0.1:5185/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d",
+      "steps": [
+        {
+          "description": "REST initial equipment snapshot is requested",
+          "expected": ">=1 equipment-status request",
+          "actual": "1",
+          "pass": true
+        },
+        {
+          "description": "SSE connection is established",
+          "expected": ">=1 EventSource request",
+          "actual": "2",
+          "pass": true
+        },
+        {
+          "description": "network interruption marks the feed CACHE/stale",
+          "expected": "CACHE",
+          "actual": "LIVE -> CACHE",
+          "pass": true
+        },
+        {
+          "description": "reconnect returns to LIVE",
+          "expected": "LIVE",
+          "actual": "LIVE",
+          "pass": true
+        }
+      ],
+      "expected": "see steps",
+      "actual": "all assertions passed",
+      "pass": true,
+      "consoleErrors": [
+        "log: Failed to load resource: net::ERR_INTERNET_DISCONNECTED"
+      ],
+      "network": {
+        "total": 383,
+        "eventSources": 2,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-runtime.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-registry.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/app/telemetry-provider.tsx",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-worker-factory.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/api/commands.mutation.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/twin/twin-equipment-status-pipeline.tsx",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/equipment-status.transport.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/equipment-status.protocol.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/equipment-status.gate.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry.worker.ts?worker_file&type=module",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status/stream",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/telemetry/stream",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [
+        "The dev fixture exposes one FAB; cross-FAB isolation is covered by equipment-status-scope-cycle/twin-fab-scope unit suites. Offline emulation is the transport-interruption simulation (no real network cut)."
+      ],
+      "performance": {
+        "jsHeapUsedMb": 103.55,
+        "taskDurationMs": 1709.7,
+        "activeEventSources": 2,
+        "workerTargets": 2,
+        "reactCommits": 23
+      }
+    },
+    {
+      "id": "S8",
+      "name": "Unknown FAB route error",
+      "startUrl": "http://127.0.0.1:5185/fabs/unknown-fab/3d",
+      "steps": [
+        {
+          "description": "unknown FAB shows route error without old FAB data",
+          "expected": "FAB 不存在",
+          "actual": "工作台无法显示数据\n\nFAB 不存在：unknown-fab\n\n重新加载",
+          "pass": true
+        }
+      ],
+      "expected": "see steps",
+      "actual": "all assertions passed",
+      "pass": true,
+      "consoleErrors": [
+        "console: %o\n\n%s\n\n%s\n Error: FAB 不存在：unknown-fab\n    at requireFabSites (http://127.0.0.1:5185/src/routes/route-data.ts:15:19)\n    at async loader (http://127.0.0.1:5185/src/routes/fab-3d.route.tsx:38:16)\n    at async loadResource (http://127.0.0.1:5185/node_modules/.vite/deps/@tanstack_react-router.js?v=882f308d:3187:53) The above error occurred in the <MatchInnerImpl> component. React will try to recreate this component tree from scratch using the error boundary you provided, CaptureBoundary."
+      ],
+      "network": {
+        "total": 127,
+        "eventSources": 0,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-runtime.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-registry.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/app/telemetry-provider.tsx",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-worker-factory.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/api/commands.mutation.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [],
+      "performance": {
+        "jsHeapUsedMb": 108.12,
+        "taskDurationMs": 91.5,
+        "activeEventSources": 0,
+        "workerTargets": 2,
+        "reactCommits": 6
+      }
+    },
+    {
+      "id": "S9",
+      "name": "Unknown URL 404",
+      "startUrl": "http://127.0.0.1:5185/does-not-exist",
+      "steps": [
+        {
+          "description": "unknown URL renders 404 component",
+          "expected": "页面不存在",
+          "actual": "页面不存在 / Page not found\n返回工作台 / Back to workbench",
+          "pass": true
+        }
+      ],
+      "expected": "see steps",
+      "actual": "all assertions passed",
+      "pass": true,
+      "consoleErrors": [],
+      "network": {
+        "total": 127,
+        "eventSources": 0,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-runtime.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-registry.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/app/telemetry-provider.tsx",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-worker-factory.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/api/commands.mutation.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [],
+      "performance": {
+        "jsHeapUsedMb": 112.03,
+        "taskDurationMs": 72.7,
+        "activeEventSources": 0,
+        "workerTargets": 2,
+        "reactCommits": 5
+      }
+    },
+    {
+      "id": "S10",
+      "name": "Page exit/re-enter connection hygiene",
+      "startUrl": "http://127.0.0.1:5185/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d",
+      "steps": [
+        {
+          "description": "re-entering the Twin page leaves at most one active stream per URL",
+          "expected": "no duplicate active streams",
+          "actual": "active=2 duplicates=0",
+          "pass": true
+        },
+        {
+          "description": "first Twin lifetime opened its own SSE streams",
+          "expected": ">=1 EventSource",
+          "actual": "2",
+          "pass": true
+        },
+        {
+          "description": "Worker count does not grow unbounded across enter/exit",
+          "expected": "after <= before + 1",
+          "actual": "before=2 after=2",
+          "pass": true
+        }
+      ],
+      "expected": "see steps",
+      "actual": "all assertions passed",
+      "pass": true,
+      "consoleErrors": [],
+      "network": {
+        "total": 197,
+        "eventSources": 2,
+        "keyRequests": [
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-runtime.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-registry.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/app/telemetry-provider.tsx",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry-worker-factory.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/api/commands.mutation.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/twin/twin-equipment-status-pipeline.tsx",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/equipment-status.transport.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/equipment-status.protocol.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/equipment-status.gate.ts",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/src/realtime/telemetry.worker.ts?worker_file&type=module",
+            "count": 3
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status/stream",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:5185/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/telemetry/stream",
+            "count": 1
+          }
+        ]
+      },
+      "screenshot": null,
+      "limitations": [
+        "Timers/actors are asserted by dispose unit tests; this browser scenario checks stream duplication and worker target count."
+      ],
+      "performance": {
+        "jsHeapUsedMb": 76.31,
+        "taskDurationMs": 388.8,
+        "activeEventSources": 2,
+        "workerTargets": 2,
+        "reactCommits": 12
+      }
+    }
+  ],
+  "passed": 10,
+  "failed": 0
+}

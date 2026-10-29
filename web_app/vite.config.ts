@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
   const url = new URL(target);
   if (!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || !['http:', 'https:'].includes(url.protocol)) throw new Error('开发代理仅允许本机 API');
   return {
-    plugins: [react()],
+    plugins: [react({ compiler: { target: '19', compilationMode: 'infer', reportDiagnostics: true } })],
     resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
     server: { port: 5173, strictPort: true, host: '127.0.0.1', proxy: { '/api': { target, changeOrigin: true, configure(proxy) {
       proxy.on('proxyReq', request => { request.removeHeader('X-Fab-Dev-Key'); if (key) request.setHeader('X-Fab-Dev-Key', key); });

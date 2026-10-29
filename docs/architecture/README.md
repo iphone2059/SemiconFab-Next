@@ -18,6 +18,7 @@
 | `evidence/effect4-task6-browser-e2e.md` | A3 浏览器 10 场景结果与修复记录 |
 | `evidence/effect4-task6-performance-a4.md` | A4 渲染/遥测/bundle/连接/render 指标与 A0–A4 对照 |
 | `evidence/effect4-task6-rxjs-removal.md` | RxJS→Effect Stream/PubSub 迁移证据 |
+| `evidence/effect4-task7-react-compiler.md` | Rust/Oxc React Compiler 接入、规则修复、A/B 与边界 |
 | `reviews/2026-10-29-effect-consolidation-design-review.md` | 方案评审历史（不作为当前事实） |
 
 ## 已实施的核心决定
@@ -25,7 +26,7 @@
 1. `effect@4.0.7` + `@effect/atom-react@4.0.7` 负责应用副作用、异步执行与响应式状态；`ManagedRuntime` 只在 `app/app-runtime.ts` 创建一次。
 2. 一个应用一个 `AtomRegistry`；Router context 与 React 树共用同一 `AppRuntime`。
 3. 已删除 Zustand、TanStack Query、Zod、RxJS 与 `@tanstack/router-plugin`；没有兼容层、双写或第二资源缓存。
-4. 保留 TanStack Router（**code-based**，无 routeTree 生成插件）、React 19、XState 6 Alpha、Babylon Lite/WebGPU。
+4. 保留 TanStack Router（**code-based**，无 routeTree 生成插件）、React 19、XState 6 Alpha、Babylon Lite/WebGPU；构建期 React Compiler 使用 Oxc/Rust（experimental），不引入 Babel Compiler。
 5. `web_app/src` 严格 `src/<module>/<file>`：允许模块 `api app catalog components contracts domain generated lib localization realtime rendering routes runtime state twin workbench`，根只允许 `main.tsx`；无二级目录。
 6. 远程快照唯一 owner 为 Resource Atom（`api/resource.ts`）：`AsyncResult` + freshness/idle TTL/single-flight/错误保留/取消；Router loader 与页面共享 `ensureResource`。
 7. XState 仍拥有命令生命周期；Effect Scope 管理 actor acquire/release，命令事件经 Effect PubSub/Stream 进入 bridge；Flux/Redux/Query/RxJS 均不再参与命令状态。
@@ -58,11 +59,13 @@ web_app/src/
 ## 依赖与门禁（当前）
 
 - 生产依赖：`@babylonjs/lite`、`@effect/atom-react`、`@tanstack/react-router`、`effect`、`react`、`react-dom`、`xstate`。
+- 开发依赖补充：`oxc-transform-react@0.156.0`（React Compiler）、`oxlint@1.90.0`（correctness 门禁）；无 Babel React Compiler 依赖。
 - 旧依赖 gate：`web_app/tests/architecture/legacy-dependency-gate.test.ts`（Zod/Zustand/TanStack Query/RxJS 在源码/manifest/lockfile 均为零）。
 - Effect 边界：`effect-runtime-boundary.test.ts`（runner/registry/ManagedRuntime/RegistryContext 白名单）。
 - 单层目录：`source-layout.test.ts`；资源所有权：`resource-ownership.test.ts`；导入图/契约：`architecture-import-graph.test.ts`、`architecture-contract-rules.test.ts`。
 - 工具链：`scripts/verify.ps1`（Node/pnpm/.NET SDK 固定；pnpm `12.15.0` 由 `start-dev.ps1` 预置）。
 - 浏览器功能：`pnpm e2e` → `tools/e2e_functional.mjs` + `scripts/e2e.ps1` → `docs/perf/effect4-e2e.json`。
+- React Compiler：`pnpm lint` + `tests/architecture/oxc-react-compiler.test.ts`（直接 transform fixture + Vite/Oxlint 配置门禁）纳入 `verify.ps1`。
 - 性能/GPU：`tools/render_perf.mjs`、`tools/telemetry_stress.mjs`、`tools/bundle_metrics.mjs`；A/B 原始 JSON 在 `evidence/perf/`。
 
 ## 验收边界（如实记录）

@@ -21,6 +21,11 @@ export function useFabRuntimeRegistry(): FabRuntimeRegistry | null {
   return useContext(FabRuntimeContext)?.registry ?? null;
 }
 
+/** Runtime assembly generation; mutable registry contents must be re-read when it changes. */
+export function useFabRuntimeVersion(): number {
+  return useContext(FabRuntimeContext)?.version ?? 0;
+}
+
 /**
  * Value equality for the read-only projection. FabRuntime.subscribe is a
  * per-FAB broadcast and getProjection() builds a fresh object per call, so
@@ -48,18 +53,14 @@ export function useCommandProjection(fabId: string, commandId: string): CommandW
   // RuntimeBootstrap rebuild re-renders consumers, so the effect re-subscribes
   // to the replacement runtime instead of keeping the disposed one.
   const runtime = registry?.get(fabId);
-  const [projection, setProjection] = useState<CommandWorkflowProjection | undefined>(undefined);
+  const [projection, setProjection] = useState<CommandWorkflowProjection | undefined>(() => runtime?.getProjection(commandId));
   // Compare-and-commit through a ref so a value-equal broadcast schedules no
   // React update at all (a functional setState with the previous value may still
   // render once before bailing out). The ref mirrors the committed state.
-  const committed = useRef<CommandWorkflowProjection | undefined>(undefined);
+  const committed = useRef<CommandWorkflowProjection | undefined>(projection);
 
   useEffect(() => {
-    if (!runtime) {
-      committed.current = undefined;
-      setProjection(undefined);
-      return;
-    }
+    if (!runtime) return;
     const update = () => {
       const next = runtime.getProjection(commandId);
       if (sameProjection(committed.current, next)) return;

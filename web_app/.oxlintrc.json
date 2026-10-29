@@ -1,0 +1,8 @@
+{
+  "plugins": [
+    "react"
+  ],
+  "categories": {
+    "correctness": "error"
+  }
+}

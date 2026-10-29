@@ -50,7 +50,7 @@ export function useCatalogData(): CatalogDataSelection {
   } = catalogState;
   // Network entries were validated by the catalog Query schema before caching.
   // Only local uploads require parseCatalogEntries at their import boundary.
-  const entries = localEntries ?? catalogView.data?.items ?? [];
+  const entries = useMemo(() => localEntries ?? catalogView.data?.items ?? [], [localEntries, catalogView.data]);
   const importId = localEntries ? localImportId : (catalogView.data?.importId ?? '');
   const localPreview = localEntries !== null;
   const error = importError || (catalogView.error !== undefined ? 'Catalog request failed' : '');

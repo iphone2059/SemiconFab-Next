@@ -1,14 +1,14 @@
 import { useAtomValue } from '@effect/atom-react';
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { SiteDto } from '@/contracts/app-contracts';
 import { sitesResource } from '@/api/sites.resource';
 import { runResource, runResultsResource, runsResource } from '@/api/runs.resource';
 import { useResource } from '@/api/use-resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import { fab3dPath } from '@/routes/route-url-mapping';
-import { useFabRuntimeRegistry } from '@/app/runtime-provider';
+import { useFabRuntimeRegistry, useFabRuntimeVersion } from '@/app/runtime-provider';
 import { workbenchAtom, workbenchActions, type WorkbenchFormState } from '@/workbench/workbench.atom';
 import { CommandConsole } from '@/workbench/command-console';
 import { errorMessage } from '@/workbench/error-message';
@@ -18,6 +18,17 @@ import { RunForm } from '@/workbench/run-form';
 import { FabOverview } from '@/workbench/fab-overview';
 import { RunHistory } from '@/workbench/run-history';
 import { useRunSubmission } from '@/workbench/use-run-submission';
+
+/**
+ * BigInt accumulation lives outside the component: the experimental Oxc compiler
+ * currently drops BigInt literals inside compiled functions (emitting undefined),
+ * which would turn `0n + BigInt(...)` into a runtime TypeError.
+ */
+function sumCompletedLots(fabs: readonly { readonly completedLots: string }[]): bigint {
+  let total = 0n;
+  for (const resultFab of fabs) total += BigInt(resultFab.completedLots);
+  return total;
+}
 
 /**
  * Dashboard composition root: resource Atom snapshots are selected here and
@@ -49,10 +60,7 @@ function Workbench({ site }: { site: SiteDto }) {
     workbenchActions.formFieldSet(registry, { field, value });
   const displayedRun = run?.runId === runId && run.siteId === site.siteId ? run : undefined;
   const displayedResult = displayedRun && result?.runId === runId ? result : undefined;
-  const completedLots = displayedResult?.fabs.reduce(
-    (sum, resultFab) => sum + BigInt(resultFab.completedLots),
-    0n,
-  );
+  const completedLots = displayedResult ? sumCompletedLots(displayedResult.fabs) : undefined;
   return (
     <>
       <WorkbenchMetrics site={site} run={displayedRun} completedLots={completedLots} />
@@ -83,9 +91,13 @@ export default function WorkbenchApp() {
   const appRuntime = useAppRuntime();
   const siteId = useAtomValue(workbenchAtom, (state) => state.siteId);
   const runtimeRegistry = useFabRuntimeRegistry();
-  const [fabIndex, setFabIndex] = useState(0);
+  const runtimeVersion = useFabRuntimeVersion();
+  // Registry contents are mutated by imperative assembly; the context version is the
+  // React-visible revision that invalidates memoized size reads.
+  const runtimeCount = runtimeVersion >= 0 ? runtimeRegistry?.size ?? 0 : 0;
+  const fabIndex = useAtomValue(workbenchAtom, (state) => state.fabIndex);
   const sitesView = useResource(appRuntime, sitesResource);
-  const sites = sitesView.data ?? [];
+  const sites = useMemo(() => sitesView.data ?? [], [sitesView.data]);
   const loading = sitesView.isInitial;
   const error = sitesView.error !== undefined ? errorMessage(sitesView.error) : '';
   useEffect(() => {
@@ -95,7 +107,6 @@ export default function WorkbenchApp() {
   const site = sites.find((value) => value.siteId === siteId);
   const fabs = site?.fabs ?? [];
   const selectedFab = fabs[Math.min(fabIndex, Math.max(0, fabs.length - 1))];
-  useEffect(() => { setFabIndex(0); }, [siteId, registry]);
   // The 3D link points at the final canonical URL for the selected FAB.
   const threeDeeHref = selectedFab ? fab3dPath(selectedFab.fabId) : '/';
   return (
@@ -123,17 +134,17 @@ export default function WorkbenchApp() {
         {fabs.length > 1 && (
           <label className="sidebar-note">
             <span className="technical">FAB</span>
-            <select value={fabIndex} onChange={(event) => setFabIndex(Number(event.target.value))}>
+            <select value={fabIndex} onChange={(event) => workbenchActions.fabIndexSet(registry, Number(event.target.value))}>
               {fabs.map((fab, index) => (
                 <option key={fab.fabId} value={index}>{fab.code}</option>
               ))}
             </select>
           </label>
         )}
-        {runtimeRegistry && runtimeRegistry.size > 0 && (
+        {runtimeCount > 0 && (
           <div className="sidebar-note">
             <span className="technical">XSTATE RUNTIMES</span>
-            <p>{runtimeRegistry.size} FAB · v6</p>
+            <p>{runtimeCount} FAB · v6</p>
           </div>
         )}
         <div className="sidebar-note">

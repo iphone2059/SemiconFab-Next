@@ -104,10 +104,10 @@ export function TwinYmsPanel({ toolStates }: YmsProjectionProps) {
   const { t } = useTwinLocale();
   const { tab: ymsTab, pattern: waferPattern, seed: waferSeed, hoverDie, dieArea, defectD0, clusterAlpha, stdfCopied } = useAtomValue(waferMapPreferencesAtom);
   const { fabYield, yieldInput, yieldScenario, yieldUnresolved } = useFabYieldProjection(toolStates);
-  const waferDies = useMemo(() => generateWaferMap(waferPattern, waferSeed), [waferPattern, waferSeed, registry]);
-  const waferAnalytics = useMemo(() => waferMetrics(waferDies), [waferDies, registry]);
-  const yieldModels = useMemo(() => theoreticalYieldModels(dieArea, defectD0, clusterAlpha), [dieArea, defectD0, clusterAlpha, registry]);
-  const stdf = useMemo(() => stdfSummary(waferDies, waferPattern), [waferDies, waferPattern, registry]);
+  const waferDies = useMemo(() => generateWaferMap(waferPattern, waferSeed), [waferPattern, waferSeed]);
+  const waferAnalytics = useMemo(() => waferMetrics(waferDies), [waferDies]);
+  const yieldModels = useMemo(() => theoreticalYieldModels(dieArea, defectD0, clusterAlpha), [dieArea, defectD0, clusterAlpha]);
+  const stdf = useMemo(() => stdfSummary(waferDies, waferPattern), [waferDies, waferPattern]);
 
   const selectWaferPattern = (value: DefectPattern) => twinPageActions.ymsRandomize(registry, value);
   const setDieArea = (value: number) => twinPageActions.ymsDieAreaSet(registry, value);

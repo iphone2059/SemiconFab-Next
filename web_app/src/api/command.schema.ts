@@ -44,14 +44,20 @@ const COMMAND_OUTCOMES = [
 /** .NET Guid.TryParse accepts the "D" layout and its hyphenless/braced equivalents. */
 const GUID_HEX = /^[0-9a-f]{32}$/i;
 /** char.IsControl equivalent used by EquipmentCommandService.TryValidateIdempotencyKey. */
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/;
+const hasControlCharacter = (value: string): boolean => {
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0;
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) return true;
+  }
+  return false;
+};
 
 export const submitEquipmentCommandInputSchema = Schema.Struct({
   siteId: nonEmptyString, fabId: nonEmptyString,
   equipmentId: nonEmptyString.check(Schema.isMaxLength(MAX_EQUIPMENT_ID_LENGTH)),
   action: nonEmptyString.check(Schema.isMaxLength(MAX_ACTION_LENGTH)),
   idempotencyKey: nonEmptyString.check(Schema.isMaxLength(MAX_IDEMPOTENCY_KEY_LENGTH),
-    Schema.makeFilter((key: string) => !CONTROL_CHARACTERS.test(key) || 'idempotencyKey must not contain control characters')),
+    Schema.makeFilter((key: string) => !hasControlCharacter(key) || 'idempotencyKey must not contain control characters')),
 });
 export const submittedEquipmentCommandSchema = Schema.Struct({
   commandId: nonEmptyString, siteId: nonEmptyString, fabId: nonEmptyString,

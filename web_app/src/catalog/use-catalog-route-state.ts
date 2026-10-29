@@ -52,31 +52,39 @@ export function useCatalogRouteState(options: CatalogRouteStateOptions): Catalog
   const preferences = useAtomValue(localeAtom);
   const language = preferences.language;
   const { view, domain, category, query, hideDrafts, selected } = catalogState;
-  const searchKey = searchToQueryString(search);
+  // Derive primitive route values so the effects depend on stable values instead
+  // of the router's per-navigation search object (React Compiler/Oxlint contract).
+  const route = catalogSearchFrom(search);
+  const routeDomain = route.domain;
+  const routeCategory = route.category;
+  const routeQuery = route.query;
+  const routeHideDrafts = route.hideDrafts;
+  const routeCompare = route.compare;
+  const routeCompareKey = routeCompare.join(',');
+  const routePreferences = preferencesFromSearch(search);
+  const routeLanguage = routePreferences.language;
+  const routeTheme = routePreferences.theme;
 
   useEffect(() => {
-    const route = catalogSearchFrom(search);
     catalogActions.hydrate(registry, {
       view: initialView,
-      domain: route.domain,
-      category: route.category,
-      query: route.query,
-      hideDrafts: route.hideDrafts,
-      selected: route.compare,
+      domain: routeDomain,
+      category: routeCategory,
+      query: routeQuery,
+      hideDrafts: routeHideDrafts,
+      selected: routeCompareKey ? routeCompareKey.split(',') : [],
       page: 0,
     });
-    localeActions.preferencesSet(registry, preferencesFromSearch(search));
-    // searchKey is the stable identity of the router search; the raw object is
-    // not stable across navigations, so the effect deliberately depends on it.
-  }, [initialView, searchKey, registry]);
+    localeActions.preferencesSet(registry, { language: routeLanguage, theme: routeTheme });
+  }, [initialView, routeDomain, routeCategory, routeQuery, routeHideDrafts, routeCompareKey, routeLanguage, routeTheme, registry]);
 
   useEffect(() => {
     if (view !== 'compare' || selected.length > 0 || entries.length === 0) return;
-    if (catalogSearchFrom(search).compare.length > 0) return;
+    if (routeCompareKey.length > 0) return;
     catalogActions.selectedSet(registry,
       entries.filter((entry) => entry.category === 'lithography').slice(0, 3).map((entry) => entry.recordId),
     );
-  }, [view, selected.length, entries, searchKey, registry]);
+  }, [view, selected.length, entries, routeCompareKey, registry]);
 
   useEffect(() => {
     // Hydration (or another effect) can replace these snapshots earlier in this
