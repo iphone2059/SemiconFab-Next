@@ -1,7 +1,6 @@
 import { createActor, type Actor } from 'xstate';
 import type { CommandResultEvent } from '@/contracts/command-events.contract';
 import type { CommandWorkflow, CommandWorkflowProjection } from '@/contracts/command-workflow.contract';
-import { CommandReconciler } from '@/runtime/command-reconciler';
 import {
   isTerminalState,
   type EquipmentCommandContext,
@@ -19,17 +18,14 @@ type EquipmentMachine = typeof equipmentCommandMachine;
  */
 export class XStateCommandWorkflowAdapter implements CommandWorkflow {
   private readonly actor: Actor<EquipmentMachine>;
-  private readonly reconciler?: CommandReconciler;
 
   private started = false;
 
   constructor(
     readonly fabId: string,
     readonly commandId: string,
-    reconciler?: CommandReconciler,
   ) {
     this.actor = createActor(equipmentCommandMachine, { input: { fabId, commandId } });
-    this.reconciler = reconciler;
   }
 
   /**
@@ -57,10 +53,15 @@ export class XStateCommandWorkflowAdapter implements CommandWorkflow {
     this.actor.send({ type: 'RESULT', event });
   }
 
-  async reconcile(commandId: string): Promise<void> {
-    if (!this.reconciler) return;
-    await this.reconciler.reconcile(this, this.fabId, commandId);
-  }
+  /**
+   * The public CommandWorkflow contract keeps reconcile() for direct adapter
+   * users, but ADR-011 §2.2 makes the FabReconciliationScheduler the only
+   * authoritative path (it owns the reconciler, request generation guard, real
+   * timeout and the shared physical budget). The adapter is therefore not an
+   * authority and performs no network work.
+   */
+  async reconcile(_commandId: string): Promise<void> {}
+
 
   dispose(): void {
     if (!this.started) return;

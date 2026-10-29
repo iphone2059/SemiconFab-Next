@@ -151,7 +151,7 @@ it('keeps reconnected and emits gaps once per backend replay-gap control frame',
 
 it('maps backend dirty control frames onto the bounded transport dirty contract', async () => {
   const { harness, scope, sources, source } = commandTransport();
-  const dirty: Array<{ reason: string; droppedCount: number; epoch?: string; sequence?: number }> = [];
+  const dirty: Array<{ reason: string; droppedCount: number; delivered?: { epoch: string; sequence: number }; gapStart?: number; gapEnd?: number }> = [];
   runCommandStream(harness.host, scope, source.dirty!, (signal) => dirty.push(signal));
   runCommandStream(harness.host, scope, source.commandResults, () => {});
   await flush();
@@ -162,17 +162,21 @@ it('maps backend dirty control frames onto the bounded transport dirty contract'
   // carries coalesced loss).
   sources[0].emitNamed('dirty', JSON.stringify({ reason: 'retention-trim', droppedCount: 4, epoch: 'epoch-1', sequence: 12, occurredAt: '2026-10-27T00:00:00Z' }));
   await flush();
-  sources[0].emitNamed('dirty', JSON.stringify({ reason: 'epoch-replaced', droppedCount: 1, epoch: 'epoch-2', sequence: 0, occurredAt: '2026-10-27T00:00:00Z' }));
+  sources[0].emitNamed('dirty', JSON.stringify({ reason: 'epoch-replaced', droppedCount: 5, epoch: 'epoch-2', sequence: 0, occurredAt: '2026-10-27T00:00:00Z' }));
   await flush();
-  sources[0].emitNamed('dirty', JSON.stringify({ reason: 'store-fault', droppedCount: 1, epoch: 'epoch-2', sequence: 5, occurredAt: '2026-10-27T00:00:00Z' }));
+  sources[0].emitNamed('dirty', JSON.stringify({ reason: 'store-fault', droppedCount: 6, epoch: 'epoch-2', sequence: 5, occurredAt: '2026-10-27T00:00:00Z' }));
   await flush();
   // Malformed dirty frames are ignored, never treated as command state.
   sources[0].emitNamed('dirty', JSON.stringify({ reason: 'nonsense' }));
   await flush();
-  expect(dirty.map((signal) => signal.reason)).toEqual(['overflow', 'stale-generation', 'closed']);
-  expect(dirty[0]).toMatchObject({ epoch: 'epoch-1', sequence: 12, droppedCount: 4 });
+  // ADR-010 §2: server classes map onto the transport reasons; a server frame
+  // never advances a local delivered cursor (the origin is unknown).
+  expect(dirty.map((signal) => signal.reason)).toEqual(['server-overflow', 'stale-generation', 'store-fault']);
+  expect(dirty[0]).toMatchObject({ droppedCount: 4 });
+  expect(dirty[0].delivered).toBeUndefined();
+  expect(dirty[0].gapStart).toBeUndefined();
   expect(dirty[1].droppedCount).toBe(5);
-  expect(dirty[2]).toMatchObject({ epoch: 'epoch-2', sequence: 5, droppedCount: 6 });
+  expect(dirty[2]).toMatchObject({ droppedCount: 6 });
 });
 
 it('bounds the command bus and reports overflow instead of silently dropping frames', async () => {

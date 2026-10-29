@@ -89,7 +89,7 @@ it('CORE-007 explicit reconcileCommand is single-flight per command', async () =
   runtime.dispose();
 });
 
-it('CORE-007 queue capacity is bounded and drops are diagnosed, never silent', async () => {
+it('CORE-007 queue capacity is bounded, drops are diagnosed, and the authoritative list is the recovery path', async () => {
   const source = new FakeCommandEventSource();
   const gateways: number[] = [];
   const gateway = fakeCommandGateway({
@@ -102,18 +102,28 @@ it('CORE-007 queue capacity is bounded and drops are diagnosed, never silent', a
   const fab = track(createTestFab({ source, gateway, maxConcurrentReconciliations: 1, maxQueuedReconciliations: 2 }));
   const runtime = fab.runtime;
   runtime.start();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const listCallsBefore = gateway.listCalls.length;
   const ids = Array.from({ length: 8 }, (_, index) => 'cmd-' + index);
   for (const commandId of ids) {
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 0, outcome: 'accepted' }));
     runtime.trackCommand(commandId);
   }
+  // Explicit batch entry (the live event already gave local evidence): 8 commands
+  // through a 1-concurrency/2-queue scheduler must overflow the bounded queue.
+  void runtime.reconcileTracked(ids);
   await expect.poll(() => runtime.lastReconciliationDrop !== undefined, { timeout: 2_000 }).toBe(true);
   const drop = runtime.lastReconciliationDrop;
   expect(drop?.reason).toBe('queue-capacity');
   expect(drop?.droppedTotal).toBeGreaterThanOrEqual(1);
   expect(gateways.length).toBeGreaterThan(0);
-  // Dropped commands are not lost: they are retried after capacity frees.
-  await expect.poll(() => runtime.reconciliationStats.completed, { timeout: 3_000 }).toBeGreaterThanOrEqual(7);
+  // ADR-011 §2.2: the scheduler keeps no hidden retry buffer. The drop is durable
+  // recovery intent: FabRuntime enters Dirty and the authoritative LIST is the
+  // convergence path, so the dropped commands are never silently lost.
+  await expect.poll(() => gateway.listCalls.length, { timeout: 3_000 }).toBeGreaterThan(listCallsBefore);
+  await expect.poll(() => runtime.recoveryState.phase, { timeout: 3_000 }).toBe('Healthy');
+  expect(runtime.lastRecoveryList).toBeDefined();
+  expect(runtime.recoveryHistory.some((entry) => entry.cause === 'queue-capacity')).toBe(true);
   runtime.dispose();
 });
 

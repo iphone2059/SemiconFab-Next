@@ -1,4 +1,5 @@
-import type { CommandGateway } from '@/contracts/command-gateway.contract';
+import type { Effect } from 'effect';
+import type { CommandGateway, CommandGatewayError } from '@/contracts/command-gateway.contract';
 import type { CommandResultEvent } from '@/contracts/command-events.contract';
 
 export interface CommandRecoveryOptions {
@@ -101,9 +102,18 @@ export class CommandEventRecovery {
     return events;
   }
 
-  /** Authoritative status query; a returned result is queued for the next retry pass. */
-  async reconcile(gateway: CommandGateway, fabId: string, commandId: string): Promise<CommandResultEvent | null> {
-    const event = await gateway.getCommandStatus(fabId, commandId);
+  /**
+   * Authoritative status query; a returned result is queued for the next retry
+   * pass. The gateway returns a native Effect (ADR-011 §2.1): the caller owns the
+   * approved execution boundary and passes it explicitly.
+   */
+  async reconcile(
+    gateway: CommandGateway,
+    fabId: string,
+    commandId: string,
+    run: (effect: Effect.Effect<CommandResultEvent | null, CommandGatewayError>) => Promise<CommandResultEvent | null>,
+  ): Promise<CommandResultEvent | null> {
+    const event = await run(gateway.getCommandStatus(fabId, commandId));
     if (event) this.hold(event);
     return event;
   }

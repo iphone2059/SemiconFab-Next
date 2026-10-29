@@ -3,8 +3,9 @@ import type { Scope } from 'effect';
 import { runCommandStream, stopCommandStream } from '@/runtime/command-stream';
 import type { RuntimeHost } from '@/runtime/fab-runtime-host';
 import type { CommandEventSource, CommandResultEvent } from '@/contracts/command-events.contract';
-import type { CommandGateway } from '@/contracts/command-gateway.contract';
-import type { CommandWorkflowRegistry } from '@/contracts/command-workflow.contract';
+import type { Effect } from 'effect';
+import type { CommandGateway, CommandGatewayError } from '@/contracts/command-gateway.contract';
+import type { CommandWorkflow, CommandWorkflowRegistry } from '@/contracts/command-workflow.contract';
 import { CommandCorrelationRegistry } from '@/runtime/command-correlation-registry';
 import { CommandEventRecovery } from '@/runtime/command-event-recovery';
 
@@ -88,16 +89,23 @@ export class CommandEventBridge {
         this.recovery.hold(event);
         continue;
       }
-      workflow.receive(event);
-      this.options.onResultDelivered?.(event);
-      delivered += 1;
+      if (this.applyToWorkflow(workflow, event)) delivered += 1;
     }
     return delivered;
   }
 
-  /** Reconcile one command through the authoritative backend gateway, then retry. */
-  async reconcile(gateway: CommandGateway, fabId: string, commandId: string): Promise<number> {
-    await this.recovery.reconcile(gateway, fabId, commandId);
+  /**
+   * Reconcile one command through the authoritative backend gateway, then retry.
+   * Test/contract helper only: production reconciliation is the scheduler's job
+   * (ADR-011 §2.2); the caller supplies the approved Effect runner.
+   */
+  async reconcile(
+    gateway: CommandGateway,
+    fabId: string,
+    commandId: string,
+    run: (effect: Effect.Effect<CommandResultEvent | null, CommandGatewayError>) => Promise<CommandResultEvent | null>,
+  ): Promise<number> {
+    await this.recovery.reconcile(gateway, fabId, commandId, run);
     return this.flushRecovery();
   }
 
@@ -123,11 +131,31 @@ export class CommandEventBridge {
     return this.started;
   }
 
+  /**
+   * Apply one event to its workflow and acknowledge it only when the actor
+   * actually advanced to that revision (ADR-010 §2: stale/terminal/rejected
+   * events must not move the acknowledged cursor forward). Returns whether the
+   * event was applied.
+   */
+  private applyToWorkflow(workflow: CommandWorkflow, event: CommandResultEvent): boolean {
+    const before = workflow.projection?.revision;
+    workflow.receive(event);
+    const after = workflow.projection?.revision;
+    // When the workflow exposes a projection we can verify the actor accepted the
+    // revision (stale/terminal events must not acknowledge). A custom workflow
+    // without a projection cannot be verified and is trusted as applied: it is the
+    // only authority available.
+    const verifiable = before !== undefined || after !== undefined;
+    if (verifiable && (after ?? -1) < event.revision) return false;
+    this.options.onResultDelivered?.(event);
+    this.source.acknowledge(event);
+    return !verifiable || (after ?? -1) >= event.revision;
+  }
+
   private deliver(event: CommandResultEvent): void {
     const workflow = this.workflows.get(event.fabId, event.commandId);
     if (workflow) {
-      workflow.receive(event);
-      this.options.onResultDelivered?.(event);
+      this.applyToWorkflow(workflow, event);
       return;
     }
     this.recovery.hold(event);

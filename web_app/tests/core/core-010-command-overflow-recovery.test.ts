@@ -140,6 +140,7 @@ it('CORE-010c a journal page without gap replays events instead of listing', asy
   const runtime = fab.runtime;
   runtime.start();
   runtime.trackCommand('cmd-1');
+  await flush();
   source.emitGap({ epoch: 'epoch-1', sequence: 1 });
   await expect.poll(() => runtime.getProjection('cmd-1')?.outcome, { timeout: 1_000 }).toBe('succeeded');
   expect(gateway.journalCalls.length).toBeGreaterThan(0);

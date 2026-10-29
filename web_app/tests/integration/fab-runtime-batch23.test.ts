@@ -46,8 +46,10 @@ describe('FabRuntime replay-gap reconciliation (batch 2/3)', () => {
     runtime.start();
     runtime.trackCommand('cmd-1');
     runtime.trackCommand('cmd-2');
-    // Settle the submit-time reconciliation, then watch only the gap pass.
+    // Settle the startup recovery pass and submit-time reconciliation, then watch
+    // only the gap/reconnect burst (ADR-010 coalescing).
     await runtime.reconcileAll();
+    await new Promise((resolve) => setTimeout(resolve, 30));
     calls.length = 0;
 
     source.emitGap();
@@ -79,6 +81,8 @@ describe('FabRuntime replay-gap reconciliation (batch 2/3)', () => {
     current.runtime.start();
     current.runtime.trackCommand('cmd');
     await current.runtime.reconcileAll();
+    // Let the startup list recovery pass finish before counting the disposed generation.
+    await new Promise((resolve) => setTimeout(resolve, 30));
     calls.length = 0;
 
     expect(oldSource.gapObservers).toBe(0);
@@ -288,12 +292,14 @@ describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => 
     for (const workflow of workflows.values()) workflow.accesses = 0;
     source.emit(commandResult({ fabId, commandId: 'cmd-target', revision: 1, outcome: 'executing' }));
     const executingAccesses = [...workflows.values()].reduce((sum, workflow) => sum + workflow.accesses, 0);
-    expect(executingAccesses).toBeLessThanOrEqual(2);
+    // Delivery now reads the projection before/after to decide whether the actor
+    // accepted the revision for the ADR-010 acknowledge (no unrelated scan).
+    expect(executingAccesses).toBeLessThanOrEqual(4);
 
     for (const workflow of workflows.values()) workflow.accesses = 0;
     source.emit(commandResult({ fabId, commandId: 'cmd-target', revision: 2, outcome: 'succeeded' }));
     const terminalAccesses = [...workflows.values()].reduce((sum, workflow) => sum + workflow.accesses, 0);
-    expect(terminalAccesses).toBeLessThanOrEqual(2);
+    expect(terminalAccesses).toBeLessThanOrEqual(4);
     expect(runtime.terminalWorkflowCount).toBe(1);
     expect(runtime.getProjection('cmd-target')).toMatchObject({ outcome: 'succeeded' });
   });

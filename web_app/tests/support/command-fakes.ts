@@ -2,15 +2,18 @@ import { Effect, Exit, Layer, ManagedRuntime, PubSub, Scope, Stream } from 'effe
 import * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import type {
   CommandConnectionStatus,
+  CommandCursor,
   CommandEventSource,
   CommandOutcome,
   CommandResultEvent,
+  CommandSourceCursors,
   CommandStreamDirty,
   CommandStreamGap,
   CommandTransportFailure,
 } from '@/contracts/command-events.contract';
 import type {
   CommandGateway,
+  CommandGatewayError,
   CommandJournalEvent,
   CommandJournalPage,
   CommandJournalQuery,
@@ -19,7 +22,11 @@ import type {
   CommandRecoveryRecord,
 } from '@/contracts/command-gateway.contract';
 import type { CommandWorkflow, CommandWorkflowRegistry } from '@/contracts/command-workflow.contract';
-import type { CommandWorkflowFactory, FabRuntimeRetentionOptions } from '@/runtime/fab-runtime';
+import type {
+  CommandWorkflowFactory,
+  FabRuntimeRecoveryOptions,
+  FabRuntimeRetentionOptions,
+} from '@/runtime/fab-runtime';
 import { FabRuntime } from '@/runtime/fab-runtime';
 import { FabRuntimeFactory } from '@/runtime/fab-runtime-factory';
 import type { RuntimeHost } from '@/runtime/fab-runtime-host';
@@ -107,6 +114,9 @@ export class FakeCommandEventSource implements CommandEventSource {
   private failureCount = 0;
   private statusCount = 0;
   private dirtyCount = 0;
+  private observedCursor?: CommandCursor;
+  private deliveredCursor?: CommandCursor;
+  private acknowledgedCursorValue?: CommandCursor;
 
   private countStream<A>(bus: PubSub.PubSub<A>, counters: { increment: () => void; decrement: () => void }): Stream.Stream<A> {
     return Stream.fromPubSub(bus).pipe(
@@ -140,6 +150,27 @@ export class FakeCommandEventSource implements CommandEventSource {
     decrement: () => { this.dirtyCount = Math.max(0, this.dirtyCount - 1); },
   });
 
+  /** ADR-010 §2: a delivered event may be acknowledged by the consumer. */
+  acknowledge(event: CommandResultEvent): void {
+    this.acknowledgedCursorValue = advanceFakeCursor(this.acknowledgedCursorValue, {
+      epoch: 'epoch-1',
+      sequence: event.revision,
+    });
+  }
+
+  get cursors(): CommandSourceCursors {
+    return {
+      ...(this.observedCursor ? { observed: this.observedCursor } : {}),
+      ...(this.deliveredCursor ? { delivered: this.deliveredCursor } : {}),
+      ...(this.acknowledgedCursorValue ? { acknowledged: this.acknowledgedCursorValue } : {}),
+    };
+  }
+
+  /** Test seam: force the recovery start cursor (e.g. a reconnect after a gap). */
+  setAcknowledgedCursor(cursor: CommandCursor | undefined): void {
+    this.acknowledgedCursorValue = cursor;
+  }
+
   reconnect(): void { PubSub.publishUnsafe(this.reconnectBus, undefined); }
 
   /** Signal that backend replay could not cover a disconnect. */
@@ -166,6 +197,9 @@ export class FakeCommandEventSource implements CommandEventSource {
   get dirtyObservers(): number { return this.dirtyCount; }
 
   emit(event: CommandResultEvent): void {
+    const cursor: CommandCursor = { epoch: 'epoch-1', sequence: event.revision };
+    this.observedCursor = advanceFakeCursor(this.observedCursor, cursor);
+    this.deliveredCursor = advanceFakeCursor(this.deliveredCursor, cursor);
     PubSub.publishUnsafe(this.resultsBus, event);
   }
 
@@ -210,13 +244,67 @@ export function emptyRecoveryList(commands: readonly CommandRecoveryRecord[] = [
 }
 
 export function emptyJournalPage(events: readonly CommandJournalEvent[] = []): CommandJournalPage {
-  return { epoch: 'epoch-1', hasGap: false, firstRetainedSequence: 0, latestSequence: 0, events };
+  return {
+    epoch: 'epoch-1',
+    hasGap: false,
+    firstRetainedSequence: 0,
+    latestSequence: 0,
+    events,
+    nextAfterSequence: events.length > 0 ? events[events.length - 1].sequence : 0,
+  };
+}
+
+/** A gateway handler may answer synchronously with a Promise (test convenience) or a native Effect. */
+export type FakeGatewayHandler<T> = () => Promise<T> | Effect.Effect<T, CommandGatewayError>;
+
+const isCommandGatewayFailure = (value: unknown): value is CommandGatewayError =>
+  typeof value === 'object' && value !== null && '_tag' in value;
+
+/**
+ * Classifies a thrown/rejected test error into the ADR-011 error algebra so the
+ * recovery state machine sees the same discriminants as the HTTP gateway.
+ * Tests may also return a native Effect.fail(CommandGatewayError) directly.
+ */
+export function classifyFakeGatewayFailure(cause: unknown): CommandGatewayError {
+  if (isCommandGatewayFailure(cause)) return cause;
+  const message = cause instanceof Error ? cause.message : String(cause);
+  if (/journal-epoch-mismatch|\b409\b/i.test(message)) {
+    return { _tag: 'CommandJournalEpochMismatch', message, currentEpoch: 'epoch-2', firstRetainedSequence: 0, latestSequence: 0 };
+  }
+  if (/store[- _]?fault|COMMAND_STORE_UNAVAILABLE/i.test(message)) {
+    return { _tag: 'CommandGatewayTerminalFailure', reason: 'store-fault', message };
+  }
+  if (/\b4\d\d\b/.test(message)) {
+    return { _tag: 'CommandGatewayTerminalFailure', reason: 'rejected', message, status: Number(message.match(/\b(4\d\d)\b/)?.[1]) };
+  }
+  return { _tag: 'CommandGatewayRetryableFailure', message, ...(message.match(/\b5(\d\d)\b/) ? { status: 500 + Number(message.match(/\b5(\d\d)\b/)?.[1]) } : {}) };
+}
+
+function fakeHandlerEffect<T>(run: () => Promise<T> | Effect.Effect<T, CommandGatewayError>): Effect.Effect<T, CommandGatewayError> {
+  const result = run();
+  if (Effect.isEffect(result)) return result as Effect.Effect<T, CommandGatewayError>;
+  return Effect.tryPromise({
+    try: () => result,
+    catch: (cause) => classifyFakeGatewayFailure(cause),
+  });
+}
+
+/**
+ * Test journal pages may omit the server-provided nextAfterSequence; the fake
+ * derives it from the last event (or 0) so existing fixtures stay readable while
+ * the production contract keeps the field required.
+ */
+export type FakeJournalPage = Omit<CommandJournalPage, 'nextAfterSequence'> & { readonly nextAfterSequence?: number };
+
+function normalizeFakeJournalPage(page: FakeJournalPage): CommandJournalPage {
+  const derived = page.events.length > 0 ? page.events[page.events.length - 1].sequence : 0;
+  return { ...page, nextAfterSequence: page.nextAfterSequence ?? derived };
 }
 
 export interface FakeCommandGatewayOptions {
-  readonly getCommandStatus?: (fabId: string, commandId: string) => Promise<CommandResultEvent | null>;
-  readonly listFabCommands?: (siteId: string, fabId: string, filter: CommandRecoveryFilter) => Promise<CommandRecoveryList>;
-  readonly getCommandJournalPage?: (siteId: string, fabId: string, cursor: CommandJournalQuery) => Promise<CommandJournalPage>;
+  readonly getCommandStatus?: (fabId: string, commandId: string) => Promise<CommandResultEvent | null> | Effect.Effect<CommandResultEvent | null, CommandGatewayError>;
+  readonly listFabCommands?: (siteId: string, fabId: string, filter: CommandRecoveryFilter) => Promise<CommandRecoveryList> | Effect.Effect<CommandRecoveryList, CommandGatewayError>;
+  readonly getCommandJournalPage?: (siteId: string, fabId: string, cursor: CommandJournalQuery) => Promise<FakeJournalPage> | Effect.Effect<FakeJournalPage, CommandGatewayError>;
 }
 
 /** Counts every authoritative call so recovery/scheduler tests can assert pressure. */
@@ -227,19 +315,24 @@ export class FakeCommandGateway implements CommandGateway {
 
   constructor(private readonly options: FakeCommandGatewayOptions = {}) {}
 
-  async getCommandStatus(fabId: string, commandId: string): Promise<CommandResultEvent | null> {
+  getCommandStatus(fabId: string, commandId: string): Effect.Effect<CommandResultEvent | null, CommandGatewayError> {
     this.statusCalls.push({ fabId, commandId });
-    return this.options.getCommandStatus ? this.options.getCommandStatus(fabId, commandId) : null;
+    const handler = this.options.getCommandStatus;
+    return handler ? fakeHandlerEffect(() => handler(fabId, commandId)) : Effect.succeed(null);
   }
 
-  async listFabCommands(siteId: string, fabId: string, filter: CommandRecoveryFilter): Promise<CommandRecoveryList> {
+  listFabCommands(siteId: string, fabId: string, filter: CommandRecoveryFilter): Effect.Effect<CommandRecoveryList, CommandGatewayError> {
     this.listCalls.push({ siteId, fabId, filter });
-    return this.options.listFabCommands ? this.options.listFabCommands(siteId, fabId, filter) : emptyRecoveryList();
+    const handler = this.options.listFabCommands;
+    return handler ? fakeHandlerEffect(() => handler(siteId, fabId, filter)) : Effect.succeed(emptyRecoveryList());
   }
 
-  async getCommandJournalPage(siteId: string, fabId: string, cursor: CommandJournalQuery): Promise<CommandJournalPage> {
+  getCommandJournalPage(siteId: string, fabId: string, cursor: CommandJournalQuery): Effect.Effect<CommandJournalPage, CommandGatewayError> {
     this.journalCalls.push({ siteId, fabId, cursor });
-    return this.options.getCommandJournalPage ? this.options.getCommandJournalPage(siteId, fabId, cursor) : emptyJournalPage();
+    const handler = this.options.getCommandJournalPage;
+    return handler
+      ? fakeHandlerEffect(() => handler(siteId, fabId, cursor)).pipe(Effect.map(normalizeFakeJournalPage))
+      : Effect.succeed(emptyJournalPage());
   }
 }
 
@@ -289,6 +382,8 @@ export interface TestFabOptions {
   readonly gateway?: CommandGateway;
   readonly createWorkflow?: CommandWorkflowFactory;
   readonly retention?: FabRuntimeRetentionOptions;
+  /** ADR-010 §4 recovery bounds/backoff (test seam). */
+  readonly recovery?: FabRuntimeRecoveryOptions;
   readonly lazyCommandSubscription?: boolean;
   readonly maxConcurrentReconciliations?: number;
   readonly maxQueuedReconciliations?: number;
@@ -306,6 +401,7 @@ export function createFabRuntime(harness: CommandTestRuntime, options: TestFabOp
     gateway: options.gateway,
     createWorkflow: options.createWorkflow,
     retention: options.retention,
+    recovery: options.recovery,
     lazyCommandSubscription: options.lazyCommandSubscription,
     maxConcurrentReconciliations: options.maxConcurrentReconciliations,
     maxQueuedReconciliations: options.maxQueuedReconciliations,
@@ -334,4 +430,34 @@ export function createTestFab(options: TestFabOptions = {}): TestFab {
       await harness.dispose();
     },
   };
+}
+
+/** ADR-011 error helpers for recovery tests (typed, no thrown strings needed). */
+export const gatewayFailures = {
+  retryable(message: string, status?: number): CommandGatewayError {
+    return { _tag: 'CommandGatewayRetryableFailure', message, ...(status !== undefined ? { status } : {}) };
+  },
+  epochMismatch(message = 'journal-epoch-mismatch', currentEpoch = 'epoch-2'): CommandGatewayError {
+    return { _tag: 'CommandJournalEpochMismatch', message, currentEpoch, firstRetainedSequence: 0, latestSequence: 0 };
+  },
+  storeFault(message = 'COMMAND_STORE_UNAVAILABLE'): CommandGatewayError {
+    return { _tag: 'CommandGatewayTerminalFailure', reason: 'store-fault', message };
+  },
+  rejected(message = 'invalid response'): CommandGatewayError {
+    return { _tag: 'CommandGatewayTerminalFailure', reason: 'invalid-response', message };
+  },
+  aborted(message = 'aborted'): CommandGatewayError {
+    return { _tag: 'CommandRequestAborted', message };
+  },
+} as const;
+
+/** Cursor helper for ADR-010 tests. */
+export function commandCursor(epoch: string, sequence: number): CommandCursor {
+  return { epoch, sequence };
+}
+
+function advanceFakeCursor(current: CommandCursor | undefined, candidate: CommandCursor): CommandCursor {
+  if (!current) return candidate;
+  if (current.epoch === candidate.epoch) return candidate.sequence >= current.sequence ? candidate : current;
+  return candidate;
 }

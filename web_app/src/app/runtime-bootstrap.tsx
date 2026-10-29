@@ -40,7 +40,6 @@ export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode
   const sitesResourceView = useResource(appRuntime, sitesDefinition);
   const sites = sitesResourceView.data;
   const projectionRegistry = appRuntime.registry;
-  const runPromise = appRuntime.runPromise;
   const runSync = appRuntime.runSync;
   const rootScope = appRuntime.rootScope;
 
@@ -73,7 +72,9 @@ export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode
         { host: transportHost(scope) },
       );
     };
-    const gateway = typeof fetch === 'function' ? createHttpCommandGateway({ runPromise }) : undefined;
+    // ADR-011 §2.1: the gateway returns native Effects and never runs them; the
+    // FabRuntime executes recovery effects through AppRuntime.runPromise.
+    const gateway = typeof fetch === 'function' ? createHttpCommandGateway() : undefined;
     const factory = new FabRuntimeFactory({
       runtime: appRuntime,
       parentScope: rootScope,
@@ -108,7 +109,7 @@ export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode
     // Registry mutations are not React state; re-render once so consumers
     // (command console/sidebar) see the assembled runtimes.
     setRuntimeVersion((value) => value + 1);
-  }, [sites, registry, telemetryRegistry, projectionRegistry, runPromise, runSync, rootScope, appRuntime]);
+  }, [sites, registry, telemetryRegistry, projectionRegistry, runSync, rootScope, appRuntime]);
 
   useEffect(() => () => {
     lifecycle.current?.dispose();

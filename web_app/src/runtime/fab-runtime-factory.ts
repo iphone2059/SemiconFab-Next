@@ -2,7 +2,11 @@ import type { Scope } from 'effect';
 import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import type { CommandEventSource } from '@/contracts/command-events.contract';
 import type { CommandGateway } from '@/contracts/command-gateway.contract';
-import type { CommandWorkflowFactory, FabRuntimeRetentionOptions } from '@/runtime/fab-runtime';
+import type {
+  CommandWorkflowFactory,
+  FabRuntimeRecoveryOptions,
+  FabRuntimeRetentionOptions,
+} from '@/runtime/fab-runtime';
 import { FabRuntime } from '@/runtime/fab-runtime';
 import type { RuntimeHost } from '@/runtime/fab-runtime-host';
 
@@ -19,6 +23,8 @@ export interface FabRuntimeFactoryOptions {
   readonly createWorkflow?: CommandWorkflowFactory;
   /** Test seam for retention bounds/clock; production keeps the runtime defaults. */
   readonly retention?: FabRuntimeRetentionOptions;
+  /** ADR-010 §4 recovery state machine bounds/backoff (test seam; production defaults). */
+  readonly recovery?: FabRuntimeRecoveryOptions;
   /** Defer opening the per-FAB command SSE stream until a command is tracked. */
   readonly lazyCommandSubscription?: boolean;
   readonly maxConcurrentReconciliations?: number;
@@ -41,6 +47,7 @@ export class FabRuntimeFactory {
       gateway: this.options.gateway,
       createWorkflow: this.options.createWorkflow,
       retention: this.options.retention,
+      recovery: this.options.recovery,
       lazyCommandSubscription: this.options.lazyCommandSubscription,
       maxConcurrentReconciliations: this.options.maxConcurrentReconciliations,
       maxQueuedReconciliations: this.options.maxQueuedReconciliations,

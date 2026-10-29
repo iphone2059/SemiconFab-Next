@@ -1,4 +1,4 @@
-import { Exit, Scope } from 'effect';
+import { Effect, Exit, Scope } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CommandEventBridge } from '@/runtime/command-event-bridge';
 import type { CommandGateway } from '@/contracts/command-gateway.contract';
@@ -109,7 +109,7 @@ describe('CommandEventBridge (CE-01..CE-05)', () => {
       getCommandStatus: async () => commandResult({ fabId, commandId, revision: 3, outcome: 'succeeded' }),
     });
     workflows.register(fabId, commandId, workflow);
-    await expect(bridge.reconcile(gateway, fabId, commandId)).resolves.toBe(2);
+    await expect(bridge.reconcile(gateway, fabId, commandId, (effect) => Effect.runPromise(effect))).resolves.toBe(2);
     expect(workflow.events.map((event) => [event.revision, event.outcome])).toEqual([
       [2, 'executing'],
       [3, 'succeeded'],
