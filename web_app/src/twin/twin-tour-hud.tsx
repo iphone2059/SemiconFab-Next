@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useState } from 'react';
+import { useImperativeHandle, useState, type Ref } from 'react';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '@/domain/simulation-original-tour';
 import { useTwinLocale } from '@/twin/twin-i18n';
 
@@ -15,12 +15,14 @@ export interface TwinTourHudHandle {
 }
 
 export interface TwinTourHudProps {
-  tourStep: number;
+  readonly tourStep: number;
   /** Value pushed when startTour opens the HUD; later frames come through the ref handle. */
-  initialHud?: TourHudSnapshot | null;
-  onEnd(): void;
-  onPrev(): void;
-  onNext(): void;
+  readonly initialHud?: TourHudSnapshot | null;
+  readonly onEnd: () => void;
+  readonly onPrev: () => void;
+  readonly onNext: () => void;
+  /** React 19 ref-as-prop (forwardRef removed): the tour controller pushes RAF frames through it. */
+  readonly ref?: Ref<TwinTourHudHandle>;
 }
 
 /**
@@ -28,10 +30,7 @@ export interface TwinTourHudProps {
  * RAF tick (~60 Hz); owning that state here keeps TwinContent/FabViewport idle
  * for the whole tour.
  */
-export const TwinTourHud = forwardRef<TwinTourHudHandle, TwinTourHudProps>(function TwinTourHud(
-  { tourStep, initialHud, onEnd, onPrev, onNext },
-  ref,
-) {
+export function TwinTourHud({ tourStep, initialHud, onEnd, onPrev, onNext, ref }: TwinTourHudProps) {
   const { t, language } = useTwinLocale();
   const [hud, setHud] = useState<TourHudSnapshot | null>(initialHud ?? null);
   useImperativeHandle(ref, () => ({
@@ -64,4 +63,4 @@ export const TwinTourHud = forwardRef<TwinTourHudHandle, TwinTourHudProps>(funct
       </div>
     </section>
   );
-});
+}

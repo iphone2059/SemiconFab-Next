@@ -55,7 +55,7 @@ export interface CommandConsoleController {
   tracked: readonly TrackedCommand[];
   selectEquipment: (equipmentId: string) => void;
   selectAction: (action: string) => void;
-  submit: (event: FormEvent) => Promise<void>;
+  submit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
 }
 
 /**
@@ -97,7 +97,7 @@ export function useCommandConsole({ siteId, fabId }: { siteId: string; fabId: st
     setStored((previous) => mutate(previous.scope === scope ? previous : createConsoleState(scope)));
   };
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!runtime) {
       update((previous) => ({ ...previous, error: 'FAB 运行时尚未装配完成' }));

@@ -27,10 +27,11 @@ const viewport = vi.hoisted(() => ({ renders: 0 }));
 vi.mock('@/twin/twin-viewer', async () => {
   const React = await import('react');
   return {
-    FabViewport: React.forwardRef(function MockFabViewport() {
+    // React 19 passes ref as a normal prop; these mocks never use it, so no forwardRef.
+    FabViewport: function MockFabViewport() {
       viewport.renders += 1;
       return React.createElement('div', { className: 'scene twin-canvas' });
-    }),
+    },
   };
 });
 

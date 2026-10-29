@@ -2,7 +2,7 @@ import { useAtomValue } from '@effect/atom-react';
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { useTwinLocale } from '@/twin/twin-i18n';
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react';
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, type Ref } from 'react';
 import { viewerActions, viewerHoverAtom, viewerSessionAtom } from '@/state/viewer.atom';
 import { createCoalescedDispatcher } from '@/lib/coalesced-dispatcher';
 import type { FabDto, SiteDto } from '@/contracts/app-contracts';
@@ -27,6 +27,8 @@ export interface FabViewportProps {
   onCameraInteraction?: () => void;
   /** Optional frame-loop source read directly from the store without a React prop pass. */
   getToolStates?: () => readonly FabToolState[];
+  /** React 19 ref-as-prop (forwardRef removed): the twin page/controllers use this imperative handle. */
+  ref?: Ref<FabViewportHandle>;
 }
 
 /**
@@ -37,10 +39,10 @@ export interface FabViewportHandle extends SceneCommands {
   reload(): void;
 }
 
-export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(function FabViewport(
-  { site, fab, toolStates, onToolChange, layers, explodeFactor, explodeMode, basement, dual, onStatusChange, onAmhsStatsChange, onCameraInteraction, getToolStates },
-  ref,
-) {
+export function FabViewport({
+  site, fab, toolStates, onToolChange, layers, explodeFactor, explodeMode, basement, dual,
+  onStatusChange, onAmhsStatsChange, onCameraInteraction, getToolStates, ref,
+}: FabViewportProps) {
   const registry = useContext(RegistryContext);
   const { t } = useTwinLocale();
   // The GPU scene and its mount effect outlive individual renders. Route every
@@ -195,4 +197,4 @@ export const FabViewport = forwardRef<FabViewportHandle, FabViewportProps>(funct
       {!ready && <div className="twin-render-status" role="status">{status}<button type="button" onClick={() => viewerActions.viewerReloadRequested(registry)}>{t("重新加载")}</button></div>}
     </div>
   );
-});
+}
