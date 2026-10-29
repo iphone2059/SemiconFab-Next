@@ -534,4 +534,9 @@ try {
 } catch (error) {
   console.error('compiler equivalence harness failed:', error instanceof Error ? error.message : error);
   process.exitCode = 1;
+} finally {
+  // Hard exit: the harness holds Chrome CDP and local-API keep-alive handles that must not
+  // keep the verification step alive after the verdict is written (observed as a hung
+  // scripts/verify.ps1 at the equivalence step). Give stdout a tick to flush first.
+  setTimeout(() => process.exit(process.exitCode ?? 0), 100);
 }
