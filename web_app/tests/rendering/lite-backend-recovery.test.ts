@@ -293,6 +293,23 @@ it('CR-08: the ?perf acceptance seam can lower the recovery budget for real-WebG
   } finally { backend.dispose(); }
 });
 
+it('CR-08: the plain ?perf probe surface keeps the production recovery budget', async () => {
+  vi.stubGlobal('location', { search: '?perf' });
+  const events: any[] = [];
+  const { backend } = await mountBackend({ position: [1, 2, 3], target: [4, 5, 6] }, 42, { events });
+  try {
+    // Three losses are far below the production default budget (96): no fail-closed.
+    for (let loss = 0; loss < 3; loss += 1) {
+      queueWorld({ position: [1, 2, 3], target: [4, 5, 6] }, loss);
+      mocks.runtimes[mocks.runtimes.length - 1].options.onStatus?.('lost');
+      await vi.waitFor(() => expect(events.filter(event => event.type === 'ready')).toHaveLength(loss + 1));
+      await flush();
+    }
+    expect(events.filter(event => event.type === 'failed')).toHaveLength(0);
+    expect(mocks.created.length).toBe(4);
+  } finally { backend.dispose(); }
+});
+
 it('cancels the previous replay when a newer recovery starts', async () => {
   const { backend } = await mountBackend({ position: [1, 2, 3], target: [4, 5, 6] }, 42);
   try {

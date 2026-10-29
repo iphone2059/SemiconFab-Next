@@ -39,7 +39,12 @@ export function createLiteBackend(options: LiteBackendOptions = {}): LiteScenePo
     if (typeof location === 'undefined') return Number.NaN;
     try {
       const search = new URLSearchParams(location.search);
-      return search.has('perf') ? Number(search.get('recoveryBudget')) : Number.NaN;
+      // Only an explicit ?perf&recoveryBudget=N lowers the budget; the plain ?perf
+      // device-loss probe surface must keep the production default (absent value
+      // would otherwise coerce to 0 and fail closed after the first loss).
+      const raw = search.has('perf') ? search.get('recoveryBudget') : null;
+      if (raw === null || raw.trim() === '') return Number.NaN;
+      return Number(raw);
     } catch { return Number.NaN; }
   })();
   const requestedBudget = options.recoveryBudget ?? (Number.isFinite(acceptanceBudget) ? acceptanceBudget : undefined);
