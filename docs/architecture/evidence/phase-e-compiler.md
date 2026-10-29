@@ -180,3 +180,8 @@
 | `web_app/tests/architecture/atom-ownership.test.ts` / `tests/state/atom-notification-surface.test.ts` / `tests/features/workbench/workbench-runs-received.test.ts` / `tests/core/core-011-compiler-equivalence.test.ts` / `tests/core/core-012-production-gpu.test.ts` | 本阶段新增回归/门禁测试 |
 
 （SHA 绑定：本文 JSON 证据的 `commit` 字段为 pending，由 Lead 在最终提交后以同一命令重跑并回填最终 SHA；原始日志不手写 PASS。）
+## Lead 绑定（2026-10-30）
+
+- Phase E 实现提交：`d0c6f19e7038baaba78e9f118d64f04d854f7fd2`。
+- 本文所有“SHA pending / 由 Lead 绑定”指该提交；最终整树验收证据见 `docs/architecture/evidence/final-verify.json` 与 `correctness-refactor-acceptance.md`（绑定最终 verify 的 commit）。
+- 本文原始输出均可按文中命令重跑；未重跑的推断不得视为 PASS。

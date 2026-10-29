@@ -187,3 +187,8 @@ rg -n "createEquipmentStatusGate|createOrderedEquipmentStatusConsumer" src   # n
 - 堆内存快照：本轮以 `manager.stats`（entries/scopes/polling/inFlight）与 `registry.getNodes()` 作为可重复的有界性证据；未采集 V8 heap snapshot（需要额外 GC 暴露参数，易抖动）。Phase F 的 verify 可在生产构建浏览器 soak 中补 heap 数据。
 - 临时调试文件 `tests/core/tmp-timer-debug.test.ts` 属 Phase C（CORE-014 timer 调试）产物，已提醒 command-owner 收尾删除；Phase B 的 `tests/core/core-00{1..6}*` 命名独立。
 - 最终提交 SHA 未绑定（Lead 提交后填写）；本文件所有输出均可由上述命令重跑。
+## Lead 绑定（2026-10-30）
+
+- Phase B 实现提交：`7564cddfc2a79b190ac215b2b93839afa3a53066`。
+- 本文所有“SHA pending / 由 Lead 绑定”指该提交；最终整树验收证据见 `docs/architecture/evidence/final-verify.json` 与 `correctness-refactor-acceptance.md`（绑定最终 verify 的 commit）。
+- 本文原始输出均可按文中命令重跑；未重跑的推断不得视为 PASS。

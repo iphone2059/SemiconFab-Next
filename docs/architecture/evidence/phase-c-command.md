@@ -249,3 +249,8 @@ pnpm test
 7. journal 恢复页大小 256（后端允许 1..1000、默认 100）；hasGap 回退 list 已测，未测试多页连续回放（单页即覆盖本阶段场景）。
 8. `FabRuntime.dispose()` 保持同步（`runSync(Scope.close)`），以“所有 finalizer 均为 Effect.sync”为前提；未来引入异步 finalizer 会以 `AsyncFiberError` 失败而不是静默泄漏（CORE-014 约束不得放宽）。
 9. 证据文件 SHA pending，由 Lead 在最终提交后绑定；本文件不包含最终 commit 的哈希。
+## Lead 绑定（2026-10-30）
+
+- Phase C 实现提交：`ff5f54b9a7e9aae14ba553801f783bc98b0e2460`。
+- 本文所有“SHA pending / 由 Lead 绑定”指该提交；最终整树验收证据见 `docs/architecture/evidence/final-verify.json` 与 `correctness-refactor-acceptance.md`（绑定最终 verify 的 commit）。
+- 本文原始输出均可按文中命令重跑；未重跑的推断不得视为 PASS。

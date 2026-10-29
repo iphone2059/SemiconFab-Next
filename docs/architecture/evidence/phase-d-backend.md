@@ -169,3 +169,8 @@ Found 0 warnings and 0 errors.
 - 前端全量 `pnpm typecheck` 在本次收尾时仍被其他 phase（Phase B/C/E）在途文件报错阻塞（错误文件均不在本 phase 写范围，例如 `tests/realtime/realtime-transport.test.ts`、`tests/state/atom-notification-surface.test.ts`）；本 phase 新增/修改的前端文件未被 tsc 报错，且 oxlint 0 error。全量 typecheck 需在并行 phase 收尾后复跑（Lead/Phase F 门禁）。
 - 真实浏览器刷新恢复 E2E 属于 Phase E/F（本 phase 只提供后端权威入口与 Phase C 的 schema），未在本证据中宣称通过。
 - 证据 SHA pending：本文件在提交前生成，待 Lead 绑定最终 commit SHA。
+## Lead 绑定（2026-10-30）
+
+- Phase D 实现提交：`12ec5650b91eef0a0ae3b01245b6f1e9e8716c03`。
+- 本文所有“SHA pending / 由 Lead 绑定”指该提交；最终整树验收证据见 `docs/architecture/evidence/final-verify.json` 与 `correctness-refactor-acceptance.md`（绑定最终 verify 的 commit）。
+- 本文原始输出均可按文中命令重跑；未重跑的推断不得视为 PASS。
