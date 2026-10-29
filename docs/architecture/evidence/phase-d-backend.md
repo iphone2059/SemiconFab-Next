@@ -174,3 +174,9 @@ Found 0 warnings and 0 errors.
 - Phase D 实现提交：`12ec5650b91eef0a0ae3b01245b6f1e9e8716c03`。
 - 本文所有“SHA pending / 由 Lead 绑定”指该提交；最终整树验收证据见 `docs/architecture/evidence/final-verify.json` 与 `correctness-refactor-acceptance.md`（绑定最终 verify 的 commit）。
 - 本文原始输出均可按文中命令重跑；未重跑的推断不得视为 PASS。
+
+## 最终整树验收（Lead，2026-10-30）
+
+- 验证提交：`af002f46b6a63599205b21132538075bbfaa15a7`；`scripts/verify.ps1` exit 0（GPU gate 开启，600s）。
+- 原始输出：`docs/architecture/evidence/final-verify-af002f4.log`；机器摘要：`final-verify.json`；门禁矩阵：`correctness-refactor-acceptance.md`。
+- 本文件早先记录的“pending”已被最终验证取代：最终 evidence 均绑定该提交；未覆盖/限制项见验收索引。

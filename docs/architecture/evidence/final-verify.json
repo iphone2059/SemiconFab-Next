@@ -1,0 +1,22 @@
+{
+  "commit": "af002f46b6a63599205b21132538075bbfaa15a7",
+  "verifiedAt": "2026-10-29T18:18:31.4434075Z",
+  "node": "v26.12.1",
+  "pnpm": "12.15.0",
+  "dotnet": "11.0.100-rc.3.26522.148",
+  "gpuGate": true,
+  "checks": [
+    "contracts",
+    "generated-artifacts",
+    "architecture",
+    "dotnet-build",
+    "dotnet-test",
+    "typecheck",
+    "oxlint",
+    "vitest",
+    "vite-build",
+    "compiler-compat",
+    "production-browser-e2e",
+    "compiler-equivalence"
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "generatedAt": "2026-10-29T18:05:19.073Z",
+  "node": "v26.12.1",
+  "provider": "win32-x64",
+  "versions": {
+    "@vitejs/plugin-react": "6.1.2",
+    "oxc-transform-react": "0.156.0",
+    "binding": "native"
+  },
+  "checks": [
+    {
+      "name": "locks one exact oxc-transform-react version",
+      "ok": true,
+      "detail": "0.156.0"
+    },
+    {
+      "name": "has no peerDependencyRules.allowedVersions bypass",
+      "ok": true,
+      "detail": "no bypass rule"
+    },
+    {
+      "name": "keeps the maintained plugin-react compatibility patch in effect",
+      "ok": true,
+      "detail": "patched >=0.152.0 <0.157.0 (upstream ^0.152.0)"
+    },
+    {
+      "name": "plugin-react consumes only the locked Oxc API surface",
+      "ok": true,
+      "detail": "transform/reactCompiler/result.fatal"
+    },
+    {
+      "name": "installed dependency tree has no Babel compiler fallback",
+      "ok": true,
+      "detail": "oxc only"
+    },
+    {
+      "name": "vite build can produce compiler ON and OFF controls",
+      "ok": true,
+      "detail": "FAB_REACT_COMPILER=off"
+    },
+    {
+      "name": "installed oxc-transform-react exports transform/transformSync",
+      "ok": true,
+      "detail": "transform + transformSync"
+    },
+    {
+      "name": "compiler ON transform succeeds through the plugin option shape",
+      "ok": true,
+      "detail": "fatal=false, compiler-runtime emitted"
+    },
+    {
+      "name": "@vitejs/plugin-react compiler path transforms through the locked Oxc",
+      "ok": true,
+      "detail": "vite:react-compiler transform OK"
+    },
+    {
+      "name": "async transform() works (the plugin awaits it)",
+      "ok": true,
+      "detail": "async path OK"
+    },
+    {
+      "name": "compiler OFF transform emits no compiler runtime (equivalence control)",
+      "ok": true,
+      "detail": "no compiler-runtime"
+    }
+  ],
+  "ok": true
+}

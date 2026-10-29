@@ -1,0 +1,1533 @@
+{
+  "generatedAt": "2026-10-29T18:06:06.722Z",
+  "commit": "af002f46b6a63599205b21132538075bbfaa15a7",
+  "webUrl": "http://127.0.0.1:4181",
+  "apiUrl": "http://127.0.0.1:5181",
+  "fabId": "37793fb6-5679-b7a3-3fef-d970433697c1",
+  "durationSeconds": 600,
+  "minCycles": 3,
+  "chromium": "Chrome/155.0.8059.86",
+  "adapter": {
+    "vendor": "nvidia",
+    "architecture": "ampere",
+    "device": "",
+    "description": ""
+  },
+  "contexts": {
+    "footer": "WebGPU FAB-01 · 单 FAB AMHS OHT 00/24 121 RUN · 0 IDLE · 0 DOWN · 0 MAINT",
+    "renderStatus": "",
+    "webgpu": true,
+    "webgl": false,
+    "webgl2": false,
+    "ready": true
+  },
+  "injectionMethod": "perf.forceDeviceLoss",
+  "initial": {
+    "status": "ready",
+    "statuses": [
+      "initializing",
+      "ready"
+    ],
+    "losses": 0,
+    "recoveries": 0,
+    "lastStatus": "WebGPU · 程序化 FAB · 121 台设备",
+    "devices": 1,
+    "destroyed": 0,
+    "liveDevices": 1
+  },
+  "cycles": [
+    {
+      "cycle": 1,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 0,
+        "recoveries": 0,
+        "devices": 1,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 1,
+        "recoveries": 1,
+        "devices": 3,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "initializing",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 784
+    },
+    {
+      "cycle": 2,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 1,
+        "recoveries": 1,
+        "devices": 3,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 2,
+        "recoveries": 2,
+        "devices": 5,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "initializing",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 786
+    },
+    {
+      "cycle": 3,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 2,
+        "recoveries": 2,
+        "devices": 5,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 3,
+        "recoveries": 3,
+        "devices": 7,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 776
+    },
+    {
+      "cycle": 4,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 3,
+        "recoveries": 3,
+        "devices": 7,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 4,
+        "recoveries": 4,
+        "devices": 9,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 778
+    },
+    {
+      "cycle": 5,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 4,
+        "recoveries": 4,
+        "devices": 9,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 5,
+        "recoveries": 5,
+        "devices": 11,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 821
+    },
+    {
+      "cycle": 6,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 5,
+        "recoveries": 5,
+        "devices": 11,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 6,
+        "recoveries": 6,
+        "devices": 13,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 803
+    },
+    {
+      "cycle": 7,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 6,
+        "recoveries": 6,
+        "devices": 13,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 7,
+        "recoveries": 7,
+        "devices": 15,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 783
+    },
+    {
+      "cycle": 8,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 7,
+        "recoveries": 7,
+        "devices": 15,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 8,
+        "recoveries": 8,
+        "devices": 17,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 1041
+    },
+    {
+      "cycle": 9,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 8,
+        "recoveries": 8,
+        "devices": 17,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 9,
+        "recoveries": 9,
+        "devices": 19,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 790
+    },
+    {
+      "cycle": 10,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 9,
+        "recoveries": 9,
+        "devices": 19,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 10,
+        "recoveries": 10,
+        "devices": 21,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 789
+    },
+    {
+      "cycle": 11,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 10,
+        "recoveries": 10,
+        "devices": 21,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 11,
+        "recoveries": 11,
+        "devices": 23,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 814
+    },
+    {
+      "cycle": 12,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 11,
+        "recoveries": 11,
+        "devices": 23,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 12,
+        "recoveries": 12,
+        "devices": 25,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 1037
+    },
+    {
+      "cycle": 13,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 12,
+        "recoveries": 12,
+        "devices": 25,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 13,
+        "recoveries": 13,
+        "devices": 27,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 803
+    },
+    {
+      "cycle": 14,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 13,
+        "recoveries": 13,
+        "devices": 27,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 14,
+        "recoveries": 14,
+        "devices": 29,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 830
+    },
+    {
+      "cycle": 15,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 14,
+        "recoveries": 14,
+        "devices": 29,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 15,
+        "recoveries": 15,
+        "devices": 31,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 814
+    },
+    {
+      "cycle": 16,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 15,
+        "recoveries": 15,
+        "devices": 31,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 16,
+        "recoveries": 16,
+        "devices": 33,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 844
+    },
+    {
+      "cycle": 17,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 16,
+        "recoveries": 16,
+        "devices": 33,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 17,
+        "recoveries": 17,
+        "devices": 35,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 787
+    },
+    {
+      "cycle": 18,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 17,
+        "recoveries": 17,
+        "devices": 35,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 18,
+        "recoveries": 18,
+        "devices": 37,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 775
+    },
+    {
+      "cycle": 19,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 18,
+        "recoveries": 18,
+        "devices": 37,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 19,
+        "recoveries": 19,
+        "devices": 39,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 788
+    },
+    {
+      "cycle": 20,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 19,
+        "recoveries": 19,
+        "devices": 39,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 20,
+        "recoveries": 20,
+        "devices": 41,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 791
+    },
+    {
+      "cycle": 21,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 20,
+        "recoveries": 20,
+        "devices": 41,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 21,
+        "recoveries": 21,
+        "devices": 43,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 790
+    },
+    {
+      "cycle": 22,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 21,
+        "recoveries": 21,
+        "devices": 43,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 22,
+        "recoveries": 22,
+        "devices": 45,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 785
+    },
+    {
+      "cycle": 23,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 22,
+        "recoveries": 22,
+        "devices": 45,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 23,
+        "recoveries": 23,
+        "devices": 47,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 781
+    },
+    {
+      "cycle": 24,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 23,
+        "recoveries": 23,
+        "devices": 47,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 24,
+        "recoveries": 24,
+        "devices": 49,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 803
+    },
+    {
+      "cycle": 25,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 24,
+        "recoveries": 24,
+        "devices": 49,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 25,
+        "recoveries": 25,
+        "devices": 51,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 821
+    },
+    {
+      "cycle": 26,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 25,
+        "recoveries": 25,
+        "devices": 51,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 26,
+        "recoveries": 26,
+        "devices": 53,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 841
+    },
+    {
+      "cycle": 27,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 26,
+        "recoveries": 26,
+        "devices": 53,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 27,
+        "recoveries": 27,
+        "devices": 55,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 793
+    },
+    {
+      "cycle": 28,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 27,
+        "recoveries": 27,
+        "devices": 55,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 28,
+        "recoveries": 28,
+        "devices": 57,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 784
+    },
+    {
+      "cycle": 29,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 28,
+        "recoveries": 28,
+        "devices": 57,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 29,
+        "recoveries": 29,
+        "devices": 59,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 812
+    },
+    {
+      "cycle": 30,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 29,
+        "recoveries": 29,
+        "devices": 59,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 30,
+        "recoveries": 30,
+        "devices": 61,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 1045
+    },
+    {
+      "cycle": 31,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 30,
+        "recoveries": 30,
+        "devices": 61,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 31,
+        "recoveries": 31,
+        "devices": 63,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 792
+    },
+    {
+      "cycle": 32,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 31,
+        "recoveries": 31,
+        "devices": 63,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 32,
+        "recoveries": 32,
+        "devices": 65,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 803
+    },
+    {
+      "cycle": 33,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 32,
+        "recoveries": 32,
+        "devices": 65,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 33,
+        "recoveries": 33,
+        "devices": 67,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 817
+    },
+    {
+      "cycle": 34,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 33,
+        "recoveries": 33,
+        "devices": 67,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 34,
+        "recoveries": 34,
+        "devices": 69,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 818
+    },
+    {
+      "cycle": 35,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 34,
+        "recoveries": 34,
+        "devices": 69,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 35,
+        "recoveries": 35,
+        "devices": 71,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 804
+    },
+    {
+      "cycle": 36,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 35,
+        "recoveries": 35,
+        "devices": 71,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 36,
+        "recoveries": 36,
+        "devices": 73,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 798
+    },
+    {
+      "cycle": 37,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 36,
+        "recoveries": 36,
+        "devices": 73,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 37,
+        "recoveries": 37,
+        "devices": 75,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 1055
+    },
+    {
+      "cycle": 38,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 37,
+        "recoveries": 37,
+        "devices": 75,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 38,
+        "recoveries": 38,
+        "devices": 77,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 799
+    },
+    {
+      "cycle": 39,
+      "injected": true,
+      "sawLoss": true,
+      "recovered": true,
+      "before": {
+        "losses": 38,
+        "recoveries": 38,
+        "devices": 77,
+        "liveDevices": 1
+      },
+      "after": {
+        "losses": 39,
+        "recoveries": 39,
+        "devices": 79,
+        "liveDevices": 1,
+        "status": "ready"
+      },
+      "statuses": [
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "domReady": true,
+      "durationMs": 806
+    }
+  ],
+  "heapSamples": [
+    {
+      "at": "2026-10-29T18:06:42.835Z",
+      "cycle": 3,
+      "jsHeapUsedMb": 32.74,
+      "taskDurationMs": 6370.7
+    },
+    {
+      "at": "2026-10-29T18:07:14.459Z",
+      "cycle": 5,
+      "jsHeapUsedMb": 32.6,
+      "taskDurationMs": 11203.9
+    },
+    {
+      "at": "2026-10-29T18:08:33.712Z",
+      "cycle": 10,
+      "jsHeapUsedMb": 33.25,
+      "taskDurationMs": 24126.8
+    },
+    {
+      "at": "2026-10-29T18:09:53.052Z",
+      "cycle": 15,
+      "jsHeapUsedMb": 37.12,
+      "taskDurationMs": 37314.5
+    },
+    {
+      "at": "2026-10-29T18:11:12.091Z",
+      "cycle": 20,
+      "jsHeapUsedMb": 37.08,
+      "taskDurationMs": 49582.3
+    },
+    {
+      "at": "2026-10-29T18:12:31.126Z",
+      "cycle": 25,
+      "jsHeapUsedMb": 33.63,
+      "taskDurationMs": 62813.3
+    },
+    {
+      "at": "2026-10-29T18:13:50.465Z",
+      "cycle": 30,
+      "jsHeapUsedMb": 38.79,
+      "taskDurationMs": 75675.2
+    },
+    {
+      "at": "2026-10-29T18:15:09.533Z",
+      "cycle": 35,
+      "jsHeapUsedMb": 38.6,
+      "taskDurationMs": 88752
+    }
+  ],
+  "lifecycleTrace": [
+    "device:created#1",
+    "destroy:destroyed#1",
+    "lost:destroyed",
+    "device:created#2",
+    "destroy:destroyed#2",
+    "lost:destroyed",
+    "device:created#3",
+    "destroy:destroyed#3",
+    "lost:destroyed",
+    "device:created#4",
+    "destroy:destroyed#4",
+    "lost:destroyed",
+    "device:created#5",
+    "destroy:destroyed#5",
+    "lost:destroyed",
+    "device:created#6",
+    "destroy:destroyed#6",
+    "lost:destroyed",
+    "device:created#7",
+    "destroy:destroyed#7",
+    "lost:destroyed",
+    "device:created#8",
+    "destroy:destroyed#8",
+    "lost:destroyed",
+    "device:created#9",
+    "destroy:destroyed#9",
+    "lost:destroyed",
+    "device:created#10",
+    "destroy:destroyed#10",
+    "lost:destroyed",
+    "device:created#11",
+    "destroy:destroyed#11",
+    "lost:destroyed",
+    "device:created#12",
+    "destroy:destroyed#12",
+    "lost:destroyed",
+    "device:created#13",
+    "destroy:destroyed#13",
+    "lost:destroyed",
+    "device:created#14",
+    "destroy:destroyed#14",
+    "lost:destroyed",
+    "device:created#15",
+    "destroy:destroyed#15",
+    "lost:destroyed",
+    "device:created#16",
+    "destroy:destroyed#16",
+    "lost:destroyed",
+    "device:created#17",
+    "destroy:destroyed#17",
+    "lost:destroyed",
+    "device:created#18",
+    "destroy:destroyed#18",
+    "lost:destroyed",
+    "device:created#19",
+    "destroy:destroyed#19",
+    "lost:destroyed",
+    "device:created#20",
+    "destroy:destroyed#20",
+    "lost:destroyed",
+    "device:created#21",
+    "destroy:destroyed#21",
+    "lost:destroyed",
+    "device:created#22",
+    "destroy:destroyed#22",
+    "lost:destroyed",
+    "device:created#23",
+    "destroy:destroyed#23",
+    "lost:destroyed",
+    "device:created#24",
+    "destroy:destroyed#24",
+    "lost:destroyed",
+    "device:created#25",
+    "destroy:destroyed#25",
+    "lost:destroyed",
+    "device:created#26",
+    "destroy:destroyed#26",
+    "lost:destroyed",
+    "device:created#27",
+    "destroy:destroyed#27",
+    "lost:destroyed",
+    "device:created#28",
+    "destroy:destroyed#28",
+    "lost:destroyed",
+    "device:created#29",
+    "destroy:destroyed#29",
+    "lost:destroyed",
+    "device:created#30",
+    "destroy:destroyed#30",
+    "lost:destroyed",
+    "device:created#31",
+    "destroy:destroyed#31",
+    "lost:destroyed",
+    "device:created#32",
+    "destroy:destroyed#32",
+    "lost:destroyed",
+    "device:created#33",
+    "destroy:destroyed#33",
+    "lost:destroyed",
+    "device:created#34"
+  ],
+  "auxiliaryProbe": {
+    "method": "Browser.crashGpuProcess",
+    "injected": true,
+    "recovered": true,
+    "before": {
+      "status": "ready",
+      "statuses": [
+        "initializing",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "losses": 39,
+      "recoveries": 39,
+      "lastStatus": "WebGPU · 程序化 FAB · 121 台设备",
+      "devices": 79,
+      "destroyed": 78,
+      "liveDevices": 1
+    },
+    "after": {
+      "status": "ready",
+      "statuses": [
+        "initializing",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready",
+        "lost",
+        "ready"
+      ],
+      "losses": 40,
+      "recoveries": 40,
+      "lastStatus": "WebGPU · 程序化 FAB · 121 台设备",
+      "devices": 81,
+      "destroyed": 79,
+      "liveDevices": 2
+    }
+  },
+  "consoleErrors": [],
+  "limitations": [],
+  "pass": true,
+  "screenshot": "C:\\Users\\han_qingyu\\SemiconFab-Next\\docs\\architecture\\evidence\\gpu\\screenshots\\gpu-ready.png",
+  "finalState": {
+    "footer": "WebGPU FAB-01 · 单 FAB AMHS OHT 00/24 99 RUN · 22 IDLE · 0 DOWN · 0 MAINT",
+    "renderStatus": "",
+    "webgpu": true,
+    "webgl": false,
+    "webgl2": false,
+    "ready": true
+  },
+  "recoveries": {
+    "injected": 39,
+    "recovered": 39,
+    "sawLoss": 39
+  },
+  "finalDevices": {
+    "created": 81,
+    "destroyed": 79,
+    "live": 2
+  },
+  "finishedAt": "2026-10-29T18:16:16.597Z"
+}
