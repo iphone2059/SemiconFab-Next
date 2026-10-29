@@ -1,3 +1,5 @@
+import { makeResource } from '@/api/resource';
+import { RESOURCE_POLICIES } from '@/api/resource-policy';
 import { Effect } from 'effect';
 import { queryOptions } from '@tanstack/react-query';
 import { parseWaferRoutes } from '@/domain/wafer-route';
@@ -18,3 +20,6 @@ export const fetchWaferRoutes = () => httpTransport.fetchJson('/twin/routes.json
   try: () => parseWaferRoutes(value),
   catch: cause => new InvalidServerResponse(cause instanceof Error ? cause.message : 'invalid wafer routes', cause),
 })));
+
+/** Static wafer routes resource; freshness is infinite, retention 10 minutes. */
+export const waferRoutesResource = makeResource(fetchWaferRoutes(), RESOURCE_POLICIES.waferRoutes);

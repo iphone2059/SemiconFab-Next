@@ -16,7 +16,8 @@
 | Task 3 Effect Schema + HTTP transport | 完成 | `effect4-task3-effect-schema-http.md`；Zod 已从源码/依赖/锁文件移除；111 文件/691 测试 PASS |
 | Task 4 Zustand→Atom（阶段 A） | 完成 | `effect4-task4-atoms.md`；Zustand 已从源码/依赖/锁文件移除；114 文件/702 测试 |
 | Task 4 XState/Effect 命令契约（阶段 B） | 完成 | `effect4-task4-command-contract.md`；119 文件/712 测试；actor Scope/Atom projection/恢复队列/并发 4/传输失败契约 |
-| Task 5 Query→Resource Atom + resource-policy | 下一任务 | — |
+| Task 5 Resource Atom 基础设施（阶段 A） | 完成 | `effect4-task5-resource-foundation.md`；120 文件/719 测试 |
+| Task 5 消费者迁移 + Query 删除（阶段 B/C） | 下一阶段 | — |
 | Task 6 Effect Stream/SSE/REST + 依赖清零 + 验收 | 未开始 | — |
 
 ## Task 2 后事实

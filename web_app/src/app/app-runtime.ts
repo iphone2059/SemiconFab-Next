@@ -28,6 +28,8 @@ export interface AppRuntime<R = never> {
   runSync<A, E>(effect: Effect.Effect<A, E, R>): A;
   /** Long-lived fibers are owned by the runtime scope and interrupted on dispose. */
   runFork<A, E>(effect: Effect.Effect<A, E, R>): Fiber.Fiber<A, E>;
+  /** True once dispose has started; resource adapters must not write afterwards. */
+  readonly disposed: boolean;
   /** Stops app tasks/subscriptions first, then releases registry nodes. Idempotent. */
   dispose(): Promise<void>;
 }
@@ -39,9 +41,11 @@ export function createApplicationRuntime<R = never>(options: AppRuntimeOptions<R
   });
   const services = ManagedRuntime.make(options.layer);
   let disposal: Promise<void> | undefined;
+  let disposed = false;
 
   const dispose = (): Promise<void> => {
     if (!disposal) {
+      disposed = true;
       disposal = (async () => {
         await services.dispose();
         registry.dispose();
@@ -56,6 +60,7 @@ export function createApplicationRuntime<R = never>(options: AppRuntimeOptions<R
     runPromise: (effect) => services.runPromise(effect),
     runSync: (effect) => services.runSync(effect),
     runFork: (effect) => services.runFork(effect),
+    get disposed() { return disposed; },
     dispose,
   };
 }

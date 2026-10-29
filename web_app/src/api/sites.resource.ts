@@ -1,3 +1,5 @@
+import { makeResource } from '@/api/resource';
+import { RESOURCE_POLICIES } from '@/api/resource-policy';
 import { queryOptions } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { sitesSchema } from '@/api/sites.schema';
@@ -20,3 +22,6 @@ export const sitesQueryOptions = () => queryOptions({
 export function findSiteByFabId(sites: readonly SiteDto[], fabId: string): SiteDto | undefined {
   return sites.find((site) => site.fabs.some((fab) => fab.fabId === fabId));
 }
+
+/** Canonical sites resource Atom (single-flight + 30s freshness + 5min idle TTL). */
+export const sitesResource = makeResource(fetchSites(), RESOURCE_POLICIES.sites);

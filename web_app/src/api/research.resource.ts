@@ -1,3 +1,5 @@
+import { makeResource } from '@/api/resource';
+import { RESOURCE_POLICIES } from '@/api/resource-policy';
 import { Effect } from 'effect';
 import { queryOptions } from '@tanstack/react-query';
 import { httpTransport } from '@/api/http.transport';
@@ -14,3 +16,6 @@ export const researchEventsQueryOptions = () =>
   });
 
 export const fetchResearchEvents = () => httpTransport.fetchText('/twin/events-t1-fifo.jsonl');
+
+/** Static research events resource; freshness is infinite, retention 10 minutes. */
+export const researchEventsResource = makeResource(fetchResearchEvents(), RESOURCE_POLICIES.researchEvents);

@@ -1,3 +1,5 @@
+import { makeResource } from '@/api/resource';
+import { RESOURCE_POLICIES } from '@/api/resource-policy';
 import type { CatalogPageDto } from '@/contracts/app-contracts';
 import { Effect } from 'effect';
 import { queryOptions } from '@tanstack/react-query';
@@ -11,3 +13,6 @@ export const catalogQueryOptions = () => queryOptions({
   queryKey: queryKeys.catalog.all,
   queryFn: ({ signal }) => Effect.runPromise(fetchCatalog(), { signal }), staleTime: 60_000, retry: 0,
 });
+
+/** Catalog resource Atom (60s freshness). */
+export const catalogResource = makeResource(fetchCatalog(), RESOURCE_POLICIES.catalog);
