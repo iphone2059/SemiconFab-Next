@@ -1,0 +1,41 @@
+{
+  "generatedAt": "2026-10-29T14:21:33.763Z",
+  "branch": "refactor/effect4-flat-20261029",
+  "testedCommit": "e4854f750c54bcd7040238c62d010d38b1f51f24",
+  "baselineCommit": "4fc8a94a3f10d185c8bef7929349ac6ccb2b8792",
+  "node": "v26.12.1",
+  "pnpm": "12.15.0",
+  "dotnetSdk": "11.0.100-rc.3.26522.148",
+  "chrome": "155.0.8059.86",
+  "os": "Microsoft Windows 11 Pro for Workstations",
+  "cpu": "12th Gen Intel(R) Core(TM) i7-12700H",
+  "gpu": [
+    "Intel(R) Iris(R) Xe Graphics",
+    "NVIDIA GeForce RTX 3050 Laptop GPU"
+  ],
+  "lockfileSha256": "4d0c26cd1ba78ebfb8b016907ab2378b03d9734d241a9d544a262710fa8aec2e",
+  "verifyLog": {
+    "path": "docs/architecture/evidence/final-verify.log",
+    "bytes": 26972,
+    "sha256": "4ee2bc66121614bdc6098cb90c4f53d773589d101c757ca917e20bdddc7a3eca",
+    "exitCode": 0,
+    "lines": 352
+  },
+  "frontend": {
+    "testFiles": 121,
+    "tests": 722,
+    "typecheck": "pass",
+    "build": "pass"
+  },
+  "backend": {
+    "dotnetTestsPassed": 180,
+    "build": "pass"
+  },
+  "browserE2e": {
+    "scenarios": 10,
+    "passed": 10,
+    "failed": 0,
+    "evidence": "docs/perf/effect4-e2e.json"
+  },
+  "perfEvidence": "docs/architecture/evidence/perf/"
+}
