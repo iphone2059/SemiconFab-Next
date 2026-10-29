@@ -48,12 +48,27 @@
 6. 3 个独立 .NET 项目 Release 构建，并对 `fab_tests` 执行 `dotnet test --no-build`。
 7. `web_app` 内用 `package.json` 锁定的 pnpm 版本执行 `install --frozen-lockfile`、`typecheck`、`test`、`build`。
 
+## 浏览器功能验收（e2e）
+
+```powershell
+# web_app 内执行；必要时自动启动隔离 dev 栈（API 5091 / Web 5179）
+pnpm e2e
+```
+
+- 实现：`tools/e2e_functional.mjs`（Chrome CDP；无额外浏览器依赖）+ `scripts/e2e.ps1`。
+- 目标环境：默认 `http://127.0.0.1:5179`；启动方式与端口、证据路径均可由脚本参数覆盖（`-ApiPort/-WebPort/-Out/-Chrome`）。
+- 产物：`docs/perf/effect4-e2e.json`（场景、步骤、期望/实际、pass/fail、console 错误、网络摘要）+ `docs/perf/e2e/*.png`（关键失败/断线截图）。
+- 场景：Sites 成功/失败/重试、设备目录筛选/搜索/视图、URL lang/theme 刷新/前进后退、Workbench 校验/重复提交/错误、Catalog 导入/导出、Twin DEMO/晶圆/Research、Twin REST/SSE/断线恢复、未知 FAB、未知 URL、页面退出重进连接卫生。
+
+```
 ## 前端架构门禁
 
 - `web_app/tests/architecture/architecture-boundaries.test.ts`：通用正则边界规则（分层 import、XState/工作流实现隔离等）。
 - `web_app/tests/architecture/architecture-import-graph.test.ts`：用项目自带 TypeScript Compiler API 解析真实 import 图，执行 R0（相对 import 可解析）、R0b（无路径别名）、R1（运行图无环）、R2（`app/router` 通用文件不依赖 features）、R3（domain 纯度）、R4（feature 互不依赖）、R5（生成物登记/头注释/数据化）、R6（`src` 根白名单）。
+- `web_app/tests/architecture/legacy-dependency-gate.test.ts`：Zod/Zustand/TanStack Query/RxJS 在源码、manifest 与 lockfile 中均为零。
+- `web_app/tests/architecture/effect-runtime-boundary.test.ts`：`Effect.run*`、`AtomRegistry.make`、`ManagedRuntime.make`、`RegistryContext.Provider` 只允许组合根/已登记 Stream 适配器。
+- `web_app/tests/architecture/source-layout.test.ts`：`src` 严格单层模块目录（无二级目录、无 `features/` 旧路径）。
 - `web_app/tests/architecture/architecture-contract-rules.test.ts`：R7–R14（通用基础层不 import features；domain 无环境时钟/随机/DOM/定时器/网络；ScenePort 必需能力；全 import 边无环（含 type-only）；生成物登记校验；公共组件跨 feature 或设计系统角色；空依赖 effect 不捕获变化回调；无未登记 `any`/伪类型校验），每条规则都有 `tests/architecture/fixtures/**` 负向样例证明可失败。
-- `web_app/tests/architecture/route-tree-generation.test.ts`：在隔离干净 worktree 中运行官方 Vite + `@tanstack/router-plugin` 重新生成 `app/router/routeTree.gen.ts`，要求与提交版本逐字节一致；同时校验插件/生成器版本固定（精确版本 + lockfile 单解析）与 `@ts-nocheck` 仅限该文件。不一致即失败，不自动覆盖。
 - `web_app/tests/types/{store-action-types.ts,scene-port-types.ts}`：仅由 `tsc --noEmit` 校验的类型负向契约。
 - `docs/modules/M*.md` 保持恰好 18 条模块档案（`tools/check_architecture.py` 断言）。
 

@@ -14,7 +14,8 @@
     "test": "vitest run",
     "predev": "node ../tools/check_frozen_assets.mjs",
     "prebuild": "node ../tools/check_frozen_assets.mjs",
-    "pretest": "node ../tools/check_frozen_assets.mjs"
+    "pretest": "node ../tools/check_frozen_assets.mjs",
+    "e2e": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/e2e.ps1"
   },
   "dependencies": {
     "@babylonjs/lite": "1.36.0",

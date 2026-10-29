@@ -83,6 +83,11 @@ export function useCatalogRouteState(options: CatalogRouteStateOptions): Catalog
     // commit. Only write the current render back; otherwise URL input and old
     // store values repeatedly overwrite each other.
     if (registry.get(catalogAtom) !== catalogState || registry.get(localeAtom) !== preferences) return;
+    // A view switch is a route navigation owned by onViewChange. Writing the old
+    // route's search back while that navigation is in flight would cancel it (the
+    // catalog route would win and the header Compare link would never render the
+    // comparison route). Wait until the router exposes the new initialView.
+    if (view !== initialView) return;
     document.documentElement.lang = languageTag(language);
     document.title = `${text(
       language,
@@ -108,7 +113,7 @@ export function useCatalogRouteState(options: CatalogRouteStateOptions): Catalog
     if (searchToQueryString({ ...search, ...patch }) !== searchToQueryString(search)) {
       onSearchChange(patch, true);
     }
-  }, [catalogState, preferences, language, view, domain, category, query, selected, hideDrafts, search, onSearchChange, registry]);
+  }, [catalogState, preferences, language, view, initialView, domain, category, query, selected, hideDrafts, search, onSearchChange, registry]);
 
   function openView(next: CatalogView): void {
     const patch = {
