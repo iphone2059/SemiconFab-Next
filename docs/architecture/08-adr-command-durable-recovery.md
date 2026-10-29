@@ -46,7 +46,7 @@ DTO（新增到 `contracts/json-schema/contracts.schema.json` 的 `$defs`，并�
 - `CommandRecoveryListDto`：epoch/latestSequence/commands[]。
 - `CommandJournalPageDto`：epoch/hasGap/firstRetainedSequence/latestSequence/events[]（events 复用 `CommandJournalEventDto`）。
 - `CommandJournalEventDto`：sequence/fabId/commandId/revision/outcome/occurredAt。
-- `CommandPriorityDirtyDto`（SSE control frame）：reason/droppedCount/epoch/sequence/occurredAt。
+- `CommandDirtyDto`（SSE control frame）：reason/droppedCount/epoch/sequence/occurredAt。
 
 openapi.json 同步由生成器产出；`verify.ps1` 的 `python tools/generate_contracts.py --check` 必须通过。
 

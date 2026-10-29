@@ -452,6 +452,19 @@ public sealed class CommandApiTests
         Assert.True(latest >= firstRetained);
         Assert.True(DateTimeOffset.TryParse(gapData.GetProperty("occurredAt").GetString(), out _));
 
+        // A replaced epoch may have lost events, so the stream adds a dirty control frame that
+        // requires the client to reconcile authoritative command state.
+        var dirty = await ReadSseEventAsync(reader, timeout.Token)
+            ?? throw new XunitException("The command stream ended before the epoch-replaced dirty signal.");
+        Assert.Equal("dirty", dirty.Event);
+        Assert.Null(dirty.Id);
+        Assert.NotNull(dirty.Data);
+        var dirtyData = dirty.Data!.Value;
+        Assert.Equal("epoch-replaced", dirtyData.GetProperty("reason").GetString());
+        Assert.Equal(0, dirtyData.GetProperty("droppedCount").GetInt64());
+        Assert.Equal(gapData.GetProperty("epoch").GetString(), dirtyData.GetProperty("epoch").GetString());
+        Assert.True(DateTimeOffset.TryParse(dirtyData.GetProperty("occurredAt").GetString(), out _));
+
         var replayed = await ReadSseEventAsync(reader, timeout.Token)
             ?? throw new XunitException("The command stream ended before replaying retained events after the gap.");
         Assert.Null(replayed.Event);
@@ -727,7 +740,7 @@ public sealed class CommandApiTests
         Assert.Equal(HttpStatusCode.Accepted, submit.StatusCode);
         var commandId = await CommandIdAsync(submit);
         var latest = service.ReadJournal(Guid.Parse(siteId), null).LatestSequence;
-        var ahead = $"{service.JournalEpoch:D}:{latest + 100}";
+        var ahead = $"{service.GetJournalEpoch(Guid.Parse(siteId)):D}:{latest + 100}";
 
         using var timeout = new CancellationTokenSource(StreamTimeout);
         using var response = await OpenCommandStreamAsync(client, siteId, fabId, ahead, timeout.Token);
@@ -778,6 +791,7 @@ public sealed class CommandApiTests
         var sawGap = false;
         var gapFirstRetained = 0L;
         JsonElement? retained = null;
+        var sawDirty = false;
         while (retained is null)
         {
             var sse = await ReadSseEventAsync(reader, timeout.Token)
@@ -788,11 +802,21 @@ public sealed class CommandApiTests
                 gapFirstRetained = sse.Data!.Value.GetProperty("firstRetainedSequence").GetInt64();
                 continue;
             }
+            if (sse.Event == "dirty")
+            {
+                // A retention trim is a real data loss: the control frame must carry the dropped count.
+                sawDirty = true;
+                Assert.Null(sse.Id);
+                Assert.Equal("retention-trim", sse.Data!.Value.GetProperty("reason").GetString());
+                Assert.True(sse.Data!.Value.GetProperty("droppedCount").GetInt64() >= 1);
+                continue;
+            }
             if (!sawGap || sse.Data is null) continue;
             retained = sse.Data;
         }
 
         Assert.True(sawGap);
+        Assert.True(sawDirty, "A pruned cursor must emit an explicit dirty control frame.");
         Assert.True(gapFirstRetained > 1, "The retained journal must have trimmed away earlier events.");
         var payload = retained!.Value.GetProperty("payload");
         Assert.Equal(commandId, payload.GetProperty("commandId").GetString());
@@ -936,7 +960,7 @@ public sealed class CommandApiTests
         {
             host.UseEnvironment("Development");
             host.UseSetting("Fab:DevelopmentKey", Key);
-            host.UseSetting("Fab:DataDirectory", Path.Combine(Path.GetTempPath(), "fab-command-api-tests", Guid.NewGuid().ToString("N")));
+            host.UseSetting("Fab:DataDirectory", TestDataDirectory.Create());
             host.UseSetting("Fab:EmbeddedWorker", "false");
             if (capabilitySettings is not null)
             {
@@ -958,6 +982,7 @@ public sealed class CommandApiTests
                 {
                     services.RemoveAll<EquipmentCommandService>();
                     services.AddSingleton(provider => new EquipmentCommandService(
+                        provider.GetRequiredService<ICommandStore>(),
                         provider.GetRequiredService<SiteDirectory>(), TimeProvider.System, commandOptions,
                         provider.GetRequiredService<IEquipmentCommandValidator>()));
                 }

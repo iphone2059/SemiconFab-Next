@@ -17,3 +17,8 @@ public sealed record CatalogEntryDto(string RecordId, string Vendor, string Mode
 public sealed record CatalogSnapshotDto(int ContractVersion, string ImportId, string Source, CatalogEntryDto[] Entries);
 public sealed record CatalogCategoryDto(string Category, string Domain, int Count);
 public sealed record CatalogPageDto(string ImportId, int TotalCount, int MatchedCount, CatalogCategoryDto[] Categories, CatalogEntryDto[] Items);
+public sealed record CommandRecoveryDto(string SiteId, string FabId, string CommandId, int Revision, string Outcome, string OccurredAt, bool Terminal);
+public sealed record CommandRecoveryListDto(string Epoch, long LatestSequence, CommandRecoveryDto[] Commands);
+public sealed record CommandJournalEventDto(long Sequence, string FabId, string CommandId, int Revision, string Outcome, string OccurredAt);
+public sealed record CommandJournalPageDto(string Epoch, bool HasGap, long FirstRetainedSequence, long LatestSequence, CommandJournalEventDto[] Events);
+public sealed record CommandDirtyDto(string Reason, long DroppedCount, string Epoch, long Sequence, string OccurredAt);

@@ -106,3 +106,39 @@ export interface CatalogPageDto {
   readonly categories: CatalogCategoryDto[];
   readonly items: CatalogEntryDto[];
 }
+export interface CommandRecoveryDto {
+  readonly siteId: string;
+  readonly fabId: string;
+  readonly commandId: string;
+  readonly revision: number;
+  readonly outcome: string;
+  readonly occurredAt: string;
+  readonly terminal: boolean;
+}
+export interface CommandRecoveryListDto {
+  readonly epoch: string;
+  readonly latestSequence: number;
+  readonly commands: CommandRecoveryDto[];
+}
+export interface CommandJournalEventDto {
+  readonly sequence: number;
+  readonly fabId: string;
+  readonly commandId: string;
+  readonly revision: number;
+  readonly outcome: string;
+  readonly occurredAt: string;
+}
+export interface CommandJournalPageDto {
+  readonly epoch: string;
+  readonly hasGap: boolean;
+  readonly firstRetainedSequence: number;
+  readonly latestSequence: number;
+  readonly events: CommandJournalEventDto[];
+}
+export interface CommandDirtyDto {
+  readonly reason: string;
+  readonly droppedCount: number;
+  readonly epoch: string;
+  readonly sequence: number;
+  readonly occurredAt: string;
+}

@@ -36,7 +36,10 @@ internal static class ApiHost
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton(commandOptions);
         builder.Services.AddSingleton(_ => new EquipmentStatusService(Path.Combine(data, "equipment-status")));
+        // Durable command recovery (ADR-008): one local-disk store under the same Fab:DataDirectory.
+        builder.Services.AddSingleton<ICommandStore>(_ => new FileCommandStore(Path.Combine(data, "commands")));
         builder.Services.AddSingleton(provider => new EquipmentCommandService(
+            provider.GetRequiredService<ICommandStore>(),
             provider.GetRequiredService<SiteDirectory>(),
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<EquipmentCommandOptions>(),
@@ -60,6 +63,8 @@ internal static class ApiHost
         var app = builder.Build();
         // Fail fast on an invalid Fab:EquipmentCapabilities catalog instead of silently widening command access.
         _ = app.Services.GetRequiredService<IEquipmentCapabilityCatalog>();
+        // Fail fast when the durable command store cannot be recovered: there is no memory fallback.
+        _ = app.Services.GetRequiredService<EquipmentCommandService>();
         app.UseExceptionHandler();
         app.Use(async (context, next) =>
         {
@@ -77,6 +82,12 @@ internal static class ApiHost
             catch (IdempotencyConflictException)
             {
                 await Results.Problem(statusCode: 409, title: "Idempotency key conflicts with an earlier request", extensions: new Dictionary<string, object?> { ["errorCode"] = "IDEMPOTENCY_CONFLICT" }).ExecuteAsync(context);
+            }
+            catch (CommandStoreException)
+            {
+                // Durable command storage is unavailable: fail explicitly instead of serving from memory.
+                await Results.Problem(statusCode: 503, title: "Command store unavailable",
+                    extensions: new Dictionary<string, object?> { ["errorCode"] = "COMMAND_STORE_UNAVAILABLE" }).ExecuteAsync(context);
             }
             catch (Exception exception) when (exception is ArgumentException or FormatException or OverflowException)
             {
@@ -185,6 +196,9 @@ internal static class ApiHost
                 EquipmentCommandSubmitStatus.InvalidCommand => Results.Problem(statusCode: 400,
                     title: result.Validation!.Title, detail: result.Validation.Detail,
                     extensions: new Dictionary<string, object?> { ["errorCode"] = "INVALID_COMMAND" }),
+                EquipmentCommandSubmitStatus.StoreUnavailable => Results.Problem(statusCode: 503,
+                    title: "Command store unavailable",
+                    extensions: new Dictionary<string, object?> { ["errorCode"] = "COMMAND_STORE_UNAVAILABLE" }),
                 _ => Results.Accepted($"/api/v1/commands/{result.Command!.CommandId}", result.Command)
             };
         });
@@ -198,6 +212,44 @@ internal static class ApiHost
                 !authorization.IsAuthorized(siteId, fabId, context.User))
                 return Results.Problem(statusCode: 404, title: "Command not found");
             return Results.Ok(command);
+        });
+        // Authoritative FAB-scoped command listing: the browser-refresh / severe-gap recovery entry point.
+        api.MapGet("/sites/{siteId:guid}/fabs/{fabId:guid}/commands", (Guid siteId, Guid fabId, string? status, int? afterRevision,
+            EquipmentCommandService commands, SiteDirectory directory, IFabAuthorization authorization, HttpContext context) =>
+        {
+            if (!directory.TryGetFab(siteId, fabId, out var fab) || !authorization.IsAuthorized(siteId, fab.Id, context.User))
+                return Results.Problem(statusCode: 404, title: "Site or FAB not found");
+            var normalizedStatus = status ?? EquipmentCommandService.StatusAll;
+            if (normalizedStatus is not (EquipmentCommandService.StatusActive or EquipmentCommandService.StatusTerminal or EquipmentCommandService.StatusAll))
+                return Results.Problem(statusCode: 400, title: "Invalid status filter",
+                    detail: "status must be active, terminal or all.",
+                    extensions: new Dictionary<string, object?> { ["errorCode"] = "INVALID_QUERY" });
+            var revision = afterRevision ?? -1;
+            if (revision < -1)
+                return Results.Problem(statusCode: 400, title: "Invalid afterRevision filter",
+                    detail: "afterRevision must be -1 or greater.",
+                    extensions: new Dictionary<string, object?> { ["errorCode"] = "INVALID_QUERY" });
+            if (commands.StoreUnavailable) return StoreUnavailableProblem();
+            return Results.Ok(commands.ListFabCommands(siteId, fab.Id, normalizedStatus, revision));
+        });
+        // Durable journal replay page with explicit gap information for slow consumers and reconnects.
+        api.MapGet("/sites/{siteId:guid}/fabs/{fabId:guid}/command-journal", (Guid siteId, Guid fabId, long? afterSequence, int? limit,
+            EquipmentCommandService commands, SiteDirectory directory, IFabAuthorization authorization, HttpContext context) =>
+        {
+            if (!directory.TryGetFab(siteId, fabId, out var fab) || !authorization.IsAuthorized(siteId, fab.Id, context.User))
+                return Results.Problem(statusCode: 404, title: "Site or FAB not found");
+            var cursor = afterSequence ?? 0;
+            var pageLimit = limit ?? EquipmentCommandService.DefaultJournalPageLimit;
+            if (cursor < 0)
+                return Results.Problem(statusCode: 400, title: "Invalid afterSequence filter",
+                    detail: "afterSequence must be 0 or greater.",
+                    extensions: new Dictionary<string, object?> { ["errorCode"] = "INVALID_QUERY" });
+            if (pageLimit is < 1 or > EquipmentCommandService.MaxJournalPageLimit)
+                return Results.Problem(statusCode: 400, title: "Invalid limit filter",
+                    detail: $"limit must be 1..{EquipmentCommandService.MaxJournalPageLimit}.",
+                    extensions: new Dictionary<string, object?> { ["errorCode"] = "INVALID_QUERY" });
+            if (commands.StoreUnavailable) return StoreUnavailableProblem();
+            return Results.Ok(commands.ReadCommandJournalPage(siteId, fab.Id, cursor, pageLimit));
         });
         api.MapGet("/sites/{siteId:guid}/commands/stream", async (Guid siteId, string? fabId, EquipmentCommandService commands,
             SiteDirectory directory, IFabAuthorization authorization, HttpContext context, CancellationToken cancellationToken) =>
@@ -213,10 +265,16 @@ internal static class ApiHost
                 await Results.Problem(statusCode: 404, title: "Site or FAB not found").ExecuteAsync(context);
                 return;
             }
+            if (commands.StoreUnavailable)
+            {
+                await StoreUnavailableProblem().ExecuteAsync(context);
+                return;
+            }
             var fabScope = fab.Id.ToString("D");
             var header = context.Request.Headers["Last-Event-ID"].ToString();
             string? lastEventId = string.IsNullOrWhiteSpace(header) ? null : header;
             var replay = commands.ReadJournal(siteId, lastEventId, fabScope);
+            var epoch = replay.Epoch;
             context.Response.Headers.ContentType = "text/event-stream";
             context.Response.Headers.CacheControl = "no-cache";
             context.Response.Headers.Connection = "keep-alive";
@@ -230,29 +288,42 @@ internal static class ApiHost
                 {
                     var gapJson = System.Text.Json.JsonSerializer.Serialize(commands.CreateReplayGap(replay, lastEventId), SseJsonOptions);
                     await context.Response.WriteAsync($"event: replay-gap\ndata: {gapJson}\n\n", cancellationToken);
+                    // Events may be missing (retention trim / epoch replacement): require authoritative reconcile.
+                    if (commands.CreateDirty(replay, lastEventId) is { } initialDirty)
+                        await WriteDirtyAsync(context.Response, initialDirty, cancellationToken);
                 }
                 foreach (var envelope in replay.Events)
-                    await WriteCommandEventAsync(context.Response, commands.JournalEpoch, envelope, cancellationToken);
+                    await WriteCommandEventAsync(context.Response, epoch, envelope, cancellationToken);
                 cursor = replay.LatestSequence;
                 if (replay.HasGap || replay.Events.Length > 0) await context.Response.Body.FlushAsync(cancellationToken);
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    var pending = commands.ReadJournalSince(siteId, cursor, fabScope, commands.JournalEpoch);
+                    if (commands.StoreUnavailable)
+                    {
+                        // The durable journal can no longer be trusted: the client must reconcile.
+                        await WriteDirtyAsync(context.Response, new CommandDirtyDto("store-fault", 0,
+                            epoch.ToString("D"), cursor, DateTimeOffset.UtcNow.ToString("O")), cancellationToken);
+                        await context.Response.Body.FlushAsync(cancellationToken);
+                        return;
+                    }
+                    var pending = commands.ReadJournalSince(siteId, cursor, fabScope, epoch);
                     if (pending.HasGap)
                     {
                         // Never silently continue: tell the client its cursor is unusable, then replay retained events.
-                        var requestedCursor = $"{commands.JournalEpoch:D}:{cursor}";
+                        var requestedCursor = $"{epoch:D}:{cursor}";
                         var gapJson = System.Text.Json.JsonSerializer.Serialize(commands.CreateReplayGap(pending, requestedCursor), SseJsonOptions);
                         await context.Response.WriteAsync($"event: replay-gap\ndata: {gapJson}\n\n", cancellationToken);
+                        if (commands.CreateDirty(pending, requestedCursor) is { } liveDirty)
+                            await WriteDirtyAsync(context.Response, liveDirty, cancellationToken);
                         foreach (var envelope in pending.Events)
-                            await WriteCommandEventAsync(context.Response, commands.JournalEpoch, envelope, cancellationToken);
+                            await WriteCommandEventAsync(context.Response, epoch, envelope, cancellationToken);
                         cursor = pending.LatestSequence;
                         await context.Response.Body.FlushAsync(cancellationToken);
                     }
                     else
                     {
                         foreach (var envelope in pending.Events)
-                            await WriteCommandEventAsync(context.Response, commands.JournalEpoch, envelope, cancellationToken);
+                            await WriteCommandEventAsync(context.Response, epoch, envelope, cancellationToken);
                         if (pending.Events.Length > 0)
                         {
                             cursor = pending.LatestSequence;
@@ -343,4 +414,16 @@ internal static class ApiHost
         await response.WriteAsync($"id: {epoch:D}:{envelope.Sequence}\n", cancellationToken);
         await response.WriteAsync($"data: {json}\n\n", cancellationToken);
     }
+
+    /// <summary>Writes one non-journaled <c>event: dirty</c> control frame (no id line).</summary>
+    private static async Task WriteDirtyAsync(HttpResponse response, CommandDirtyDto dirty, CancellationToken cancellationToken)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(dirty, SseJsonOptions);
+        await response.WriteAsync($"event: dirty\ndata: {json}\n\n", cancellationToken);
+    }
+
+    /// <summary>Explicit 503 when durable command storage is unavailable; never a memory-only success.</summary>
+    private static IResult StoreUnavailableProblem() =>
+        Results.Problem(statusCode: 503, title: "Command store unavailable",
+            extensions: new Dictionary<string, object?> { ["errorCode"] = "COMMAND_STORE_UNAVAILABLE" });
 }

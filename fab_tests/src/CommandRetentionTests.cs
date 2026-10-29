@@ -91,7 +91,7 @@ public sealed class CommandRetentionTests
     }
 
     private static EquipmentCommandService Service(TimeProvider clock, EquipmentCommandOptions options) =>
-        new(new SiteDirectory(), clock, options);
+        new(TestDataDirectory.Store(), new SiteDirectory(), clock, options);
 
     private static EquipmentCommandOptions FastOptions(EquipmentCommandOptions options) => new()
     {

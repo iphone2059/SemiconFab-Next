@@ -266,6 +266,124 @@
           }
         }
       }
+    },
+    "/api/v1/sites/{siteId}/fabs/{fabId}/commands": {
+      "get": {
+        "description": "Authoritative command listing for one FAB. Browser refresh / severe replay gaps use this to rebuild tracked commands; it is the only recovery entry point for unacknowledged commands.",
+        "parameters": [
+          {
+            "name": "siteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "fabId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "terminal",
+                "all"
+              ]
+            }
+          },
+          {
+            "name": "afterRevision",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": -1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandRecoveryListDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "ProblemDetails error"
+          }
+        }
+      }
+    },
+    "/api/v1/sites/{siteId}/fabs/{fabId}/command-journal": {
+      "get": {
+        "description": "Journal replay page for one FAB, including the durable epoch and explicit gap information for slow consumers and reconnects.",
+        "parameters": [
+          {
+            "name": "siteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "fabId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "afterSequence",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandJournalPageDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "ProblemDetails error"
+          }
+        }
+      }
     }
   },
   "security": [
@@ -797,6 +915,183 @@
             }
           }
         }
+      },
+      "CommandRecoveryDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "siteId",
+          "fabId",
+          "commandId",
+          "revision",
+          "outcome",
+          "occurredAt",
+          "terminal"
+        ],
+        "properties": {
+          "siteId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fabId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string"
+          },
+          "terminal": {
+            "type": "boolean"
+          }
+        },
+        "description": "Authoritative command state inside the durable retention window (Development defaults: terminal TTL 5 minutes, at most 512 terminal commands and 4096 journal events per Site). Commands outside the window are not recoverable: GET /api/v1/commands/{commandId} returns 404 instead of guessing."
+      },
+      "CommandRecoveryListDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "epoch",
+          "latestSequence",
+          "commands"
+        ],
+        "properties": {
+          "epoch": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "latestSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommandRecoveryDto"
+            }
+          }
+        },
+        "description": "Authoritative FAB-scoped command listing used after a browser refresh or a severe replay gap. epoch/latestSequence are the durable per-Site journal cursor; commands outside the retention window are omitted."
+      },
+      "CommandJournalEventDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sequence",
+          "fabId",
+          "commandId",
+          "revision",
+          "outcome",
+          "occurredAt"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "fabId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string"
+          }
+        },
+        "description": "One durable journal event. sequence is the per-Site monotonic cursor component; SSE ids are the string form {epoch}:{sequence}."
+      },
+      "CommandJournalPageDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "epoch",
+          "hasGap",
+          "firstRetainedSequence",
+          "latestSequence",
+          "events"
+        ],
+        "properties": {
+          "epoch": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "hasGap": {
+            "type": "boolean"
+          },
+          "firstRetainedSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "latestSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommandJournalEventDto"
+            }
+          }
+        },
+        "description": "A paged journal replay window. hasGap=true means the requested afterSequence cannot be served exactly (retention trim, epoch replacement or cursor ahead of the journal); clients must reconcile authoritative command state via the commands listing. Events outside the retention window are never replayed."
+      },
+      "CommandDirtyDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "droppedCount",
+          "epoch",
+          "sequence",
+          "occurredAt"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "droppedCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "epoch": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "occurredAt": {
+            "type": "string"
+          }
+        },
+        "description": "SSE event: dirty control frame (no id line, not journaled). The retained journal may be incomplete (reason retention-trim|epoch-replaced|store-fault): the client MUST reconcile authoritative command state and must not guess."
       }
     }
   }

@@ -33,7 +33,7 @@ public sealed class CommandJournalTests
         var service = Service();
         Submit(service, "equipment-0", "key-1");
 
-        var fromStart = service.ReadJournal(SiteId, $"{service.JournalEpoch:D}:0");
+        var fromStart = service.ReadJournal(SiteId, $"{service.GetJournalEpoch(SiteId):D}:0");
         Assert.False(fromStart.HasGap);
         Assert.True(fromStart.CursorAccepted);
         Assert.Equal(0, fromStart.RequestedSequence);
@@ -41,7 +41,7 @@ public sealed class CommandJournalTests
         Assert.All(fromStart.Events, envelope => Assert.True(envelope.Sequence > 0));
 
         var snapshot = service.ReadJournal(SiteId, null);
-        var cursor = $"{service.JournalEpoch:D}:{snapshot.LatestSequence}";
+        var cursor = $"{service.GetJournalEpoch(SiteId):D}:{snapshot.LatestSequence}";
         var fromTail = service.ReadJournal(SiteId, cursor);
         Assert.False(fromTail.HasGap);
         Assert.True(fromTail.CursorAccepted);
@@ -66,7 +66,7 @@ public sealed class CommandJournalTests
         var gap = service.CreateReplayGap(result, lastEventId);
         Assert.True(gap.ReplayGap);
         Assert.Equal(EquipmentCommandService.CommandResultTopic, gap.Topic);
-        Assert.Equal(service.JournalEpoch.ToString("D"), gap.Epoch);
+        Assert.Equal(service.GetJournalEpoch(SiteId).ToString("D"), gap.Epoch);
         Assert.NotEqual(foreignEpoch.ToString("D"), gap.Epoch);
         Assert.Equal(lastEventId, gap.RequestedLastEventId);
         Assert.Equal(result.FirstRetainedSequence, gap.FirstRetainedSequence);
@@ -110,14 +110,14 @@ public sealed class CommandJournalTests
         Submit(service, "equipment-1", "key-2");
         Submit(service, "equipment-2", "key-3");
 
-        var result = service.ReadJournal(SiteId, $"{service.JournalEpoch:D}:0");
+        var result = service.ReadJournal(SiteId, $"{service.GetJournalEpoch(SiteId):D}:0");
         Assert.True(result.HasGap);
         Assert.True(result.CursorAccepted);
         Assert.Equal(2, result.FirstRetainedSequence);
         Assert.Equal(new long[] { 2, 3 }, result.Events.Select(envelope => envelope.Sequence).ToArray());
 
         // The exact boundary before the retained window is still resumable.
-        var boundary = service.ReadJournal(SiteId, $"{service.JournalEpoch:D}:{result.FirstRetainedSequence - 1}");
+        var boundary = service.ReadJournal(SiteId, $"{service.GetJournalEpoch(SiteId):D}:{result.FirstRetainedSequence - 1}");
         Assert.False(boundary.HasGap);
         Assert.Equal(new long[] { 2, 3 }, boundary.Events.Select(envelope => envelope.Sequence).ToArray());
     }
@@ -127,9 +127,9 @@ public sealed class CommandJournalTests
     {
         var first = Service();
         var second = Service();
-        Assert.NotEqual(Guid.Empty, first.JournalEpoch);
-        Assert.Equal(first.JournalEpoch, first.JournalEpoch);
-        Assert.NotEqual(first.JournalEpoch, second.JournalEpoch);
+        Assert.NotEqual(Guid.Empty, first.GetJournalEpoch(SiteId));
+        Assert.Equal(first.GetJournalEpoch(SiteId), first.GetJournalEpoch(SiteId));
+        Assert.NotEqual(first.GetJournalEpoch(SiteId), second.GetJournalEpoch(SiteId));
     }
 
     [Theory]
@@ -156,7 +156,7 @@ public sealed class CommandJournalTests
         var latest = service.ReadJournal(SiteId, null).LatestSequence;
         var requested = latest + 100;
 
-        var result = service.ReadJournal(SiteId, $"{service.JournalEpoch:D}:{requested}");
+        var result = service.ReadJournal(SiteId, $"{service.GetJournalEpoch(SiteId):D}:{requested}");
         Assert.True(result.HasGap);
         Assert.True(result.CursorAccepted);
         Assert.Equal(requested, result.RequestedSequence);
@@ -237,7 +237,7 @@ public sealed class CommandJournalTests
     }
 
     private static EquipmentCommandService Service(EquipmentCommandOptions? options = null) =>
-        new(new SiteDirectory(), TimeProvider.System, options);
+        new(TestDataDirectory.Store(), new SiteDirectory(), TimeProvider.System, options);
 
     private static EquipmentCommandStatus Submit(EquipmentCommandService service, string equipmentId, string key, string? fabId = null)
     {

@@ -19,10 +19,10 @@
       "sources": [
         {
           "path": "contracts/json-schema/contracts.schema.json",
-          "sha256": "edf7cf62cf1099db30f2526617701fcd20493343aeb241a6425912f42fd68e08"
+          "sha256": "9a127201e50a4026c706f86720ae8f2a3baa93b35b94b02db99c53226fb5a3d0"
         }
       ],
-      "sha256": "e3d8197f0e1c3dcd8985a1208930154514b73c65256a5f7e0004dab7bfd995e3"
+      "sha256": "cd6d970d2661f3adf1e9ba18ff64a42f1a08dbc013cc1f02c2c7900e5e040010"
     },
     {
       "path": "web_app/src/generated/twin-translations.generated.ts",
