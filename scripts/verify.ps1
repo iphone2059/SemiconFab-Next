@@ -1,5 +1,10 @@
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')))
+$fabProjectRoot = (Get-Location).Path
+$fabCommit = (& git rev-parse HEAD).Trim()
+$fabEvidence = Join-Path $fabProjectRoot 'docs/architecture/evidence'
+New-Item -ItemType Directory -Path (Join-Path $fabEvidence 'compiler') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $fabEvidence 'browser') -Force | Out-Null
 python tools/generate_contracts.py --check
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 node tools/build_twin_translations.cjs --check
@@ -68,4 +73,46 @@ if ($LASTEXITCODE) { exit $LASTEXITCODE }
 Invoke-FabPinnedPnpm -FabArguments @('test')
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 Invoke-FabPinnedPnpm -FabArguments @('build')
-exit $LASTEXITCODE
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+# Oxc peer-compatibility gate: proves the maintained @vitejs/plugin-react patch is
+# in effect and that the real plugin-consumed Oxc API works (CORE-011/G15).
+node (Join-Path $fabProjectRoot 'tools/compiler_compat.mjs') --out (Join-Path $fabEvidence 'compiler/compiler-compat.json')
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+# Production-bundle browser regression: builds once above, then serves the real
+# dist through vite preview (never the dev server) and drives fixed Chrome.
+& (Join-Path $PSScriptRoot 'e2e-production.ps1') -SkipBuild -Out 'docs/architecture/evidence/browser/production-e2e.json'
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+# Real WebGPU device-loss/recovery gate: GitHub-hosted runners have no GPU, so it
+# runs only on a self-hosted GPU runner (FAB_RUN_GPU_GATE=1) or locally on opt-in.
+if ($env:FAB_RUN_GPU_GATE -eq '1') {
+    $fabGpuSeconds = 600
+    if ($env:FAB_GPU_GATE_SECONDS) { $fabGpuSeconds = [int]$env:FAB_GPU_GATE_SECONDS }
+    & (Join-Path $PSScriptRoot 'gpu-gate.ps1') -SkipBuild -Out 'docs/architecture/evidence/gpu/gpu-gate.json' -DurationSeconds $fabGpuSeconds
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
+}
+
+# Compiler ON/OFF production-build equivalence: same tree, same deterministic
+# network/clock/events, compared business trace (execution counts may differ).
+& (Join-Path $PSScriptRoot 'compiler-equivalence.ps1') -OutDir 'docs/architecture/evidence/compiler'
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+# Evidence summary bound to the verified commit; the raw console output is saved
+# by the caller (docs/architecture/evidence/final-verify-<sha>.log).
+$fabSummary = [ordered]@{
+    commit = $fabCommit
+    verifiedAt = (Get-Date).ToUniversalTime().ToString('o')
+    node = (& node --version)
+    pnpm = $fabPnpmVersion
+    dotnet = (& dotnet --version)
+    gpuGate = ($env:FAB_RUN_GPU_GATE -eq '1')
+    checks = @(
+        'contracts', 'generated-artifacts', 'architecture', 'dotnet-build', 'dotnet-test',
+        'typecheck', 'oxlint', 'vitest', 'vite-build', 'compiler-compat',
+        'production-browser-e2e', 'compiler-equivalence'
+    )
+}
+$fabSummary | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $fabEvidence 'final-verify.json') -Encoding utf8
+exit 0

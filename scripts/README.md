@@ -45,8 +45,28 @@
 3. **架构检查**：`python tools/check_architecture.py`（扁平项目布局、前端终态目录/旧路径缺席、domain 分层、src 根白名单、feature 状态归属、生成物区域、禁用依赖、ARCH-11 高频边界、模块档案数量）。
 4. 工具单测：`./scripts/test-start-dev.ps1`、`python -m unittest discover -s tools -p 'test_*.py'` 与 `node --test tools/test_render_perf_checks.mjs`。
 5. 导入快照：`python tools/migrate_legacy_data.py --check`。
-6. 3 个独立 .NET 项目 Release 构建，并对 `fab_tests` 执行 `dotnet test --no-build`。
-7. `web_app` 内用 `package.json` 锁定的 pnpm 版本执行 `install --frozen-lockfile`、`typecheck`、`test`、`build`。
+6. 3 个独立 .NET 项目 Release 构建，并对 `fab_tests` 执行 `dotnet test --no-build`（含 Phase D 持久化/恢复测试，CORE-013）。
+7. `web_app` 内用 `package.json` 锁定的 pnpm 版本执行 `install --frozen-lockfile`、`typecheck`、`test`、`build`（含 CORE-001..014 与 property/model 测试）。
+8. **Oxc 兼容门禁**：`node tools/compiler_compat.mjs` 证明维护中的 `@vitejs/plugin-react` 兼容补丁生效、插件真实使用的 Oxc API 可用、无 Babel fallback（CORE-011/G15）。
+9. **生产 bundle 浏览器回归**：`scripts/e2e-production.ps1` 用 `vite build` 产物 + `vite preview`（不是 dev server）+ 固定 Chrome 跑 9 个功能场景，证据写 `docs/architecture/evidence/browser/`。
+10. **Compiler ON/OFF 等价**：`scripts/compiler-equivalence.ps1` 用同一确定性时钟/网络/事件序列比较两套生产构建的业务 trace（CORE-011），产物在 `docs/architecture/evidence/compiler/`。
+11. **GPU gate（可选）**：设置 `FAB_RUN_GPU_GATE=1` 时执行 `scripts/gpu-gate.ps1`（真实 WebGPU、设备丢失注入、恢复与长稳；需本机 GPU 或 self-hosted GPU runner，CORE-012）。
+12. 最后写 `docs/architecture/evidence/final-verify.json`（绑定受验 commit、工具版本与门禁清单）；调用方应把原始输出保存为 `final-verify-<sha>.log`。
+
+```powershell
+# 生产 bundle 浏览器验收（自动 build + API(start-dev -ApiOnly) + vite preview + Chrome）
+./scripts/e2e-production.ps1
+./scripts/e2e-production.ps1 -SkipBuild -Out docs/architecture/evidence/browser/production-e2e.json
+
+# Compiler ON/OFF 等价（自行 build 两套 + 隔离 API + Chrome）
+./scripts/compiler-equivalence.ps1 -OutDir docs/architecture/evidence/compiler
+
+# 真实 WebGPU 设备丢失/恢复 + 长稳（默认 600 秒）
+$env:FAB_RUN_GPU_GATE = '1'
+./scripts/verify.ps1
+# 或单独：
+./scripts/gpu-gate.ps1 -DurationSeconds 600
+```
 
 ## 浏览器功能验收（e2e）
 

@@ -123,6 +123,10 @@ function Start-FabProductionStack {
             ApiProcess = $fabApiProcess
             PreviewProcess = $fabPreviewProcess
             Environment = $fabEnvironment
+            Node = $fabPnpm.Node
+            PnpmEntry = $fabPnpm.PnpmEntry
+            PnpmVersion = $fabPnpm.Version
+            WebDirectory = $fabPnpm.WebDirectory
         }
     } catch {
         foreach ($fabName in $fabEnvironment.Keys) { Set-FabDevEnvironmentState -Name $fabName -Value $fabEnvironment[$fabName] }
