@@ -1,6 +1,7 @@
 import { Effect, Option } from 'effect';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { AppRuntime } from '@/app/app-runtime';
 import type { CommandEventSource } from '@/contracts/command-events.contract';
 import { sitesQueryOptions } from '@/api/sites.resource';
 import { FabLifecycleCoordinator } from '@/runtime/fab-lifecycle-coordinator';
@@ -22,7 +23,7 @@ import { TelemetryProvider } from '@/app/telemetry-provider';
  * EventSource/Worker (tests/jsdom), the runtime falls back to the empty
  * CommandEventSource seam.
  */
-export function RuntimeBootstrap({ children }: { children: ReactNode }) {
+export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode; appRuntime: AppRuntime<never> }) {
   const [registry] = useState(() => new FabRuntimeRegistry());
   const [telemetryRegistry] = useState(() => new FabTelemetryRegistry());
   const [runtimeVersion, setRuntimeVersion] = useState(0);
@@ -64,6 +65,7 @@ export function RuntimeBootstrap({ children }: { children: ReactNode }) {
       sourceFor: (fabId) => sourceByFab.get(fabId) ?? createPendingCommandEventSource(),
       gateway,
       lazyCommandSubscription: true,
+      projectionRegistry: appRuntime.registry,
     });
     for (const fab of fabs) registry.register(factory.create(fab.fabId));
 

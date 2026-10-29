@@ -1,3 +1,4 @@
+import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import type { CommandEventSource } from '@/contracts/command-events.contract';
 import type { CommandGateway } from '@/contracts/command-gateway.contract';
 import type { CommandWorkflowFactory, FabRuntimeRetentionOptions } from '@/runtime/fab-runtime';
@@ -12,6 +13,8 @@ export interface FabRuntimeFactoryOptions {
   readonly retention?: FabRuntimeRetentionOptions;
   /** Defer opening the per-FAB command SSE stream until a command is tracked. */
   readonly lazyCommandSubscription?: boolean;
+  readonly projectionRegistry?: AtomRegistry.AtomRegistry;
+  readonly maxConcurrentReconciliations?: number;
 }
 
 /** Creates one runtime per FAB from the same realtime source provider and gateway. */
@@ -26,6 +29,8 @@ export class FabRuntimeFactory {
       createWorkflow: this.options.createWorkflow,
       retention: this.options.retention,
       lazyCommandSubscription: this.options.lazyCommandSubscription,
+      projectionRegistry: this.options.projectionRegistry,
+      maxConcurrentReconciliations: this.options.maxConcurrentReconciliations,
     });
   }
 }

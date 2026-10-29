@@ -21,6 +21,8 @@ export class XStateCommandWorkflowAdapter implements CommandWorkflow {
   private readonly actor: Actor<EquipmentMachine>;
   private readonly reconciler?: CommandReconciler;
 
+  private started = false;
+
   constructor(
     readonly fabId: string,
     readonly commandId: string,
@@ -28,10 +30,27 @@ export class XStateCommandWorkflowAdapter implements CommandWorkflow {
   ) {
     this.actor = createActor(equipmentCommandMachine, { input: { fabId, commandId } });
     this.reconciler = reconciler;
+  }
+
+  /**
+   * Start is explicit so the owner can seed the initial projection and subscribe
+   * before the actor emits its first snapshot (Task 4 actor lifecycle contract).
+   */
+  start(): void {
+    if (this.started) return;
+    this.started = true;
     this.actor.start();
   }
 
+  /** Read-only snapshot subscription; the owner must unsubscribe before stopping. */
+  subscribe(listener: () => void): () => void {
+    const subscription = this.actor.subscribe(() => listener());
+    return () => subscription.unsubscribe();
+  }
+
   receive(event: CommandResultEvent): void {
+    // Direct adapter users (contract tests) may not call start explicitly.
+    this.start();
     const snapshot = this.actor.getSnapshot();
     if (isTerminalState(String(snapshot.value) as EquipmentCommandState)) return;
     if (!Number.isInteger(event.revision) || event.revision <= snapshot.context.revision) return;
@@ -44,6 +63,8 @@ export class XStateCommandWorkflowAdapter implements CommandWorkflow {
   }
 
   dispose(): void {
+    if (!this.started) return;
+    this.started = false;
     this.actor.stop();
   }
 

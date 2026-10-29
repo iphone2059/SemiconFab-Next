@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useAtomValue } from '@effect/atom-react';
 import type { CommandWorkflowProjection } from '@/contracts/command-workflow.contract';
+import { commandProjectionAtom, commandProjectionKey } from '@/runtime/command-projection.atom';
 import type { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
 
 interface RuntimeContextValue {
@@ -37,6 +39,10 @@ function sameProjection(left: CommandWorkflowProjection | undefined, right: Comm
  * notifications and never exposes actor/send APIs to the page.
  */
 export function useCommandProjection(fabId: string, commandId: string): CommandWorkflowProjection | undefined {
+  // Production reads the Atom projection written by FabRuntime through the same
+  // AppRuntime registry. The subscription below stays as a fallback for isolated
+  // runtimes/tests that do not inject a projection registry.
+  const atomProjection = useAtomValue(commandProjectionAtom(commandProjectionKey(fabId, commandId)));
   const registry = useFabRuntimeRegistry();
   // Derive the current runtime per render. The Provider version bump after a
   // RuntimeBootstrap rebuild re-renders consumers, so the effect re-subscribes
@@ -64,5 +70,5 @@ export function useCommandProjection(fabId: string, commandId: string): CommandW
     return runtime.subscribe(update);
   }, [runtime, commandId]);
 
-  return projection;
+  return atomProjection ?? projection;
 }

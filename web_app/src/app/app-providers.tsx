@@ -21,7 +21,7 @@ export function AppProviders({ children, client, runtime = applicationRuntime }:
     <AppRuntimeProvider runtime={runtime}>
       <RegistryContext.Provider value={runtime.registry}>
         <QueryProvider client={client}>
-          <RuntimeBootstrap>
+          <RuntimeBootstrap appRuntime={runtime}>
             <ErrorBoundary>{children}</ErrorBoundary>
           </RuntimeBootstrap>
         </QueryProvider>

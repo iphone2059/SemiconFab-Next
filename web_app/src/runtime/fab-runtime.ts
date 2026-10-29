@@ -1,9 +1,16 @@
-import type { CommandEventSource } from '@/contracts/command-events.contract';
+import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
+import type {
+  CommandConnectionStatus, CommandEventSource, CommandTransportFailure,
+} from '@/contracts/command-events.contract';
 import type { CommandGateway } from '@/contracts/command-gateway.contract';
 import type { CommandWorkflow, CommandWorkflowProjection, CommandWorkflowRegistry } from '@/contracts/command-workflow.contract';
 import { CommandCorrelationRegistry } from '@/runtime/command-correlation-registry';
 import { CommandEventBridge } from '@/runtime/command-event-bridge';
 import { CommandReconciler } from '@/runtime/command-reconciler';
+import { commandProjectionAtom, commandProjectionKey } from '@/runtime/command-projection.atom';
+import type { CommandRecoveryEviction } from '@/runtime/command-event-recovery';
+import { CommandEventRecovery } from '@/runtime/command-event-recovery';
+import { EffectCommandWorkflowScope, type CommandWorkflowScope } from '@/runtime/command-workflow-scope';
 import { XStateCommandWorkflowAdapter } from '@/runtime/xstate-command-workflow-adapter';
 import type { Subscription } from 'rxjs';
 
@@ -33,6 +40,12 @@ export interface FabRuntimeOptions {
   readonly retention?: FabRuntimeRetentionOptions;
   /** Defer opening the command SSE stream until the first command is tracked. */
   readonly lazyCommandSubscription?: boolean;
+  /** Task 2 application registry: the only writer of read-only command projection atoms. */
+  readonly projectionRegistry?: AtomRegistry.AtomRegistry;
+  /** Test seam for actor Scope ownership; production creates one Effect scope. */
+  readonly workflowScope?: CommandWorkflowScope;
+  /** Bound on simultaneous authoritative reconciliations per FAB (target 4). */
+  readonly maxConcurrentReconciliations?: number;
 }
 
 interface ResolvedRetention {
@@ -89,8 +102,18 @@ export class FabRuntime {
   private readonly lazyCommandSubscription: boolean;
   private readonly retention: ResolvedRetention;
   private readonly reconciliations = new Map<string, Promise<boolean>>();
+  private readonly projectionSubscriptions = new Map<string, () => void>();
+  private readonly projectionRegistry?: AtomRegistry.AtomRegistry;
+  private readonly workflowScope: CommandWorkflowScope;
+  private readonly recovery: CommandEventRecovery;
+  private readonly maxConcurrentReconciliations: number;
   private reconnectSubscription?: Subscription;
   private gapSubscription?: Subscription;
+  private failureSubscription?: Subscription;
+  private statusSubscription?: Subscription;
+  private connectionStatus: CommandConnectionStatus = 'connecting';
+  private lastTransportFailure?: CommandTransportFailure;
+  private lastEviction?: CommandRecoveryEviction;
   private sweepTimer?: ReturnType<typeof setTimeout>;
   private reconcileScheduled = false;
   private gapObserved = false;
@@ -105,6 +128,18 @@ export class FabRuntime {
     this.retention = resolveRetention(options.retention);
     this.reconciler = options.gateway ? new CommandReconciler(options.gateway) : undefined;
     this.createWorkflow = options.createWorkflow ?? ((fabId, commandId) => new XStateCommandWorkflowAdapter(fabId, commandId, this.reconciler));
+    this.projectionRegistry = options.projectionRegistry;
+    this.workflowScope = options.workflowScope ?? new EffectCommandWorkflowScope();
+    this.maxConcurrentReconciliations = Math.max(1, options.maxConcurrentReconciliations ?? 4);
+    this.recovery = new CommandEventRecovery({
+      onEvict: (eviction) => {
+        this.lastEviction = eviction;
+        // A capacity eviction may have lost a revision; converge from the
+        // authoritative backend through the same coalesced pass as gaps/reconnects.
+        this.gapObserved = true;
+        this.scheduleReconcilePass();
+      },
+    });
     this.correlation = new CommandCorrelationRegistry({
       maxTerminalEntries: this.retention.maxTerminalWorkflows,
       terminalTtlMs: this.retention.terminalTtlMs,
@@ -116,6 +151,7 @@ export class FabRuntime {
     this.bridge = new CommandEventBridge(options.source, registry, {
       fabId: options.fabId,
       correlation: this.correlation,
+      recovery: this.recovery,
       onResultDelivered: (event) => { this.afterDelivery(event.commandId); },
     });
   }
@@ -132,6 +168,11 @@ export class FabRuntime {
       this.scheduleReconcilePass();
     });
     this.reconnectSubscription = this.source.reconnected$?.subscribe(() => this.scheduleReconcilePass());
+    this.failureSubscription = this.source.transportFailures$?.subscribe(failure => {
+      this.lastTransportFailure = failure;
+      this.scheduleReconcilePass();
+    });
+    this.statusSubscription = this.source.connectionStatus$?.subscribe(status => { this.connectionStatus = status; });
     // With lazy command streams, opening the SSE connection waits for the first
     // tracked command (backend replays its journal on connect), keeping the page
     // under browser HTTP/1.1 connection limits when no commands are active.
@@ -151,6 +192,10 @@ export class FabRuntime {
     this.gapSubscription = undefined;
     this.reconnectSubscription?.unsubscribe();
     this.reconnectSubscription = undefined;
+    this.failureSubscription?.unsubscribe();
+    this.failureSubscription = undefined;
+    this.statusSubscription?.unsubscribe();
+    this.statusSubscription = undefined;
     this.clearSweepTimer();
     this.started = false;
   }
@@ -159,8 +204,12 @@ export class FabRuntime {
   trackCommand(commandId: string): CommandWorkflow {
     const existing = this.workflows.get(commandId);
     if (existing) return existing;
-    const workflow = this.createWorkflow(this.fabId, commandId);
+    const workflow = this.workflowScope.acquire(this.createWorkflow, this.fabId, commandId);
     this.workflows.set(commandId, workflow);
+    // Seed the initial snapshot, then subscribe, then start: no first frame is lost.
+    this.publishProjection(commandId);
+    this.subscribeProjection(commandId, workflow);
+    this.startWorkflow(workflow);
     if (!this.bridgeStarted && this.started && !this.disposed) {
       this.bridge.start();
       this.bridgeStarted = true;
@@ -217,20 +266,25 @@ export class FabRuntime {
 
   /** Reconcile only the given tracked commands; terminal/evicted ids are ignored. */
   async reconcileTracked(commandIds: Iterable<string>): Promise<number> {
-    const unique = [...new Set(commandIds)];
-    const results = await Promise.all(unique.map((commandId) => {
+    const unique = [...new Set(commandIds)].filter((commandId) => {
       const workflow = this.workflows.get(commandId);
-      if (!workflow || TERMINAL_OUTCOMES.has(workflow.projection?.outcome ?? '')) return Promise.resolve(false);
-      return this.reconcileCommand(commandId);
-    }));
+      return workflow !== undefined && !TERMINAL_OUTCOMES.has(workflow.projection?.outcome ?? '');
+    });
+    const results: boolean[] = new Array(unique.length).fill(false);
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      while (next < unique.length) {
+        const index = next++;
+        results[index] = await this.reconcileCommand(unique[index]);
+      }
+    };
+    const workers = Array.from({ length: Math.min(this.maxConcurrentReconciliations, unique.length) }, () => worker());
+    await Promise.all(workers);
     return results.filter(Boolean).length;
   }
 
   private reconcileActive(): void {
-    for (const [commandId, workflow] of this.workflows) {
-      const outcome = workflow.projection?.outcome;
-      if (!TERMINAL_OUTCOMES.has(outcome ?? '')) void this.reconcileCommand(commandId);
-    }
+    void this.reconcileTracked(this.workflows.keys());
   }
 
   private scheduleReconcilePass(): void {
@@ -253,13 +307,16 @@ export class FabRuntime {
     this.clearSweepTimer();
     this.reconcileScheduled = false;
     this.gapObserved = false;
-    for (const workflow of this.workflows.values()) workflow.dispose();
     this.workflows.clear();
     this.terminalAt.clear();
     this.retainedProjections.clear();
     this.reconciliations.clear();
     this.listeners.clear();
+    for (const unsubscribe of this.projectionSubscriptions.values()) unsubscribe();
+    this.projectionSubscriptions.clear();
     this.bridge.dispose();
+    // Effect Scope finalizers stop every acquired XState actor exactly once.
+    this.workflowScope.close();
   }
 
   /** UI projection subscription: read-only, never writes workflow state. */
@@ -296,11 +353,55 @@ export class FabRuntime {
     return this.started;
   }
 
+  get connectionState(): CommandConnectionStatus {
+    return this.connectionStatus;
+  }
+
+  get transportFailure(): CommandTransportFailure | undefined {
+    return this.lastTransportFailure;
+  }
+
+  get recoveryDroppedCount(): number {
+    return this.recovery.droppedCount;
+  }
+
+  get recoveryDiagnostics(): readonly CommandRecoveryEviction[] {
+    return this.recovery.diagnostics;
+  }
+
+  get lastRecoveryEviction(): CommandRecoveryEviction | undefined {
+    return this.lastEviction;
+  }
+
   private afterDelivery(commandId: string): void {
     // Registration, authoritative reconciliation and stream delivery all know
     // the affected command. None needs to revisit unrelated workflows.
+    this.publishProjection(commandId);
     this.recordTerminal(commandId);
     this.notify();
+  }
+
+  /** Subscribe to actor snapshots before start; unsubscribe is owned with the workflow. */
+  private subscribeProjection(commandId: string, workflow: CommandWorkflow): void {
+    const subscribable = workflow as CommandWorkflow & { subscribe?: (listener: () => void) => () => void };
+    if (typeof subscribable.subscribe !== 'function') return;
+    const unsubscribe = subscribable.subscribe(() => this.publishProjection(commandId));
+    this.projectionSubscriptions.set(commandId, unsubscribe);
+  }
+
+  /** XState adapters start explicitly after the projection subscription exists. */
+  private startWorkflow(workflow: CommandWorkflow): void {
+    const startable = workflow as CommandWorkflow & { start?: () => void };
+    if (typeof startable.start === 'function') startable.start();
+  }
+
+  /** The only writer of the read-only projection atom for one command. */
+  private publishProjection(commandId: string): void {
+    if (!this.projectionRegistry) return;
+    const projection = this.getProjection(commandId);
+    if (projection) {
+      this.projectionRegistry.set(commandProjectionAtom(commandProjectionKey(this.fabId, commandId)), projection);
+    }
   }
 
   private notify(): void {
@@ -356,6 +457,8 @@ export class FabRuntime {
     this.terminalAt.delete(commandId);
     if (!workflow) return;
     const projection = workflow.projection;
+    this.projectionSubscriptions.get(commandId)?.();
+    this.projectionSubscriptions.delete(commandId);
     workflow.dispose();
     this.workflows.delete(commandId);
     if (projection) this.rememberProjection(commandId, projection);

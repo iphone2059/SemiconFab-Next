@@ -24,6 +24,8 @@ const relativeToSource = (file: string): string => relative(sourceRoot, file).re
 
 const ALLOWED_RUNNERS = new Set([
   'app/app-runtime.ts',
+  // Task 4 stage B: Effect Scope owns XState actor acquire/release finalizers.
+  'runtime/command-workflow-scope.ts',
   // Transitional Task 3 adapters: Query queryFns/UI controllers still run the
   // typed Effects at the old edge until Task 5 moves them onto resource atoms.
   'api/catalog.resource.ts',

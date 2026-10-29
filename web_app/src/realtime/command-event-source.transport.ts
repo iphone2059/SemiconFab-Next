@@ -1,5 +1,5 @@
-import { Observable, Subject, share } from 'rxjs';
-import type { CommandEventSource, CommandResultEvent, CommandStreamGap } from '@/contracts/command-events.contract';
+import { BehaviorSubject, Observable, Subject, share } from 'rxjs';
+import type { CommandConnectionStatus, CommandEventSource, CommandResultEvent, CommandStreamGap, CommandTransportFailure } from '@/contracts/command-events.contract';
 import { MessageDecoder } from '@/realtime/message-decoder';
 
 interface SseMessageLike {
@@ -70,9 +70,13 @@ export function parseCommandReplayGap(data: string, cursor: CommandCursor): Comm
 export function createSseCommandEventSource(url: string, options: SseCommandEventSourceOptions = {}): CommandEventSource {
   const reconnected = new Subject<void>();
   const gaps = new Subject<CommandStreamGap>();
+  const connectionStatus = new BehaviorSubject<CommandConnectionStatus>('connecting');
+  const transportFailures = new Subject<CommandTransportFailure>();
   return {
     reconnected$: reconnected.asObservable(),
     gaps$: gaps.asObservable(),
+    connectionStatus$: connectionStatus.asObservable(),
+    transportFailures$: transportFailures.asObservable(),
     commandResult$: new Observable<CommandResultEvent>((subscriber) => {
       const factory = options.eventSourceFactory ??
         (typeof EventSource === 'undefined' ? undefined : (target: string) => new EventSource(target) as unknown as EventSourceLike);
@@ -97,6 +101,7 @@ export function createSseCommandEventSource(url: string, options: SseCommandEven
         if (subscriber.closed) return;
         if (opened) reconnected.next();
         opened = true;
+        connectionStatus.next('open');
       };
       source.onmessage = (event) => {
         // Merge the cursor: frames without an id line must not erase the epoch.
@@ -111,9 +116,12 @@ export function createSseCommandEventSource(url: string, options: SseCommandEven
           // backend reconciliation recover the authoritative state.
         }
       };
-      source.onerror = () => {
-        // EventSource reconnects automatically; a terminal error surfaces when
-        // the runtime is disposed and closes the source.
+      source.onerror = (event) => {
+        if (subscriber.closed) return;
+        // EventSource reconnects automatically; surface the interruption so the
+        // runtime can reconcile authoritative state instead of silently ignoring it.
+        connectionStatus.next('reconnecting');
+        transportFailures.next({ message: 'command stream transport error', cause: event });
       };
       return () => {
         source.removeEventListener?.('replay-gap', onReplayGap);

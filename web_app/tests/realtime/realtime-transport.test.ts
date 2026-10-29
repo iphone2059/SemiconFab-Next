@@ -192,3 +192,27 @@ it('retains the previous state for entities missing from a later frame instead o
   expect(later.toolStates[0]).toBe('down'); // kept, not defaulted back to running
   expect(later.toolStates[7]).toBe('idle');
 });
+
+it('surfaces connection status and transport failures without fabricating command outcomes', () => {
+  const sources: FakeEventSource[] = [];
+  const source = createSseCommandEventSource('/api/v1/sites/site-1/commands/stream?fabId=fab-a', {
+    eventSourceFactory: (url) => { const value = new FakeEventSource(url); sources.push(value); return value; },
+  });
+  const failures: unknown[] = [];
+  const statuses: string[] = [];
+  const failureSubscription = source.transportFailures$?.subscribe((failure) => failures.push(failure));
+  const statusSubscription = source.connectionStatus$?.subscribe((status) => statuses.push(status));
+  const results = source.commandResult$.subscribe(() => {});
+  expect(statuses).toEqual(['connecting']);
+  sources[0].onopen?.();
+  expect(statuses.at(-1)).toBe('open');
+  // An EventSource interruption is a transport signal, never a command failed/cancelled event.
+  sources[0].onerror?.({ message: 'network down' });
+  expect(statuses.at(-1)).toBe('reconnecting');
+  expect(failures).toHaveLength(1);
+  expect(failures[0]).toMatchObject({ message: 'command stream transport error' });
+  sources[0].onopen?.();
+  expect(statuses.at(-1)).toBe('open');
+  results.unsubscribe(); failureSubscription?.unsubscribe(); statusSubscription?.unsubscribe();
+  expect(sources[0].closed).toBe(true);
+});

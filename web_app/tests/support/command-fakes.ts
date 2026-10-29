@@ -1,5 +1,5 @@
 import { Subject } from 'rxjs';
-import type { CommandEventSource, CommandOutcome, CommandResultEvent, CommandStreamGap } from '@/contracts/command-events.contract';
+import type { CommandConnectionStatus, CommandEventSource, CommandOutcome, CommandResultEvent, CommandStreamGap, CommandTransportFailure } from '@/contracts/command-events.contract';
 import type { CommandWorkflow, CommandWorkflowRegistry } from '@/contracts/command-workflow.contract';
 
 export class FakeCommandWorkflow implements CommandWorkflow {
@@ -40,14 +40,28 @@ export class FakeCommandEventSource implements CommandEventSource {
   private readonly subject = new Subject<CommandResultEvent>();
   private readonly reconnects = new Subject<void>();
   private readonly gaps = new Subject<CommandStreamGap>();
+  private readonly failures = new Subject<CommandTransportFailure>();
+  private readonly statuses = new Subject<CommandConnectionStatus>();
   readonly commandResult$ = this.subject.asObservable();
   readonly reconnected$ = this.reconnects.asObservable();
   readonly gaps$ = this.gaps.asObservable();
+  readonly transportFailures$ = this.failures.asObservable();
+  readonly connectionStatus$ = this.statuses.asObservable();
 
   reconnect(): void { this.reconnects.next(); }
 
   /** Signal that backend replay could not cover a disconnect. */
   emitGap(gap: CommandStreamGap = { epoch: 'epoch-1', sequence: 7 }): void { this.gaps.next(gap); }
+
+  /** Simulate an EventSource transport interruption (never a command outcome). */
+  failTransport(failure: CommandTransportFailure = { message: 'transport failure' }): void {
+    this.statuses.next('reconnecting');
+    this.failures.next(failure);
+  }
+
+  openStream(): void { this.statuses.next('open'); }
+
+  get failureObservers(): number { return this.failures.observed ? 1 : 0; }
 
   get commandObservers(): number { return this.subject.observed ? 1 : 0; }
   get reconnectObservers(): number { return this.reconnects.observed ? 1 : 0; }

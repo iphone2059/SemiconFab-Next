@@ -31,6 +31,14 @@ export interface CommandStreamGap {
   readonly cursor?: string;
 }
 
+export type CommandConnectionStatus = 'connecting' | 'open' | 'reconnecting' | 'failed';
+
+/** Transport-level command stream failure; never a business command outcome. */
+export interface CommandTransportFailure {
+  readonly message: string;
+  readonly cause?: unknown;
+}
+
 export interface CommandEventSource {
   readonly commandResult$: Observable<CommandResultEvent>;
   /** A live connection was restored; replay may no longer contain every result. */
@@ -41,6 +49,14 @@ export interface CommandEventSource {
    * signalling remain valid sources.
    */
   readonly gaps$?: Observable<CommandStreamGap>;
+  /** Connection lifecycle for the shared FAB command stream (optional for fakes). */
+  readonly connectionStatus$?: Observable<CommandConnectionStatus>;
+  /**
+   * Transport failure/interruption signal. A failed connection must be observable
+   * and must trigger bounded authoritative reconciliation; it is never reported as
+   * a command failed/cancelled outcome.
+   */
+  readonly transportFailures$?: Observable<CommandTransportFailure>;
 }
 
 export interface AlarmEvent {
