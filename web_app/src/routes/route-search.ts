@@ -11,10 +11,10 @@ import { finiteNumber } from '@/api/primitives.schema';
  * symmetrically. The object is loose: unknown debug params are preserved
  * unchanged, while the listed product params stay validated.
  *
- * The helpers below only convert generic router search values; feature-specific
- * conversions live in the owning feature module (for example
- * features/catalog/search.ts), so this generic router utility never imports a
- * feature. Pages no longer read `location` for product state.
+ * The helpers below only convert generic router search values; catalog-specific
+ * conversions live in the owning module (for example catalog/catalog-search.ts),
+ * so this generic router utility never imports a business module. Pages no longer
+ * read `location` for product state.
  */
 const textParam = Schema.optional(Schema.Union([Schema.String, finiteNumber, Schema.Boolean])).pipe(
   Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),

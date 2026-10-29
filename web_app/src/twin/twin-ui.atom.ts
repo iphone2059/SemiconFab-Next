@@ -39,7 +39,7 @@ export const twinUiActions = {
   onboardingStep: (registry: AtomRegistry.AtomRegistry, step: number) => apply(registry, { type: 'onboarding/step', step }),
   waferOpen: (registry: AtomRegistry.AtomRegistry) => apply(registry, { type: 'wafer/open' }),
   // Store-only close: the page projection is cleared by the explicit
-  // closeWaferSession(registry) use case (features/twin/wafer-session.ts), not by a
+  // closeWaferSession(registry) use case (twin/twin-wafer-session.ts), not by a
   // hidden cross-store write from this store.
   waferClose: (registry: AtomRegistry.AtomRegistry) => apply(registry, { type: 'wafer/close' }),
   waferPlay: (registry: AtomRegistry.AtomRegistry, playing: boolean) => apply(registry, { type: 'wafer/play', playing }),
