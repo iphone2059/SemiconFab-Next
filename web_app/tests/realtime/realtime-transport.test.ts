@@ -2,6 +2,10 @@ import { expect, it, vi } from 'vitest';
 import { COMMAND_RESULT_TOPIC, TELEMETRY_TOPIC } from '@/realtime/message-decoder';
 import { createSseCommandEventSource, parseCommandCursor, parseCommandReplayGap } from '@/realtime/command-event-source.transport';
 import { TelemetryRuntime, flattenTelemetryFrame, toolStatesFromValues } from '@/realtime/telemetry-runtime';
+import { runCommandStream } from '@/runtime/command-stream';
+
+/** Stream consumers run on an Effect fiber; yield once so PubSub frames are delivered. */
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 class FakeEventSource {
   onopen: (() => void) | null = null;
@@ -31,34 +35,42 @@ const commandEnvelope = (revision: number) => ({
   payload: { fabId: 'fab-a', commandId: 'cmd-1', revision, outcome: revision === 0 ? 'accepted' : 'succeeded', occurredAt: '2026-10-27T00:00:00Z' },
 });
 
-it('decodes command SSE envelopes and closes the EventSource on unsubscribe', () => {
+it('decodes command SSE envelopes and closes the EventSource on unsubscribe', async () => {
   const sources: FakeEventSource[] = [];
   // The product stream is FAB-scoped and authorized by the fabId query param.
   const source = createSseCommandEventSource('/api/v1/sites/site-1/commands/stream?fabId=fab-a', {
     eventSourceFactory: (url) => { const value = new FakeEventSource(url); sources.push(value); return value; },
   });
   const received: number[] = [];
-  const subscription = source.commandResult$.subscribe((event) => received.push(event.revision));
+  const stop = runCommandStream(source.commandResults, (event) => received.push(event.revision));
+  await flush();
   expect(sources[0].url).toBe('/api/v1/sites/site-1/commands/stream?fabId=fab-a');
   sources[0].emit(commandEnvelope(0));
   sources[0].emit(commandEnvelope(1));
   sources[0].emit({ topic: 'unknown', payload: {} });
+  await flush();
   expect(received).toEqual([0, 1]);
-  subscription.unsubscribe();
+  stop();
+  await flush();
   expect(sources[0].closed).toBe(true);
 });
 
-it('reports SSE reconnection so runtimes can reconcile results outside the replay journal', () => {
+it('reports SSE reconnection so runtimes can reconcile results outside the replay journal', async () => {
   const sources: FakeEventSource[] = [];
   const source = createSseCommandEventSource('fake', { eventSourceFactory: url => { const value = new FakeEventSource(url); sources.push(value); return value; } });
   let reconnects = 0;
-  const changes = source.reconnected$?.subscribe(() => { reconnects++; });
-  const results = source.commandResult$.subscribe(() => {});
+  const stopChanges = source.reconnected ? runCommandStream(source.reconnected, () => { reconnects += 1; }) : undefined;
+  const stopResults = runCommandStream(source.commandResults, () => {});
+  await flush();
   sources[0].onopen?.();
+  await flush();
   expect(reconnects).toBe(0);
   sources[0].onopen?.();
+  await flush();
   expect(reconnects).toBe(1);
-  results.unsubscribe(); changes?.unsubscribe();
+  stopResults();
+  stopChanges?.();
+  await flush();
   expect(sources[0].closed).toBe(true);
 });
 
@@ -78,16 +90,17 @@ it('parses the journal cursor and surfaces replay-gap as an explicit signal', ()
   expect(parseCommandReplayGap('<html>', { sequence: 3 })).toEqual({ sequence: 3 });
 });
 
-it('keeps reconnected$ and emits gaps$ once per backend replay-gap control frame', () => {
+it('keeps reconnected and emits gaps once per backend replay-gap control frame', async () => {
   const sources: FakeEventSource[] = [];
   const source = createSseCommandEventSource('/api/v1/sites/site-1/commands/stream?fabId=fab-a', {
     eventSourceFactory: (url) => { const value = new FakeEventSource(url); sources.push(value); return value; },
   });
   const gaps: unknown[] = [];
   let reconnects = 0;
-  const gapSubscription = source.gaps$?.subscribe((gap) => gaps.push(gap));
-  const reconnectSubscription = source.reconnected$?.subscribe(() => { reconnects++; });
-  const results = source.commandResult$.subscribe(() => {});
+  const stopGaps = source.gaps ? runCommandStream(source.gaps, (gap) => gaps.push(gap)) : undefined;
+  const stopReconnects = source.reconnected ? runCommandStream(source.reconnected, () => { reconnects += 1; }) : undefined;
+  const stopResults = runCommandStream(source.commandResults, () => {});
+  await flush();
   sources[0].onopen?.();
   // Normal frames carry the journal cursor in the SSE id line.
   sources[0].emit(commandEnvelope(0), 'epoch-1:7');
@@ -98,9 +111,11 @@ it('keeps reconnected$ and emits gaps$ once per backend replay-gap control frame
     topic: 'command.result', replayGap: true, epoch: 'epoch-2', requestedLastEventId: 'epoch-1:8',
     firstRetainedSequence: 20, latestSequence: 22, occurredAt: '2026-10-27T00:00:00Z',
   }), 'epoch-1:8');
+  await flush();
   expect(reconnects).toBe(1);
   expect(gaps).toEqual([{ epoch: 'epoch-2', sequence: 8, cursor: 'epoch-1:8' }]);
-  results.unsubscribe(); gapSubscription?.unsubscribe(); reconnectSubscription?.unsubscribe();
+  stopResults(); stopGaps?.(); stopReconnects?.();
+  await flush();
   expect(sources[0].closed).toBe(true);
 });
 
@@ -193,26 +208,31 @@ it('retains the previous state for entities missing from a later frame instead o
   expect(later.toolStates[7]).toBe('idle');
 });
 
-it('surfaces connection status and transport failures without fabricating command outcomes', () => {
+it('surfaces connection status and transport failures without fabricating command outcomes', async () => {
   const sources: FakeEventSource[] = [];
   const source = createSseCommandEventSource('/api/v1/sites/site-1/commands/stream?fabId=fab-a', {
     eventSourceFactory: (url) => { const value = new FakeEventSource(url); sources.push(value); return value; },
   });
   const failures: unknown[] = [];
   const statuses: string[] = [];
-  const failureSubscription = source.transportFailures$?.subscribe((failure) => failures.push(failure));
-  const statusSubscription = source.connectionStatus$?.subscribe((status) => statuses.push(status));
-  const results = source.commandResult$.subscribe(() => {});
+  const stopFailures = source.transportFailures ? runCommandStream(source.transportFailures, (failure) => failures.push(failure)) : undefined;
+  const stopStatuses = source.connectionStatus ? runCommandStream(source.connectionStatus, (status) => statuses.push(status)) : undefined;
+  const stopResults = runCommandStream(source.commandResults, () => {});
+  await flush();
   expect(statuses).toEqual(['connecting']);
   sources[0].onopen?.();
+  await flush();
   expect(statuses.at(-1)).toBe('open');
   // An EventSource interruption is a transport signal, never a command failed/cancelled event.
   sources[0].onerror?.({ message: 'network down' });
+  await flush();
   expect(statuses.at(-1)).toBe('reconnecting');
   expect(failures).toHaveLength(1);
   expect(failures[0]).toMatchObject({ message: 'command stream transport error' });
   sources[0].onopen?.();
+  await flush();
   expect(statuses.at(-1)).toBe('open');
-  results.unsubscribe(); failureSubscription?.unsubscribe(); statusSubscription?.unsubscribe();
+  stopResults(); stopFailures?.(); stopStatuses?.();
+  await flush();
   expect(sources[0].closed).toBe(true);
 });

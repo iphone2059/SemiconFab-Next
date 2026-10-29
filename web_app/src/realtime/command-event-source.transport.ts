@@ -1,4 +1,4 @@
-import { BehaviorSubject, Observable, Subject, share } from 'rxjs';
+import { Effect, PubSub, Result, Stream } from 'effect';
 import type { CommandConnectionStatus, CommandEventSource, CommandResultEvent, CommandStreamGap, CommandTransportFailure } from '@/contracts/command-events.contract';
 import { MessageDecoder } from '@/realtime/message-decoder';
 
@@ -27,6 +27,13 @@ interface CommandCursor {
   epoch?: string;
   sequence?: number;
 }
+
+type CommandStreamMessage =
+  | { readonly kind: 'result'; readonly event: CommandResultEvent }
+  | { readonly kind: 'reconnected' }
+  | { readonly kind: 'gap'; readonly gap: CommandStreamGap }
+  | { readonly kind: 'status'; readonly status: CommandConnectionStatus }
+  | { readonly kind: 'failure'; readonly failure: CommandTransportFailure };
 
 /** Parse the journal cursor written in the SSE `id` line: `{epoch}:{sequence}`. */
 export function parseCommandCursor(lastEventId: string | undefined): CommandCursor {
@@ -59,75 +66,118 @@ export function parseCommandReplayGap(data: string, cursor: CommandCursor): Comm
 }
 
 /**
- * Command-result transport backed by the backend SSE stream. The backend emits
- * MessageDecoder envelopes; decode happens once here and consumers see typed
- * events only. EventSource reconnection is delegated to the browser.
+ * Command-result transport backed by one FAB SSE stream. Task 6 replaces the
+ * RxJS Observable bridge with Effect PubSub + Streams: all five signals are
+ * derived from one typed message bus and one lazily opened EventSource, opened
+ * by the first subscriber and closed when the last stream consumer exits.
  *
- * The journal cursor (`id: {epoch}:{sequence}`) is tracked so the transport can
- * surface `replay-gap` control frames as an explicit `gaps$` signal: the caller
- * must then reconcile authoritative command state because replay is incomplete.
+ * The journal cursor (`id: {epoch}:{sequence}`) is tracked so replay-gap control
+ * frames become an explicit Stream signal rather than being silently ignored.
  */
 export function createSseCommandEventSource(url: string, options: SseCommandEventSourceOptions = {}): CommandEventSource {
-  const reconnected = new Subject<void>();
-  const gaps = new Subject<CommandStreamGap>();
-  const connectionStatus = new BehaviorSubject<CommandConnectionStatus>('connecting');
-  const transportFailures = new Subject<CommandTransportFailure>();
-  return {
-    reconnected$: reconnected.asObservable(),
-    gaps$: gaps.asObservable(),
-    connectionStatus$: connectionStatus.asObservable(),
-    transportFailures$: transportFailures.asObservable(),
-    commandResult$: new Observable<CommandResultEvent>((subscriber) => {
-      const factory = options.eventSourceFactory ??
-        (typeof EventSource === 'undefined' ? undefined : (target: string) => new EventSource(target) as unknown as EventSourceLike);
-      if (!factory) {
-        subscriber.error(new Error('EventSource is not available in this environment'));
-        return undefined;
+  const bus = Effect.runSync(PubSub.unbounded<CommandStreamMessage>());
+  const decoder = new MessageDecoder();
+  const state: {
+    status: CommandConnectionStatus;
+    subscribers: number;
+    source: EventSourceLike | null;
+    opened: boolean;
+    cursor: CommandCursor;
+  } = { status: 'connecting', subscribers: 0, source: null, opened: false, cursor: {} };
+
+  const publish = (message: CommandStreamMessage): void => { PubSub.publishUnsafe(bus, message); };
+  const publishStatus = (status: CommandConnectionStatus): void => {
+    state.status = status;
+    publish({ kind: 'status', status });
+  };
+
+  const open = (): void => {
+    const factory = options.eventSourceFactory ??
+      (typeof EventSource === 'undefined' ? undefined : (target: string) => new EventSource(target) as unknown as EventSourceLike);
+    if (!factory) {
+      publishStatus('failed');
+      publish({ kind: 'failure', failure: { message: 'EventSource is not available in this environment' } });
+      return;
+    }
+    const source = factory(url);
+    state.source = source;
+    const onReplayGap = (event: SseMessageLike): void => {
+      const observed = parseCommandCursor(event.lastEventId);
+      if (observed.epoch !== undefined) state.cursor.epoch = observed.epoch;
+      if (observed.sequence !== undefined) state.cursor.sequence = observed.sequence;
+      publish({ kind: 'gap', gap: parseCommandReplayGap(event.data, state.cursor) });
+    };
+    source.addEventListener?.('replay-gap', onReplayGap);
+    source.onopen = () => {
+      if (state.opened) publish({ kind: 'reconnected' });
+      state.opened = true;
+      publishStatus('open');
+    };
+    source.onmessage = (event) => {
+      const observed = parseCommandCursor(event.lastEventId);
+      if (observed.epoch !== undefined) state.cursor.epoch = observed.epoch;
+      if (observed.sequence !== undefined) state.cursor.sequence = observed.sequence;
+      try {
+        const decoded = decoder.decode(event.data);
+        if (decoded.kind === 'command') publish({ kind: 'result', event: decoded.event });
+      } catch {
+        // Malformed frames are transport noise; keep the stream alive and let
+        // backend reconciliation recover the authoritative state.
       }
-      const decoder = new MessageDecoder();
-      const source = factory(url);
-      let opened = false;
-      let cursor: CommandCursor = {};
-      const onReplayGap = (event: SseMessageLike) => {
-        if (subscriber.closed) return;
-        // The gap control frame carries no id line; keep the last valid cursor.
-        const observed = parseCommandCursor(event.lastEventId);
-        if (observed.epoch !== undefined) cursor.epoch = observed.epoch;
-        if (observed.sequence !== undefined) cursor.sequence = observed.sequence;
-        gaps.next(parseCommandReplayGap(event.data, cursor));
-      };
-      source.addEventListener?.('replay-gap', onReplayGap);
-      source.onopen = () => {
-        if (subscriber.closed) return;
-        if (opened) reconnected.next();
-        opened = true;
-        connectionStatus.next('open');
-      };
-      source.onmessage = (event) => {
-        // Merge the cursor: frames without an id line must not erase the epoch.
-        const observed = parseCommandCursor(event.lastEventId);
-        if (observed.epoch !== undefined) cursor.epoch = observed.epoch;
-        if (observed.sequence !== undefined) cursor.sequence = observed.sequence;
-        try {
-          const decoded = decoder.decode(event.data);
-          if (decoded.kind === 'command') subscriber.next(decoded.event);
-        } catch {
-          // Malformed frames are transport noise; keep the stream alive and let
-          // backend reconciliation recover the authoritative state.
-        }
-      };
-      source.onerror = (event) => {
-        if (subscriber.closed) return;
-        // EventSource reconnects automatically; surface the interruption so the
-        // runtime can reconcile authoritative state instead of silently ignoring it.
-        connectionStatus.next('reconnecting');
-        transportFailures.next({ message: 'command stream transport error', cause: event });
-      };
-      return () => {
-        source.removeEventListener?.('replay-gap', onReplayGap);
-        source.onopen = null; source.onmessage = null; source.onerror = null;
-        source.close();
-      };
-    }).pipe(share()),
+    };
+    source.onerror = (event) => {
+      // EventSource reconnects automatically; surface the interruption so the
+      // runtime can reconcile authoritative state instead of silently ignoring it.
+      publishStatus('reconnecting');
+      publish({ kind: 'failure', failure: { message: 'command stream transport error', cause: event } });
+    };
+  };
+
+  const close = (): void => {
+    if (!state.source) return;
+    state.source.onopen = null;
+    state.source.onmessage = null;
+    state.source.onerror = null;
+    state.source.close();
+    state.source = null;
+    // A later consumer starts a fresh connection generation; its first open is
+    // not a reconnection of the previous lifetime.
+    state.opened = false;
+  };
+
+  const acquire = (): void => {
+    state.subscribers += 1;
+    if (state.subscribers === 1) open();
+  };
+  const release = (): void => {
+    state.subscribers = Math.max(0, state.subscribers - 1);
+    if (state.subscribers === 0) close();
+  };
+
+  const messages = Stream.fromPubSub(bus);
+  /**
+   * The command-result stream owns the connection lifetime: FabRuntime only starts
+   * it when the first command is tracked, preserving lazy FAB SSE. Status/gap/
+   * failure streams observe an already-open connection and never open one.
+   */
+  const lifecycle = <A>(stream: Stream.Stream<A>): Stream.Stream<A> => stream.pipe(
+    Stream.onStart(Effect.sync(acquire)),
+    Stream.ensuring(Effect.sync(release)),
+  );
+  const select = <A>(read: (message: CommandStreamMessage) => A | undefined): Stream.Stream<A> =>
+    messages.pipe(Stream.filterMap((message) => {
+      const value = read(message);
+      return value === undefined ? Result.fail(undefined) : Result.succeed(value);
+    }));
+
+  return {
+    commandResults: lifecycle(select((message) => message.kind === 'result' ? message.event : undefined)),
+    reconnected: messages.pipe(Stream.filterMap((message) => message.kind === 'reconnected' ? Result.succeed(undefined) : Result.fail(undefined))),
+    gaps: select((message) => message.kind === 'gap' ? message.gap : undefined),
+    connectionStatus: Stream.concat(
+      Stream.sync(() => state.status),
+      select((message) => message.kind === 'status' ? message.status : undefined),
+    ),
+    transportFailures: select((message) => message.kind === 'failure' ? message.failure : undefined),
   };
 }

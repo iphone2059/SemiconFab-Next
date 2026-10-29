@@ -1,4 +1,4 @@
-import type { Observable } from 'rxjs';
+import type { Stream } from 'effect';
 
 /**
  * Version-agnostic command-result contract. Realtime infrastructure and
@@ -40,23 +40,23 @@ export interface CommandTransportFailure {
 }
 
 export interface CommandEventSource {
-  readonly commandResult$: Observable<CommandResultEvent>;
+  readonly commandResults: Stream.Stream<CommandResultEvent>;
   /** A live connection was restored; replay may no longer contain every result. */
-  readonly reconnected$?: Observable<void>;
+  readonly reconnected?: Stream.Stream<void>;
   /**
    * Replay could not cover a disconnect (backend `replay-gap`); reconciliation of
    * tracked active commands is required. Optional so fakes/backends without gap
    * signalling remain valid sources.
    */
-  readonly gaps$?: Observable<CommandStreamGap>;
+  readonly gaps?: Stream.Stream<CommandStreamGap>;
   /** Connection lifecycle for the shared FAB command stream (optional for fakes). */
-  readonly connectionStatus$?: Observable<CommandConnectionStatus>;
+  readonly connectionStatus?: Stream.Stream<CommandConnectionStatus>;
   /**
    * Transport failure/interruption signal. A failed connection must be observable
    * and must trigger bounded authoritative reconciliation; it is never reported as
    * a command failed/cancelled outcome.
    */
-  readonly transportFailures$?: Observable<CommandTransportFailure>;
+  readonly transportFailures?: Stream.Stream<CommandTransportFailure>;
 }
 
 export interface AlarmEvent {

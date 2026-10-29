@@ -20,7 +20,7 @@ const RULES: readonly LegacyDependencyRule[] = [
   { dependency: 'zustand', bareSpecifier: /^zustand$/, active: true, task: 'Task 4' },
   { dependency: '@tanstack/react-query', bareSpecifier: /^@tanstack\/(?:react-query|query-core)$/, active: true, task: 'Task 5' },
   { dependency: '@tanstack/query-core', bareSpecifier: /^@tanstack\/query-core$/, active: true, task: 'Task 5' },
-  { dependency: 'rxjs', bareSpecifier: /^rxjs(?:\/|$)/, active: false, task: 'Task 6' },
+  { dependency: 'rxjs', bareSpecifier: /^rxjs(?:\/|$)/, active: true, task: 'Task 6' },
 ];
 
 const webAppRoot = fileURLToPath(new URL('../../', import.meta.url));

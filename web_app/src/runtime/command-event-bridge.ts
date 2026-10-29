@@ -1,4 +1,4 @@
-import type { Subscription } from 'rxjs';
+import { runCommandStream } from '@/runtime/command-stream';
 import type { CommandEventSource, CommandResultEvent } from '@/contracts/command-events.contract';
 import type { CommandGateway } from '@/contracts/command-gateway.contract';
 import type { CommandWorkflowRegistry } from '@/contracts/command-workflow.contract';
@@ -24,7 +24,7 @@ export interface CommandEventBridgeOptions {
  * pass or backend reconciliation.
  */
 export class CommandEventBridge {
-  private subscription?: Subscription;
+  private stopCommandStream?: () => void;
   private readonly correlation: CommandCorrelationRegistry;
   private readonly recovery: CommandEventRecovery;
   private started = false;
@@ -41,14 +41,12 @@ export class CommandEventBridge {
   start(): void {
     if (this.started) return;
     this.started = true;
-    this.subscription = this.source.commandResult$.subscribe({
-      next: (event) => { this.receive(event); },
-    });
+    this.stopCommandStream = runCommandStream(this.source.commandResults, (event) => this.receive(event));
   }
 
   stop(): void {
-    this.subscription?.unsubscribe();
-    this.subscription = undefined;
+    this.stopCommandStream?.();
+    this.stopCommandStream = undefined;
     this.started = false;
   }
 

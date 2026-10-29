@@ -12,7 +12,7 @@ import type { CommandRecoveryEviction } from '@/runtime/command-event-recovery';
 import { CommandEventRecovery } from '@/runtime/command-event-recovery';
 import { EffectCommandWorkflowScope, type CommandWorkflowScope } from '@/runtime/command-workflow-scope';
 import { XStateCommandWorkflowAdapter } from '@/runtime/xstate-command-workflow-adapter';
-import type { Subscription } from 'rxjs';
+import { runCommandStream } from '@/runtime/command-stream';
 
 export type CommandWorkflowFactory = (fabId: string, commandId: string) => CommandWorkflow;
 
@@ -107,10 +107,10 @@ export class FabRuntime {
   private readonly workflowScope: CommandWorkflowScope;
   private readonly recovery: CommandEventRecovery;
   private readonly maxConcurrentReconciliations: number;
-  private reconnectSubscription?: Subscription;
-  private gapSubscription?: Subscription;
-  private failureSubscription?: Subscription;
-  private statusSubscription?: Subscription;
+  private stopReconnectStream?: () => void;
+  private stopGapStream?: () => void;
+  private stopFailureStream?: () => void;
+  private stopStatusStream?: () => void;
   private connectionStatus: CommandConnectionStatus = 'connecting';
   private lastTransportFailure?: CommandTransportFailure;
   private lastEviction?: CommandRecoveryEviction;
@@ -163,16 +163,16 @@ export class FabRuntime {
     // synchronous replay-gap frame must never be missed.
     // A restored stream may have missed results; reconcile authoritative state.
     // Signals are coalesced into one pass per tick and are dispose-safe.
-    this.gapSubscription = this.source.gaps$?.subscribe(() => {
+    if (this.source.gaps) this.stopGapStream = runCommandStream(this.source.gaps, () => {
       this.gapObserved = true;
       this.scheduleReconcilePass();
     });
-    this.reconnectSubscription = this.source.reconnected$?.subscribe(() => this.scheduleReconcilePass());
-    this.failureSubscription = this.source.transportFailures$?.subscribe(failure => {
+    if (this.source.reconnected) this.stopReconnectStream = runCommandStream(this.source.reconnected, () => this.scheduleReconcilePass());
+    if (this.source.transportFailures) this.stopFailureStream = runCommandStream(this.source.transportFailures, (failure) => {
       this.lastTransportFailure = failure;
       this.scheduleReconcilePass();
     });
-    this.statusSubscription = this.source.connectionStatus$?.subscribe(status => { this.connectionStatus = status; });
+    if (this.source.connectionStatus) this.stopStatusStream = runCommandStream(this.source.connectionStatus, (status) => { this.connectionStatus = status; });
     // With lazy command streams, opening the SSE connection waits for the first
     // tracked command (backend replays its journal on connect), keeping the page
     // under browser HTTP/1.1 connection limits when no commands are active.
@@ -188,14 +188,10 @@ export class FabRuntime {
     if (!this.started) return;
     if (this.bridgeStarted) this.bridge.stop();
     this.bridgeStarted = false;
-    this.gapSubscription?.unsubscribe();
-    this.gapSubscription = undefined;
-    this.reconnectSubscription?.unsubscribe();
-    this.reconnectSubscription = undefined;
-    this.failureSubscription?.unsubscribe();
-    this.failureSubscription = undefined;
-    this.statusSubscription?.unsubscribe();
-    this.statusSubscription = undefined;
+    this.stopGapStream?.(); this.stopGapStream = undefined;
+    this.stopReconnectStream?.(); this.stopReconnectStream = undefined;
+    this.stopFailureStream?.(); this.stopFailureStream = undefined;
+    this.stopStatusStream?.(); this.stopStatusStream = undefined;
     this.clearSweepTimer();
     this.started = false;
   }

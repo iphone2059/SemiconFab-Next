@@ -26,6 +26,10 @@ const ALLOWED_RUNNERS = new Set([
   'app/app-runtime.ts',
   // Task 4 stage B: Effect Scope owns XState actor acquire/release finalizers.
   'runtime/command-workflow-scope.ts',
+  // Task 6: Effect Stream consumers for the plain-TS FabRuntime lifecycle.
+  'runtime/command-stream.ts',
+  // Task 6: EventSource adapter creates the shared PubSub bus once (no scope yet).
+  'realtime/command-event-source.transport.ts',
 ]);
 const ALLOWED_REGISTRY = new Set(['app/app-runtime.ts']);
 const ALLOWED_MANAGED_RUNTIME = new Set(['app/app-runtime.ts']);
