@@ -33,6 +33,9 @@ const chrome = arg('chrome', 'C:/Program Files/Google/Chrome/Application/chrome.
 const commit = arg('commit', 'pending');
 const durationSeconds = Number(arg('duration-seconds', '600'));
 const minCycles = Number(arg('cycles', '3'));
+// CR-08: exercise the device-loss rebuild budget circuit breaker on real WebGPU too. The
+// acceptance-only ?perf seam lets the page use a small budget instead of injecting ~96 losses.
+const circuitBreakerEnabled = arg('circuit-breaker', '1') !== '0';
 const screenshotDir = path.join(path.dirname(out), 'screenshots');
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.mkdirSync(screenshotDir, { recursive: true });
@@ -80,6 +83,7 @@ const results = {
   generatedAt: now(), commit, webUrl, apiUrl, fabId, durationSeconds, minCycles,
   chromium: null, adapter: null, contexts: null, injectionMethod: 'perf.forceDeviceLoss',
   initial: null, cycles: [], heapSamples: [], lifecycleTrace: [], auxiliaryProbe: null,
+  circuitBreaker: null,
   consoleErrors: [], limitations: [], pass: false,
 };
 cleanupStaleProfiles('fab-gpu-gate-');
@@ -170,19 +174,63 @@ try {
   results.finalState = await domState(browser).catch(() => null);
   results.lifecycleTrace = await browser.evaluate('(window.__FAB_GPU_TRACE__ ?? []).map((entry) => entry.kind + ":" + entry.value).filter((value, position, all) => value !== all[position + 1]).slice(0, 100)').catch(() => []);
   results.consoleErrors = browser.consoleErrors.filter((entry) => !/net::ERR_FAILED|Failed to load resource|Page entered Back-Forward Cache/.test(entry));
+
+  // CR-08 circuit-breaker probe: on a fresh page with the acceptance budget (?perf&recoveryBudget=8),
+  // rapid device losses must hit the budget, fail closed, fully release, and stop creating GPUDevices.
+  // The probe deliberately ends in the controlled failed state; the main gate evidence above is
+  // already captured, and probe console output is reported separately from the main consoleErrors.
+  if (circuitBreakerEnabled) {
+    const probe = {
+      enabled: true, budget: null, attempts: 0, failClosed: false,
+      devicesBefore: null, devicesAfter: null, pageAlive: null, budgetMessageSeen: false,
+      consoleErrors: [], pass: false, error: null,
+    };
+    const probeBaseline = browser.consoleErrors.length;
+    try {
+      await browser.navigate(webUrl + '/fabs/' + fabId + '/3d?perf&recoveryBudget=8', 'document.querySelector("canvas")');
+      await browser.waitFor('document.querySelector("#bottom-hud-footer") && document.querySelector("#bottom-hud-footer").innerText.includes("WebGPU") && !document.querySelector(".twin-render-status")', 90000, 'probe WebGPU ready');
+      const initialLifecycle = await browser.evaluate('window.__SEMICONFAB_PERF__ ? window.__SEMICONFAB_PERF__.getLifecycle() : null');
+      probe.budget = initialLifecycle ? initialLifecycle.recoveryBudget ?? null : null;
+      if (!probe.budget || probe.budget > 8) throw new Error('acceptance recoveryBudget override was not applied (got ' + probe.budget + ')');
+      const maxAttempts = probe.budget + 3;
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        const step = await browser.evaluate('(() => { const p = window.__SEMICONFAB_PERF__; if (!p || typeof p.forceDeviceLoss !== "function") return "closed"; p.forceDeviceLoss(); return "injected"; })()');
+        if (step !== 'injected') { probe.failClosed = true; break; }
+        probe.attempts += 1;
+        await sleep(400);
+        const stillOpen = await browser.evaluate('!!window.__SEMICONFAB_PERF__');
+        if (stillOpen === false) { probe.failClosed = true; break; }
+      }
+      probe.devicesBefore = await browser.evaluate('(window.__FAB_GPU_DEVICES__ ?? []).length');
+      await sleep(1500);
+      probe.devicesAfter = await browser.evaluate('(window.__FAB_GPU_DEVICES__ ?? []).length');
+      probe.pageAlive = await browser.evaluate('typeof document !== "undefined" && !!document.body').catch(() => false);
+      probe.consoleErrors = browser.consoleErrors.slice(probeBaseline).filter((entry) => !/net::ERR_FAILED|Failed to load resource/.test(entry)).slice(-10);
+      probe.budgetMessageSeen = browser.consoleErrors.slice(probeBaseline).some((entry) => /重建预算|recovery budget exhausted/i.test(entry));
+      probe.pass = probe.failClosed === true && probe.devicesAfter === probe.devicesBefore && probe.pageAlive === true && probe.budgetMessageSeen === true;
+      if (probe.devicesAfter !== probe.devicesBefore) results.limitations.push('circuit breaker probe kept creating GPUDevices after fail-closed (' + probe.devicesBefore + ' -> ' + probe.devicesAfter + ')');
+      if (!probe.failClosed) results.limitations.push('circuit breaker probe did not fail closed within budget+3 device losses');
+    } catch (error) {
+      probe.error = error instanceof Error ? error.message : String(error);
+      results.limitations.push('circuit breaker probe failed to run: ' + probe.error);
+    }
+    results.circuitBreaker = probe;
+  }
+
   const injectedCycles = results.cycles.filter((cycle) => cycle.injected).length;
   const recoveredCycles = results.cycles.filter((cycle) => cycle.injected && cycle.recovered).length;
   results.recoveries = { injected: injectedCycles, recovered: recoveredCycles, sawLoss: results.cycles.filter((cycle) => cycle.sawLoss).length };
   const finalPerf = await perfState(browser).catch(() => null);
   results.finalDevices = finalPerf ? { created: finalPerf.devices, destroyed: finalPerf.destroyed, live: finalPerf.liveDevices } : null;
   const liveBoundOk = results.finalDevices === null || results.finalDevices.live <= 8;
+  const circuitBreakerOk = !circuitBreakerEnabled || results.circuitBreaker?.pass === true;
   results.pass = injectedCycles >= minCycles && recoveredCycles === injectedCycles
     && results.finalState !== null && results.finalState.ready === true
     && results.finalState.webgl === false && results.finalState.webgl2 === false
     && results.consoleErrors.length === 0
-    && liveBoundOk;
+    && liveBoundOk && circuitBreakerOk;
   if (results.finalDevices && !liveBoundOk) results.limitations.push('live GPUDevice count grew to ' + results.finalDevices.live + ' (bound 8): repeated forceDeviceLoss may leak replacement devices.');
-  if (!results.pass) results.limitations.push('device-loss gate requires ' + minCycles + '+ forceDeviceLoss cycles, all recovered, final WebGPU-ready state, no WebGL fallback, no console errors and bounded live GPUDevices.');
+  if (!results.pass) results.limitations.push('device-loss gate requires ' + minCycles + '+ forceDeviceLoss cycles, all recovered, final WebGPU-ready state, no WebGL fallback, no console errors, bounded live GPUDevices and a passing CR-08 circuit-breaker probe.');
 } catch (error) {
   results.error = error instanceof Error ? error.message : String(error);
   if (browser) {
@@ -193,7 +241,7 @@ try {
   results.finishedAt = now();
   results.consoleErrors = (browser?.consoleErrors ?? []).filter((entry) => !/net::ERR_FAILED|Failed to load resource|Page entered Back-Forward Cache/.test(entry));
   fs.writeFileSync(out, JSON.stringify(results, null, 2) + '\n');
-  console.log((results.pass ? 'GPU GATE PASS' : 'GPU GATE FAIL') + ' cycles=' + results.cycles.length + ' recovered=' + (results.recoveries?.recovered ?? 0) + '/' + (results.recoveries?.injected ?? 0) + ' method=' + results.injectionMethod + ' liveDevices=' + JSON.stringify(results.finalDevices?.live ?? null) + ' auxCrashRecovered=' + JSON.stringify(results.auxiliaryProbe?.recovered ?? null));
+  console.log((results.pass ? 'GPU GATE PASS' : 'GPU GATE FAIL') + ' cycles=' + results.cycles.length + ' recovered=' + (results.recoveries?.recovered ?? 0) + '/' + (results.recoveries?.injected ?? 0) + ' method=' + results.injectionMethod + ' liveDevices=' + JSON.stringify(results.finalDevices?.live ?? null) + ' auxCrashRecovered=' + JSON.stringify(results.auxiliaryProbe?.recovered ?? null) + ' circuitBreaker=' + JSON.stringify(results.circuitBreaker ? { failClosed: results.circuitBreaker.failClosed, pass: results.circuitBreaker.pass } : null));
   console.log('report: ' + out);
   try { browser?.close(); } catch { /* ignore */ }
   await sleep(500);

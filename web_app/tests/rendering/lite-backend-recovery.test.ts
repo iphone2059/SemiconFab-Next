@@ -80,11 +80,17 @@ function mountOptions(controller: AbortController): SceneMountOptions {
     },
   };
 }
-async function mountBackend(pose: { position: Point; target: Point } | null, selection: number | null) {
+async function mountBackend(
+  pose: { position: Point; target: Point } | null,
+  selection: number | null,
+  options: { recoveryBudget?: number; events?: any[] } = {},
+) {
   const firstWorld = queueWorld(pose, selection);
   const controller = new AbortController();
-  const backend = createLiteBackend();
-  await backend.mount(mountOptions(controller));
+  const mount = mountOptions(controller);
+  if (options.events) mount.callbacks.onLifecycle = event => options.events!.push(event);
+  const backend = createLiteBackend(options.recoveryBudget === undefined ? {} : { recoveryBudget: options.recoveryBudget });
+  await backend.mount(mount);
   return { backend, controller, firstWorld };
 }
 const activeTimers = () => mocks.timers.filter(timer => !timer.cleared);
@@ -231,6 +237,57 @@ it('clears pending replay timers on dispose and never restores into a disposed b
     expect(replacement.pose).toBeNull();
     expect(replacement.setCameraPose).not.toHaveBeenCalled();
     expect(backend.getCameraPose()).toBeNull();
+  } finally { backend.dispose(); }
+});
+
+it('CR-08: fails closed with a full release after the device-loss rebuild budget is exhausted', async () => {
+  const events: any[] = [];
+  const { backend } = await mountBackend({ position: [1, 2, 3], target: [4, 5, 6] }, 42, { recoveryBudget: 2, events });
+  try {
+    // Budget = 2: two rebuilds are allowed.
+    queueWorld(null, null);
+    await loseDevice();
+    expect(mocks.created).toHaveLength(2);
+    queueWorld({ position: [7, 7, 7], target: [8, 8, 8] }, 9);
+    mocks.runtimes[mocks.runtimes.length - 1].options.onStatus?.('lost');
+    await vi.waitFor(() => expect(events.filter(event => event.type === 'ready')).toHaveLength(3));
+    await flush();
+    expect(mocks.created).toHaveLength(3);
+
+    // Third loss exceeds the budget: no replacement runtime may be created at all.
+    const runtimesBefore = mocks.runtimes.length;
+    mocks.runtimes[mocks.runtimes.length - 1].options.onStatus?.('lost');
+    await flush();
+    expect(mocks.runtimes.length).toBe(runtimesBefore);
+    const failed = events.filter(event => event.type === 'failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0].message).toContain('重建预算');
+    // Full release: no pending replay timers, no world, and later losses are inert (no GPU work).
+    expect(activeTimers()).toHaveLength(0);
+    expect(backend.getCameraPose()).toBeNull();
+    mocks.runtimes[mocks.runtimes.length - 1].options.onStatus?.('lost');
+    await flush();
+    expect(mocks.runtimes.length).toBe(runtimesBefore);
+    expect(events.filter(event => event.type === 'failed')).toHaveLength(1);
+  } finally { backend.dispose(); }
+});
+
+it('CR-08: the ?perf acceptance seam can lower the recovery budget for real-WebGPU probes', async () => {
+  vi.stubGlobal('location', { search: '?perf&recoveryBudget=2' });
+  const events: any[] = [];
+  const { backend } = await mountBackend({ position: [1, 2, 3], target: [4, 5, 6] }, 42, { events });
+  try {
+    queueWorld({ position: [1, 2, 3], target: [4, 5, 6] }, 1);
+    await loseDevice();
+    queueWorld({ position: [1, 2, 3], target: [4, 5, 6] }, 2);
+    mocks.runtimes[mocks.runtimes.length - 1].options.onStatus?.('lost');
+    await vi.waitFor(() => expect(events.filter(event => event.type === 'ready')).toHaveLength(3));
+    const runtimesBefore = mocks.runtimes.length;
+    mocks.runtimes[mocks.runtimes.length - 1].options.onStatus?.('lost');
+    await flush(200);
+    expect(mocks.runtimes.length).toBe(runtimesBefore);
+    expect(events.filter(event => event.type === 'failed')).toHaveLength(1);
+    expect(events.find(event => event.type === 'failed').message).toContain('重建预算');
   } finally { backend.dispose(); }
 });
 

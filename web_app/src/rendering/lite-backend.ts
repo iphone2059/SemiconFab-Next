@@ -12,12 +12,38 @@ export interface LiteScenePort extends ScenePort {
   readonly acceptance: SceneAcceptanceCapabilities;
 }
 
+export interface LiteBackendOptions {
+  /**
+   * CR-08 safe-degradation budget: maximum GPU device-loss rebuilds in one viewer/port
+   * lifetime. Reaching the budget fails closed (full release + explicit error) instead of
+   * creating replacement GPUDevices until the browser/driver descriptor heap dies.
+   * The value is deliberately far above realistic product churn (a 10-minute acceptance
+   * soak injects ~39 losses) and below the observed uncontrolled-exhaustion point (>128).
+   */
+  readonly recoveryBudget?: number;
+}
+
+/** ADR-013/CR-08 safe degradation budget default. */
+export const DEFAULT_RECOVERY_BUDGET = 96;
+
 /**
  * Native Babylon Lite implementation of the application ScenePort. Owns the Lite runtime
  * (GPU acquisition, first frame, device-loss recovery), the native product world and the
  * single idempotent mount/dispose lifetime; product/React code only sees the port.
  */
-export function createLiteBackend(): LiteScenePort {
+export function createLiteBackend(options: LiteBackendOptions = {}): LiteScenePort {
+  // Acceptance-only seam: the ?perf bridge is a documented device-loss probe surface, so the
+  // recovery budget may be lowered there to exercise the CR-08 circuit breaker on real WebGPU
+  // without injecting ~100 losses (which is itself the exhaustion mode being prevented).
+  const acceptanceBudget = (() => {
+    if (typeof location === 'undefined') return Number.NaN;
+    try {
+      const search = new URLSearchParams(location.search);
+      return search.has('perf') ? Number(search.get('recoveryBudget')) : Number.NaN;
+    } catch { return Number.NaN; }
+  })();
+  const requestedBudget = options.recoveryBudget ?? (Number.isFinite(acceptanceBudget) ? acceptanceBudget : undefined);
+  const recoveryBudget = Math.max(1, Math.trunc(requestedBudget ?? DEFAULT_RECOVERY_BUDGET));
   let runtime: LiteRuntime | undefined;
   let world: LiteWorld | undefined;
   let perf: PerfBridge | undefined;
@@ -26,7 +52,12 @@ export function createLiteBackend(): LiteScenePort {
   let mountPromise: Promise<SceneMountOutcome> | undefined;
   let mountOptions: SceneMountOptions | undefined;
   let abortHandler: (() => void) | undefined;
-  const lifecycle = { backendId: crypto.randomUUID(), statuses: [] as string[], losses: 0, recoveries: 0, lastStatus: '' };
+  const lifecycle = {
+    backendId: crypto.randomUUID(), statuses: [] as string[], losses: 0, recoveries: 0, lastStatus: '',
+    recoveryBudget, recoveryBudgetRemaining: recoveryBudget, failClosed: false,
+  };
+  /** CR-08: set once the per-lifetime rebuild budget is exhausted; no further GPU work starts. */
+  let failClosed = false;
   // GPU validation errors observed by scenes that were torn down on device loss (diagnostics of
   // a replaced world would otherwise disappear with it).
   const retiredGpuErrors: string[] = [];
@@ -99,7 +130,11 @@ export function createLiteBackend(): LiteScenePort {
         const diagnostics = world?.readDiagnostics();
         return diagnostics ? { ...diagnostics, gpuErrors: [...retiredGpuErrors, ...diagnostics.gpuErrors] } : null;
       },
-      getLifecycle: () => ({ ...lifecycle, statuses: [...lifecycle.statuses], status: world ? 'ready' : 'mounting' }),
+      getLifecycle: () => ({
+        ...lifecycle,
+        statuses: [...lifecycle.statuses],
+        status: failClosed ? 'failed' : world ? 'ready' : 'mounting',
+      }),
       projectTool: (index: number) => world?.projectTool(index) ?? null,
       forceDeviceLoss: () => world?.forceDeviceLoss(),
       readStatus: () => lifecycle.lastStatus,
@@ -176,6 +211,10 @@ export function createLiteBackend(): LiteScenePort {
     let pendingPose: CameraPose | null = null;
     let pendingSelection: number | null = null;
     let failureReported = false;
+    // CR-08: budget is per mounted viewer/port lifetime. Recovery is allowed until the budget
+    // is exhausted; beyond it we fail closed and release rather than keep creating GPUs.
+    let recoveriesRemaining = recoveryBudget;
+    lifecycle.recoveryBudgetRemaining = recoveriesRemaining;
 
     const emitFailure = (error: unknown) => {
       if (failureReported) return;
@@ -188,7 +227,25 @@ export function createLiteBackend(): LiteScenePort {
       lifecycle.statuses.push(status);
       if (status === 'initializing') emit(options, { type: 'initializing', message: '正在初始化 WebGPU…' });
       else if (status === 'lost') {
+        if (failClosed) return;
         lifecycle.losses += 1;
+        recoveriesRemaining -= 1;
+        lifecycle.recoveryBudgetRemaining = recoveriesRemaining;
+        if (recoveriesRemaining < 0) {
+          // CR-08 circuit breaker: stop rebuilding, fully release, and surface an explicit
+          // terminal failure. Continuing to acquire replacement devices here is what drives
+          // the browser's D3D12 descriptor heap into uncontrolled OOM.
+          failClosed = true;
+          lifecycle.failClosed = true;
+          const budgetError = new Error(
+            'GPU 设备在单次视图生命周期内反复丢失，已超过受控重建预算（' + recoveryBudget +
+            ' 次）。已停止重建并释放全部 GPU 资源；请重新加载视图。',
+          );
+          console.error('[lite] device-loss recovery budget exhausted; failing closed', budgetError.message);
+          emitFailure(budgetError);
+          dispose();
+          return;
+        }
         emit(options, { type: 'recovering', message: 'GPU 设备已丢失，正在重新构建设备和静态场景。若失败，请重新加载视图。', cause: 'device-lost' });
         // A new recovery supersedes any replay still pending from the previous one.
         recoveryGeneration += 1;
