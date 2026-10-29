@@ -19,7 +19,13 @@ declare const sites: typeof sitesSchema.Type;
 export const wireContracts: [CatalogPageDto, RunSummary, RunSummary[], RunResult, CreateRunRequest, SiteDto[]] =
   [catalog, run, runs, results, request, sites];
 export const http: Effect.Effect<unknown, ApiError, never> = createHttpTransport().fetchJson('/api/v1/sites');
-export const gateway: Effect.Effect<Option.Option<CommandResultEvent>, ApiError, never> = createHttpCommandGateway().getCommandStatus('fab', 'cmd');
+// ADR-008 §2.4: the authoritative recovery gateway is Promise-based; the
+// composition root injects the approved Effect runner for wire decoding.
+export const gateway: Promise<CommandResultEvent | null> = createHttpCommandGateway({
+  runPromise: (effect) => Effect.runPromise(effect),
+}).getCommandStatus('fab', 'cmd');
+// @ts-expect-error The gateway never exposes an Effect-shaped status query.
+export const gatewayEffect: Effect.Effect<Option.Option<CommandResultEvent>, ApiError, never> = gateway;
 export const submission: Effect.Effect<SubmittedEquipmentCommand, ApiError, never> = submitEquipmentCommand({
   siteId: 'site', fabId: 'fab', equipmentId: 'tool', action: 'START', idempotencyKey: 'stable',
 });

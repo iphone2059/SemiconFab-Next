@@ -80,12 +80,17 @@ it.each([
     async () => new Response(JSON.stringify(body), { status }))));
   expect(result).toMatchObject({ _tag: 'Failure', failure: { _tag: tag } });
 });
-it('models a missing command as Option without swallowing a network failure', async () => {
-  const missing = createHttpCommandGateway({ fetchImpl: async () => new Response('', { status: 404 }) });
-  expect(await Effect.runPromise(missing.getCommandStatus('fab', 'cmd'))).toMatchObject({ _tag: 'None' });
-  const offline = createHttpCommandGateway({ fetchImpl: async () => { throw new TypeError('offline'); } });
-  expect(await Effect.runPromise(Effect.result(offline.getCommandStatus('fab', 'cmd'))))
-    .toMatchObject({ _tag: 'Failure', failure: { _tag: 'NetworkUnavailable' } });
+it('models a missing command as null without swallowing a network failure', async () => {
+  const missing = createHttpCommandGateway({
+    runPromise: (effect) => Effect.runPromise(effect),
+    fetchImpl: async () => new Response('', { status: 404 }),
+  });
+  await expect(missing.getCommandStatus('fab', 'cmd')).resolves.toBeNull();
+  const offline = createHttpCommandGateway({
+    runPromise: (effect) => Effect.runPromise(effect),
+    fetchImpl: async () => { throw new TypeError('offline'); },
+  });
+  await expect(offline.getCommandStatus('fab', 'cmd')).rejects.toMatchObject({ _tag: 'NetworkUnavailable' });
 });
 // An invalid static document is a validation failure rather than an Effect defect.
 it('reports malformed wafer-route data through the expected API error channel', async () => {

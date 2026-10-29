@@ -1,7 +1,6 @@
 import { expect, it } from 'vitest';
 import { CommandEventRecovery } from '@/runtime/command-event-recovery';
-import type { CommandGateway } from '@/contracts/command-gateway.contract';
-import { commandResult } from '../support/command-fakes.ts';
+import { commandResult, fakeCommandGateway } from '../support/command-fakes.ts';
 
 const event = (fabId: string, commandId: string, revision: number) =>
   commandResult({ fabId, commandId, revision, outcome: 'executing' });
@@ -43,9 +42,9 @@ it('does not evict real events after repeatedly replacing the same revision', ()
 it('drains in arrival order and can reconcile through the authoritative gateway', async () => {
   const recovery = new CommandEventRecovery();
   expect(recovery.drain()).toEqual([]);
-  const gateway: CommandGateway = {
+  const gateway = fakeCommandGateway({
     getCommandStatus: async () => commandResult({ fabId: 'fab', commandId: 'cmd', revision: 4, outcome: 'succeeded' }),
-  };
+  });
   const authoritative = await recovery.reconcile(gateway, 'fab', 'cmd');
   expect(authoritative?.outcome).toBe('succeeded');
   expect(recovery.pendingFor('fab', 'cmd')).toHaveLength(1);

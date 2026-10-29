@@ -1,22 +1,51 @@
-import { describe, expect, it } from 'vitest';
+import { Exit, Scope } from 'effect';
+import { afterEach, describe, expect, it } from 'vitest';
 import { CommandEventBridge } from '@/runtime/command-event-bridge';
 import type { CommandGateway } from '@/contracts/command-gateway.contract';
 import {
+  type CommandTestRuntime,
   FakeCommandEventSource,
   FakeCommandWorkflow,
   FakeWorkflowRegistry,
   commandResult,
+  createCommandTestRuntime,
+  fakeCommandGateway,
 } from '../support/command-fakes.ts';
 
 const fabId = 'fab-a';
 const commandId = 'cmd-1';
 
-function setup(options: { fabId?: string } = {}) {
+interface Setup {
+  readonly source: FakeCommandEventSource;
+  readonly workflows: FakeWorkflowRegistry;
+  readonly workflow: FakeCommandWorkflow;
+  readonly bridge: CommandEventBridge;
+  readonly harness: CommandTestRuntime;
+  readonly scope: Scope.Closeable;
+}
+
+const cleanups: Array<() => Promise<void>> = [];
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0)) await cleanup();
+});
+
+function setup(options: { fabId?: string } = {}): Setup {
   const source = new FakeCommandEventSource();
   const workflows = new FakeWorkflowRegistry();
   const workflow = new FakeCommandWorkflow();
-  const bridge = new CommandEventBridge(source, workflows, { fabId: options.fabId });
-  return { source, workflows, workflow, bridge };
+  const harness = createCommandTestRuntime();
+  const scope = Scope.makeUnsafe();
+  const bridge = new CommandEventBridge(source, workflows, {
+    fabId: options.fabId,
+    runtime: harness.host,
+    scope,
+  });
+  cleanups.push(async () => {
+    bridge.dispose();
+    harness.host.runSync(Scope.close(scope, Exit.void));
+    await harness.dispose();
+  });
+  return { source, workflows, workflow, bridge, harness, scope };
 }
 
 describe('CommandEventBridge (CE-01..CE-05)', () => {
@@ -63,7 +92,6 @@ describe('CommandEventBridge (CE-01..CE-05)', () => {
     source.emit(commandResult({ fabId, commandId, revision: 1, outcome: 'succeeded' }));
     expect(workflow.events).toHaveLength(0);
     expect(bridge.pendingCount).toBe(1);
-    // The submit response eventually creates the workflow; the held result is replayed once.
     workflows.register(fabId, commandId, workflow);
     expect(bridge.flushRecovery()).toBe(1);
     expect(workflow.events.map((event) => [event.revision, event.outcome])).toEqual([[1, 'succeeded']]);
@@ -77,9 +105,9 @@ describe('CommandEventBridge (CE-01..CE-05)', () => {
     source.emit(commandResult({ fabId, commandId, revision: 2, outcome: 'executing' }));
     expect(bridge.pendingCount).toBe(1);
 
-    const gateway: CommandGateway = {
+    const gateway: CommandGateway = fakeCommandGateway({
       getCommandStatus: async () => commandResult({ fabId, commandId, revision: 3, outcome: 'succeeded' }),
-    };
+    });
     workflows.register(fabId, commandId, workflow);
     await expect(bridge.reconcile(gateway, fabId, commandId)).resolves.toBe(2);
     expect(workflow.events.map((event) => [event.revision, event.outcome])).toEqual([
@@ -93,7 +121,7 @@ describe('CommandEventBridge (CE-01..CE-05)', () => {
     const { source, workflows, workflow, bridge } = setup({ fabId: 'fab-b' });
     workflows.register('fab-b', commandId, workflow);
     bridge.start();
-    source.emit(commandResult({ fabId, commandId, revision: 1, outcome: 'accepted' }));
+    source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'accepted' }));
     source.emit(commandResult({ fabId: 'fab-b', commandId, revision: 1, outcome: 'accepted' }));
     expect(workflow.events.map((event) => event.fabId)).toEqual(['fab-b']);
   });
@@ -109,6 +137,7 @@ describe('CommandEventBridge lifecycle (CE-08)', () => {
     source.emit(commandResult({ fabId, commandId, revision: 2, outcome: 'succeeded' }));
     expect(workflow.events).toHaveLength(1);
     expect(workflow.events[0].revision).toBe(1);
+    expect(bridge.running).toBe(false);
 
     source.emit(commandResult({ fabId: 'fab-a', commandId: 'unknown', revision: 1, outcome: 'failed' }));
     expect(bridge.pendingCount).toBe(0);

@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import { useAtomValue } from '@effect/atom-react';
+import * as Atom from 'effect/reactivity/Atom';
 import type { CommandWorkflowProjection } from '@/contracts/command-workflow.contract';
-import { commandProjectionAtom, commandProjectionKey } from '@/runtime/command-projection.atom';
 import type { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
 
 interface RuntimeContextValue {
@@ -11,6 +11,9 @@ interface RuntimeContextValue {
 }
 
 const FabRuntimeContext = createContext<RuntimeContextValue | null>(null);
+
+/** Stable value for "no runtime / no tracked command": never a second state source. */
+const EMPTY_PROJECTION_ATOM = Atom.make<CommandWorkflowProjection | undefined>(undefined);
 
 export function RuntimeProvider({ registry, version = 0, children }: { registry: FabRuntimeRegistry; version?: number; children: ReactNode }) {
   const value = (({ registry, version }));
@@ -27,49 +30,25 @@ export function useFabRuntimeVersion(): number {
 }
 
 /**
- * Value equality for the read-only projection. FabRuntime.subscribe is a
- * per-FAB broadcast and getProjection() builds a fresh object per call, so
- * without this check every command result would setState every ProjectionRow
- * (B05). Field-by-field equality is sufficient: the projection is exactly
- * state/revision/outcome and carries no nested data.
- */
-function sameProjection(left: CommandWorkflowProjection | undefined, right: CommandWorkflowProjection | undefined): boolean {
-  if (left === right) return true;
-  if (!left || !right) return false;
-  return left.state === right.state && left.revision === right.revision && left.outcome === right.outcome;
-}
-
-/**
- * Read-only workflow projection for one command. It subscribes to runtime
- * notifications and never exposes actor/send APIs to the page.
+ * Read-only command workflow projection (ADR-007 §6, INV-11).
+ *
+ * There is exactly one data source: the Atom owned by the FabRuntime's bounded
+ * CommandProjectionStore and written only by the runtime. There is no useState
+ * fallback, no runtime.subscribe broadcast and no second cache: a replaced
+ * runtime yields a different Atom identity, so a stale projection can never leak
+ * into the replacement generation.
  */
 export function useCommandProjection(fabId: string, commandId: string): CommandWorkflowProjection | undefined {
-  // Production reads the Atom projection written by FabRuntime through the same
-  // AppRuntime registry. The subscription below stays as a fallback for isolated
-  // runtimes/tests that do not inject a projection registry.
-  const atomProjection = useAtomValue(commandProjectionAtom(commandProjectionKey(fabId, commandId)));
+  // Validated compiler limitation (CORE-011 family): with Oxc React Compiler
+  // 'infer' mode, a custom hook whose only reactive input is an external Atom
+  // subscription can be memoized by its call arguments; the read-only projection
+  // would then never update. The hook has no optimization value, so it explicitly
+  // opts out instead of depending on compiler caching for correctness (spec §4).
+  'use no memo';
   const registry = useFabRuntimeRegistry();
-  // Derive the current runtime per render. The Provider version bump after a
-  // RuntimeBootstrap rebuild re-renders consumers, so the effect re-subscribes
-  // to the replacement runtime instead of keeping the disposed one.
   const runtime = registry?.get(fabId);
-  const [projection, setProjection] = useState<CommandWorkflowProjection | undefined>(() => runtime?.getProjection(commandId));
-  // Compare-and-commit through a ref so a value-equal broadcast schedules no
-  // React update at all (a functional setState with the previous value may still
-  // render once before bailing out). The ref mirrors the committed state.
-  const committed = useRef<CommandWorkflowProjection | undefined>(projection);
-
-  useEffect(() => {
-    if (!runtime) return;
-    const update = () => {
-      const next = runtime.getProjection(commandId);
-      if (sameProjection(committed.current, next)) return;
-      committed.current = next;
-      setProjection(next);
-    };
-    update();
-    return runtime.subscribe(update);
-  }, [runtime, commandId]);
-
-  return atomProjection ?? projection;
+  // Atom identity is stable in the runtime's bounded store, so no memoization is
+  // needed (and the hook must not depend on compiler caching for correctness).
+  const atom = runtime ? runtime.projectionAtom(commandId) : EMPTY_PROJECTION_ATOM;
+  return useAtomValue(atom);
 }

@@ -1,5 +1,14 @@
-import { Effect, PubSub, Result, Stream } from 'effect';
-import type { CommandConnectionStatus, CommandEventSource, CommandResultEvent, CommandStreamGap, CommandTransportFailure } from '@/contracts/command-events.contract';
+import { Cause, Effect, Option, Queue, Schema, Stream } from 'effect';
+import type {
+  CommandConnectionStatus,
+  CommandEventSource,
+  CommandResultEvent,
+  CommandStreamDirty,
+  CommandStreamDirtyReason,
+  CommandStreamGap,
+  CommandTransportFailure,
+} from '@/contracts/command-events.contract';
+import { type CommandDirtyReason, commandDirtySchema } from '@/api/command-recovery.schema';
 import { MessageDecoder } from '@/realtime/message-decoder';
 
 interface SseMessageLike {
@@ -18,9 +27,26 @@ interface EventSourceLike {
   close(): void;
 }
 
+/**
+ * The CommandTransportScope side of the transport contract: the transport never
+ * creates or owns a detached Scope. The owner registers a synchronous finalizer
+ * that closes the EventSource and clears every timer.
+ */
+export interface CommandTransportFinalizerHost {
+  addFinalizer(finalizer: () => void): void;
+}
+
 export interface SseCommandEventSourceOptions {
+  /** CommandTransportScope finalizer registration (ADR-007 §2/§5). */
+  readonly host: CommandTransportFinalizerHost;
   /** Test seam; production defaults to the browser EventSource. */
   readonly eventSourceFactory?: (url: string) => EventSourceLike;
+  /** Per-signal bounded buffer capacity (ADR-007 §5 target: 256). */
+  readonly capacity?: number;
+  /** A connection that never opens is failed and retried after this delay. */
+  readonly connectTimeoutMs?: number;
+  /** Delay before a failed/interrupted connection is reopened. */
+  readonly reconnectDelayMs?: number;
 }
 
 interface CommandCursor {
@@ -28,12 +54,87 @@ interface CommandCursor {
   sequence?: number;
 }
 
-type CommandStreamMessage =
-  | { readonly kind: 'result'; readonly event: CommandResultEvent }
-  | { readonly kind: 'reconnected' }
-  | { readonly kind: 'gap'; readonly gap: CommandStreamGap }
-  | { readonly kind: 'status'; readonly status: CommandConnectionStatus }
-  | { readonly kind: 'failure'; readonly failure: CommandTransportFailure };
+type BufferPolicy = 'mark-dirty' | 'coalesce-newest';
+
+/**
+ * Server-classified dirty causes (CommandDirtyDto) mapped onto the frozen transport
+ * dirty-reason contract of ADR-007 §5. All three require authoritative reconciliation.
+ */
+const SERVER_DIRTY_REASON: Record<CommandDirtyReason, CommandStreamDirtyReason> = {
+  'retention-trim': 'overflow',
+  'epoch-replaced': 'stale-generation',
+  'store-fault': 'closed',
+};
+
+function parseServerDirty(data: string): { reason: CommandDirtyReason; droppedCount: number; epoch: string; sequence: number } | undefined {
+  try {
+    const parsed: unknown = JSON.parse(data);
+    const decoded = Schema.decodeUnknownOption(commandDirtySchema)(parsed);
+    if (Option.isNone(decoded)) return undefined;
+    const { reason, droppedCount, epoch, sequence } = decoded.value;
+    return { reason, droppedCount, epoch, sequence };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * One bounded signal channel. Values are published synchronously from the
+ * EventSource callbacks into per-consumer Stream.callback queues.
+ *
+ * - `mark-dirty`: a full consumer queue means the frame cannot be delivered, so
+ *   the drop is counted and reported through the dirty channel (never silent);
+ * - `coalesce-newest`: the channel is a dirty signal itself; the newest dirty
+ *   state must survive, so the sliding queue keeps it and the monotonic
+ *   droppedCount carries the loss accounting.
+ */
+class BoundedSignal<A> {
+  private readonly queues = new Set<Queue.Queue<A, Cause.Done>>();
+  private subscriberListener?: () => void;
+  readonly stream: Stream.Stream<A>;
+
+  constructor(
+    private readonly capacity: number,
+    private readonly policy: BufferPolicy,
+    private readonly onOverflow: (dropped: number) => void,
+  ) {
+    this.stream = Stream.callback<A>(
+      (queue) =>
+        Effect.acquireRelease(
+          Effect.sync(() => {
+            this.queues.add(queue);
+            this.subscriberListener?.();
+          }),
+          () =>
+            Effect.sync(() => {
+              this.queues.delete(queue);
+              this.subscriberListener?.();
+            }),
+        ),
+      { bufferSize: capacity, strategy: 'sliding' },
+    );
+  }
+
+  onSubscriberChange(listener: () => void): void {
+    this.subscriberListener = listener;
+  }
+
+  publish(value: A): void {
+    let dropped = 0;
+    for (const queue of this.queues) {
+      if (this.policy === 'mark-dirty' && Queue.sizeUnsafe(queue) >= this.capacity) {
+        dropped += 1;
+        continue;
+      }
+      Queue.offerUnsafe(queue, value);
+    }
+    if (dropped > 0) this.onOverflow(dropped);
+  }
+
+  get subscriberCount(): number {
+    return this.queues.size;
+  }
+}
 
 /** Parse the journal cursor written in the SSE `id` line: `{epoch}:{sequence}`. */
 export function parseCommandCursor(lastEventId: string | undefined): CommandCursor {
@@ -65,119 +166,244 @@ export function parseCommandReplayGap(data: string, cursor: CommandCursor): Comm
   };
 }
 
+function browserEventSourceFactory(): ((url: string) => EventSourceLike) | undefined {
+  if (typeof EventSource === 'undefined') return undefined;
+  return (target) => new EventSource(target) as unknown as EventSourceLike;
+}
+
 /**
- * Command-result transport backed by one FAB SSE stream. Task 6 replaces the
- * RxJS Observable bridge with Effect PubSub + Streams: all five signals are
- * derived from one typed message bus and one lazily opened EventSource, opened
- * by the first subscriber and closed when the last stream consumer exits.
+ * Command-result transport backed by one FAB SSE stream.
  *
- * The journal cursor (`id: {epoch}:{sequence}`) is tracked so replay-gap control
- * frames become an explicit Stream signal rather than being silently ignored.
+ * Ownership (ADR-007 §5): every consumer Stream is a child of the supplied
+ * CommandTransportScope; the first commandResults consumer opens one EventSource,
+ * the last consumer (or Scope close) closes it, and Scope finalizers clear every
+ * timer. Each connection attempt carries a generation token: callbacks from a
+ * closed/replaced connection are dropped and reported as `stale-generation`
+ * dirty signals instead of corrupting the current connection state.
+ *
+ * Bounded memory (capacity 256 by default) without silent loss: a full consumer
+ * buffer drops the frame, increments the monotonic dropped counter and publishes
+ * a dirty signal on its own coalescing channel. FabRuntime turns every dirty
+ * signal into authoritative reconciliation through the FAB scheduler. There is no
+ * unbounded PubSub and no global Effect runner here.
  */
-export function createSseCommandEventSource(url: string, options: SseCommandEventSourceOptions = {}): CommandEventSource {
-  const bus = Effect.runSync(PubSub.unbounded<CommandStreamMessage>());
+export function createSseCommandEventSource(
+  url: string,
+  options: SseCommandEventSourceOptions,
+): CommandEventSource {
+  const capacity = Math.max(1, options.capacity ?? 256);
+  const connectTimeoutMs = Math.max(1, options.connectTimeoutMs ?? 10_000);
+  const reconnectDelayMs = Math.max(0, options.reconnectDelayMs ?? 250);
   const decoder = new MessageDecoder();
   const state: {
     status: CommandConnectionStatus;
-    subscribers: number;
     source: EventSourceLike | null;
+    removeControlListeners?: () => void;
     opened: boolean;
+    generation: number;
     cursor: CommandCursor;
-  } = { status: 'connecting', subscribers: 0, source: null, opened: false, cursor: {} };
+    connectTimer?: ReturnType<typeof setTimeout>;
+    reconnectTimer?: ReturnType<typeof setTimeout>;
+  } = { status: 'connecting', source: null, opened: false, generation: 0, cursor: {} };
+  let stopped = false;
+  let finalizerRegistered = false;
+  let droppedTotal = 0;
 
-  const publish = (message: CommandStreamMessage): void => { PubSub.publishUnsafe(bus, message); };
+  const observeCursor = (lastEventId: string | undefined): void => {
+    const observed = parseCommandCursor(lastEventId);
+    if (observed.epoch !== undefined) state.cursor.epoch = observed.epoch;
+    if (observed.sequence !== undefined) state.cursor.sequence = observed.sequence;
+  };
+
+  const dirty = new BoundedSignal<CommandStreamDirty>(1, 'coalesce-newest', () => {
+    /* The dirty channel is the loss record itself: coalescing keeps the newest
+       state and the monotonic droppedCount preserves the total. */
+  });
+  const emitDirty = (reason: CommandStreamDirtyReason, dropped: number): void => {
+    droppedTotal += dropped;
+    dirty.publish({
+      reason,
+      droppedCount: droppedTotal,
+      ...(state.cursor.epoch !== undefined ? { epoch: state.cursor.epoch } : {}),
+      ...(state.cursor.sequence !== undefined ? { sequence: state.cursor.sequence } : {}),
+    });
+  };
+  const overflow = (dropped: number): void => emitDirty('overflow', dropped);
+
+  const commandResults = new BoundedSignal<CommandResultEvent>(capacity, 'mark-dirty', overflow);
+  const gaps = new BoundedSignal<CommandStreamGap>(capacity, 'mark-dirty', overflow);
+  const statuses = new BoundedSignal<CommandConnectionStatus>(capacity, 'mark-dirty', overflow);
+  const failures = new BoundedSignal<CommandTransportFailure>(capacity, 'mark-dirty', overflow);
+  const reconnections = new BoundedSignal<void>(capacity, 'mark-dirty', overflow);
+
+  let lastStatus: CommandConnectionStatus = 'connecting';
   const publishStatus = (status: CommandConnectionStatus): void => {
     state.status = status;
-    publish({ kind: 'status', status });
+    if (status === lastStatus) return;
+    lastStatus = status;
+    statuses.publish(status);
   };
 
-  const open = (): void => {
-    const factory = options.eventSourceFactory ??
-      (typeof EventSource === 'undefined' ? undefined : (target: string) => new EventSource(target) as unknown as EventSourceLike);
-    if (!factory) {
-      publishStatus('failed');
-      publish({ kind: 'failure', failure: { message: 'EventSource is not available in this environment' } });
-      return;
-    }
-    const source = factory(url);
-    state.source = source;
-    const onReplayGap = (event: SseMessageLike): void => {
-      const observed = parseCommandCursor(event.lastEventId);
-      if (observed.epoch !== undefined) state.cursor.epoch = observed.epoch;
-      if (observed.sequence !== undefined) state.cursor.sequence = observed.sequence;
-      publish({ kind: 'gap', gap: parseCommandReplayGap(event.data, state.cursor) });
-    };
-    source.addEventListener?.('replay-gap', onReplayGap);
-    source.onopen = () => {
-      if (state.opened) publish({ kind: 'reconnected' });
-      state.opened = true;
-      publishStatus('open');
-    };
-    source.onmessage = (event) => {
-      const observed = parseCommandCursor(event.lastEventId);
-      if (observed.epoch !== undefined) state.cursor.epoch = observed.epoch;
-      if (observed.sequence !== undefined) state.cursor.sequence = observed.sequence;
-      try {
-        const decoded = decoder.decode(event.data);
-        if (decoded.kind === 'command') publish({ kind: 'result', event: decoded.event });
-      } catch {
-        // Malformed frames are transport noise; keep the stream alive and let
-        // backend reconciliation recover the authoritative state.
-      }
-    };
-    source.onerror = (event) => {
-      // EventSource reconnects automatically; surface the interruption so the
-      // runtime can reconcile authoritative state instead of silently ignoring it.
-      publishStatus('reconnecting');
-      publish({ kind: 'failure', failure: { message: 'command stream transport error', cause: event } });
-    };
+  const clearConnectTimer = (): void => {
+    if (state.connectTimer === undefined) return;
+    clearTimeout(state.connectTimer);
+    state.connectTimer = undefined;
+  };
+  const clearReconnectTimer = (): void => {
+    if (state.reconnectTimer === undefined) return;
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = undefined;
+  };
+  const clearTimers = (): void => {
+    clearConnectTimer();
+    clearReconnectTimer();
   };
 
-  const close = (): void => {
-    if (!state.source) return;
-    state.source.onopen = null;
-    state.source.onmessage = null;
-    state.source.onerror = null;
-    state.source.close();
+  const closeSource = (): void => {
+    const source = state.source;
+    if (!source) return;
     state.source = null;
-    // A later consumer starts a fresh connection generation; its first open is
-    // not a reconnection of the previous lifetime.
+    state.generation += 1;
+    source.onopen = null;
+    source.onmessage = null;
+    source.onerror = null;
+    state.removeControlListeners?.();
+    state.removeControlListeners = undefined;
+    source.close();
+    clearTimers();
+  };
+
+  const closeTransport = (): void => {
+    stopped = true;
+    closeSource();
     state.opened = false;
   };
 
-  const acquire = (): void => {
-    state.subscribers += 1;
-    if (state.subscribers === 1) open();
-  };
-  const release = (): void => {
-    state.subscribers = Math.max(0, state.subscribers - 1);
-    if (state.subscribers === 0) close();
+  const scheduleReconnect = (): void => {
+    if (stopped) return;
+    clearReconnectTimer();
+    state.reconnectTimer = setTimeout(() => {
+      state.reconnectTimer = undefined;
+      if (stopped || state.source || commandResults.subscriberCount === 0) return;
+      open();
+    }, reconnectDelayMs);
   };
 
-  const messages = Stream.fromPubSub(bus);
-  /**
-   * The command-result stream owns the connection lifetime: FabRuntime only starts
-   * it when the first command is tracked, preserving lazy FAB SSE. Status/gap/
-   * failure streams observe an already-open connection and never open one.
-   */
-  const lifecycle = <A>(stream: Stream.Stream<A>): Stream.Stream<A> => stream.pipe(
-    Stream.onStart(Effect.sync(acquire)),
-    Stream.ensuring(Effect.sync(release)),
-  );
-  const select = <A>(read: (message: CommandStreamMessage) => A | undefined): Stream.Stream<A> =>
-    messages.pipe(Stream.filterMap((message) => {
-      const value = read(message);
-      return value === undefined ? Result.fail(undefined) : Result.succeed(value);
-    }));
+  const restartConnection = (): void => {
+    if (stopped) return;
+    closeSource();
+    scheduleReconnect();
+  };
+
+  const open = (): void => {
+    if (stopped || state.source) return;
+    const generation = state.generation + 1;
+    state.generation = generation;
+    const factory = options.eventSourceFactory ?? browserEventSourceFactory();
+    if (!factory) {
+      publishStatus('failed');
+      failures.publish({ message: 'EventSource is not available in this environment' });
+      return;
+    }
+    let source: EventSourceLike;
+    try {
+      source = factory(url);
+    } catch (cause) {
+      publishStatus('failed');
+      failures.publish({ message: 'command stream connection failed', cause });
+      return;
+    }
+    state.source = source;
+    if (!finalizerRegistered) {
+      finalizerRegistered = true;
+      options.host.addFinalizer(closeTransport);
+    }
+    const isCurrent = (): boolean => !stopped && state.source === source && state.generation === generation;
+    const isStale = (): boolean => {
+      if (isCurrent()) return false;
+      emitDirty('stale-generation', 1);
+      return true;
+    };
+
+    const onReplayGap = (event: SseMessageLike): void => {
+      if (isStale()) return;
+      observeCursor(event.lastEventId);
+      gaps.publish(parseCommandReplayGap(event.data, { ...state.cursor }));
+    };
+    const onServerDirty = (event: SseMessageLike): void => {
+      if (isStale()) return;
+      const dirtyFrame = parseServerDirty(event.data);
+      if (!dirtyFrame) return;
+      state.cursor = { epoch: dirtyFrame.epoch, sequence: dirtyFrame.sequence };
+      emitDirty(SERVER_DIRTY_REASON[dirtyFrame.reason], dirtyFrame.droppedCount);
+    };
+    source.addEventListener?.('replay-gap', onReplayGap);
+    source.addEventListener?.('dirty', onServerDirty);
+    state.removeControlListeners = () => {
+      source.removeEventListener?.('replay-gap', onReplayGap);
+      source.removeEventListener?.('dirty', onServerDirty);
+    };
+
+    source.onopen = () => {
+      if (isStale()) return;
+      clearConnectTimer();
+      const reopened = state.opened;
+      state.opened = true;
+      if (reopened) reconnections.publish(undefined);
+      publishStatus('open');
+    };
+    source.onmessage = (event) => {
+      if (isStale()) return;
+      observeCursor(event.lastEventId);
+      try {
+        const decoded = decoder.decode(event.data);
+        if (decoded.kind === 'command') commandResults.publish(decoded.event);
+      } catch {
+        // Malformed frames are transport noise; authoritative reconciliation
+        // recovers the command state instead of guessing from the frame.
+      }
+    };
+    source.onerror = (event) => {
+      if (isStale()) return;
+      publishStatus('reconnecting');
+      failures.publish({ message: 'command stream transport error', cause: event });
+      // EventSource would auto-reconnect with an unowned timer; the transport owns
+      // the single connection explicitly and reopens after reconnectDelayMs.
+      restartConnection();
+    };
+
+    publishStatus('connecting');
+    state.connectTimer = setTimeout(() => {
+      state.connectTimer = undefined;
+      if (!isCurrent()) return;
+      publishStatus('failed');
+      failures.publish({ message: 'command stream connect timeout' });
+      emitDirty('closed', 1);
+      restartConnection();
+    }, connectTimeoutMs);
+  };
+
+  // Only the commandResults stream owns the connection lifetime (lazy FAB SSE):
+  // status/gap/failure/reconnect streams observe an already-open connection.
+  commandResults.onSubscriberChange(() => {
+    if (commandResults.subscriberCount > 0) {
+      if (!stopped && !state.source) open();
+      return;
+    }
+    closeSource();
+    state.opened = false;
+    clearTimers();
+  });
+  statuses.onSubscriberChange(() => {
+    if (statuses.subscriberCount === 1) statuses.publish(state.status);
+  });
 
   return {
-    commandResults: lifecycle(select((message) => message.kind === 'result' ? message.event : undefined)),
-    reconnected: messages.pipe(Stream.filterMap((message) => message.kind === 'reconnected' ? Result.succeed(undefined) : Result.fail(undefined))),
-    gaps: select((message) => message.kind === 'gap' ? message.gap : undefined),
-    connectionStatus: Stream.concat(
-      Stream.sync(() => state.status),
-      select((message) => message.kind === 'status' ? message.status : undefined),
-    ),
-    transportFailures: select((message) => message.kind === 'failure' ? message.failure : undefined),
+    commandResults: commandResults.stream,
+    reconnected: reconnections.stream,
+    gaps: gaps.stream,
+    connectionStatus: statuses.stream,
+    transportFailures: failures.stream,
+    dirty: dirty.stream,
   };
 }

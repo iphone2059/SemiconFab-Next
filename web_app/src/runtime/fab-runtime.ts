@@ -1,18 +1,38 @@
+import { Effect, Exit, Scope } from 'effect';
+import type * as Fiber from 'effect/Fiber';
 import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import type {
-  CommandConnectionStatus, CommandEventSource, CommandTransportFailure,
+  CommandConnectionStatus,
+  CommandEventSource,
+  CommandResultEvent,
+  CommandStreamDirty,
+  CommandTransportFailure,
 } from '@/contracts/command-events.contract';
-import type { CommandGateway } from '@/contracts/command-gateway.contract';
-import type { CommandWorkflow, CommandWorkflowProjection, CommandWorkflowRegistry } from '@/contracts/command-workflow.contract';
+import type {
+  CommandGateway,
+  CommandJournalEvent,
+  CommandJournalPage,
+  CommandRecoveryList,
+} from '@/contracts/command-gateway.contract';
+import type { CommandOutcome } from '@/contracts/command-events.contract';
+import type {
+  CommandWorkflow,
+  CommandWorkflowProjection,
+  CommandWorkflowRegistry,
+} from '@/contracts/command-workflow.contract';
 import { CommandCorrelationRegistry } from '@/runtime/command-correlation-registry';
 import { CommandEventBridge } from '@/runtime/command-event-bridge';
-import { CommandReconciler } from '@/runtime/command-reconciler';
-import { commandProjectionAtom, commandProjectionKey } from '@/runtime/command-projection.atom';
 import type { CommandRecoveryEviction } from '@/runtime/command-event-recovery';
 import { CommandEventRecovery } from '@/runtime/command-event-recovery';
-import { EffectCommandWorkflowScope, type CommandWorkflowScope } from '@/runtime/command-workflow-scope';
+import { CommandProjectionStore, type CommandProjectionAtom } from '@/runtime/command-projection.store';
+import {
+  FabReconciliationScheduler,
+  type FabReconciliationSchedulerStats,
+  type ReconciliationDropDiagnostic,
+} from '@/runtime/fab-reconciliation-scheduler';
+import type { RuntimeHost } from '@/runtime/fab-runtime-host';
+import { runCommandStream, stopCommandStream } from '@/runtime/command-stream';
 import { XStateCommandWorkflowAdapter } from '@/runtime/xstate-command-workflow-adapter';
-import { runCommandStream } from '@/runtime/command-stream';
 
 export type CommandWorkflowFactory = (fabId: string, commandId: string) => CommandWorkflow;
 
@@ -31,8 +51,23 @@ export interface FabRuntimeRetentionOptions {
 }
 
 export interface FabRuntimeOptions {
+  /** FAB identity is composite: (siteId, fabId) (ADR-007 §3). */
+  readonly siteId: string;
   readonly fabId: string;
-  readonly source: CommandEventSource;
+  /** Approved execution boundary (AppRuntime satisfies it structurally). */
+  readonly runtime: RuntimeHost;
+  /** AppScope: FabRuntime forks its FabScope from this parent (ADR-007 §2). */
+  readonly parentScope: Scope.Scope;
+  /**
+   * Required: the same AtomRegistry React reads. There is no fallback path and no
+   * second projection source (ADR-007 §6).
+   */
+  readonly projectionRegistry: AtomRegistry.AtomRegistry;
+  /**
+   * Creates the per-FAB command event source; the FabRuntime passes the
+   * CommandTransportScope that owns the EventSource and consumer fibers.
+   */
+  readonly sourceFor: (fabId: string, scope: Scope.Scope) => CommandEventSource;
   readonly gateway?: CommandGateway;
   /** Test seam; production defaults to XStateCommandWorkflowAdapter. */
   readonly createWorkflow?: CommandWorkflowFactory;
@@ -40,12 +75,12 @@ export interface FabRuntimeOptions {
   readonly retention?: FabRuntimeRetentionOptions;
   /** Defer opening the command SSE stream until the first command is tracked. */
   readonly lazyCommandSubscription?: boolean;
-  /** Task 2 application registry: the only writer of read-only command projection atoms. */
-  readonly projectionRegistry?: AtomRegistry.AtomRegistry;
-  /** Test seam for actor Scope ownership; production creates one Effect scope. */
-  readonly workflowScope?: CommandWorkflowScope;
   /** Bound on simultaneous authoritative reconciliations per FAB (target 4). */
   readonly maxConcurrentReconciliations?: number;
+  /** Bound on queued reconciliations per FAB (target 128, drop + diagnostic). */
+  readonly maxQueuedReconciliations?: number;
+  /** Per-item reconciliation timeout (target 10s). */
+  readonly reconcileTimeoutMs?: number;
 }
 
 interface ResolvedRetention {
@@ -74,70 +109,108 @@ function resolveRetention(options: FabRuntimeRetentionOptions | undefined): Reso
   };
 }
 
-const TERMINAL_OUTCOMES = new Set(['succeeded', 'failed', 'cancelled']);
+const TERMINAL_OUTCOMES: ReadonlySet<CommandOutcome> = new Set(['succeeded', 'failed', 'cancelled']);
+const isTerminalOutcome = (outcome: CommandOutcome | 'pending' | undefined): boolean =>
+  outcome !== undefined && outcome !== 'pending' && TERMINAL_OUTCOMES.has(outcome);
+
+interface JournalCursor {
+  readonly epoch?: string;
+  readonly sequence?: number;
+}
+
+interface RecoveryRequest {
+  readonly journal?: JournalCursor;
+  readonly list: boolean;
+}
+
+export interface FabRuntimeLifecycleCounts {
+  /** Workflows acquired through Effect.acquireRelease (CommandScope). */
+  readonly created: number;
+  /** Workflow finalizers that ran exactly once. */
+  readonly finalized: number;
+}
 
 /**
- * Per-FAB assembly layer: the only place that wires the realtime source, the
- * application CommandEventBridge and the workflow implementations together
- * (ARCH-09). One runtime exists per FAB; all command identities stay scoped to
- * (fabId, commandId).
+ * Per-FAB command runtime (ADR-007 §2/§3): the only assembly point of the
+ * realtime source, the CommandEventBridge, the authoritative scheduler and the
+ * XState workflows.
  *
- * Lifecycle: realtime gaps/reconnects schedule one coalesced authoritative
- * reconciliation pass over tracked active commands. Workflows are bounded:
- * active commands are always retained, terminal ones are evicted by TTL/max
- * (their actor and subscriptions are disposed) while a recent read-only
- * projection stays available to the UI.
+ * Scope tree owned here:
+ *   FabScope
+ *     ├── CommandTransportScope   (EventSource + every signal/command consumer fiber)
+ *     ├── ReconciliationSchedulerScope (scheduler-owned; one scheduler per FAB)
+ *     └── CommandScope(commandId) (XState actor acquired with Effect.acquireRelease)
+ *
+ * Every reconciliation entry point funnels through the single scheduler; terminal
+ * eviction closes the command's Scope so its finalizer runs exactly once; dispose
+ * closes the children then the FabScope. Read-only projections live in one
+ * bounded CommandProjectionStore written only by this class.
  */
 export class FabRuntime {
+  readonly siteId: string;
   readonly fabId: string;
-  private readonly workflows = new Map<string, CommandWorkflow>();
-  private readonly terminalAt = new Map<string, number>();
-  private readonly retainedProjections = new Map<string, CommandWorkflowProjection>();
-  private readonly listeners = new Set<() => void>();
+
+  private readonly runtime: RuntimeHost;
+  private readonly fabScope: Scope.Closeable;
+  private readonly transportScope: Scope.Closeable;
+  private readonly source: CommandEventSource;
+  private readonly gateway?: CommandGateway;
+  private readonly projectionStore: CommandProjectionStore;
+  private readonly scheduler: FabReconciliationScheduler;
   private readonly bridge: CommandEventBridge;
   private readonly correlation: CommandCorrelationRegistry;
-  private readonly reconciler?: CommandReconciler;
+  private readonly recovery: CommandEventRecovery;
   private readonly createWorkflow: CommandWorkflowFactory;
-  private readonly source: CommandEventSource;
   private readonly lazyCommandSubscription: boolean;
   private readonly retention: ResolvedRetention;
-  private readonly reconciliations = new Map<string, Promise<boolean>>();
+
+  private readonly workflows = new Map<string, CommandWorkflow>();
+  private readonly commandScopes = new Map<string, Scope.Closeable>();
+  private readonly terminalAt = new Map<string, number>();
   private readonly projectionSubscriptions = new Map<string, () => void>();
-  private readonly projectionRegistry?: AtomRegistry.AtomRegistry;
-  private readonly workflowScope: CommandWorkflowScope;
-  private readonly recovery: CommandEventRecovery;
-  private readonly maxConcurrentReconciliations: number;
-  private stopReconnectStream?: () => void;
-  private stopGapStream?: () => void;
-  private stopFailureStream?: () => void;
-  private stopStatusStream?: () => void;
+  private readonly signalFibers: Array<Fiber.Fiber<void, never>> = [];
+
+  private started = false;
+  private disposed = false;
+  private bridgeStarted = false;
+  private sweepTimer?: ReturnType<typeof setTimeout>;
+  private passScheduled = false;
+  private passRunning = false;
+  private passPending = false;
+  private recoveryRequest: RecoveryRequest | undefined;
+  private gapObserved = false;
   private connectionStatus: CommandConnectionStatus = 'connecting';
   private lastTransportFailure?: CommandTransportFailure;
+  private lastDirty?: CommandStreamDirty;
   private lastEviction?: CommandRecoveryEviction;
-  private sweepTimer?: ReturnType<typeof setTimeout>;
-  private reconcileScheduled = false;
-  private gapObserved = false;
-  private disposed = false;
-  private started = false;
-  private bridgeStarted = false;
+  private lastDrop?: ReconciliationDropDiagnostic;
+  private lastJournalPageValue?: CommandJournalPage;
+  private lastRecoveryListValue?: CommandRecoveryList;
+  private createdWorkflows = 0;
+  private finalizedWorkflows = 0;
 
   constructor(options: FabRuntimeOptions) {
+    this.siteId = options.siteId;
     this.fabId = options.fabId;
-    this.source = options.source;
+    this.runtime = options.runtime;
+    this.gateway = options.gateway;
     this.lazyCommandSubscription = options.lazyCommandSubscription === true;
     this.retention = resolveRetention(options.retention);
-    this.reconciler = options.gateway ? new CommandReconciler(options.gateway) : undefined;
-    this.createWorkflow = options.createWorkflow ?? ((fabId, commandId) => new XStateCommandWorkflowAdapter(fabId, commandId, this.reconciler));
-    this.projectionRegistry = options.projectionRegistry;
-    this.workflowScope = options.workflowScope ?? new EffectCommandWorkflowScope();
-    this.maxConcurrentReconciliations = Math.max(1, options.maxConcurrentReconciliations ?? 4);
+
+    // FabScope is the only Scope this class closes; its children are created from it.
+    this.fabScope = Scope.forkUnsafe(options.parentScope);
+    this.transportScope = Scope.forkUnsafe(this.fabScope);
+    this.projectionStore = new CommandProjectionStore({
+      registry: options.projectionRegistry,
+      maxRetained: this.retention.maxRetainedProjections,
+    });
     this.recovery = new CommandEventRecovery({
       onEvict: (eviction) => {
         this.lastEviction = eviction;
         // A capacity eviction may have lost a revision; converge from the
-        // authoritative backend through the same coalesced pass as gaps/reconnects.
+        // authoritative backend through the single scheduler.
         this.gapObserved = true;
-        this.scheduleReconcilePass();
+        this.requestRecovery({ list: false });
       },
     });
     this.correlation = new CommandCorrelationRegistry({
@@ -145,64 +218,101 @@ export class FabRuntime {
       terminalTtlMs: this.retention.terminalTtlMs,
       now: this.retention.now,
     });
+    this.scheduler = new FabReconciliationScheduler({
+      fabId: options.fabId,
+      runtime: options.runtime,
+      parentScope: this.fabScope,
+      gateway: options.gateway,
+      resolve: (commandId) => this.resolveReconciliationTarget(commandId),
+      isTerminal: (commandId) => this.isTerminalCommand(commandId),
+      maxConcurrent: options.maxConcurrentReconciliations,
+      maxQueued: options.maxQueuedReconciliations,
+      timeoutMs: options.reconcileTimeoutMs,
+      onDrop: (diagnostic) => {
+        this.lastDrop = diagnostic;
+        this.gapObserved = true;
+      },
+      onReconciled: (commandId) => this.afterDelivery(commandId),
+    });
+    const reconciler = this.scheduler.commandReconciler;
+    this.createWorkflow = options.createWorkflow ??
+      ((fabId, commandId) => new XStateCommandWorkflowAdapter(fabId, commandId, reconciler));
+    this.source = options.sourceFor(options.fabId, this.transportScope);
     const registry: CommandWorkflowRegistry = {
       get: (fabId, commandId) => (fabId === this.fabId ? this.workflows.get(commandId) : undefined),
     };
-    this.bridge = new CommandEventBridge(options.source, registry, {
+    this.bridge = new CommandEventBridge(this.source, registry, {
       fabId: options.fabId,
       correlation: this.correlation,
       recovery: this.recovery,
       onResultDelivered: (event) => { this.afterDelivery(event.commandId); },
+      runtime: options.runtime,
+      scope: this.transportScope,
     });
   }
 
   start(): void {
     if (this.started || this.disposed) return;
     this.started = true;
-    // Signal subscriptions exist before the bridge can consume the stream: a
-    // synchronous replay-gap frame must never be missed.
-    // A restored stream may have missed results; reconcile authoritative state.
-    // Signals are coalesced into one pass per tick and are dispose-safe.
-    if (this.source.gaps) this.stopGapStream = runCommandStream(this.source.gaps, () => {
-      this.gapObserved = true;
-      this.scheduleReconcilePass();
-    });
-    if (this.source.reconnected) this.stopReconnectStream = runCommandStream(this.source.reconnected, () => this.scheduleReconcilePass());
-    if (this.source.transportFailures) this.stopFailureStream = runCommandStream(this.source.transportFailures, (failure) => {
-      this.lastTransportFailure = failure;
-      this.scheduleReconcilePass();
-    });
-    if (this.source.connectionStatus) this.stopStatusStream = runCommandStream(this.source.connectionStatus, (status) => { this.connectionStatus = status; });
-    // With lazy command streams, opening the SSE connection waits for the first
-    // tracked command (backend replays its journal on connect), keeping the page
-    // under browser HTTP/1.1 connection limits when no commands are active.
+    this.subscribeSignals();
     if (!this.lazyCommandSubscription || this.workflows.size > 0) {
       this.bridge.start();
       this.bridgeStarted = true;
     }
-    this.reconcileActive();
+    // Startup/refresh recovery: list the FAB's active commands from the durable
+    // authority, track the ones this page did not submit, then reconcile them.
+    this.requestRecovery({ list: true });
     this.scheduleSweep();
   }
 
   stop(): void {
     if (!this.started) return;
-    if (this.bridgeStarted) this.bridge.stop();
-    this.bridgeStarted = false;
-    this.stopGapStream?.(); this.stopGapStream = undefined;
-    this.stopReconnectStream?.(); this.stopReconnectStream = undefined;
-    this.stopFailureStream?.(); this.stopFailureStream = undefined;
-    this.stopStatusStream?.(); this.stopStatusStream = undefined;
-    this.clearSweepTimer();
     this.started = false;
+    if (this.bridgeStarted) {
+      this.bridge.stop();
+      this.bridgeStarted = false;
+    }
+    for (const fiber of this.signalFibers) stopCommandStream(this.runtime, fiber);
+    this.signalFibers.length = 0;
+    this.clearSweepTimer();
   }
 
   /** Create the workflow for a submitted command; replays results held before registration. */
   trackCommand(commandId: string): CommandWorkflow {
+    if (this.disposed) throw new Error('FAB runtime is disposed');
     const existing = this.workflows.get(commandId);
     if (existing) return existing;
-    const workflow = this.workflowScope.acquire(this.createWorkflow, this.fabId, commandId);
+    const commandScope = Scope.forkUnsafe(this.fabScope);
+    const factory = this.createWorkflow;
+    let workflow: CommandWorkflow;
+    try {
+      // Per-command CommandScope: the actor and every command-owned task live
+      // inside it; the finalizer runs exactly once when the Scope closes (ADR-007 §2).
+      workflow = this.runtime.runSync(
+        Effect.provideService(
+          Effect.acquireRelease(
+            Effect.sync(() => {
+              this.createdWorkflows += 1;
+              return factory(this.fabId, commandId);
+            }),
+            (created) =>
+              Effect.sync(() => {
+                this.finalizedWorkflows += 1;
+                created.dispose();
+              }),
+          ),
+          Scope.Scope,
+          commandScope,
+        ),
+      );
+    } catch (cause) {
+      this.runtime.runSync(Scope.close(commandScope, Exit.void));
+      throw cause;
+    }
     this.workflows.set(commandId, workflow);
-    // Seed the initial snapshot, then subscribe, then start: no first frame is lost.
+    this.commandScopes.set(commandId, commandScope);
+    this.projectionStore.pin(commandId);
+    // Seed the initial projection, then subscribe, then start: no first frame is lost.
     this.publishProjection(commandId);
     this.subscribeProjection(commandId, workflow);
     this.startWorkflow(workflow);
@@ -212,11 +322,9 @@ export class FabRuntime {
     }
     this.bridge.flushRecovery();
     this.afterDelivery(commandId);
-    // A replay gap means the local stream may hold no evidence for this command;
-    // converge from the authoritative query instead of trusting local silence.
-    const localEvidence = this.hasLocalEvidence(commandId);
-    if (this.gapObserved || !localEvidence || !workflow.projection || workflow.projection.revision < 0) {
-      void this.reconcileCommand(commandId);
+    const revision = workflow.projection?.revision ?? -1;
+    if (this.gapObserved || !this.hasLocalEvidence(commandId) || revision < 0) {
+      void this.scheduler.schedule(commandId);
     }
     return workflow;
   }
@@ -225,108 +333,42 @@ export class FabRuntime {
     return this.workflows.get(commandId);
   }
 
+  /** Stable read-only Atom for one command; React reads it, FabRuntime writes it. */
+  projectionAtom(commandId: string): CommandProjectionAtom {
+    return this.projectionStore.atomFor(commandId);
+  }
+
   /** True when realtime events (or held recovery events) were observed for the command. */
   hasLocalEvidence(commandId: string): boolean {
     return this.correlation.lastRevision(this.fabId, commandId) !== undefined ||
       this.bridge.recoveryQueue.pendingFor(this.fabId, commandId).length > 0;
   }
 
-  /** Converge one command with the backend after a disconnect/missed frame. */
+  /** Converge one command with the backend: every explicit entry goes through the scheduler. */
   reconcileCommand(commandId: string): Promise<boolean> {
-    const workflow = this.workflows.get(commandId);
-    if (!workflow || !this.reconciler || this.disposed) return Promise.resolve(false);
-    if (TERMINAL_OUTCOMES.has(workflow.projection?.outcome ?? '')) return Promise.resolve(false);
-    const pending = this.reconciliations.get(commandId);
-    if (pending) return pending;
-    const isCurrent = () => !this.disposed && this.workflows.get(commandId) === workflow;
-    const request = this.reconciler.reconcile(workflow, this.fabId, commandId, isCurrent)
-      .then(reconciled => {
-        if (reconciled && isCurrent()) { this.afterDelivery(commandId); }
-        return reconciled;
-      })
-      // Recovery runs in the background. Keep failures contained and retry on
-      // the next connection restoration or explicit reconciliation.
-      .catch(() => false)
-      .finally(() => { if (this.reconciliations.get(commandId) === request) this.reconciliations.delete(commandId); });
-    this.reconciliations.set(commandId, request);
-    return request;
+    return this.scheduler.schedule(commandId);
   }
 
-  /**
-   * Authoritative reconciliation for every tracked active command. Used after a
-   * replay gap/reconnect and available to tests and future recovery UI.
-   */
-  async reconcileAll(): Promise<number> {
+  /** Authoritative reconciliation for every tracked command through the one scheduler. */
+  reconcileAll(): Promise<number> {
     return this.reconcileTracked(this.workflows.keys());
   }
 
   /** Reconcile only the given tracked commands; terminal/evicted ids are ignored. */
-  async reconcileTracked(commandIds: Iterable<string>): Promise<number> {
+  reconcileTracked(commandIds: Iterable<string>): Promise<number> {
     const unique = [...new Set(commandIds)].filter((commandId) => {
       const workflow = this.workflows.get(commandId);
-      return workflow !== undefined && !TERMINAL_OUTCOMES.has(workflow.projection?.outcome ?? '');
+      return workflow !== undefined && !isTerminalOutcome(workflow.projection?.outcome);
     });
-    const results: boolean[] = new Array(unique.length).fill(false);
-    let next = 0;
-    const worker = async (): Promise<void> => {
-      while (next < unique.length) {
-        const index = next++;
-        results[index] = await this.reconcileCommand(unique[index]);
-      }
-    };
-    const workers = Array.from({ length: Math.min(this.maxConcurrentReconciliations, unique.length) }, () => worker());
-    await Promise.all(workers);
-    return results.filter(Boolean).length;
-  }
-
-  private reconcileActive(): void {
-    void this.reconcileTracked(this.workflows.keys());
-  }
-
-  private scheduleReconcilePass(): void {
-    if (this.disposed || !this.started) return;
-    // A burst of gap/reconnect signals from the same tick shares one pass; a
-    // signal that arrives while the pass is running queues exactly one follow-up.
-    if (this.reconcileScheduled) return;
-    this.reconcileScheduled = true;
-    void Promise.resolve().then(async () => {
-      this.reconcileScheduled = false;
-      if (!this.started || this.disposed) return;
-      await this.reconcileAll();
-      if (!this.reconcileScheduled) this.gapObserved = false;
-    });
-  }
-
-  dispose(): void {
-    this.disposed = true;
-    this.stop();
-    this.clearSweepTimer();
-    this.reconcileScheduled = false;
-    this.gapObserved = false;
-    this.workflows.clear();
-    this.terminalAt.clear();
-    this.retainedProjections.clear();
-    this.reconciliations.clear();
-    this.listeners.clear();
-    for (const unsubscribe of this.projectionSubscriptions.values()) unsubscribe();
-    this.projectionSubscriptions.clear();
-    this.bridge.dispose();
-    // Effect Scope finalizers stop every acquired XState actor exactly once.
-    this.workflowScope.close();
-  }
-
-  /** UI projection subscription: read-only, never writes workflow state. */
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => { this.listeners.delete(listener); };
+    return this.scheduler.scheduleMany(unique);
   }
 
   /**
-   * Recent read-only projection: live workflows first, then the retained
+   * Recent read-only projection: live workflows first, then the store's retained
    * terminal projection of an evicted workflow so the UI row does not vanish.
    */
   getProjection(commandId: string): CommandWorkflowProjection | undefined {
-    return this.workflows.get(commandId)?.projection ?? this.retainedProjections.get(commandId);
+    return this.workflows.get(commandId)?.projection ?? this.projectionStore.peek(commandId);
   }
 
   get workflowCount(): number {
@@ -338,7 +380,11 @@ export class FabRuntime {
   }
 
   get retainedProjectionCount(): number {
-    return this.retainedProjections.size;
+    return this.projectionStore.retainedCount;
+  }
+
+  get projectionAtomCount(): number {
+    return this.projectionStore.size;
   }
 
   get pendingCount(): number {
@@ -369,12 +415,215 @@ export class FabRuntime {
     return this.lastEviction;
   }
 
+  get reconciliationStats(): FabReconciliationSchedulerStats {
+    return this.scheduler.stats;
+  }
+
+  get lastReconciliationDrop(): ReconciliationDropDiagnostic | undefined {
+    return this.lastDrop;
+  }
+
+  get lastDirtySignal(): CommandStreamDirty | undefined {
+    return this.lastDirty;
+  }
+
+  get lastJournalPage(): CommandJournalPage | undefined {
+    return this.lastJournalPageValue;
+  }
+
+  get lastRecoveryList(): CommandRecoveryList | undefined {
+    return this.lastRecoveryListValue;
+  }
+
+  get lifecycleCounts(): FabRuntimeLifecycleCounts {
+    return { created: this.createdWorkflows, finalized: this.finalizedWorkflows };
+  }
+
+  /**
+   * Fixed teardown order (ADR-007 §2): scheduler -> transport -> command scopes ->
+   * projections -> FabScope. Idempotent; Scope finalizers guarantee exactly-once.
+   */
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.stop();
+    this.scheduler.dispose();
+    this.runtime.runSync(Scope.close(this.transportScope, Exit.void));
+    for (const [commandId, commandScope] of [...this.commandScopes]) {
+      this.commandScopes.delete(commandId);
+      this.runtime.runSync(Scope.close(commandScope, Exit.void));
+    }
+    this.workflows.clear();
+    this.terminalAt.clear();
+    for (const unsubscribe of this.projectionSubscriptions.values()) unsubscribe();
+    this.projectionSubscriptions.clear();
+    this.clearSweepTimer();
+    this.recoveryRequest = undefined;
+    this.passPending = false;
+    this.bridge.dispose();
+    this.correlation.clear();
+    this.projectionStore.invalidateAll();
+    // Child scopes are closed; closing FabScope also cascades anything left and
+    // is idempotent, so a Runtime-level AppScope close can never double-finalize.
+    this.runtime.runSync(Scope.close(this.fabScope, Exit.void));
+  }
+
+  private subscribeSignals(): void {
+    const subscribe = <A>(stream: import('effect').Stream.Stream<A>, handler: (value: A) => void): void => {
+      this.signalFibers.push(runCommandStream(this.runtime, this.transportScope, stream, handler));
+    };
+    if (this.source.gaps) {
+      subscribe(this.source.gaps, (gap) => {
+        this.gapObserved = true;
+        this.requestRecovery({ journal: { epoch: gap.epoch, sequence: gap.sequence }, list: false });
+      });
+    }
+    if (this.source.reconnected) {
+      subscribe(this.source.reconnected, () => {
+        this.requestRecovery({ list: true });
+      });
+    }
+    if (this.source.transportFailures) {
+      subscribe(this.source.transportFailures, (failure) => {
+        this.lastTransportFailure = failure;
+        this.requestRecovery({ list: true });
+      });
+    }
+    if (this.source.connectionStatus) {
+      subscribe(this.source.connectionStatus, (status) => {
+        this.connectionStatus = status;
+      });
+    }
+    if (this.source.dirty) {
+      subscribe(this.source.dirty, (dirty) => this.onDirty(dirty));
+    }
+  }
+
+  private onDirty(dirty: CommandStreamDirty): void {
+    this.lastDirty = dirty;
+    this.gapObserved = true;
+    const cursor: JournalCursor = {
+      ...(dirty.epoch !== undefined ? { epoch: dirty.epoch } : {}),
+      ...(dirty.sequence !== undefined ? { sequence: dirty.sequence } : {}),
+    };
+    this.requestRecovery(
+      dirty.epoch !== undefined || dirty.sequence !== undefined ? { journal: cursor, list: false } : { list: true },
+    );
+  }
+
+  private resolveReconciliationTarget(commandId: string): { workflow: CommandWorkflow; isCurrent: () => boolean } | undefined {
+    const workflow = this.workflows.get(commandId);
+    if (!workflow) return undefined;
+    if (isTerminalOutcome(workflow.projection?.outcome)) return undefined;
+    return {
+      workflow,
+      isCurrent: () => !this.disposed && this.workflows.get(commandId) === workflow,
+    };
+  }
+
+  private isTerminalCommand(commandId: string): boolean {
+    return isTerminalOutcome(this.workflows.get(commandId)?.projection?.outcome);
+  }
+
+  /**
+   * Coalesced recovery pass: one journal/list recovery followed by one scheduler
+   * batch over the tracked commands. Gap/reconnect/overflow bursts share it.
+   */
+  private requestRecovery(request: { journal?: JournalCursor; list?: boolean }): void {
+    if (this.disposed || !this.started) return;
+    const previous = this.recoveryRequest;
+    this.recoveryRequest = {
+      journal: request.journal ?? previous?.journal,
+      list: request.list === true || previous?.list === true,
+    };
+    if (this.passRunning) {
+      this.passPending = true;
+      return;
+    }
+    if (this.passScheduled) return;
+    this.passScheduled = true;
+    queueMicrotask(() => {
+      this.passScheduled = false;
+      void this.runRecoveryPass();
+    });
+  }
+
+  private async runRecoveryPass(): Promise<void> {
+    if (this.disposed) return;
+    this.passRunning = true;
+    try {
+      const request = this.recoveryRequest;
+      this.recoveryRequest = undefined;
+      if (request?.journal && this.gateway) await this.recoverFromJournal(request.journal);
+      if (request?.list && this.gateway) await this.recoverFromAuthoritativeList();
+      if (this.recoveryRequest !== undefined) this.passPending = true;
+      await this.scheduler.scheduleMany(this.workflows.keys());
+    } catch {
+      // Recovery is best-effort at this boundary; the next gap/reconnect retries.
+    } finally {
+      this.passRunning = false;
+      this.gapObserved = false;
+      if (this.passPending || this.recoveryRequest !== undefined) {
+        this.passPending = false;
+        this.requestRecovery({});
+      }
+    }
+  }
+
+  /** Page the journal from a broken cursor; hasGap falls back to list recovery. */
+  private async recoverFromJournal(cursor: JournalCursor): Promise<void> {
+    if (!this.gateway || this.disposed) return;
+    try {
+      const page = await this.gateway.getCommandJournalPage(this.siteId, this.fabId, {
+        ...(cursor.epoch !== undefined ? { epoch: cursor.epoch } : {}),
+        ...(cursor.sequence !== undefined ? { afterSequence: cursor.sequence } : {}),
+        limit: 256,
+      });
+      if (this.disposed) return;
+      this.lastJournalPageValue = page;
+      if (page.hasGap) {
+        await this.recoverFromAuthoritativeList();
+        return;
+      }
+      for (const event of page.events) {
+        if (event.fabId !== this.fabId) continue;
+        this.bridge.receive(toResultEvent(event));
+      }
+    } catch {
+      // Keep the dirty/gap signal authoritative: the next pass or reconnect retries.
+    }
+  }
+
+  /** Authoritative list recovery after refresh/严重 gap/transport recovery (ADR-008 §2.4). */
+  private async recoverFromAuthoritativeList(): Promise<void> {
+    if (!this.gateway || this.disposed) return;
+    try {
+      const list = await this.gateway.listFabCommands(this.siteId, this.fabId, 'active');
+      if (this.disposed) return;
+      this.lastRecoveryListValue = list;
+      for (const record of list.commands) {
+        if (this.disposed) return;
+        if (record.fabId !== this.fabId) continue;
+        if (record.terminal) continue;
+        // Unconfirmed commands from a previous page lifetime are tracked and then
+        // reconciled; the local stream may hold no evidence for them.
+        if (!this.workflows.has(record.commandId)) this.trackCommand(record.commandId);
+        this.bridge.receive({
+          fabId: record.fabId,
+          commandId: record.commandId,
+          revision: record.revision,
+          outcome: record.outcome,
+          occurredAt: record.occurredAt,
+        });
+      }
+    } catch {
+      // Best-effort: a broken recovery endpoint must not take the runtime down.
+    }
+  }
+
   private afterDelivery(commandId: string): void {
-    // Registration, authoritative reconciliation and stream delivery all know
-    // the affected command. None needs to revisit unrelated workflows.
     this.publishProjection(commandId);
     this.recordTerminal(commandId);
-    this.notify();
   }
 
   /** Subscribe to actor snapshots before start; unsubscribe is owned with the workflow. */
@@ -391,17 +640,10 @@ export class FabRuntime {
     if (typeof startable.start === 'function') startable.start();
   }
 
-  /** The only writer of the read-only projection atom for one command. */
+  /** The only writer of the read-only projection store for one command. */
   private publishProjection(commandId: string): void {
-    if (!this.projectionRegistry) return;
     const projection = this.getProjection(commandId);
-    if (projection) {
-      this.projectionRegistry.set(commandProjectionAtom(commandProjectionKey(this.fabId, commandId)), projection);
-    }
-  }
-
-  private notify(): void {
-    for (const listener of this.listeners) listener();
+    if (projection) this.projectionStore.set(commandId, projection);
   }
 
   /** Track terminal state for one delivered command (O(1): no workflow scan). */
@@ -410,7 +652,7 @@ export class FabRuntime {
     const workflow = this.workflows.get(commandId);
     if (!workflow) return;
     const now = this.retention.now();
-    if (TERMINAL_OUTCOMES.has(workflow.projection?.outcome ?? '')) {
+    if (isTerminalOutcome(workflow.projection?.outcome)) {
       if (!this.terminalAt.has(commandId)) this.terminalAt.set(commandId, now);
     } else if (this.terminalAt.has(commandId)) {
       this.terminalAt.delete(commandId);
@@ -427,12 +669,18 @@ export class FabRuntime {
   }
 
   private scheduleSweep(): void {
-    if (this.disposed || this.terminalAt.size === 0) { this.clearSweepTimer(); return; }
+    if (this.disposed || this.terminalAt.size === 0) {
+      this.clearSweepTimer();
+      return;
+    }
     if (this.sweepTimer !== undefined) return;
     const now = this.retention.now();
     const nextExpiry = Math.min(...[...this.terminalAt.values()].map((at) => at + this.retention.terminalTtlMs));
     const delay = Math.max(1, Math.min(this.retention.sweepIntervalMs, nextExpiry - now));
-    this.sweepTimer = setTimeout(() => { this.sweepTimer = undefined; this.sweep(); }, delay);
+    this.sweepTimer = setTimeout(() => {
+      this.sweepTimer = undefined;
+      this.sweep();
+    }, delay);
   }
 
   private sweep(): void {
@@ -448,28 +696,24 @@ export class FabRuntime {
     this.scheduleSweep();
   }
 
+  /**
+   * Terminal eviction: close the command's own Scope (finalizer exactly once),
+   * keep only the bounded read-only projection and never the actor.
+   */
   private evictWorkflow(commandId: string): void {
     const workflow = this.workflows.get(commandId);
     this.terminalAt.delete(commandId);
     if (!workflow) return;
     const projection = workflow.projection;
-    this.projectionSubscriptions.get(commandId)?.();
+    const unsubscribe = this.projectionSubscriptions.get(commandId);
     this.projectionSubscriptions.delete(commandId);
-    workflow.dispose();
+    unsubscribe?.();
+    const commandScope = this.commandScopes.get(commandId);
+    this.commandScopes.delete(commandId);
     this.workflows.delete(commandId);
-    if (projection) this.rememberProjection(commandId, projection);
-    this.notify();
-  }
-
-  private rememberProjection(commandId: string, projection: CommandWorkflowProjection): void {
-    if (this.retention.maxRetainedProjections === 0) return;
-    this.retainedProjections.delete(commandId);
-    this.retainedProjections.set(commandId, projection);
-    while (this.retainedProjections.size > this.retention.maxRetainedProjections) {
-      const oldest = this.retainedProjections.keys().next().value;
-      if (oldest === undefined) break;
-      this.retainedProjections.delete(oldest);
-    }
+    if (commandScope) this.runtime.runSync(Scope.close(commandScope, Exit.void));
+    if (projection) this.projectionStore.retain(commandId, projection);
+    else this.projectionStore.forget(commandId);
   }
 
   private clearSweepTimer(): void {
@@ -477,4 +721,14 @@ export class FabRuntime {
     clearTimeout(this.sweepTimer);
     this.sweepTimer = undefined;
   }
+}
+
+function toResultEvent(event: CommandJournalEvent): CommandResultEvent {
+  return {
+    fabId: event.fabId,
+    commandId: event.commandId,
+    revision: event.revision,
+    outcome: event.outcome,
+    occurredAt: event.occurredAt,
+  };
 }

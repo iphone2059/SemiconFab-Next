@@ -1,8 +1,7 @@
 import { expect, it } from 'vitest';
-import type { CommandGateway } from '@/contracts/command-gateway.contract';
 import { CommandReconciler } from '@/runtime/command-reconciler';
 import { XStateCommandWorkflowAdapter } from '@/runtime/xstate-command-workflow-adapter';
-import { commandResult } from '../support/command-fakes.ts';
+import { commandResult, fakeCommandGateway } from '../support/command-fakes.ts';
 
 const fabId = 'fab-a';
 const commandId = 'cmd-1';
@@ -36,9 +35,9 @@ it('ignores duplicate, stale and post-terminal revisions before reaching the act
 });
 
 it('uses the authoritative reconciler to converge a workflow after a disconnect', async () => {
-  const gateway: CommandGateway = {
+  const gateway = fakeCommandGateway({
     getCommandStatus: async () => commandResult({ fabId, commandId, revision: 5, outcome: 'succeeded' }),
-  };
+  });
   const reconciler = new CommandReconciler(gateway);
   const workflow = new XStateCommandWorkflowAdapter(fabId, commandId, reconciler);
   workflow.receive(commandResult({ fabId, commandId, revision: 1, outcome: 'accepted' }));

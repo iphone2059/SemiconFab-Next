@@ -4,9 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 
 /**
- * Task 2 architecture gate: Effect execution and registry construction are
- * composition-root concerns. Business modules export Effects; they must not run
- * them or construct a second registry/runtime on their own.
+ * Phase C architecture gate (ADR-007 §2): Effect execution and registry
+ * construction are composition-root concerns. Business modules export Effects;
+ * they must not run them, construct a second registry/runtime, or own an
+ * unowned PubSub. The only allowed global Effect runner is app/app-runtime.ts.
  */
 const sourceRoot = fileURLToPath(new URL('../../src/', import.meta.url));
 
@@ -21,16 +22,10 @@ function sourceFiles(directory: string): string[] {
 }
 
 const relativeToSource = (file: string): string => relative(sourceRoot, file).replaceAll('\\', '/');
+/** Comments may describe removed APIs; gates inspect code only. */
+const stripComments = (text: string): string => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
-const ALLOWED_RUNNERS = new Set([
-  'app/app-runtime.ts',
-  // Task 4 stage B: Effect Scope owns XState actor acquire/release finalizers.
-  'runtime/command-workflow-scope.ts',
-  // Task 6: Effect Stream consumers for the plain-TS FabRuntime lifecycle.
-  'runtime/command-stream.ts',
-  // Task 6: EventSource adapter creates the shared PubSub bus once (no scope yet).
-  'realtime/command-event-source.transport.ts',
-]);
+const ALLOWED_RUNNERS = new Set(['app/app-runtime.ts']);
 const ALLOWED_REGISTRY = new Set(['app/app-runtime.ts']);
 const ALLOWED_MANAGED_RUNTIME = new Set(['app/app-runtime.ts']);
 const ALLOWED_REGISTRY_PROVIDER = new Set(['app/app-providers.tsx']);
@@ -65,4 +60,20 @@ it('constructs exactly one registry/managed runtime at the composition root', ()
   expect(violations).toEqual([]);
   const providers = readFileSync(join(sourceRoot, 'app/app-providers.tsx'), 'utf8');
   expect(providers).toContain('runtime.registry');
+});
+
+it('never constructs an unbounded PubSub or a detached command stream fiber', () => {
+  const violations: string[] = [];
+  for (const file of sourceFiles(sourceRoot)) {
+    const path = relativeToSource(file);
+    const text = stripComments(readFileSync(file, 'utf8'));
+    if (/PubSub\.unbounded/.test(text)) violations.push(path + ' constructs PubSub.unbounded');
+    if (/\bEffect\.runFork\b|\bEffect\.run\b/.test(text)) violations.push(path + ' uses a global Effect runner');
+  }
+  expect(violations).toEqual([]);
+  // The command transport must stay bounded and PubSub-free (ADR-007 §5).
+  const transport = stripComments(readFileSync(join(sourceRoot, 'realtime/command-event-source.transport.ts'), 'utf8'));
+  expect(transport).not.toMatch(/PubSub/);
+  expect(transport).toContain('capacity');
+  expect(transport).toContain("'dirty'");
 });

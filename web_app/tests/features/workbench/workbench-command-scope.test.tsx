@@ -3,9 +3,11 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
+import * as Atom from 'effect/reactivity/Atom';
 import { RuntimeProvider } from '@/app/runtime-provider';
 import { CommandConsole } from '@/workbench/command-console';
 import type { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
+import type { CommandWorkflowProjection } from '@/contracts/command-workflow.contract';
 import type { SubmitEquipmentCommandInput, SubmittedEquipmentCommand } from '@/api/commands.mutation';
 import { createTestRuntime, ResourceTestProviders } from '../../support/resource-test-runtime.tsx';
 
@@ -17,8 +19,8 @@ const submit = mutation.submitEquipmentCommand;
 
 interface FakeRuntime {
   trackCommand: ReturnType<typeof vi.fn>;
-  subscribe: ReturnType<typeof vi.fn>;
-  getProjection: ReturnType<typeof vi.fn>;
+  /** The only projection read path of the new contract: a bounded per-runtime Atom. */
+  projectionAtom: ReturnType<typeof vi.fn>;
 }
 
 interface RegistryFixture {
@@ -27,10 +29,17 @@ interface RegistryFixture {
 }
 
 function createRegistry(): RegistryFixture {
+  const atoms = new Map<string, Atom.Writable<CommandWorkflowProjection | undefined, CommandWorkflowProjection | undefined>>();
+  const atomFor = (commandId: string) => {
+    const existing = atoms.get(commandId);
+    if (existing) return existing;
+    const atom = Atom.make<CommandWorkflowProjection | undefined>(undefined);
+    atoms.set(commandId, atom);
+    return atom;
+  };
   const createRuntime = (): FakeRuntime => ({
     trackCommand: vi.fn(),
-    subscribe: vi.fn(() => () => {}),
-    getProjection: vi.fn(() => undefined),
+    projectionAtom: vi.fn((commandId: string) => atomFor(commandId)),
   });
   const runtime = createRuntime();
   const registry = { get: (fabId: string) => fabId === 'fab-a' ? runtime : undefined } as unknown as FabRuntimeRegistry;
@@ -209,14 +218,16 @@ it('tracks a submission on the configured FAB and drops its row when the site sc
 
   await waitFor(() => expect(runtime.trackCommand).toHaveBeenCalledWith('cmd-a-1'));
   await waitFor(() => expect(console.text()).toContain('cmd-a-1'.slice(0, 8)));
-  // The projection row queries the runtime of the FAB that submitted the command.
-  await waitFor(() => expect(runtime.getProjection).toHaveBeenCalledWith('cmd-a-1'));
-  runtime.getProjection.mockClear();
+  // The projection row reads the Atom of the FAB that submitted the command, and
+  // no value was published by this fake runtime -> the row shows the waiting state.
+  await waitFor(() => expect(runtime.projectionAtom).toHaveBeenCalledWith('cmd-a-1'));
+  expect(console.text()).toContain('等待 SSE 事件…');
+  runtime.projectionAtom.mockClear();
 
   console.rerender({ siteId: 'site-b', fabId: 'fab-a' });
   expect(console.text()).not.toContain('cmd-a-1'.slice(0, 8));
   expect(console.text()).toContain('还没有命令');
   // The old scope's row cannot query the runtime after the console resets.
-  expect(runtime.getProjection).not.toHaveBeenCalled();
+  expect(runtime.projectionAtom).not.toHaveBeenCalled();
   expect(runtime.trackCommand).toHaveBeenCalledTimes(1);
 });

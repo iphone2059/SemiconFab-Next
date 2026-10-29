@@ -33,6 +33,29 @@ export interface CommandStreamGap {
 
 export type CommandConnectionStatus = 'connecting' | 'open' | 'reconnecting' | 'failed';
 
+/**
+ * Why the bounded command transport bus could not deliver every frame. A dirty
+ * signal is a correctness event, never a counter-only diagnostic: the consumer
+ * must run authoritative reconciliation through the FAB scheduler (ADR-007 §5).
+ */
+export type CommandStreamDirtyReason = 'overflow' | 'slow-consumer' | 'stale-generation' | 'closed';
+
+/**
+ * The transport dropped frames (slow consumer, bounded-bus overflow, a callback
+ * from a stale connection generation, or a connection that could not be
+ * established). The monotonic `droppedCount` preserves the loss amount even when
+ * several dirty signals coalesce; it is never silently discarded.
+ */
+export interface CommandStreamDirty {
+  readonly reason: CommandStreamDirtyReason;
+  /** Monotonic total frame drops observed by this transport. */
+  readonly droppedCount: number;
+  /** Journal epoch last observed when the drop happened, when known. */
+  readonly epoch?: string;
+  /** Journal sequence last observed when the drop happened, when known. */
+  readonly sequence?: number;
+}
+
 /** Transport-level command stream failure; never a business command outcome. */
 export interface CommandTransportFailure {
   readonly message: string;
@@ -57,6 +80,13 @@ export interface CommandEventSource {
    * a command failed/cancelled outcome.
    */
   readonly transportFailures?: Stream.Stream<CommandTransportFailure>;
+  /**
+   * Bounded-bus overflow/coalescing signal. A delivered dirty frame means every
+   * tracked active command must be reconciled authoritatively; the signal is
+   * carried on its own coalescing channel so overflow of the result bus cannot
+   * silence it.
+   */
+  readonly dirty?: Stream.Stream<CommandStreamDirty>;
 }
 
 export interface AlarmEvent {

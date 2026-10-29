@@ -1,4 +1,7 @@
-import { runCommandStream } from '@/runtime/command-stream';
+import type * as Fiber from 'effect/Fiber';
+import type { Scope } from 'effect';
+import { runCommandStream, stopCommandStream } from '@/runtime/command-stream';
+import type { RuntimeHost } from '@/runtime/fab-runtime-host';
 import type { CommandEventSource, CommandResultEvent } from '@/contracts/command-events.contract';
 import type { CommandGateway } from '@/contracts/command-gateway.contract';
 import type { CommandWorkflowRegistry } from '@/contracts/command-workflow.contract';
@@ -14,6 +17,10 @@ export interface CommandEventBridgeOptions {
   readonly onUncorrelated?: (event: CommandResultEvent) => void;
   /** Called after a result is delivered to a workflow (used by Runtime projections). */
   readonly onResultDelivered?: (event: CommandResultEvent) => void;
+  /** Approved Effect execution boundary (AppRuntime satisfies it structurally). */
+  readonly runtime: RuntimeHost;
+  /** CommandTransportScope: the only owner of the command-result consumer fiber. */
+  readonly scope: Scope.Scope;
 }
 
 /**
@@ -22,9 +29,12 @@ export interface CommandEventBridgeOptions {
  * knows neither WebSocket nor XState; the Runtime assembles all three (ADR-0010,
  * ARCH-07/09). Missing workflows are not dropped: the result is held for a retry
  * pass or backend reconciliation.
+ *
+ * The consumer fiber is forked into the supplied CommandTransportScope, not the
+ * global Effect runtime (ADR-007 §2).
  */
 export class CommandEventBridge {
-  private stopCommandStream?: () => void;
+  private commandFiber?: Fiber.Fiber<void, never>;
   private readonly correlation: CommandCorrelationRegistry;
   private readonly recovery: CommandEventRecovery;
   private started = false;
@@ -32,7 +42,7 @@ export class CommandEventBridge {
   constructor(
     private readonly source: CommandEventSource,
     private readonly workflows: CommandWorkflowRegistry,
-    private readonly options: CommandEventBridgeOptions = {},
+    private readonly options: CommandEventBridgeOptions,
   ) {
     this.correlation = options.correlation ?? new CommandCorrelationRegistry();
     this.recovery = options.recovery ?? new CommandEventRecovery();
@@ -41,13 +51,21 @@ export class CommandEventBridge {
   start(): void {
     if (this.started) return;
     this.started = true;
-    this.stopCommandStream = runCommandStream(this.source.commandResults, (event) => this.receive(event));
+    this.commandFiber = runCommandStream(
+      this.options.runtime,
+      this.options.scope,
+      this.source.commandResults,
+      (event) => {
+        if (this.started) this.receive(event);
+      },
+    );
   }
 
   stop(): void {
-    this.stopCommandStream?.();
-    this.stopCommandStream = undefined;
     this.started = false;
+    const fiber = this.commandFiber;
+    this.commandFiber = undefined;
+    if (fiber) stopCommandStream(this.options.runtime, fiber);
   }
 
   /** Visible for tests and Runtime-driven injection of a single decoded frame. */
@@ -99,6 +117,10 @@ export class CommandEventBridge {
 
   get recoveryQueue(): CommandEventRecovery {
     return this.recovery;
+  }
+
+  get running(): boolean {
+    return this.started;
   }
 
   private deliver(event: CommandResultEvent): void {

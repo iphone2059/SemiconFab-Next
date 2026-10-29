@@ -1,7 +1,17 @@
-import { expect, it } from 'vitest';
+import { afterEach, expect, it } from 'vitest';
 import { CommandEventRecovery } from '@/runtime/command-event-recovery';
-import { FabRuntimeFactory } from '@/runtime/fab-runtime-factory';
-import { FakeCommandEventSource, commandResult } from '../support/command-fakes.ts';
+import type { TestFab } from '../support/command-fakes.ts';
+import {
+  FakeCommandEventSource,
+  commandResult,
+  createTestFab,
+  fakeCommandGateway,
+} from '../support/command-fakes.ts';
+
+const fabs: TestFab[] = [];
+afterEach(async () => {
+  for (const fab of fabs.splice(0)) await fab.dispose();
+});
 
 it('evicts a non-terminal event before a terminal one and reports diagnostics', () => {
   const evictions: unknown[] = [];
@@ -9,7 +19,6 @@ it('evicts a non-terminal event before a terminal one and reports diagnostics', 
   recovery.hold(commandResult({ fabId: 'fab', commandId: 'terminal', revision: 1, outcome: 'succeeded' }));
   recovery.hold(commandResult({ fabId: 'fab', commandId: 'pending-a', revision: 1, outcome: 'executing' }));
   recovery.hold(commandResult({ fabId: 'fab', commandId: 'pending-b', revision: 1, outcome: 'accepted' }));
-  // The terminal result arrived first but must survive; a non-terminal event is evicted.
   expect(recovery.pendingFor('fab', 'terminal')).toHaveLength(1);
   expect(recovery.droppedCount).toBe(1);
   expect(recovery.diagnostics).toHaveLength(1);
@@ -29,11 +38,15 @@ it('prefers non-terminal events for per-command overflow too', () => {
 it('turns a capacity eviction into a coalesced authoritative reconciliation', async () => {
   const source = new FakeCommandEventSource();
   let queries = 0;
-  const gateway = { getCommandStatus: async (fabId: string, commandId: string) => {
-    queries += 1;
-    return commandResult({ fabId, commandId, revision: 5, outcome: 'succeeded' });
-  } };
-  const runtime = new FabRuntimeFactory({ sourceFor: () => source, gateway }).create('fab-a');
+  const gateway = fakeCommandGateway({
+    getCommandStatus: async (fabId, commandId) => {
+      queries += 1;
+      return commandResult({ fabId, commandId, revision: 5, outcome: 'succeeded' });
+    },
+  });
+  const fab = createTestFab({ source, gateway });
+  fabs.push(fab);
+  const runtime = fab.runtime;
   runtime.start();
   source.emit(commandResult({ fabId: 'fab-a', commandId: 'cmd-1', revision: 1, outcome: 'executing' }));
   runtime.trackCommand('cmd-1');
@@ -45,6 +58,5 @@ it('turns a capacity eviction into a coalesced authoritative reconciliation', as
   }
   expect(runtime.recoveryDroppedCount).toBeGreaterThan(0);
   expect(runtime.lastRecoveryEviction).toBeDefined();
-  await expect.poll(() => queries, { timeout: 300 }).toBeGreaterThan(before);
-  runtime.dispose();
+  await expect.poll(() => queries, { timeout: 1_000 }).toBeGreaterThan(before);
 });

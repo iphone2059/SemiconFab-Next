@@ -1,89 +1,126 @@
-import { describe, expect, it } from 'vitest';
-import type { CommandGateway } from '@/contracts/command-gateway.contract';
+import { afterEach, describe, expect, it } from 'vitest';
+import type { FabRuntime } from '@/runtime/fab-runtime';
 import { XStateCommandWorkflowAdapter } from '@/runtime/xstate-command-workflow-adapter';
 import { FabLifecycleCoordinator } from '@/runtime/fab-lifecycle-coordinator';
-import { FabRuntimeFactory } from '@/runtime/fab-runtime-factory';
 import { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
-import { FakeCommandEventSource, commandResult } from '../support/command-fakes.ts';
+import {
+  FakeCommandEventSource,
+  type TestFab,
+  type TestFabOptions,
+  commandResult,
+  createTestFab,
+  fakeCommandGateway,
+} from '../support/command-fakes.ts';
 
 const commandId = 'cmd-1';
 
-function adapter(runtime: { getWorkflow(id: string): unknown }): XStateCommandWorkflowAdapter {
+const fabs: TestFab[] = [];
+afterEach(async () => {
+  for (const fab of fabs.splice(0)) await fab.dispose();
+});
+
+function createFab(options: TestFabOptions = {}): TestFab {
+  const fab = createTestFab(options);
+  fabs.push(fab);
+  return fab;
+}
+
+function adapter(runtime: FabRuntime): XStateCommandWorkflowAdapter {
   const workflow = runtime.getWorkflow(commandId);
   if (!(workflow instanceof XStateCommandWorkflowAdapter)) throw new Error('expected XState adapter');
   return workflow;
 }
 
 describe('FabRuntime single-FAB assembly (CE-07)', () => {
-  it('replaces the FAB runtime without carrying its old workflow or source into the new generation', () => {
+  it('replaces the FAB runtime without carrying its old workflow or source into the new generation', async () => {
     const oldSource = new FakeCommandEventSource();
     const newSource = new FakeCommandEventSource();
     const registry = new FabRuntimeRegistry();
-    const first = new FabRuntimeFactory({ sourceFor: () => oldSource }).create('fab-a');
-    registry.register(first);
+    const first = createFab({ source: oldSource });
+    registry.register(first.runtime);
     expect(registry.size).toBe(1);
     expect(registry.fabIds).toEqual(['fab-a']);
     registry.startAll();
-    const oldWorkflow = first.trackCommand(commandId);
+    const oldWorkflow = first.runtime.trackCommand(commandId);
     oldSource.emit(commandResult({ fabId: 'fab-a', commandId, revision: 5, outcome: 'executing' }));
-    expect(adapter(first).state).toBe('executing');
+    expect(adapter(first.runtime).state).toBe('executing');
 
-    expect(registry.remove('fab-a')).toBe(first);
+    expect(registry.remove('fab-a')).toBe(first.runtime);
     expect(oldSource.commandObservers).toBe(0);
-    const current = new FabRuntimeFactory({ sourceFor: () => newSource }).create('fab-a');
-    registry.register(current);
+    const current = createFab({ source: newSource });
+    registry.register(current.runtime);
     registry.startAll();
-    expect(current.trackCommand(commandId)).not.toBe(oldWorkflow);
-    expect(current.getProjection(commandId)).toMatchObject({ state: 'idle', revision: -1 });
+    expect(current.runtime.trackCommand(commandId)).not.toBe(oldWorkflow);
+    expect(current.runtime.getProjection(commandId)).toMatchObject({ state: 'idle', revision: -1 });
     oldSource.emit(commandResult({ fabId: 'fab-a', commandId, revision: 6, outcome: 'succeeded' }));
     newSource.emit(commandResult({ fabId: 'unknown-fab', commandId, revision: 9, outcome: 'succeeded' }));
-    expect(current.getProjection(commandId)).toMatchObject({ state: 'idle', revision: -1 });
+    expect(current.runtime.getProjection(commandId)).toMatchObject({ state: 'idle', revision: -1 });
     newSource.emit(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'accepted' }));
     newSource.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'executing' }));
-    expect(adapter(current).context).toMatchObject({ fabId: 'fab-a', commandId, revision: 2, outcome: 'executing' });
-    expect(adapter(current).state).toBe('executing');
+    expect(adapter(current.runtime).context).toMatchObject({ fabId: 'fab-a', commandId, revision: 2, outcome: 'executing' });
+    expect(adapter(current.runtime).state).toBe('executing');
     expect(registry.size).toBe(1);
     registry.disposeAll();
     expect(registry.size).toBe(0);
     expect(newSource.commandObservers).toBe(0);
+    await Promise.all([first.dispose(), current.dispose()]);
   });
 });
 
 describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
   it('recovers a terminal result evicted before HTTP submission registers its workflow', async () => {
     const source = new FakeCommandEventSource();
-    const gateway: CommandGateway = { getCommandStatus: async (fabId, commandId) => commandResult({ fabId, commandId, revision: 2, outcome: 'succeeded' }) };
-    const runtime = new FabRuntimeFactory({ sourceFor: () => source, gateway }).create('fab-a');
+    const gateway = fakeCommandGateway({
+      getCommandStatus: async (fabId, targetCommandId) =>
+        commandResult({ fabId, commandId: targetCommandId, revision: 2, outcome: 'succeeded' }),
+    });
+    const { runtime } = createFab({ source, gateway });
     runtime.start();
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'succeeded' }));
-    for (let index = 0; index < 256; index++) source.emit(commandResult({ fabId: 'fab-a', commandId: `other-${index}`, revision: 2, outcome: 'succeeded' }));
+    for (let index = 0; index < 256; index++) {
+      source.emit(commandResult({ fabId: 'fab-a', commandId: 'other-' + index, revision: 2, outcome: 'succeeded' }));
+    }
     runtime.trackCommand(commandId);
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'succeeded' }));
-    await expect.poll(() => runtime.getProjection(commandId)?.outcome, { timeout: 150 }).toBe('succeeded');
-    runtime.dispose();
+    await expect.poll(() => runtime.getProjection(commandId)?.outcome, { timeout: 500 }).toBe('succeeded');
   });
 
   it('automatically reconciles active commands when the source reconnects', async () => {
     const source = new FakeCommandEventSource();
     let outcome: 'accepted' | 'succeeded' = 'accepted';
-    const gateway: CommandGateway = { getCommandStatus: async (fabId, commandId) => commandResult({ fabId, commandId, revision: outcome === 'accepted' ? 0 : 2, outcome }) };
-    const runtime = new FabRuntimeFactory({ sourceFor: () => source, gateway }).create('fab-a');
-    runtime.start(); runtime.trackCommand(commandId);
+    const gateway = fakeCommandGateway({
+      getCommandStatus: async (fabId, targetCommandId) =>
+        commandResult({ fabId, commandId: targetCommandId, revision: outcome === 'accepted' ? 0 : 2, outcome }),
+    });
+    const { runtime } = createFab({ source, gateway });
+    runtime.start();
+    runtime.trackCommand(commandId);
     await runtime.reconcileCommand(commandId);
-    outcome = 'succeeded'; source.reconnect();
-    await expect.poll(() => runtime.getProjection(commandId)?.outcome, { timeout: 150 }).toBe('succeeded');
-    runtime.dispose();
+    outcome = 'succeeded';
+    source.reconnect();
+    await expect.poll(() => runtime.getProjection(commandId)?.outcome, { timeout: 500 }).toBe('succeeded');
   });
 
   it('coalesces authoritative queries and ignores their results after disposal', async () => {
     const source = new FakeCommandEventSource();
     let complete!: (event: ReturnType<typeof commandResult>) => void;
     let queries = 0;
-    const gateway: CommandGateway = { getCommandStatus: () => { queries++; return new Promise(resolve => { complete = resolve; }); } };
-    const runtime = new FabRuntimeFactory({ sourceFor: () => source, gateway }).create('fab-a');
-    runtime.start(); runtime.trackCommand(commandId);
+    const gateway = fakeCommandGateway({
+      getCommandStatus: () => {
+        queries++;
+        return new Promise((resolve) => {
+          complete = resolve;
+        });
+      },
+    });
+    const { runtime } = createFab({ source, gateway });
+    runtime.start();
+    runtime.trackCommand(commandId);
     const pending = runtime.reconcileCommand(commandId);
     const concurrent = runtime.reconcileCommand(commandId);
+    // The scheduler runs items on a scoped fiber; the duplicate calls merged into
+    // one single-flight query.
+    await new Promise((resolve) => setTimeout(resolve, 10));
     expect(queries).toBe(1);
     runtime.dispose();
     complete(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'succeeded' }));
@@ -96,24 +133,27 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
   it('contains failed background recovery and retries when the connection returns', async () => {
     const source = new FakeCommandEventSource();
     let available = false;
-    const gateway: CommandGateway = { getCommandStatus: async (fabId, commandId) => {
-      if (!available) throw new Error('offline');
-      return commandResult({ fabId, commandId, revision: 2, outcome: 'succeeded' });
-    } };
-    const runtime = new FabRuntimeFactory({ sourceFor: () => source, gateway }).create('fab-a');
-    runtime.start(); runtime.trackCommand(commandId);
+    const gateway = fakeCommandGateway({
+      getCommandStatus: async (fabId, targetCommandId) => {
+        if (!available) throw new Error('offline');
+        return commandResult({ fabId, commandId: targetCommandId, revision: 2, outcome: 'succeeded' });
+      },
+    });
+    const { runtime } = createFab({ source, gateway });
+    runtime.start();
+    runtime.trackCommand(commandId);
     await expect(runtime.reconcileCommand(commandId)).resolves.toBe(false);
-    available = true; source.reconnect();
-    await expect.poll(() => runtime.getProjection(commandId)?.outcome, { timeout: 150 }).toBe('succeeded');
-    runtime.dispose();
+    available = true;
+    source.reconnect();
+    await expect.poll(() => runtime.getProjection(commandId)?.outcome, { timeout: 500 }).toBe('succeeded');
   });
 
   it('converges through the authoritative gateway after the stream stops (CE-06)', async () => {
     const source = new FakeCommandEventSource();
-    const gateway: CommandGateway = {
+    const gateway = fakeCommandGateway({
       getCommandStatus: async () => commandResult({ fabId: 'fab-a', commandId, revision: 3, outcome: 'succeeded' }),
-    };
-    const runtime = new FabRuntimeFactory({ sourceFor: () => source, gateway }).create('fab-a');
+    });
+    const { runtime } = createFab({ source, gateway });
     runtime.start();
     runtime.trackCommand(commandId);
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'accepted' }));
@@ -122,25 +162,24 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     expect(adapter(runtime).state).toBe('accepted');
     await expect(runtime.reconcileCommand(commandId)).resolves.toBe(true);
     expect(adapter(runtime).state).toBe('succeeded');
-    runtime.dispose();
   });
 
   it('replays results that arrive before trackCommand created the workflow (CE-04 runtime path)', () => {
     const source = new FakeCommandEventSource();
-    const runtime = new FabRuntimeFactory({ sourceFor: () => source }).create('fab-a');
+    const { runtime } = createFab({ source });
     runtime.start();
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'succeeded' }));
     expect(runtime.pendingCount).toBe(1);
     expect(runtime.trackCommand(commandId)).toBeInstanceOf(XStateCommandWorkflowAdapter);
     expect(adapter(runtime).state).toBe('succeeded');
     expect(runtime.pendingCount).toBe(0);
-    runtime.dispose();
   });
 
-  it('stops delivery and disposes workflows/runtimes on lifecycle shutdown (CE-08)', () => {
+  it('stops delivery and disposes workflows/runtimes on lifecycle shutdown (CE-08)', async () => {
     const source = new FakeCommandEventSource();
+    const created = createFab({ source });
     const registry = new FabRuntimeRegistry();
-    registry.register(new FabRuntimeFactory({ sourceFor: () => source }).create('fab-a'));
+    registry.register(created.runtime);
     const lifecycle = new FabLifecycleCoordinator(registry);
     lifecycle.start();
     registry.get('fab-a')!.trackCommand(commandId);
@@ -153,25 +192,23 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     expect(lifecycle.running).toBe(false);
   });
 
-  it('exposes read-only workflow projections and notifies UI subscribers', () => {
+  it('exposes read-only workflow projections through the bounded atom store', async () => {
     const source = new FakeCommandEventSource();
-    const runtime = new FabRuntimeFactory({ sourceFor: () => source }).create('fab-a');
-    const notifications: number[] = [];
-    runtime.subscribe(() => notifications.push(notifications.length));
+    const created = createFab({ source });
+    const runtime = created.runtime;
     runtime.start();
     runtime.trackCommand(commandId);
-    expect(runtime.getProjection(commandId)).toMatchObject({ state: 'idle', revision: -1, outcome: 'pending' });
+    const atom = runtime.projectionAtom(commandId);
+    expect(created.harness.registry.get(atom)).toMatchObject({ state: 'idle', revision: -1, outcome: 'pending' });
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'accepted' }));
-    expect(runtime.getProjection(commandId)).toMatchObject({ state: 'accepted', revision: 1, outcome: 'accepted' });
-    expect(notifications.length).toBeGreaterThan(0);
-    runtime.dispose();
+    expect(created.harness.registry.get(atom)).toMatchObject({ state: 'accepted', revision: 1, outcome: 'accepted' });
+    expect(runtime.getProjection(commandId)).toMatchObject({ state: 'accepted', revision: 1 });
   });
 
   it('exposes reconcileCommand only when a gateway is assembled', async () => {
     const source = new FakeCommandEventSource();
-    const runtime = new FabRuntimeFactory({ sourceFor: () => source }).create('fab-a');
+    const { runtime } = createFab({ source });
     runtime.trackCommand(commandId);
     await expect(runtime.reconcileCommand(commandId)).resolves.toBe(false);
-    runtime.dispose();
   });
 });
