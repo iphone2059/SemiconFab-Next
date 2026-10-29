@@ -1,18 +1,15 @@
+import type { ResourcePolicy } from '@/api/resource';
+
+export type { ResourcePolicy };
+
 /**
- * Central resource policies (Task 5). freshnessMs controls revalidation on
- * mount/navigation; idleTtlMs controls Atom retention after the last consumer;
- * pollMs is only active while a consumer is mounted (no global polling).
- *
- * These values are the documented replacement for the previous Query
+ * Central resource policies. freshnessMs controls revalidation on mount/navigation;
+ * idleTtlMs controls manager/Atom retention after the last consumer; pollMs is owned
+ * by the ResourceManager and is only active while at least one consumer is retained
+ * (never a per-component timer). These values replace the previous Query
  * staleTime/gcTime/refetchInterval combination; they are deliberately not a
  * Query-compatible cache configuration.
  */
-export interface ResourcePolicy {
-  readonly freshnessMs: number;
-  readonly idleTtlMs: number;
-  readonly pollMs?: number;
-}
-
 export const RESOURCE_POLICIES = {
   sites: { freshnessMs: 30_000, idleTtlMs: 300_000 },
   catalog: { freshnessMs: 60_000, idleTtlMs: 300_000 },

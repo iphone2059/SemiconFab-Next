@@ -2,14 +2,14 @@ import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { useCallback, useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
-import { waferRoutesResource } from '@/api/wafer.resource';
+import { waferRoutesDefinition } from '@/api/wafer.resource';
 import { useResource } from '@/api/use-resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import type { WaferProduct } from '@/domain/wafer-route';
 import { createWaferTimeline, type WaferHud, type WaferTimeline } from '@/domain/wafer-timeline';
 import { buildWaferScenario } from '@/domain/wafer-scenario';
 import { localeAtom } from '@/state/locale.atom';
-import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
+import { twinWaferActions, twinWaferAtom } from '@/twin/twin-wafer.atom';
 import { twinUiAtom, twinUiActions } from '@/twin/twin-ui.atom';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
 import type { TwinLanguage } from '@/twin/twin-i18n';
@@ -54,7 +54,7 @@ export interface TwinWaferPlayback {
 export function useWaferPlayback({ scene, waferActive, language, endTour, t }: TwinWaferPlaybackParams): TwinWaferPlayback {
   const registry = useContext(RegistryContext);
   const appRuntime = useAppRuntime();
-  const waferRoutesView = useResource(appRuntime, waferRoutesResource, { enabled: waferActive });
+  const waferRoutesView = useResource(appRuntime, waferRoutesDefinition, { enabled: waferActive });
   const waferTimelineRef = useRef<WaferTimeline | null>(null);
   const waferHudRef = useRef<WaferHud | null>(null);
   const waferRoutes = waferRoutesView.data;
@@ -76,7 +76,7 @@ export function useWaferPlayback({ scene, waferActive, language, endTour, t }: T
     const frame = controller.readFrame();
     if (frame.hud !== waferHudRef.current) {
       waferHudRef.current = frame.hud;
-      twinPageActions.waferFrameReceived(registry, { product: frame.product as WaferProduct, index: frame.index,
+      twinWaferActions.waferFrameReceived(registry, { product: frame.product as WaferProduct, index: frame.index,
         hud: frame.hud, completed: controller.readStats().completed });
     }
     if (frame.playing !== registry.get(twinUiAtom).wafer.playing) twinUiActions.waferPlay(registry, frame.playing);
@@ -90,7 +90,7 @@ export function useWaferPlayback({ scene, waferActive, language, endTour, t }: T
     if (!controller) {
       controller = createWaferTimeline({
         ...buildWaferScenario(waferRoutes, registry.get(localeAtom).language),
-        product: registry.get(twinPageAtom).wafer.product,
+        product: registry.get(twinWaferAtom).product,
       });
       controller.setSpeed(registry.get(twinUiAtom).wafer.speed);
       waferTimelineRef.current = controller;
@@ -108,7 +108,7 @@ export function useWaferPlayback({ scene, waferActive, language, endTour, t }: T
       const current = controller.readFrame();
       const { x, y, z } = current.position;
       scene.current?.setWaferPoint(x, y, z, true, false, current.rotationY);
-      if (registry.get(twinPageAtom).wafer.follow) {
+      if (registry.get(twinWaferAtom).follow) {
         scene.current?.setCameraPose([current.camera.x, current.camera.y, current.camera.z], [x, y, z], 0);
       }
       scene.current?.setWaferTrail(controller.readTrailPoints().map(point => [point.x, point.y, point.z]));
@@ -161,7 +161,7 @@ export function useWaferPlayback({ scene, waferActive, language, endTour, t }: T
   }
 
   function clearFollowOnCameraInteraction(): void {
-    if (registry.get(twinPageAtom).wafer.follow) twinPageActions.waferFollowSet(registry, false);
+    if (registry.get(twinWaferAtom).follow) twinWaferActions.waferFollowSet(registry, false);
   }
 
   return {

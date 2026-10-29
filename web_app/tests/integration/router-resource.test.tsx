@@ -1,7 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { loadSites, requireFabSites } from '@/routes/route-data';
-import { ensureResource } from '@/api/resource';
-import { sitesResource } from '@/api/sites.resource';
+import { sitesDefinition } from '@/api/sites.resource';
 import { createTestRuntime } from '../support/resource-test-runtime.tsx';
 
 const sites = [{
@@ -15,17 +14,18 @@ it('RES-01: loader prefetch and page ensure share one in-flight sites request', 
   const fetch = vi.fn(async () => json(sites));
   vi.stubGlobal('fetch', fetch);
   const runtime = createTestRuntime();
+  const manager = runtime.resources;
   const [preloaded, mounted] = await Promise.all([
     loadSites(runtime),
-    ensureResource(runtime, sitesResource),
+    manager.ensure(manager.handle(sitesDefinition)),
   ]);
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(preloaded).toEqual(mounted);
   expect(mounted).toEqual(sites);
   // A fresh page mount inside the 30s freshness window reuses the Atom.
-  expect(await ensureResource(runtime, sitesResource)).toEqual(sites);
+  expect(await manager.ensure(manager.handle(sitesDefinition))).toEqual(sites);
   expect(fetch).toHaveBeenCalledTimes(1);
-  runtime.dispose();
+  await runtime.dispose();
 });
 
 it('RES-02: an abandoned loader waiter does not abort the read used by other consumers', async () => {
@@ -36,13 +36,14 @@ it('RES-02: an abandoned loader waiter does not abort the read used by other con
   });
   vi.stubGlobal('fetch', fetch);
   const runtime = createTestRuntime();
+  const manager = runtime.resources;
   const abandoned = loadSites(runtime);
-  const shared = ensureResource(runtime, sitesResource);
+  const shared = manager.ensure(manager.handle(sitesDefinition));
   // The first promise is intentionally ignored: the resource read must still finish.
   void abandoned.catch(() => undefined);
   await expect(shared).resolves.toEqual(sites);
   expect(signal?.aborted).toBe(false);
-  runtime.dispose();
+  await runtime.dispose();
 });
 
 it('RES-03: unknown FAB fails the route from the same resource identity without redirect', async () => {
@@ -50,7 +51,7 @@ it('RES-03: unknown FAB fails the route from the same resource identity without 
   const runtime = createTestRuntime();
   await expect(requireFabSites(runtime, '37793fb6-5679-b7a3-3fef-d970433697c1')).resolves.toMatchObject({ siteId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' });
   await expect(requireFabSites(runtime, 'unknown-fab')).rejects.toThrow(/FAB 不存在/);
-  runtime.dispose();
+  await runtime.dispose();
 });
 
 it('RES-04: loader failure is typed and a retry reuses the same Atom', async () => {
@@ -58,8 +59,8 @@ it('RES-04: loader failure is typed and a retry reuses the same Atom', async () 
   vi.stubGlobal('fetch', failing);
   const runtime = createTestRuntime();
   await expect(loadSites(runtime)).rejects.toThrow(/缺少开发密钥/);
-  expect(runtime.registry.get(sitesResource.atom)._tag).toBe('Failure');
+  expect(runtime.resources.state(runtime.resources.handle(sitesDefinition))._tag).toBe('Failure');
   vi.stubGlobal('fetch', vi.fn(async () => json(sites)));
   await expect(loadSites(runtime)).resolves.toEqual(sites);
-  runtime.dispose();
+  await runtime.dispose();
 });

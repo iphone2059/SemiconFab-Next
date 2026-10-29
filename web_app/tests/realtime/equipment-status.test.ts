@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createEquipmentStatusGate, createOrderedEquipmentStatusConsumer } from '@/realtime/equipment-status.gate';
+import { compareEquipmentStatusSnapshot } from '@/realtime/equipment-status.gate';
 import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
 import { watchEquipmentStatus } from '@/realtime/equipment-status.transport';
 
@@ -50,35 +50,22 @@ it('rejects a site-only legacy frame and a crossed FAB frame', () => {
 });
 
 it('orders complete frames by (epoch, sequence), not timestamp', () => {
-  const onSnapshot = vi.fn();
-  const onInvalid = vi.fn();
-  const apply = createOrderedEquipmentStatusConsumer(scope, 2, onSnapshot, onInvalid);
-  expect(apply(base())).toBe(true);
-  expect(apply(base({ sequence: 1, generatedAt: '2026-10-24T03:00:00Z' }))).toBe(false);
-  expect(apply(base({ sequence: 2, generatedAt: '2026-10-24T01:00:00Z' }))).toBe(true);
-  expect(apply(base({ epoch: 2, sequence: 0 }))).toBe(true);
-  expect(apply(base({ epoch: 1, sequence: 500 }))).toBe(false);
-  expect(onSnapshot).toHaveBeenCalledTimes(3);
-  expect(onInvalid).not.toHaveBeenCalled();
+  // The transport never reorders; the commit comparison owns ordering. Feed the
+  // decoded frames through the same pure contract the resource manager uses.
+  const frames = [base(), base({ sequence: 1, generatedAt: '2026-10-24T03:00:00Z' }), base({ sequence: 2, generatedAt: '2026-10-24T01:00:00Z' }), base({ epoch: 2, sequence: 0 }), base({ epoch: 1, sequence: 500 })];
+  const verdicts: string[] = [];
+  let highWater: { epoch: number; sequence: number } | undefined;
+  for (const frame of frames) {
+    const verdict = compareEquipmentStatusSnapshot(scope, 2, highWater, frame);
+    verdicts.push(verdict._tag);
+    if (verdict._tag === 'Accept') highWater = { epoch: verdict.snapshot.epoch, sequence: verdict.snapshot.sequence };
+  }
+  expect(verdicts).toEqual(['Accept', 'Reject', 'Accept', 'Accept', 'Reject']);
 });
 
-it('rejects invalid frame shapes without advancing the ordering watermark', () => {
-  const onInvalid = vi.fn();
-  const gate = createEquipmentStatusGate(scope, 2, onInvalid);
-  expect(gate.accept(base({ tools: [{ state: 'running' }] }))).toBeUndefined();
-  expect(gate.accept({ ...base(), epoch: undefined })).toBeUndefined();
-  expect(gate.accept({ ...base(), sequence: -1 })).toBeUndefined();
-  expect(gate.accept(base())).toBeDefined();
-  expect(onInvalid).toHaveBeenCalledTimes(3);
-});
-
-it('accepts a restarted epoch for the same FAB without replaying the previous generation', () => {
-  const onSnapshot = vi.fn();
-  const apply = createOrderedEquipmentStatusConsumer(scope, 2, onSnapshot);
-  expect(apply(base({ sequence: 5 }))).toBe(true);
-  expect(apply(base({ epoch: 2, sequence: 1 }))).toBe(true);
-  expect(apply(base({ epoch: 1, sequence: 6 }))).toBe(false);
-  expect(apply(base({ epoch: 2, sequence: 2 }))).toBe(true);
-  expect(onSnapshot).toHaveBeenCalledTimes(3);
-  expect(onSnapshot.mock.lastCall?.[0]).toMatchObject({ fabId: scope.fabId, epoch: 2, sequence: 2 });
+it('a correctly scoped but late frame is an ordering rejection, not a malformed frame', () => {
+  // The transport hands every structurally valid frame to the commit port; the
+  // comparison rejects it as stale without marking the stream stale.
+  const verdict = compareEquipmentStatusSnapshot(scope, 2, { epoch: 1, sequence: 10 }, base({ epoch: 1, sequence: 9 }));
+  expect(verdict).toEqual({ _tag: 'Reject', reason: 'stale' });
 });

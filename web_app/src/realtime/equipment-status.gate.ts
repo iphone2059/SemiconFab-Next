@@ -5,46 +5,42 @@ import {
 } from '@/realtime/equipment-status.protocol';
 
 /**
- * Authoritative ordering: the backend always sends both epoch and sequence.
- * Timestamps are display-only; older generations cannot win by a newer clock.
+ * Authoritative ordering metadata: epoch is the server generation, sequence is
+ * monotonic within it. Display timestamps never participate in ordering.
  */
-export interface EquipmentStatusGate {
-  readonly accept: (value: unknown) => EquipmentStatusSnapshot | undefined;
+export interface EquipmentStatusOrdering {
+  readonly epoch: number;
+  readonly sequence: number;
 }
 
-export function createEquipmentStatusGate(
-  scope: EquipmentStatusScope,
-  expectedToolCount: number,
-  onInvalid?: () => void,
-): EquipmentStatusGate {
-  let lastEpoch = -1;
-  let lastSequence = -1;
-  return {
-    accept(value: unknown): EquipmentStatusSnapshot | undefined {
-      if (!isValidEquipmentStatusSnapshot(value, scope, expectedToolCount)) {
-        onInvalid?.();
-        return undefined;
-      }
-      if (value.epoch < lastEpoch ||
-          (value.epoch === lastEpoch && value.sequence <= lastSequence)) return undefined;
-      lastEpoch = value.epoch;
-      lastSequence = value.sequence;
-      return value;
-    },
-  };
-}
+/** Pure ordering verdict: an accepted snapshot or the rejection reason. */
+export type EquipmentStatusComparison =
+  | { readonly _tag: 'Accept'; readonly snapshot: EquipmentStatusSnapshot }
+  | { readonly _tag: 'Reject'; readonly reason: 'invalid' | 'stale' };
 
-export function createOrderedEquipmentStatusConsumer(
+/**
+ * Stateless ordered-acceptance comparison (ADR-006 §2.9).
+ *
+ * The previous mutable gate owned a second copy of the epoch/sequence high-water,
+ * which could disagree with the Atom across Activate/reset handovers (G06). This
+ * function holds no state: the caller passes the currently accepted high-water
+ * read from the same Atom inside one synchronous commit step, and decides
+ * Publish | Ignore from the verdict. It validates through protocol.ts so REST,
+ * SSE and recovery frames cannot disagree about the scope or payload shape.
+ */
+export function compareEquipmentStatusSnapshot(
   scope: EquipmentStatusScope,
   expectedToolCount: number,
-  onSnapshot: (snapshot: EquipmentStatusSnapshot) => void,
-  onInvalid?: () => void,
-): (value: unknown) => boolean {
-  const gate = createEquipmentStatusGate(scope, expectedToolCount, onInvalid);
-  return (value: unknown): boolean => {
-    const accepted = gate.accept(value);
-    if (!accepted) return false;
-    onSnapshot(accepted);
-    return true;
-  };
+  previous: EquipmentStatusOrdering | undefined,
+  candidate: unknown,
+): EquipmentStatusComparison {
+  if (!isValidEquipmentStatusSnapshot(candidate, scope, expectedToolCount)) {
+    return { _tag: 'Reject', reason: 'invalid' };
+  }
+  if (previous !== undefined &&
+      (candidate.epoch < previous.epoch ||
+       (candidate.epoch === previous.epoch && candidate.sequence <= previous.sequence))) {
+    return { _tag: 'Reject', reason: 'stale' };
+  }
+  return { _tag: 'Accept', snapshot: candidate };
 }

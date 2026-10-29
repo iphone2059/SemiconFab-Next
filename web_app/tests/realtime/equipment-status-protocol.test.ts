@@ -1,6 +1,6 @@
-import { expect, it, vi } from 'vitest';
+import { expect, it } from 'vitest';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
-import { createEquipmentStatusGate } from '@/realtime/equipment-status.gate';
+import { compareEquipmentStatusSnapshot } from '@/realtime/equipment-status.gate';
 import {
   decodeEquipmentStatusFrame,
   isEquipmentStateCode,
@@ -40,15 +40,12 @@ it('decodes a large frame without truncating its tool list', () => {
   expect(decoded.tools[4_095]).toEqual({ state: 'idle' });
 });
 
-it('the ordered gate (not the decoder) owns the exact FAB tool count', () => {
-  // Structural decode accepts any positive tool count; the gate knows the layout.
+it('the ordered comparison (not the decoder) owns the exact FAB tool count', () => {
+  // Structural decode accepts any positive tool count; the commit comparison knows the layout.
   expect(() => decode(frame({ tools: tools(FAB_LAYOUT.length + 1) }))).not.toThrow();
-  const onInvalid = vi.fn();
-  const gate = createEquipmentStatusGate(scope, FAB_LAYOUT.length, onInvalid);
-  expect(gate.accept(frame({ tools: tools(FAB_LAYOUT.length) }))).toBeDefined();
-  expect(gate.accept(frame({ tools: tools(FAB_LAYOUT.length + 1) }))).toBeUndefined();
-  expect(gate.accept(frame({ tools: tools(FAB_LAYOUT.length - 1) }))).toBeUndefined();
-  expect(onInvalid).toHaveBeenCalledTimes(2);
+  expect(compareEquipmentStatusSnapshot(scope, FAB_LAYOUT.length, undefined, frame({ tools: tools(FAB_LAYOUT.length) }))._tag).toBe('Accept');
+  expect(compareEquipmentStatusSnapshot(scope, FAB_LAYOUT.length, undefined, frame({ tools: tools(FAB_LAYOUT.length + 1) }))).toEqual({ _tag: 'Reject', reason: 'invalid' });
+  expect(compareEquipmentStatusSnapshot(scope, FAB_LAYOUT.length, undefined, frame({ tools: tools(FAB_LAYOUT.length - 1) }))).toEqual({ _tag: 'Reject', reason: 'invalid' });
 });
 
 it('rejects malformed JSON and non-object payloads', () => {
@@ -104,7 +101,7 @@ it('isInScope requires both Site and FAB identities', () => {
   expect(isInScope({ siteId: 'other-site', fabId: 'fab-a' }, scope)).toBe(false);
 });
 
-it('the shared snapshot validator drives both the decoder and the gate', () => {
+it('the shared snapshot validator drives both the decoder and the ordered comparison', () => {
   expect(isValidEquipmentStatusSnapshot(frame(), scope, 2)).toBe(true);
   expect(isValidEquipmentStatusSnapshot(frame(), scope, 3)).toBe(false);
   // undefined count = structural SSE rule: at least one well-formed tool.
@@ -114,14 +111,12 @@ it('the shared snapshot validator drives both the decoder and the gate', () => {
   expect(isEquipmentStateCode('MAINT')).toBe(false);
 });
 
-it('decode never orders frames: a well-formed late frame reaches the ordered gate', () => {
-  const onInvalid = vi.fn();
-  const gate = createEquipmentStatusGate(scope, 2, onInvalid);
-  expect(gate.accept(decode(frame({ sequence: 5 })))).toBeDefined();
+it('decode never orders frames: a well-formed late frame reaches the ordered comparison', () => {
+  const first = decode(frame({ sequence: 5 }));
+  expect(compareEquipmentStatusSnapshot(scope, 2, undefined, first)._tag).toBe('Accept');
   // A duplicate/late frame is well-formed, so the SSE transport must not mark the
-  // stream stale for it; the gate drops it silently (ordering, not invalid data).
+  // stream stale for it; the comparison rejects it as stale (ordering, not invalid data).
   const late = decode(frame({ sequence: 4 }));
   expect(late.sequence).toBe(4);
-  expect(gate.accept(late)).toBeUndefined();
-  expect(onInvalid).not.toHaveBeenCalled();
+  expect(compareEquipmentStatusSnapshot(scope, 2, { epoch: first.epoch, sequence: first.sequence }, late)).toEqual({ _tag: 'Reject', reason: 'stale' });
 });

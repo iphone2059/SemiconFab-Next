@@ -1,16 +1,16 @@
 import type { AppRuntime } from '@/app/app-runtime';
 import type { SiteDto } from '@/contracts/app-contracts';
-import { ensureResource } from '@/api/resource';
-import { findSiteByFabId, sitesResource } from '@/api/sites.resource';
+import { findSiteByFabId, sitesDefinition } from '@/api/sites.resource';
 
 /**
- * Route loaders read the sites document through the shared AppRuntime resource
- * facade; a loader prefetch, intent preload and page mount share the same Atom
- * and in-flight read. There are no redirects: an unavailable API or an unknown
- * FAB fails the route and the root error component owns the retry/back path.
+ * Route loaders read the sites document through the AppRuntime ResourceManager
+ * (ADR-006 §2.10): a loader prefetch, intent preload and page mount share the same
+ * manager handle, Atom and in-flight read. There are no redirects: an unavailable
+ * API or an unknown FAB fails the route and the root error component owns the
+ * retry/back path; no second cache or module-level promise exists.
  */
 export async function loadSites(runtime: AppRuntime<never>): Promise<SiteDto[]> {
-  return ensureResource(runtime, sitesResource);
+  return runtime.resources.ensure(runtime.resources.handle(sitesDefinition));
 }
 
 export async function requireFabSites(runtime: AppRuntime<never>, fabId: string): Promise<SiteDto> {

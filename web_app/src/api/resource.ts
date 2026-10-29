@@ -1,141 +1,178 @@
-import { Duration, Effect, Option } from 'effect';
-import * as AsyncResult from 'effect/reactivity/AsyncResult';
-import * as Atom from 'effect/reactivity/Atom';
+import type { Effect } from 'effect';
+import type * as AsyncResult from 'effect/reactivity/AsyncResult';
+import type * as Atom from 'effect/reactivity/Atom';
 import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
-import type { AppRuntime } from '@/app/app-runtime';
-import type { ResourcePolicy } from '@/api/resource-policy';
+import type * as Fiber from 'effect/Fiber';
+import type * as ManagedRuntime from 'effect/ManagedRuntime';
+import type * as Scope from 'effect/Scope';
 
 /**
- * A remote resource Atom: one writable AsyncResult cell per logical resource
- * identity, plus the Effect used to load it. The Atom is the only value owner;
- * freshness/idle TTL are control metadata (not a second cache).
+ * Phase B resource identity and commit protocol (ADR-006 §2.8, frozen API).
+ *
+ * A {@link ResourceDefinition} is an immutable description of one logical remote
+ * resource: its canonical key, the Effect that loads it, its freshness/idle/poll
+ * policy and (optionally) the ordered-acceptance hook. Definitions carry no
+ * mutable request state, so two AppRuntimes never share request coordination.
+ *
+ * The single snapshot owner is the {@link ResourceHandle.atom} created by the
+ * owning {@link ResourceManager}; every read completion, SSE push, mutation
+ * result and recovery snapshot must pass through the manager's synchronous
+ * Publish | Ignore commit function (ADR-006 §2.4).
  */
-export interface ResourceOptions<A> {
-  /**
-   * Ordered-acceptance hook used by resources whose writes must pass a shared
-   * gate (equipment status REST/SSE). Returning a value writes it; throwing makes
-   * the read fail without overwriting the last accepted value.
-   */
-  readonly accept?: (next: A, previous: A | undefined, registry: AtomRegistry.AtomRegistry) => A;
+export type ResourceKey = string;
+
+/** Freshness/idle/poll policy. Freshness and idle TTL are deliberately distinct. */
+export interface ResourcePolicy {
+  /** Age at which a retained success is refreshed on mount/navigation. */
+  readonly freshnessMs: number;
+  /** Zero-subscriber retention before the manager releases the resource entry. */
+  readonly idleTtlMs: number;
+  /** Poll interval while at least one consumer is retained (never per component). */
+  readonly pollMs?: number;
 }
 
-export interface Resource<A, E> {
-  readonly atom: Atom.Writable<AsyncResult.AsyncResult<A, E>, AsyncResult.AsyncResult<A, E>>;
+/** Why a candidate was not published. Every Ignore appends a bounded diagnostic. */
+export type IgnoreReason =
+  | 'disposed'
+  | 'scope-closed'
+  | 'stale-request'
+  | 'superseded-write'
+  | 'rejected'
+  | 'capacity';
+
+/** The single commit exit: Publish writes the Atom exactly once; Ignore never writes. */
+export type CommitDecision<A> =
+  | { readonly _tag: 'Publish'; readonly value: A }
+  | { readonly _tag: 'Ignore'; readonly reason: IgnoreReason };
+
+/** Synchronous commit context handed to {@link ResourceDefinition.accept}. */
+export interface ResourceCommitContext<A> {
+  /** The value currently owned by this Atom, read in the same synchronous commit step. */
+  readonly current: AsyncResult.AsyncResult<A, unknown>;
+  readonly origin: 'read' | 'push' | 'mutation' | 'recovery';
+  readonly requestId: number | undefined;
+  /** writeSeq observed when the candidate request started (read origins only). */
+  readonly baselineWriteSeq: number;
+  /** writeSeq at commit time. */
+  readonly writeSeq: number;
+  /** ResourceScope generation of the owning manager entry. */
+  readonly scopeGeneration: number;
+}
+
+/** Immutable resource definition. Static resources export one; dynamic ones are manager-cached. */
+export interface ResourceDefinition<A, E> {
+  readonly key: ResourceKey;
   readonly load: Effect.Effect<A, E, never>;
   readonly policy: ResourcePolicy;
-  readonly accept?: ResourceOptions<A>['accept'];
+  /**
+   * Ordered-acceptance hook: reads the current Atom state from `context.current`
+   * (never a captured previous value), validates the candidate and returns
+   * Publish | Ignore. Must be synchronous and side-effect free.
+   */
+  readonly accept?: (next: A, context: ResourceCommitContext<A>) => CommitDecision<A>;
 }
 
-/** Deterministic family keyed by logical identity; repeated calls return the same Resource. */
-export function resourceFamily<Key extends string, A, E>(
-  create: (key: Key) => Resource<A, E>,
-): (key: Key) => Resource<A, E> {
-  const cache = new Map<Key, Resource<A, E>>();
-  return (key: Key): Resource<A, E> => {
-    const existing = cache.get(key);
-    if (existing) return existing;
-    const created = create(key);
-    cache.set(key, created);
-    return created;
-  };
+/** Stable handle for one (manager, key) resource; the Atom is the only value owner. */
+export interface ResourceHandle<A, E> {
+  readonly key: ResourceKey;
+  readonly atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>;
+  readonly definition: ResourceDefinition<A, E>;
 }
 
-export function makeResource<A, E>(
-  load: Effect.Effect<A, E, never>,
-  policy: ResourcePolicy,
-  options: ResourceOptions<A> = {},
-): Resource<A, E> {
-  const atom = Atom.writable<AsyncResult.AsyncResult<A, E>, AsyncResult.AsyncResult<A, E>>(
-    () => AsyncResult.initial<A, E>(),
-    (context, value) => context.setSelf(value),
-  ).pipe(Atom.setIdleTTL(Duration.millis(policy.idleTtlMs)));
-  return { atom, load, policy, accept: options.accept };
+/** Bounded diagnostic record for Ignore decisions (newest last, max 32 entries). */
+export interface ResourceDiagnostic {
+  readonly key: ResourceKey;
+  readonly origin: 'read' | 'push' | 'mutation' | 'recovery';
+  readonly reason: IgnoreReason;
+  readonly requestId?: number;
 }
 
-/** One in-flight load per Resource instance; every waiter shares the same request. */
-const inFlight = new WeakMap<Resource<unknown, unknown>, Promise<unknown>>();
-
-function currentSuccess<A, E>(
-  registry: AtomRegistry.AtomRegistry,
-  resource: Resource<A, E>,
-): Option.Option<AsyncResult.Success<A, E>> {
-  const current = registry.get(resource.atom);
-  if (AsyncResult.isSuccess(current)) return Option.some(current);
-  if (AsyncResult.isFailure(current)) return current.previousSuccess;
-  return Option.none();
+/** Manager statistics used by boundedness gates (CORE-006). */
+export interface ResourceManagerStats {
+  readonly entries: number;
+  readonly inFlight: number;
+  readonly polling: number;
+  readonly scopes: number;
 }
 
 /**
- * Starts or joins the resource read. A failure keeps the previous successful
- * value inside the Atom (AsyncResult.previousSuccess) and returns a typed error;
- * callers must never treat the retained value as freshly validated.
+ * Structural runtime surface owned by the manager (an AppRuntime satisfies it).
+ * It deliberately avoids importing app/app-runtime to keep the module graph
+ * acyclic while preserving the frozen `manager.runtime` identity.
  */
-export function refreshResource<A, E>(runtime: AppRuntime<never>, resource: Resource<A, E>): Promise<A> {
-  if (runtime.disposed) return Promise.reject(new Error('AppRuntime is disposed'));
-  const existing = inFlight.get(resource as Resource<unknown, unknown>);
-  if (existing) return existing as Promise<A>;
-
-  const registry = runtime.registry;
-  const previous = currentSuccess(registry, resource);
-  const previousValue = Option.getOrUndefined(previous);
-  if (previousValue) registry.set(resource.atom, AsyncResult.success(previousValue.value, { waiting: true }));
-
-  const request = runtime.runPromise(resource.load)
-    .then((value) => {
-      if (runtime.disposed) return value;
-      const accepted = resource.accept ? resource.accept(value, previousValue?.value, registry) : value;
-      registry.set(resource.atom, AsyncResult.success(accepted));
-      return accepted;
-    })
-    .catch((error: E) => {
-      if (!runtime.disposed) registry.set(resource.atom, AsyncResult.failWithPrevious(error, { previous }));
-      throw error;
-    })
-    .finally(() => { inFlight.delete(resource as Resource<unknown, unknown>); });
-
-  inFlight.set(resource as Resource<unknown, unknown>, request);
-  return request;
+export interface ResourceRuntime {
+  readonly registry: AtomRegistry.AtomRegistry;
+  readonly services: ManagedRuntime.ManagedRuntime<never, never>;
+  readonly rootScope: Scope.Closeable;
+  readonly disposed: boolean;
 }
 
-/**
- * Freshness-on-mount/navigation helper: a fresh success is reused without a
- * request; stale/missing values refresh and share the in-flight read. This is the
- * explicit replacement for Query staleTime because Atom reclaims an idle node
- * after its TTL instead of revalidating on every mount.
- */
-export async function ensureResource<A, E>(runtime: AppRuntime<never>, resource: Resource<A, E>): Promise<A> {
-  if (runtime.disposed) throw new Error('AppRuntime is disposed');
-  const current = runtime.registry.get(resource.atom);
-  if (AsyncResult.isSuccess(current)) {
-    const age = Date.now() - current.timestamp;
-    if (age < resource.policy.freshnessMs) return current.value;
+/** Explicit resource-system manager, one per AppRuntime (ADR-006 §2.2/§2.6). */
+export interface ResourceManager<Runtime extends ResourceRuntime = ResourceRuntime> {
+  /** The owning application runtime (identity, not a copy). */
+  readonly runtime: Runtime;
+  /** Stable handle for a definition key; creates the manager entry when absent. */
+  handle<A, E>(definition: ResourceDefinition<A, E>): ResourceHandle<A, E>;
+  /** Current Atom state (Initial / Loading / Ready / Refreshing / Failed*). */
+  state<A, E>(handle: ResourceHandle<A, E>): AsyncResult.AsyncResult<A, E>;
+  /** Retained value (including the last success behind a typed failure). */
+  value<A, E>(handle: ResourceHandle<A, E>): A | undefined;
+  /** Freshness-on-mount read: reuse a fresh success, otherwise refresh (single-flight). */
+  ensure<A, E>(handle: ResourceHandle<A, E>): Promise<A>;
+  /** Force a read (single-flight); the previous success is kept while refreshing. */
+  refresh<A, E>(handle: ResourceHandle<A, E>): Promise<A>;
+  /** Publish a transport/mutation/recovery snapshot through the commit protocol. */
+  publish<A, E>(
+    handle: ResourceHandle<A, E>,
+    value: A,
+    origin?: 'push' | 'mutation' | 'recovery',
+  ): CommitDecision<A>;
+  /** First subscriber creates the ResourceScope/poll owner; returns the release function. */
+  retain<A, E>(handle: ResourceHandle<A, E>): () => void;
+  /** Force-release the manager entry for a key (interrupts scope/fibers, deletes metadata). */
+  release(key: ResourceKey): void;
+  /** Bounded Ignore diagnostics (newest last). */
+  readonly diagnostics: readonly ResourceDiagnostic[];
+  readonly stats: ResourceManagerStats;
+  /** Marks the manager disposed and releases every entry. Idempotent; called by AppRuntime.dispose. */
+  dispose(): void;
+}
+
+/** Raised by handle() when the bounded dynamic-resource identity cache is exhausted. */
+export class ResourceCapacityError extends Error {
+  constructor(readonly key: ResourceKey, readonly capacity: number) {
+    super('Resource capacity exhausted (' + capacity + ') for key: ' + key);
+    this.name = 'ResourceCapacityError';
   }
-  return refreshResource(runtime, resource);
 }
 
-/** Writes a transport-accepted snapshot (SSE or mutation result) into the Atom. */
-export function setResourceValue<A, E>(
-  runtime: AppRuntime<never>,
-  resource: Resource<A, E>,
-  value: A,
-): void {
-  if (runtime.disposed) return;
-  runtime.registry.set(resource.atom, AsyncResult.success(value));
+/** Host dependencies of createResourceManager; provided by the AppRuntime composition root. */
+export interface ResourceManagerHost<Runtime extends ResourceRuntime = ResourceRuntime> {
+  /** The owning AppRuntime instance (exposed as manager.runtime without a module cycle). */
+  readonly runtime: Runtime;
+  readonly registry: AtomRegistry.AtomRegistry;
+  readonly services: ManagedRuntime.ManagedRuntime<never, never>;
+  readonly rootScope: Scope.Closeable;
+  readonly isDisposed: () => boolean;
 }
 
-/** Reads the retained value (including the last success behind a failure). */
-export function resourceValue<A, E>(
-  registry: AtomRegistry.AtomRegistry,
-  resource: Resource<A, E>,
-): A | undefined {
-  return Option.getOrUndefined(AsyncResult.value(registry.get(resource.atom)));
+/** In-flight control metadata (never a payload cache). */
+export interface ResourceInFlight {
+  readonly requestId: number;
+  readonly promise: Promise<unknown>;
+  readonly interrupt: () => void;
 }
 
-/** Explicit invalidation used by mutations; never a global cache clear. */
-export function invalidateResource<A, E>(runtime: AppRuntime<never>, resource: Resource<A, E>): void {
-  void refreshResource(runtime, resource).catch(() => {
-    /* error is stored in the Atom; callers surface it from there */
-  });
+/** Identity helper that keeps definition files annotation-free while preserving A/E inference. */
+export function defineResource<A, E>(definition: ResourceDefinition<A, E>): ResourceDefinition<A, E> {
+  return definition;
 }
 
-/** No cache-clear helper: resource identity is precise, invalidation is per-resource. */
+/** Exposed for tests/architecture checks: the immutable Atom cell factory used by the manager. */
+export const resourceAtomIdleTTL = (policy: ResourcePolicy): number => policy.idleTtlMs;
+
+/** Type-only helper retained for callers that only need the load signature. */
+export type ResourceLoad<A, E> = Effect.Effect<A, E, never>;
+
+/** Type-only helper: handles are manager-owned; a Fiber type import keeps the contract explicit. */
+export type ResourceFiber<A, E> = Fiber.Fiber<A, E>;

@@ -2,13 +2,15 @@ import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { useEffect } from 'react';
 import type { FabDto, SiteDto } from '@/contracts/app-contracts';
-import { sitesResource } from '@/api/sites.resource';
+import { sitesDefinition } from '@/api/sites.resource';
 import { useResource } from '@/api/use-resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import { searchToQueryString, type RouterSearch } from '@/routes/route-search';
 import { languageTag, readPreferences } from '@/state/preferences.atom';
 import { localeAtom } from '@/state/locale.atom';
 import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
+import { twinPageUiActions } from '@/twin/twin-page-ui.atom';
+import { twinYmsActions } from '@/twin/twin-yms.atom';
 import { twinUiAtom, twinUiActions } from '@/twin/twin-ui.atom';
 import type { EntryMode } from '@/twin/twin-state';
 import { ONBOARDING_KEY } from '@/twin/twin-page-data';
@@ -58,7 +60,7 @@ export function useTwinRouteState({
 }: TwinRouteStateParams): TwinRouteState {
   const registry = useContext(RegistryContext);
   const appRuntime = useAppRuntime();
-  const sitesView = useResource(appRuntime, sitesResource);
+  const sitesView = useResource(appRuntime, sitesDefinition);
   const searchQuery = searchToQueryString(search ?? {});
   const searchMode = search?.mode;
   const searchLang = search?.lang;
@@ -126,9 +128,9 @@ export function useTwinRouteState({
   }, [sitesView.error, t, registry]);
 
   useEffect(() => {
-    if (routeModal === 'database' || routeModal === 'catalog') twinPageActions.infoDialogSet(registry, 'database');
-    else if (routeModal === 'arch') twinPageActions.infoDialogSet(registry, 'architecture');
-    else if (routeModal === 'yms') { twinPageActions.ymsOpenSet(registry, true); twinPageActions.ymsTabSet(registry, 'map'); }
+    if (routeModal === 'database' || routeModal === 'catalog') twinPageUiActions.infoDialogSet(registry, 'database');
+    else if (routeModal === 'arch') twinPageUiActions.infoDialogSet(registry, 'architecture');
+    else if (routeModal === 'yms') { twinYmsActions.ymsOpenSet(registry, true); twinYmsActions.ymsTabSet(registry, 'map'); }
   }, [routeModal, registry]);
 
   useEffect(() => {

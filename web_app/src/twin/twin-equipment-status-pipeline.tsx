@@ -4,8 +4,7 @@ import { useEffect, useLayoutEffect, useMemo } from 'react';
 import { watchEquipmentStatus } from '@/realtime/equipment-status.transport';
 import type { EquipmentStatusSnapshot, EquipmentStatusScope } from '@/realtime/equipment-status.protocol';
 import { FAB_LAYOUT, type FabToolState } from '@/domain/fab-layout';
-import { acceptEquipmentStatusSnapshot, activateEquipmentStatusScope, equipmentStatusResource } from '@/api/equipment.resource';
-import { resourceValue } from '@/api/resource';
+import { equipmentStatusDefinition } from '@/api/equipment.resource';
 import { useResource } from '@/api/use-resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import type { AppRuntime } from '@/app/app-runtime';
@@ -26,24 +25,30 @@ interface EquipmentStatusProjectionFrame {
 }
 
 /**
- * A01/A02: isolated subscriber for the FAB-scoped equipment status. The resource
- * Atom owns the accepted snapshot; SSE and REST share one ordering gate, and this
- * child only forwards accepted snapshots into the 100 ms page batcher, so a raw
- * frame never rerenders TwinContent/FabViewport.
+ * A01/A02: isolated subscriber for the FAB-scoped equipment status.
+ *
+ * The ResourceManager-owned Atom is the single accepted-snapshot owner (ADR-006
+ * §2.5). REST (manager poll) and SSE both commit through
+ * `resources.publish(handle, snapshot, 'push')`: the definition's accept hook reads
+ * the current (epoch, sequence) from the same Atom in the same synchronous commit
+ * step and returns Publish | Ignore. An Ignore only appends a bounded manager
+ * diagnostic — it never writes the Atom and therefore never reaches the page.
  *
  * Scope handover is atomic: pending frames from the previous FAB are cancelled in
- * a layout effect, the new scope starts with a fresh ordering high-water seeded
- * from the accepted Atom value, and every FAB-scoped store projection is cleared
- * before the browser can paint.
+ * a layout effect, the old EventSource generation is aborted, and every FAB-scoped
+ * store projection is cleared before the browser can paint.
  */
 export function EquipmentStatusPipeline({ siteId, fabId }: EquipmentStatusPipelineProps) {
   const registry = useContext(RegistryContext);
   const appRuntime = useAppRuntime();
   const scope = useMemo<EquipmentStatusScope>(() => ({ siteId, fabId }), [siteId, fabId]);
-  const resource = equipmentStatusResource(siteId, fabId);
+  const definition = useMemo(() => equipmentStatusDefinition(siteId, fabId), [siteId, fabId]);
+  const handle = useMemo(() => appRuntime.resources.handle(definition), [appRuntime, definition]);
   /** Snapshot high-water at provider/scope activation; older cached values stay in the Atom
    * (resource retention) but must not repopulate the freshly cleared UI projection. */
   const activationBaseline = useRef<{ epoch: number; sequence: number } | undefined>(undefined);
+  /** Scope generation token: a callback from a previous activation may never reach the page. */
+  const generation = useRef(0);
   // Owner object: the coalescing timer identity must survive renders.
   const batcher = useMemo(() => createCoalescedDispatcher<EquipmentStatusProjectionFrame>((frame) => {
     const states = FAB_LAYOUT.map((_, index): FabToolState => {
@@ -52,11 +57,13 @@ export function EquipmentStatusPipeline({ siteId, fabId }: EquipmentStatusPipeli
     });
     twinPageActions.liveSnapshotReceived(registry, { scope: frame.scope, states, updatedAt: frame.snapshot.generatedAt });
   }, 100), [registry]);
+
   useLayoutEffect(() => {
     // Atomic handover: cancel A's pending batch before the new ordering history
     // and projections exist, all before paint.
     batcher.cancel();
-    const cached = resourceValue(registry, equipmentStatusResource(siteId, fabId));
+    generation.current += 1;
+    const cached = appRuntime.resources.value(handle);
     // A provider/runtime replacement is a new UI lifetime: keep the Atom's high-water
     // but do not replay the pre-replacement snapshot into the freshly cleared page.
     // An ordinary unmount/remount of the same runtime may resume from the accepted
@@ -65,14 +72,13 @@ export function EquipmentStatusPipeline({ siteId, fabId }: EquipmentStatusPipeli
     const replaced = previousRuntime !== undefined && previousRuntime !== appRuntime;
     runtimeByRegistry.set(registry, appRuntime);
     activationBaseline.current = replaced && cached ? { epoch: cached.epoch, sequence: cached.sequence } : undefined;
-    activateEquipmentStatusScope(registry, scope, () => twinPageActions.statusFeedStale(registry, { scope }));
     twinPageActions.liveScopeActivated(registry, scope);
-  }, [appRuntime, batcher, fabId, registry, scope, siteId]);
+  }, [appRuntime, batcher, fabId, handle, registry, scope, siteId]);
   useLayoutEffect(() => () => batcher.cancel(), [batcher]);
 
   // The page's only REST poll subscription; the resource policy keeps it at 4s and
-  // only while this component is mounted.
-  const statusView = useResource(appRuntime, resource);
+  // only while this component is mounted (the ResourceManager owns the single timer).
+  const statusView = useResource(appRuntime, definition);
 
   // The accepted Atom value is the single snapshot owner; this is the one path
   // that feeds the throttled projection (no per-frame parent render).
@@ -95,13 +101,20 @@ export function EquipmentStatusPipeline({ siteId, fabId }: EquipmentStatusPipeli
     const source = new EventSource(
       `/api/v1/sites/${encodeURIComponent(siteId)}/fabs/${encodeURIComponent(fabId)}/equipment-status/stream`,
     );
+    const connectionGeneration = generation.current;
     watchEquipmentStatus(source, scope, (snapshot) => {
-      // One acceptance boundary: a frame the ordered consumer rejects is never
-      // written to the FAB-scoped Atom (and therefore never reaches the page).
-      acceptEquipmentStatusSnapshot(appRuntime, scope, snapshot);
-    }, () => twinPageActions.statusFeedStale(registry, { scope }), controller.signal);
-    return () => controller.abort();
-  }, [appRuntime, fabId, registry, scope, siteId]);
+      if (controller.signal.aborted || generation.current !== connectionGeneration) return;
+      // One acceptance boundary: a frame rejected by the ordered accept hook is
+      // never written to the FAB-scoped Atom (and therefore never reaches the page).
+      appRuntime.resources.publish(handle, snapshot, 'push');
+    }, () => {
+      if (!controller.signal.aborted) twinPageActions.statusFeedStale(registry, { scope });
+    }, controller.signal);
+    return () => {
+      controller.abort();
+      batcher.cancel();
+    };
+  }, [appRuntime, batcher, fabId, handle, registry, scope, siteId]);
 
   return null;
 }

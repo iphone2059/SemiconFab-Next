@@ -1,7 +1,7 @@
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { useEffect, useMemo } from 'react';
-import { researchEventsResource } from '@/api/research.resource';
+import { researchEventsDefinition } from '@/api/research.resource';
 import { useResource } from '@/api/use-resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import type { FabToolState } from '@/domain/fab-layout';
@@ -48,7 +48,7 @@ export function useResearchPlayback({
 }: TwinResearchPlaybackParams): TwinResearchPlayback {
   const registry = useContext(RegistryContext);
   const appRuntime = useAppRuntime();
-  const researchView = useResource(appRuntime, researchEventsResource, { enabled: mode === 'research' });
+  const researchView = useResource(appRuntime, researchEventsDefinition, { enabled: mode === 'research' });
 
   // A16: a parse failure is a distinct, visible state; it must not silently become
   // undefined and only reuse the network error owned by the Query.

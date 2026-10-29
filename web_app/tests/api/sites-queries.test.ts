@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { afterEach, expect, it, vi } from 'vitest';
-import { fetchSites as fetchSitesEffect, findSiteByFabId, sitesResource } from '@/api/sites.resource';
+import { fetchSites as fetchSitesEffect, findSiteByFabId, sitesDefinition } from '@/api/sites.resource';
 
 const fetchSites = (...args: Parameters<typeof fetchSitesEffect>) => Effect.runPromise(fetchSitesEffect(...args));
 
@@ -23,7 +23,8 @@ it('fetches sites through the relative URL with RTK-equivalent transport options
 });
 
 it('exposes one freshness/idle-TTL policy for every sites consumer', () => {
-  expect(sitesResource.policy).toEqual({ freshnessMs: 30_000, idleTtlMs: 300_000 });
+  expect(sitesDefinition.policy).toEqual({ freshnessMs: 30_000, idleTtlMs: 300_000 });
+  expect(sitesDefinition.key).toBe('sites');
 });
 
 it('surfaces non-2xx ProblemDetails as a descriptive Error', async () => {

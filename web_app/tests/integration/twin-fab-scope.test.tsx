@@ -140,7 +140,7 @@ it('scopes status REST + SSE to the single configured canonical route FAB', asyn
   expect(document.title).toBe('SITE-1 / FAB-A · 3D FAB');
 });
 
-it('A01: remounting the AppRuntime provider clears projections while the FAB high-water survives', async () => {
+it('A01: provider replacement starts a fresh runtime baseline; the old generation can never write into it', async () => {
   const client = setup();
   const view = renderTwin(client, 'fab-a');
   const sourceA = await streamFor('fab-a');
@@ -155,10 +155,15 @@ it('A01: remounting the AppRuntime provider clears projections while the FAB hig
   send(sourceA, frame({ sequence: 5, generatedAt: '2026-10-27T00:00:05Z', tools: tools({ 0: 'down' }) }));
   await waitFor(() => expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('down'));
   expect(registry.get(twinPageAtom).statusFeed).toEqual({ updatedAt: '2026-10-27T00:00:05Z', stale: false });
+  // The old runtime accepted the frame in its own manager-owned Atom.
+  expect(readEquipmentStatus(client, 'site-1', 'fab-a')?.sequence).toBe(5);
 
-  // Queue a frame in the 100 ms batcher and replace the provider before it can
-  // publish: pending work must not escape into the new lifetime.
+  // Queue a frame in the 100 ms batcher, then replace the provider before it can
+  // publish. ADR-006 §2.1: each AppRuntime owns its manager/Atom, so the new
+  // runtime is a new lifetime (ADR-007 §3 / CORE-009): no old state may enter it.
   send(sourceA, frame({ sequence: 6, generatedAt: '2026-10-27T00:00:06Z', tools: tools({ 0: 'maint', 1: 'idle' }) }));
+  const previousGeneration = sourceA.onmessage;
+  expect(readEquipmentStatus(client, 'site-1', 'fab-a')?.sequence, 'the old runtime owns its accepted snapshot').toBe(6);
   const replacementClient = createTestRuntime(registry);
   seedSites(replacementClient, sites);
   view.rerender(
@@ -168,27 +173,36 @@ it('A01: remounting the AppRuntime provider clears projections while the FAB hig
   );
 
   await waitFor(() => expect(sourceA.onmessage).toBeNull());
-  // The same FAB starts its new provider lifetime without old UI projections.
+  // The same FAB starts its new runtime lifetime without old UI projections or Atom values.
   expect(registry.get(twinPageAtom).liveToolStates).toEqual([...FAB_TOOL_STATES]);
   expect(registry.get(twinPageAtom).statusFeed).toBeUndefined();
   expect(registry.get(twinPageAtom).mesJobs).toEqual({});
   expect(registry.get(twinPageAtom).inspectorMes).toEqual({});
+  expect(readEquipmentStatus(replacementClient, 'site-1', 'fab-a'), 'new runtime starts from its own empty Atom').toBeUndefined();
   await flushProjection();
   expect(registry.get(twinPageAtom).liveStatusScope?.fabId).toBe('fab-a');
   expect(registry.get(twinPageAtom).liveToolStates).toEqual([...FAB_TOOL_STATES]);
 
-  // One application registry: the accepted ordering high-water survives the
-  // provider replacement, so a lower sequence from the new connection is stale...
+  // A late callback captured from the previous generation is detached and writes nothing.
+  act(() => { previousGeneration?.({ data: JSON.stringify(frame({ sequence: 99, generatedAt: '2026-10-27T00:00:09Z', tools: tools({ 0: 'down' }) })) }); });
+  await flushProjection();
+  expect(readEquipmentStatus(replacementClient, 'site-1', 'fab-a')).toBeUndefined();
+  expect(registry.get(twinPageAtom).liveToolStates).toEqual([...FAB_TOOL_STATES]);
+
+  // The new connection's first frame is the new runtime's own baseline (no cross-runtime high-water).
   const sourceNew = await streamFor('fab-a', 2);
   send(sourceNew, frame({ sequence: 1, generatedAt: '2026-10-27T00:00:20Z', tools: tools({ 0: 'idle' }) }));
   await flushProjection();
-  expect(registry.get(twinPageAtom).liveToolStates).toEqual([...FAB_TOOL_STATES]);
+  expect(readEquipmentStatus(replacementClient, 'site-1', 'fab-a')?.sequence).toBe(1);
+  expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('idle');
 
-  // ...while a genuinely newer revision repopulates the new lifetime.
-  send(sourceNew, frame({ sequence: 7, generatedAt: '2026-10-27T00:00:21Z', tools: tools({ 0: 'idle' }) }));
-  await waitFor(() => expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('idle'));
+  // Within the new runtime the ordered acceptance still applies: older/duplicate frames are ignored.
+  send(sourceNew, frame({ sequence: 1, generatedAt: '2026-10-27T00:00:21Z', tools: tools({ 0: 'maint' }) }));
+  send(sourceNew, frame({ sequence: 2, generatedAt: '2026-10-27T00:00:22Z', tools: tools({ 0: 'down' }) }));
+  await waitFor(() => expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('down'));
+  expect(readEquipmentStatus(replacementClient, 'site-1', 'fab-a')?.sequence).toBe(2);
   expect(registry.get(twinPageAtom).liveStatusScope).toEqual({ siteId: 'site-1', fabId: 'fab-a' });
-  expect(registry.get(twinPageAtom).statusFeed).toEqual({ updatedAt: '2026-10-27T00:00:21Z', stale: false });
+  expect(registry.get(twinPageAtom).statusFeed).toEqual({ updatedAt: '2026-10-27T00:00:22Z', stale: false });
 });
 
 it('A02: an SSE frame rejected by the ordered consumer never reaches the FAB-scoped resource Atom', async () => {

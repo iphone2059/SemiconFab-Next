@@ -5,8 +5,7 @@ import type { CreateRunRequest, SiteDto } from '@/contracts/app-contracts';
 import { ScopeGate, type ScopeToken } from '@/runtime/scope-gate';
 import { validateScenario } from '@/domain/simulation-scenario';
 import { createRun } from '@/api/runs.mutation';
-import { refreshResource } from '@/api/resource';
-import { runsResource } from '@/api/runs.resource';
+import { runsDefinition } from '@/api/runs.resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import { workbenchAtom, workbenchActions } from '@/workbench/workbench.atom';
 import type { WorkbenchFormState } from '@/workbench/workbench.atom';
@@ -86,7 +85,7 @@ export function useRunSubmission(site: SiteDto, form: WorkbenchFormState): RunSu
         pending.current = undefined;
         workbenchActions.runIdSet(registry, created.runId);
         // Resource invalidation is precise: only the runs list is refreshed.
-        void refreshResource(appRuntime, runsResource).catch(() => {});
+        void appRuntime.resources.refresh(appRuntime.resources.handle(runsDefinition)).catch(() => {});
       }
     } catch (error: unknown) {
       if (accepts(token)) workbenchActions.submitErrorSet(registry, errorMessage(error));

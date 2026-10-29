@@ -1,10 +1,14 @@
-import { Effect, Schema } from 'effect';
-import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
+import { Effect, Option, Schema } from 'effect';
+import * as AsyncResult from 'effect/reactivity/AsyncResult';
 import { nonEmptyString, nonNegativeInteger } from '@/api/primitives.schema';
-import { makeResource, resourceFamily, setResourceValue } from '@/api/resource';
+import { defineResource, type CommitDecision, type ResourceCommitContext, type ResourceKey } from '@/api/resource';
 import { RESOURCE_POLICIES } from '@/api/resource-policy';
-import type { EquipmentStatusSnapshot, EquipmentStatusScope } from '@/realtime/equipment-status.protocol';
-import { createEquipmentStatusGate, type EquipmentStatusGate } from '@/realtime/equipment-status.gate';
+import {
+  isValidEquipmentStatusSnapshot,
+  type EquipmentStatusScope,
+  type EquipmentStatusSnapshot,
+} from '@/realtime/equipment-status.protocol';
+import { compareEquipmentStatusSnapshot, type EquipmentStatusOrdering } from '@/realtime/equipment-status.gate';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
 import { httpTransport, decodeApiResponse, InvalidServerResponse, type ApiError } from '@/api/http.transport';
 
@@ -17,79 +21,77 @@ const equipmentStatusSchema = Schema.Struct({
   tools: Schema.Array(Schema.Struct({ state: nonEmptyString })).pipe(Schema.mutable).check(Schema.isMinLength(1)),
 });
 
-export const fetchEquipmentStatus = (siteId: string, fabId: string) => httpTransport.fetchJson(
-  `/api/v1/sites/${encodeURIComponent(siteId)}/fabs/${encodeURIComponent(fabId)}/equipment-status`,
-).pipe(Effect.flatMap(decodeApiResponse(equipmentStatusSchema, 'invalid equipment-status response')));
+/**
+ * Native REST boundary for one FAB snapshot. The wire payload is validated
+ * through the same protocol module the SSE stream uses, including the exact FAB
+ * tool count and the composite (siteId, fabId) identity, before it can reach a
+ * commit. A rejected payload fails the read; it never reaches the Atom.
+ */
+export const fetchEquipmentStatus = (siteId: string, fabId: string) => {
+  const scope: EquipmentStatusScope = { siteId, fabId };
+  return httpTransport.fetchJson(
+    `/api/v1/sites/${encodeURIComponent(siteId)}/fabs/${encodeURIComponent(fabId)}/equipment-status`,
+  ).pipe(
+    Effect.flatMap(decodeApiResponse(equipmentStatusSchema, 'invalid equipment-status response')),
+    Effect.flatMap((value) => Effect.try({
+      try: (): EquipmentStatusSnapshot => {
+        if (!isValidEquipmentStatusSnapshot(value, scope, FAB_LAYOUT.length)) {
+          throw new Error('equipment-status snapshot failed the scope/payload contract');
+        }
+        return value;
+      },
+      catch: (cause) => new InvalidServerResponse(cause instanceof Error ? cause.message : 'invalid equipment-status', cause),
+    })),
+  );
+};
+
+/** Canonical composite resource key for one FAB's equipment status (ADR-006 §2.1). */
+export const equipmentStatusKey = (siteId: string, fabId: string): ResourceKey =>
+  'equipment-status\u0000' + siteId + '\u0000' + fabId;
 
 /**
- * Per-registry accepted ordering gates. The gate is control metadata (epoch /
- * sequence high-water), never a snapshot copy; REST and SSE for one FAB share the
- * exact same instance, and two FABs never share ordering state.
+ * Accepted (epoch, sequence) high-water of one FAB, read from the Atom's own
+ * current state inside the same synchronous commit step (ADR-006 §2.5). Never a
+ * second gate object and never a captured "previous request" value.
  */
-const gatesByRegistry = new WeakMap<AtomRegistry.AtomRegistry, Map<string, { readonly gate: EquipmentStatusGate }>>();
-const scopeKey = (scope: EquipmentStatusScope): string => scope.siteId + '\u0000' + scope.fabId;
-
-function gates(registry: AtomRegistry.AtomRegistry): Map<string, { readonly gate: EquipmentStatusGate }> {
-  let value = gatesByRegistry.get(registry);
-  if (!value) { value = new Map(); gatesByRegistry.set(registry, value); }
-  return value;
+function acceptedHighWater(
+  current: AsyncResult.AsyncResult<EquipmentStatusSnapshot, unknown>,
+): EquipmentStatusOrdering | undefined {
+  const value = Option.getOrUndefined(AsyncResult.value(current));
+  return value === undefined ? undefined : { epoch: value.epoch, sequence: value.sequence };
 }
 
-export function equipmentStatusGate(registry: AtomRegistry.AtomRegistry, scope: EquipmentStatusScope): EquipmentStatusGate {
-  const key = scopeKey(scope);
-  const existing = gates(registry).get(key);
-  if (existing) return existing.gate;
-  const gate = createEquipmentStatusGate(scope, FAB_LAYOUT.length);
-  gates(registry).set(key, { gate });
-  return gate;
-}
-
-/** Fresh ordering history for a newly activated scope, seeded by the accepted Atom value. */
-export function activateEquipmentStatusScope(
-  registry: AtomRegistry.AtomRegistry,
+/**
+ * The single ordered-acceptance rule for the equipment status resource: REST,
+ * SSE pushes, reconnect snapshots and recovery snapshots all commit through the
+ * manager with this hook. Invalid frames and non-advancing generations return
+ * Ignore('rejected'); only a strictly newer (epoch, sequence) is Publish.
+ */
+export function commitEquipmentStatusSnapshot(
   scope: EquipmentStatusScope,
-  onInvalid?: () => void,
-): EquipmentStatusGate {
-  const gate = createEquipmentStatusGate(scope, FAB_LAYOUT.length, onInvalid);
-  const cached = registry.get(equipmentStatusResource(scope.siteId, scope.fabId).atom);
-  if (cached._tag === 'Success') gate.accept(cached.value);
-  gates(registry).set(scopeKey(scope), { gate });
-  return gate;
+  next: unknown,
+  context: ResourceCommitContext<EquipmentStatusSnapshot>,
+): CommitDecision<EquipmentStatusSnapshot> {
+  const verdict = compareEquipmentStatusSnapshot(scope, FAB_LAYOUT.length, acceptedHighWater(context.current), next);
+  return verdict._tag === 'Accept'
+    ? { _tag: 'Publish', value: verdict.snapshot }
+    : { _tag: 'Ignore', reason: 'rejected' };
 }
 
-export function resetEquipmentStatusGates(registry: AtomRegistry.AtomRegistry): void {
-  gatesByRegistry.delete(registry);
-}
-
-/** Single acceptance boundary shared by REST and SSE; only accepted frames reach the Atom. */
-export function acceptEquipmentStatusSnapshot(
-  runtime: import('@/app/app-runtime').AppRuntime<never>,
-  scope: EquipmentStatusScope,
-  value: unknown,
-): EquipmentStatusSnapshot | undefined {
-  const accepted = equipmentStatusGate(runtime.registry, scope).accept(value);
-  if (accepted) setResourceValue(runtime, equipmentStatusResource(scope.siteId, scope.fabId), accepted);
-  return accepted;
-}
-
-const equipmentStatusFamily = resourceFamily((key: string) => {
-  const [siteId, fabId] = key.split('\u0000');
-  const scope = { siteId, fabId };
-  return makeResource(fetchEquipmentStatus(siteId, fabId), RESOURCE_POLICIES.equipmentStatus, {
-    // REST polls go through the same ordered gate as SSE; a delayed poll cannot
-    // regress a newer accepted snapshot and never overwrites the retained value.
-    accept: (next, previous, registry) => {
-      const accepted = equipmentStatusGate(registry, scope).accept(next);
-      if (accepted) return accepted;
-      if (previous !== undefined) return previous;
-      throw new InvalidServerResponse('equipment-status snapshot rejected by the ordered acceptance gate');
-    },
+/**
+ * Immutable per-FAB equipment status definition. The manager owns the single
+ * Atom; every read/push goes through its Publish | Ignore commit protocol.
+ */
+export function equipmentStatusDefinition(siteId: string, fabId: string) {
+  const scope: EquipmentStatusScope = { siteId, fabId };
+  return defineResource({
+    key: equipmentStatusKey(siteId, fabId),
+    load: fetchEquipmentStatus(siteId, fabId),
+    policy: RESOURCE_POLICIES.equipmentStatus,
+    accept: (next: EquipmentStatusSnapshot, context: ResourceCommitContext<EquipmentStatusSnapshot>) =>
+      commitEquipmentStatusSnapshot(scope, next, context),
   });
-});
+}
 
-/** FAB-scoped equipment status resource (REST polling fallback + SSE writes). */
-export const equipmentStatusResource = (siteId: string, fabId: string) =>
-  equipmentStatusFamily(siteId + '\u0000' + fabId);
-
-/** Type alias to keep call sites explicit about the shared ApiError channel. */
+/** Explicit error channel alias for the equipment status resource. */
 export type EquipmentStatusResourceError = ApiError;

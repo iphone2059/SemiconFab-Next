@@ -25,7 +25,7 @@ import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protoc
  */
 
 const viewport = vi.hoisted(() => ({ renders: 0 }));
-vi.mock('../../src/features/twin/fab-viewer', async () => {
+vi.mock('@/twin/twin-viewer', async () => {
   const React = await import('react');
   return {
     FabViewport: React.forwardRef(function MockFabViewport() {

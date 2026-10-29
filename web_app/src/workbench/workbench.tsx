@@ -3,8 +3,8 @@ import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { useEffect } from 'react';
 import type { SiteDto } from '@/contracts/app-contracts';
-import { sitesResource } from '@/api/sites.resource';
-import { runResource, runResultsResource, runsResource } from '@/api/runs.resource';
+import { sitesDefinition } from '@/api/sites.resource';
+import { runDefinition, runResultsDefinition, runsDefinition } from '@/api/runs.resource';
 import { useResource } from '@/api/use-resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import { fab3dPath } from '@/routes/route-url-mapping';
@@ -42,13 +42,13 @@ function Workbench({ site }: { site: SiteDto }) {
   const registry = useContext(RegistryContext);
   const appRuntime = useAppRuntime();
   const { runId, form, submitError } = useAtomValue(workbenchAtom);
-  const runsView = useResource(appRuntime, runsResource);
+  const runsView = useResource(appRuntime, runsDefinition);
   const scopedRuns = ((runsView.data ?? []).filter((value) => value.siteId === site.siteId));
   const listError = runsView.error !== undefined ? errorMessage(runsView.error) : '';
-  const runView = useResource(appRuntime, runResource(runId ?? '__no-run__'), { enabled: !!runId });
+  const runView = useResource(appRuntime, runDefinition(runId ?? '__no-run__'), { enabled: !!runId });
   const runCompleted = !!runView.data && isCompleted(runView.data.status);
   // Results are only requested once the backend reports COMPLETED.
-  const resultView = useResource(appRuntime, runResultsResource(runId ?? '__no-run__'), { enabled: !!runId && runCompleted });
+  const resultView = useResource(appRuntime, runResultsDefinition(runId ?? '__no-run__'), { enabled: !!runId && runCompleted });
   const run = runView.data;
   const result = resultView.data;
   const runError = runView.error !== undefined ? errorMessage(runView.error) : resultView.error !== undefined ? errorMessage(resultView.error) : '';
@@ -96,7 +96,7 @@ export default function WorkbenchApp() {
   // React-visible revision that invalidates memoized size reads.
   const runtimeCount = runtimeVersion >= 0 ? runtimeRegistry?.size ?? 0 : 0;
   const fabIndex = useAtomValue(workbenchAtom, (state) => state.fabIndex);
-  const sitesView = useResource(appRuntime, sitesResource);
+  const sitesView = useResource(appRuntime, sitesDefinition);
   const sites = sitesView.data ?? NO_SITES;
   const loading = sitesView.isInitial;
   const error = sitesView.error !== undefined ? errorMessage(sitesView.error) : '';

@@ -1,7 +1,13 @@
-import { expect, it, vi } from 'vitest';
-import { createEquipmentStatusGate, createOrderedEquipmentStatusConsumer } from '@/realtime/equipment-status.gate';
+import { expect, it } from 'vitest';
+import { compareEquipmentStatusSnapshot } from '@/realtime/equipment-status.gate';
 import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
 
+/**
+ * Epoch/sequence ordering contract (ADR-006 §2.5/§2.9). The comparison is pure:
+ * the accepted high-water is supplied by the caller (read from the resource Atom
+ * in the same synchronous commit step), so this test pins the ordering rule
+ * itself without a second mutable gate copy.
+ */
 const scope = { siteId: 'site-1', fabId: 'fab-a' };
 const base = (patch: Partial<EquipmentStatusSnapshot> = {}): EquipmentStatusSnapshot => ({
   siteId: 'site-1', fabId: 'fab-a',
@@ -10,10 +16,10 @@ const base = (patch: Partial<EquipmentStatusSnapshot> = {}): EquipmentStatusSnap
   tools: [{ state: 'running' }, { state: 'running' }],
   ...patch,
 });
+const compare = (previous: { epoch: number; sequence: number } | undefined, candidate: unknown) =>
+  compareEquipmentStatusSnapshot(scope, 2, previous, candidate);
 
 it('requires an epoch, a sequence and a composite FAB identity', () => {
-  const onInvalid = vi.fn();
-  const gate = createEquipmentStatusGate(scope, 2, onInvalid);
   for (const invalid of [
     { ...base(), epoch: undefined },
     { ...base(), sequence: undefined },
@@ -21,39 +27,31 @@ it('requires an epoch, a sequence and a composite FAB identity', () => {
     { ...base(), epoch: -1 },
     { ...base(), epoch: 1.5 },
     { ...base(), sequence: Number.MAX_SAFE_INTEGER + 1 },
-  ]) expect(gate.accept(invalid)).toBeUndefined();
-  expect(onInvalid).toHaveBeenCalledTimes(6);
+  ]) {
+    expect(compare(undefined, invalid), JSON.stringify(invalid)).toEqual({ _tag: 'Reject', reason: 'invalid' });
+  }
 });
 
 it('rejects duplicate or lower sequence within an epoch, regardless of display time', () => {
-  const gate = createEquipmentStatusGate(scope, 2);
-  expect(gate.accept(base({ epoch: 2, sequence: 100 }))).toBeDefined();
-  expect(gate.accept(base({ epoch: 2, sequence: 100, generatedAt: '2026-10-24T01:00:10Z' }))).toBeUndefined();
-  expect(gate.accept(base({ epoch: 2, sequence: 1, generatedAt: '2026-10-24T01:00:10Z' }))).toBeUndefined();
-  expect(gate.accept(base({ epoch: 2, sequence: 101 }))).toBeDefined();
+  expect(compare({ epoch: 2, sequence: 100 }, base({ epoch: 2, sequence: 100 }))).toEqual({ _tag: 'Reject', reason: 'stale' });
+  expect(compare({ epoch: 2, sequence: 100 }, base({ epoch: 2, sequence: 100, generatedAt: '2026-10-24T01:00:10Z' }))).toEqual({ _tag: 'Reject', reason: 'stale' });
+  expect(compare({ epoch: 2, sequence: 100 }, base({ epoch: 2, sequence: 1, generatedAt: '2026-10-24T01:00:10Z' }))).toEqual({ _tag: 'Reject', reason: 'stale' });
+  expect(compare({ epoch: 2, sequence: 100 }, base({ epoch: 2, sequence: 101 }))).toEqual({ _tag: 'Accept', snapshot: base({ epoch: 2, sequence: 101 }) });
 });
 
 it('accepts a higher epoch even if sequence and display timestamp go backwards', () => {
-  const gate = createEquipmentStatusGate(scope, 2);
-  expect(gate.accept(base({ epoch: 5, sequence: 100, generatedAt: '2026-10-24T02:00:00Z' }))).toBeDefined();
+  expect(compare({ epoch: 5, sequence: 100 }, base({ epoch: 5, sequence: 100 }))).toEqual({ _tag: 'Reject', reason: 'stale' });
   const restarted = base({ epoch: 6, sequence: 0, generatedAt: '2026-10-24T01:00:00Z' });
-  expect(gate.accept(restarted)).toBe(restarted);
+  expect(compare({ epoch: 5, sequence: 100 }, restarted)).toEqual({ _tag: 'Accept', snapshot: restarted });
 });
 
-it('does not let a delayed earlier epoch override the restarted server', () => {
-  const onSnapshot = vi.fn();
-  const apply = createOrderedEquipmentStatusConsumer(scope, 2, onSnapshot);
-  expect(apply(base({ epoch: 1, sequence: 100 }))).toBe(true);
-  expect(apply(base({ epoch: 2, sequence: 1, tools: [{ state: 'down' }, { state: 'down' }] }))).toBe(true);
-  expect(apply(base({ epoch: 1, sequence: 101, generatedAt: '2026-10-24T03:00:00Z' }))).toBe(false);
-  expect(onSnapshot).toHaveBeenCalledTimes(2);
-  expect(onSnapshot.mock.calls[1][0].tools[0].state).toBe('down');
+it('a delayed earlier epoch can never override the restarted server', () => {
+  expect(compare(undefined, base({ epoch: 1, sequence: 100 }))._tag).toBe('Accept');
+  expect(compare({ epoch: 2, sequence: 1 }, base({ epoch: 2, sequence: 1, tools: [{ state: 'down' }, { state: 'down' }] }))._tag).toBe('Reject');
+  expect(compare({ epoch: 2, sequence: 1 }, base({ epoch: 1, sequence: 101, generatedAt: '2026-10-24T03:00:00Z' }))).toEqual({ _tag: 'Reject', reason: 'stale' });
 });
 
 it('treats a correctly scoped but late frame as ordering rejection, not malformed data', () => {
-  const onInvalid = vi.fn();
-  const gate = createEquipmentStatusGate(scope, 2, onInvalid);
-  expect(gate.accept(base({ epoch: 1, sequence: 10 }))).toBeDefined();
-  expect(gate.accept(base({ epoch: 1, sequence: 9 }))).toBeUndefined();
-  expect(onInvalid).not.toHaveBeenCalled();
+  expect(compare(undefined, base({ epoch: 1, sequence: 10 }))._tag).toBe('Accept');
+  expect(compare({ epoch: 1, sequence: 10 }, base({ epoch: 1, sequence: 9 }))).toEqual({ _tag: 'Reject', reason: 'stale' });
 });

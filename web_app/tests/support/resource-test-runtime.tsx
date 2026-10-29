@@ -4,13 +4,13 @@ import type { ReactNode } from 'react';
 import { AppRuntimeProvider } from '@/app/app-runtime-provider';
 import { createApplicationRuntime, type AppRuntime } from '@/app/app-runtime';
 import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
-import { resourceValue, setResourceValue, type Resource } from '@/api/resource';
-import { sitesResource } from '@/api/sites.resource';
-import { catalogResource } from '@/api/catalog.resource';
-import { runResource, runResultsResource, runsResource } from '@/api/runs.resource';
-import { researchEventsResource } from '@/api/research.resource';
-import { waferRoutesResource } from '@/api/wafer.resource';
-import { equipmentStatusResource } from '@/api/equipment.resource';
+import type { ResourceDefinition } from '@/api/resource';
+import { sitesDefinition } from '@/api/sites.resource';
+import { catalogDefinition } from '@/api/catalog.resource';
+import { runDefinition, runResultsDefinition, runsDefinition } from '@/api/runs.resource';
+import { researchEventsDefinition } from '@/api/research.resource';
+import { waferRoutesDefinition } from '@/api/wafer.resource';
+import { equipmentStatusDefinition } from '@/api/equipment.resource';
 import type { SiteDto, CatalogPageDto, RunResult, RunSummary } from '@/contracts/app-contracts';
 import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
 import type { WaferProduct, WaferRouteStep } from '@/domain/wafer-route';
@@ -22,6 +22,29 @@ export function createTestRuntime(registry?: AtomRegistry.AtomRegistry): AppRunt
   return createApplicationRuntime({ layer: Layer.empty, registry });
 }
 
+/**
+ * Seeds one resource through the manager's single commit port (the same path a
+ * transport push/mutation/recovery snapshot uses). No test writes a registry
+ * directly, so the seeded value is exactly what the commit protocol accepts.
+ */
+export function seedResource<A, E>(
+  runtime: AppRuntime<never>,
+  definition: ResourceDefinition<A, E>,
+  value: A,
+): void {
+  const manager = runtime.resources;
+  manager.publish(manager.handle(definition), value, 'recovery');
+}
+
+/** Reads the retained value of any definition through the manager (including previous success). */
+export function readResourceValue<A, E>(
+  runtime: AppRuntime<never>,
+  definition: ResourceDefinition<A, E>,
+): A | undefined {
+  const manager = runtime.resources;
+  return manager.value(manager.handle(definition));
+}
+
 /** Runtime pre-seeded with the sites document used by most page tests. */
 export function createRuntimeWithSites(sites: SiteDto[], registry?: AtomRegistry.AtomRegistry): AppRuntime<never> {
   const runtime = createTestRuntime(registry);
@@ -29,36 +52,32 @@ export function createRuntimeWithSites(sites: SiteDto[], registry?: AtomRegistry
   return runtime;
 }
 
-export function seedResource<A, E>(runtime: AppRuntime<never>, resource: Resource<A, E>, value: A): void {
-  setResourceValue(runtime, resource, value);
-}
-
 export function seedSites(runtime: AppRuntime<never>, sites: SiteDto[]): void {
-  seedResource(runtime, sitesResource, sites);
+  seedResource(runtime, sitesDefinition, sites);
 }
 
 export function seedCatalog(runtime: AppRuntime<never>, catalog: CatalogPageDto): void {
-  seedResource(runtime, catalogResource, catalog);
+  seedResource(runtime, catalogDefinition, catalog);
 }
 
 export function seedRuns(runtime: AppRuntime<never>, runs: RunSummary[]): void {
-  seedResource(runtime, runsResource, runs);
+  seedResource(runtime, runsDefinition, runs);
 }
 
 export function seedRun(runtime: AppRuntime<never>, runId: string, run: RunSummary): void {
-  seedResource(runtime, runResource(runId), run);
+  seedResource(runtime, runDefinition(runId), run);
 }
 
 export function seedRunResults(runtime: AppRuntime<never>, runId: string, results: RunResult): void {
-  seedResource(runtime, runResultsResource(runId), results);
+  seedResource(runtime, runResultsDefinition(runId), results);
 }
 
 export function seedResearchEvents(runtime: AppRuntime<never>, events: string): void {
-  seedResource(runtime, researchEventsResource, events);
+  seedResource(runtime, researchEventsDefinition, events);
 }
 
 export function seedWaferRoutes(runtime: AppRuntime<never>, routes: Record<WaferProduct, WaferRouteStep[]>): void {
-  seedResource(runtime, waferRoutesResource, routes);
+  seedResource(runtime, waferRoutesDefinition, routes);
 }
 
 export function seedEquipmentStatus(
@@ -67,7 +86,7 @@ export function seedEquipmentStatus(
   fabId: string,
   snapshot: EquipmentStatusSnapshot,
 ): void {
-  seedResource(runtime, equipmentStatusResource(siteId, fabId), snapshot);
+  seedResource(runtime, equipmentStatusDefinition(siteId, fabId), snapshot);
 }
 
 /**
@@ -87,9 +106,5 @@ export function readEquipmentStatus(
   siteId: string,
   fabId: string,
 ): EquipmentStatusSnapshot | undefined {
-  return resourceValue(runtime.registry, equipmentStatusResource(siteId, fabId));
-}
-
-export function readResourceValue<A, E>(runtime: AppRuntime<never>, resource: Resource<A, E>): A | undefined {
-  return resourceValue(runtime.registry, resource);
+  return readResourceValue(runtime, equipmentStatusDefinition(siteId, fabId));
 }

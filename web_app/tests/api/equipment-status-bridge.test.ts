@@ -1,28 +1,18 @@
-import { expect, it } from 'vitest';
-import {
-  acceptEquipmentStatusSnapshot,
-  activateEquipmentStatusScope,
-  equipmentStatusGate,
-  equipmentStatusResource,
-  resetEquipmentStatusGates,
-} from '@/api/equipment.resource';
-import { resourceValue } from '@/api/resource';
+import { afterEach, expect, it, vi } from 'vitest';
+import { equipmentStatusDefinition } from '@/api/equipment.resource';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
 import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
-import { createTestRuntime } from '../support/resource-test-runtime.tsx';
+import { createTestRuntime, type AppRuntime } from '../support/resource-test-runtime.tsx';
 
 /**
- * The per-registry ordering gate is the single acceptance boundary for REST and
- * SSE snapshots. These tests pin the cross-boundary races the plan requires:
- * same-FAB reactivation, a late callback from an old epoch, duplicate
- * epoch/sequence after an SSE reconnect, REST/SSE reordering, missing fields and
- * a large frame. The resource Atom is the only accepted-snapshot store.
+ * Equipment status single commit port (ADR-006 §2.5): REST, SSE pushes, reconnect
+ * snapshots and recovery snapshots all commit through the manager's ordered
+ * accept hook. The accepted (epoch, sequence) high-water is read from the resource
+ * Atom inside the same synchronous commit step — there is no second gate object.
  */
-
 const scopeA = { siteId: 'site-a', fabId: 'fab-1' };
 const foreignScope = { siteId: 'site-a', fabId: 'unknown-fab' };
 const tools = (state = 'running') => FAB_LAYOUT.map(() => ({ state }));
-
 const frame = (
   scope: { siteId: string; fabId: string },
   sequence: number,
@@ -37,79 +27,96 @@ const frame = (
   tools: tools(),
   ...patch,
 });
+const json = (value: unknown) => new Response(JSON.stringify(value), { status: 200, headers: { 'content-type': 'application/json' } });
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => { resolve = res; });
+  return { promise, resolve };
+};
 
-const accepted = (runtime: ReturnType<typeof createTestRuntime>, scope: { siteId: string; fabId: string }) =>
-  resourceValue(runtime.registry, equipmentStatusResource(scope.siteId, scope.fabId));
-
-it('reactivating the same FAB seeds its ordering high-water from the accepted resource Atom', () => {
-  const runtime = createTestRuntime();
-  activateEquipmentStatusScope(runtime.registry, scopeA);
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, frame(scopeA, 5, '2026-10-27T00:00:05Z'))?.sequence).toBe(5);
-  expect(equipmentStatusGate(runtime.registry, scopeA)).toBe(equipmentStatusGate(runtime.registry, scopeA));
-
-  const previousGate = equipmentStatusGate(runtime.registry, scopeA);
-  // A fresh page activation keeps the Atom's accepted history.
-  activateEquipmentStatusScope(runtime.registry, scopeA);
-  expect(equipmentStatusGate(runtime.registry, scopeA)).not.toBe(previousGate);
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, frame(foreignScope, 9, '2026-10-27T00:00:09Z'))).toBeUndefined();
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, frame(scopeA, 4, '2026-10-27T00:00:04Z'))).toBeUndefined();
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, frame(scopeA, 6, '2026-10-27T00:00:06Z'))?.sequence).toBe(6);
-  expect(accepted(runtime, scopeA)?.sequence).toBe(6);
-  runtime.dispose();
+const runtimes: AppRuntime<never>[] = [];
+const runtime = (): AppRuntime<never> => {
+  const value = createTestRuntime();
+  runtimes.push(value);
+  return value;
+};
+afterEach(async () => {
+  for (const value of runtimes.splice(0)) await value.dispose();
+  vi.unstubAllGlobals();
 });
 
-it('a late callback from the previous epoch cannot pollute the reactivated FAB Atom', () => {
-  const runtime = createTestRuntime();
-  activateEquipmentStatusScope(runtime.registry, scopeA);
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, frame(scopeA, 5, '2026-10-27T00:00:05Z'))?.sequence).toBe(5);
-  activateEquipmentStatusScope(runtime.registry, scopeA);
+const accepted = (client: AppRuntime<never>, scope: { siteId: string; fabId: string }) => {
+  const manager = client.resources;
+  return manager.value(manager.handle(equipmentStatusDefinition(scope.siteId, scope.fabId)));
+};
+
+it('accepts round-order snapshots and rejects duplicates/lower sequences without writing', () => {
+  const client = runtime();
+  const manager = client.resources;
+  const handle = manager.handle(equipmentStatusDefinition(scopeA.siteId, scopeA.fabId));
+  expect(manager.publish(handle, frame(scopeA, 5, '2026-10-27T00:00:05Z'), 'recovery')._tag).toBe('Publish');
+  expect(accepted(client, scopeA)?.sequence).toBe(5);
+  expect(manager.publish(handle, frame(scopeA, 4, '2026-10-27T00:00:04Z'), 'push')).toEqual({ _tag: 'Ignore', reason: 'rejected' });
+  expect(manager.publish(handle, frame(scopeA, 5, '2026-10-27T00:00:09Z'), 'push')).toEqual({ _tag: 'Ignore', reason: 'rejected' });
+  expect(accepted(client, scopeA)?.sequence).toBe(5);
+  expect(manager.publish(handle, frame(scopeA, 6, '2026-10-27T00:00:06Z'), 'push')._tag).toBe('Publish');
+  expect(accepted(client, scopeA)?.sequence).toBe(6);
+});
+
+it('a restarted server epoch outranks the previous sequence space, and late old-epoch frames die', () => {
+  const client = runtime();
+  const manager = client.resources;
+  const handle = manager.handle(equipmentStatusDefinition(scopeA.siteId, scopeA.fabId));
+  manager.publish(handle, frame(scopeA, 5, '2026-10-27T00:00:05Z'), 'recovery');
   const restarted = frame(scopeA, 1, '2026-10-27T00:00:10Z', { epoch: 2, tools: tools('down') });
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, restarted)).toEqual(restarted);
-  const late = frame(scopeA, 9, '2026-10-27T00:00:09Z', { tools: tools('maint') });
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, late)).toBeUndefined();
-  expect(accepted(runtime, scopeA)).toEqual(restarted);
-  runtime.dispose();
+  expect(manager.publish(handle, restarted, 'recovery')).toEqual({ _tag: 'Publish', value: restarted });
+  const late = frame(scopeA, 999, '2026-10-27T00:00:09Z', { tools: tools('maint') });
+  expect(manager.publish(handle, late, 'push')).toEqual({ _tag: 'Ignore', reason: 'rejected' });
+  expect(accepted(client, scopeA)).toEqual(restarted);
 });
 
-it('a reconnected SSE stream replaying the same epoch/sequence is a duplicate, not an Atom write', () => {
-  const runtime = createTestRuntime();
-  activateEquipmentStatusScope(runtime.registry, scopeA);
-  const first = frame(scopeA, 7, '2026-10-27T00:00:07Z');
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, first)?.sequence).toBe(7);
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, first)).toBeUndefined();
-  expect(accepted(runtime, scopeA)).toEqual(first);
-  runtime.dispose();
-});
-
-it('a delayed REST response cannot regress a newer accepted SSE Atom value', () => {
-  const runtime = createTestRuntime();
-  activateEquipmentStatusScope(runtime.registry, scopeA);
+it('a delayed REST response cannot regress a newer accepted SSE snapshot', async () => {
+  const client = runtime();
+  const manager = client.resources;
+  const handle = manager.handle(equipmentStatusDefinition(scopeA.siteId, scopeA.fabId));
+  manager.publish(handle, frame(scopeA, 10, '2026-10-27T00:00:10Z'), 'recovery');
+  const rest = deferred<Response>();
+  const fetchMock = vi.fn(() => rest.promise);
+  vi.stubGlobal('fetch', fetchMock);
+  const refresh = manager.refresh(handle);
+  await expect.poll(() => fetchMock.mock.calls.length).toBe(1);
   const sse = frame(scopeA, 12, '2026-10-27T00:00:12Z', { tools: tools('maint') });
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, sse)).toEqual(sse);
-  const delayedRest = frame(scopeA, 11, '2026-10-27T00:00:11Z', { tools: tools('idle') });
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, delayedRest)).toBeUndefined();
-  expect(accepted(runtime, scopeA)).toEqual(sse);
-  runtime.dispose();
+  expect(manager.publish(handle, sse, 'push')._tag).toBe('Publish');
+  rest.resolve(json(frame(scopeA, 11, '2026-10-27T00:00:11Z', { tools: tools('idle') })));
+  await refresh;
+  expect(accepted(client, scopeA)).toEqual(sse);
+  expect(manager.diagnostics.some((entry) => entry.reason === 'rejected')).toBe(true);
 });
 
-it('rejects missing fields, wrong tool counts and foreign FAB identities through onInvalid', () => {
-  const runtime = createTestRuntime();
-  let invalid = 0;
-  activateEquipmentStatusScope(runtime.registry, scopeA, () => { invalid += 1; });
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, { ...frame(scopeA, 1, 'x'), tools: tools().slice(0, 3) })).toBeUndefined();
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, { siteId: scopeA.siteId, fabId: scopeA.fabId, generatedAt: 'x', sequence: 2, epoch: 1 })).toBeUndefined();
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, frame(foreignScope, 3, 'x'))).toBeUndefined();
-  expect(invalid).toBe(3);
-  expect(accepted(runtime, scopeA)).toBeUndefined();
-  runtime.dispose();
+it('rejects missing fields, wrong tool counts and foreign FAB identities as diagnostics only', () => {
+  const client = runtime();
+  const manager = client.resources;
+  const handle = manager.handle(equipmentStatusDefinition(scopeA.siteId, scopeA.fabId));
+  const invalid: unknown[] = [
+    { ...frame(scopeA, 1, 'x'), tools: tools().slice(0, 3) },
+    { siteId: scopeA.siteId, fabId: scopeA.fabId, generatedAt: 'x', sequence: 2, epoch: 1 },
+    frame(foreignScope, 3, 'x'),
+  ];
+  for (const candidate of invalid) {
+    expect(manager.publish(handle, candidate as EquipmentStatusSnapshot, 'push')).toEqual({ _tag: 'Ignore', reason: 'rejected' });
+  }
+  expect(accepted(client, scopeA)).toBeUndefined();
+  expect(manager.diagnostics.filter((entry) => entry.reason === 'rejected')).toHaveLength(3);
 });
 
 it('accepts and retains a large valid frame without a second cache', () => {
-  const runtime = createTestRuntime();
-  activateEquipmentStatusScope(runtime.registry, scopeA);
-  const large = frame(scopeA, 5000, '2026-10-27T00:05:00Z', { tools: FAB_LAYOUT.map((_, index) => ({ state: index % 2 ? 'running' : 'down' })) });
-  expect(acceptEquipmentStatusSnapshot(runtime, scopeA, large)).toEqual(large);
-  expect(accepted(runtime, scopeA)).toEqual(large);
-  resetEquipmentStatusGates(runtime.registry);
-  runtime.dispose();
+  const client = runtime();
+  const manager = client.resources;
+  const handle = manager.handle(equipmentStatusDefinition(scopeA.siteId, scopeA.fabId));
+  const large = frame(scopeA, 5000, '2026-10-27T00:05:00Z', {
+    tools: FAB_LAYOUT.map((_, index) => ({ state: index % 2 ? 'running' : 'down' })),
+  });
+  expect(manager.publish(handle, large, 'recovery')).toEqual({ _tag: 'Publish', value: large });
+  expect(accepted(client, scopeA)).toEqual(large);
+  expect(manager.stats.entries).toBe(1);
 });

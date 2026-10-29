@@ -3,7 +3,7 @@ import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { useDeferredValue } from 'react';
 import type { CatalogEntryDto } from '@/contracts/app-contracts';
-import { catalogResource } from '@/api/catalog.resource';
+import { catalogDefinition } from '@/api/catalog.resource';
 import { useResource } from '@/api/use-resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import { filterCatalog, type CatalogDomain } from '@/catalog/catalog-data';
@@ -42,7 +42,7 @@ export interface CatalogDataSelection {
 export function useCatalogData(): CatalogDataSelection {
   const registry = useContext(RegistryContext);
   const appRuntime = useAppRuntime();
-  const catalogView = useResource(appRuntime, catalogResource);
+  const catalogView = useResource(appRuntime, catalogDefinition);
   const catalogState = useAtomValue(catalogAtom);
   const {
     domain, category, query, hideDrafts, selected,

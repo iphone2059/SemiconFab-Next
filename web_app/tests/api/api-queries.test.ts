@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 import { afterEach, expect, it, vi } from 'vitest';
-import { equipmentStatusGate, equipmentStatusResource, fetchEquipmentStatus } from '@/api/equipment.resource';
-import { refreshResource } from '@/api/resource';
+import { equipmentStatusDefinition, fetchEquipmentStatus } from '@/api/equipment.resource';
 import { createTestRuntime, readEquipmentStatus } from '../support/resource-test-runtime.tsx';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
 import { fetchRun, fetchRunResults, fetchRuns } from '@/api/runs.resource';
@@ -101,15 +100,16 @@ it('A03: keeps the additive server epoch through the Effect REST schema', async 
   expect(snapshot.epoch).toBe(7);
 });
 
-it('A02: a partial FAB frame is rejected by the shared ordered gate before the cache', async () => {
+it('A02: a partial FAB frame is rejected at the native boundary before the commit port', async () => {
   vi.stubGlobal('fetch', async () => jsonResponse({
     siteId: 'site-1', fabId: 'fab-1', generatedAt: '2026-10-27T00:00:00Z', sequence: 1, epoch: 1,
     tools: [{ state: 'running' }],
   }));
   const runtime = createTestRuntime();
-  equipmentStatusGate(runtime.registry, { siteId: 'site-1', fabId: 'fab-1' });
-  await expect(refreshResource(runtime, equipmentStatusResource('site-1', 'fab-1')))
-    .rejects.toThrow(/ordered acceptance gate/);
+  const manager = runtime.resources;
+  const handle = manager.handle(equipmentStatusDefinition('site-1', 'fab-1'));
+  await expect(manager.refresh(handle)).rejects.toThrow(/scope\/payload contract/);
+  // The rejected payload never reached the Atom through the single commit port.
   expect(readEquipmentStatus(runtime, 'site-1', 'fab-1')).toBeUndefined();
-  runtime.dispose();
+  await runtime.dispose();
 });
