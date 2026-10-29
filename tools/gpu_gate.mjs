@@ -47,9 +47,14 @@ if (!fabId) { console.error('gpu gate requires one configured FAB'); process.exi
 const INSTRUMENT = [
   '(function () {',
   '  window.__FAB_GPU_DEVICES__ = [];',
+  '  window.__FAB_GPU_DESTROYED__ = 0;',
   '  window.__FAB_GPU_TRACE__ = [];',
   '  const record = (kind, value) => window.__FAB_GPU_TRACE__.push({ at: Date.now(), kind, value: String(value) });',
   '  try {',
+  '    if (window.GPUDevice && window.GPUDevice.prototype.destroy) {',
+  '      const originalDestroy = window.GPUDevice.prototype.destroy;',
+  '      window.GPUDevice.prototype.destroy = function (...args) { window.__FAB_GPU_DESTROYED__ += 1; record("destroy", "destroyed#" + window.__FAB_GPU_DESTROYED__); return originalDestroy.apply(this, args); };',
+  '    }',
   '    if (window.GPUAdapter && window.GPUAdapter.prototype.requestDevice) {',
   '      const original = window.GPUAdapter.prototype.requestDevice;',
   '      window.GPUAdapter.prototype.requestDevice = async function (...args) {',
@@ -67,7 +72,7 @@ const INSTRUMENT = [
 ].join('\n');
 
 const domState = (browser) => browser.evaluate('(() => { const footer = document.querySelector("#bottom-hud-footer"); return { footer: footer ? footer.innerText.replace(/\\s+/g, " ").trim() : "", renderStatus: document.querySelector(".twin-render-status")?.innerText ?? "", webgpu: !!document.querySelector("canvas")?.getContext("webgpu"), webgl: !!document.querySelector("canvas")?.getContext("webgl"), webgl2: !!document.querySelector("canvas")?.getContext("webgl2"), ready: !!footer && footer.innerText.includes("WebGPU") && !document.querySelector(".twin-render-status") }; })()');
-const perfState = (browser) => browser.evaluate('(() => { const perf = window.__SEMICONFAB_PERF__; if (!perf) return null; const lifecycle = perf.getLifecycle(); return { status: lifecycle.status, statuses: lifecycle.statuses, losses: lifecycle.losses, recoveries: lifecycle.recoveries, lastStatus: lifecycle.lastStatus, devices: window.__FAB_GPU_DEVICES__.length }; })()');
+const perfState = (browser) => browser.evaluate('(() => { const perf = window.__SEMICONFAB_PERF__; if (!perf) return null; const lifecycle = perf.getLifecycle(); const created = window.__FAB_GPU_DEVICES__.length; const destroyed = window.__FAB_GPU_DESTROYED__; return { status: lifecycle.status, statuses: lifecycle.statuses, losses: lifecycle.losses, recoveries: lifecycle.recoveries, lastStatus: lifecycle.lastStatus, devices: created, destroyed, liveDevices: created - destroyed }; })()');
 
 let browser;
 let profileDir;
@@ -96,6 +101,11 @@ try {
 
   const started = Date.now();
   const deadline = started + durationSeconds * 1000;
+  // Injection cadence: a smoke run recovers back-to-back; a long soak uses a realistic
+  // device-loss cadence (about 40 losses across the window) instead of hammering Chrome's
+  // GPU process with >100 device recreations per 10 minutes, which exhausts the driver's
+  // D3D12 descriptor heap at the browser level (observed at cycle 131, see limitations).
+  const cycleIntervalMs = Number(arg('cycle-interval-ms', durationSeconds <= 180 ? '500' : String(Math.max(1000, Math.floor((durationSeconds * 1000) / 40)))));
   while (true) {
     const before = await perfState(browser).catch(() => null);
     const cycleStart = Date.now();
@@ -120,8 +130,8 @@ try {
       injected,
       sawLoss,
       recovered,
-      before: before ? { losses: before.losses, recoveries: before.recoveries, devices: before.devices } : null,
-      after: cycleState ? { losses: cycleState.losses, recoveries: cycleState.recoveries, devices: cycleState.devices, status: cycleState.status } : null,
+      before: before ? { losses: before.losses, recoveries: before.recoveries, devices: before.devices, liveDevices: before.liveDevices } : null,
+      after: cycleState ? { losses: cycleState.losses, recoveries: cycleState.recoveries, devices: cycleState.devices, liveDevices: cycleState.liveDevices, status: cycleState.status } : null,
       statuses: statusesSeen,
       domReady: dom ? dom.ready : null,
       durationMs: Date.now() - cycleStart,
@@ -132,7 +142,7 @@ try {
     // Short smoke runs stop at the requested cycle count; soak runs keep cycling until the duration.
     if (durationSeconds <= 180 && results.cycles.length >= minCycles) break;
     if (Date.now() >= deadline) break;
-    await sleep(500);
+    await sleep(cycleIntervalMs);
   }
 
   // Information-only: one real GPU-process crash. Chrome 155 may enter a transient
@@ -163,11 +173,16 @@ try {
   const injectedCycles = results.cycles.filter((cycle) => cycle.injected).length;
   const recoveredCycles = results.cycles.filter((cycle) => cycle.injected && cycle.recovered).length;
   results.recoveries = { injected: injectedCycles, recovered: recoveredCycles, sawLoss: results.cycles.filter((cycle) => cycle.sawLoss).length };
+  const finalPerf = await perfState(browser).catch(() => null);
+  results.finalDevices = finalPerf ? { created: finalPerf.devices, destroyed: finalPerf.destroyed, live: finalPerf.liveDevices } : null;
+  const liveBoundOk = results.finalDevices === null || results.finalDevices.live <= 8;
   results.pass = injectedCycles >= minCycles && recoveredCycles === injectedCycles
     && results.finalState !== null && results.finalState.ready === true
     && results.finalState.webgl === false && results.finalState.webgl2 === false
-    && results.consoleErrors.length === 0;
-  if (!results.pass) results.limitations.push('device-loss gate requires ' + minCycles + '+ forceDeviceLoss cycles, all recovered, final WebGPU-ready state, no WebGL fallback and no console errors.');
+    && results.consoleErrors.length === 0
+    && liveBoundOk;
+  if (results.finalDevices && !liveBoundOk) results.limitations.push('live GPUDevice count grew to ' + results.finalDevices.live + ' (bound 8): repeated forceDeviceLoss may leak replacement devices.');
+  if (!results.pass) results.limitations.push('device-loss gate requires ' + minCycles + '+ forceDeviceLoss cycles, all recovered, final WebGPU-ready state, no WebGL fallback, no console errors and bounded live GPUDevices.');
 } catch (error) {
   results.error = error instanceof Error ? error.message : String(error);
   if (browser) {
@@ -178,7 +193,7 @@ try {
   results.finishedAt = now();
   results.consoleErrors = (browser?.consoleErrors ?? []).filter((entry) => !/net::ERR_FAILED|Failed to load resource|Page entered Back-Forward Cache/.test(entry));
   fs.writeFileSync(out, JSON.stringify(results, null, 2) + '\n');
-  console.log((results.pass ? 'GPU GATE PASS' : 'GPU GATE FAIL') + ' cycles=' + results.cycles.length + ' recovered=' + (results.recoveries?.recovered ?? 0) + '/' + (results.recoveries?.injected ?? 0) + ' method=' + results.injectionMethod + ' auxCrashRecovered=' + JSON.stringify(results.auxiliaryProbe?.recovered ?? null));
+  console.log((results.pass ? 'GPU GATE PASS' : 'GPU GATE FAIL') + ' cycles=' + results.cycles.length + ' recovered=' + (results.recoveries?.recovered ?? 0) + '/' + (results.recoveries?.injected ?? 0) + ' method=' + results.injectionMethod + ' liveDevices=' + JSON.stringify(results.finalDevices?.live ?? null) + ' auxCrashRecovered=' + JSON.stringify(results.auxiliaryProbe?.recovered ?? null));
   console.log('report: ' + out);
   try { browser?.close(); } catch { /* ignore */ }
   await sleep(500);
