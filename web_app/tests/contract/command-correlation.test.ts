@@ -63,6 +63,18 @@ it('never evicts active commands for the absolute maxEntries cap', () => {
   expect(registry.isTerminal(fabId, 'active-0')).toBe(false);
 });
 
+it('separates observed revisions from revisions proven applied to the actor', () => {
+  const registry = new CommandCorrelationRegistry();
+  const event = result('cmd', 4, 'succeeded');
+  expect(registry.observe(event)).toBe('new');
+  expect(registry.lastRevision(fabId, 'cmd')).toBe(4);
+  expect(registry.isApplied(event)).toBe(false);
+  expect(registry.isTerminal(fabId, 'cmd')).toBeUndefined();
+  registry.markApplied(event);
+  expect(registry.isApplied(event)).toBe(true);
+  expect(registry.isTerminal(fabId, 'cmd')).toBe(true);
+});
+
 it('retains duplicate/stale decisions and TTL sweeps without touching active commands', () => {
   let now = 0;
   const registry = new CommandCorrelationRegistry({ maxTerminalEntries: 8, terminalTtlMs: 100, now: () => now });
