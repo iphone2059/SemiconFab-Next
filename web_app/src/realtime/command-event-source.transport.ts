@@ -13,6 +13,7 @@ import type {
   CommandTransportFailure,
 } from '@/contracts/command-events.contract';
 import { type CommandDirtyReason, commandDirtySchema } from '@/api/command-recovery.schema';
+import { requireNonNegativeSafeInteger, requirePositiveSafeInteger } from '@/runtime/numeric-configuration';
 import {
   COMMAND_RESULT_TOPIC,
   MessageDecoder,
@@ -274,10 +275,10 @@ export function createSseCommandEventSource(
   url: string,
   options: SseCommandEventSourceOptions,
 ): CommandEventSource {
-  const capacity = Math.max(1, options.capacity ?? 256);
-  const connectTimeoutMs = Math.max(1, options.connectTimeoutMs ?? 10_000);
-  const reconnectDelayMs = Math.max(0, options.reconnectDelayMs ?? 250);
-  const ackLedgerCapacity = Math.max(1, options.ackLedgerCapacity ?? DEFAULT_ACK_LEDGER_CAPACITY);
+  const capacity = requirePositiveSafeInteger('capacity', options.capacity ?? 256);
+  const connectTimeoutMs = requirePositiveSafeInteger('connectTimeoutMs', options.connectTimeoutMs ?? 10_000);
+  const reconnectDelayMs = requireNonNegativeSafeInteger('reconnectDelayMs', options.reconnectDelayMs ?? 250);
+  const ackLedgerCapacity = requirePositiveSafeInteger('ackLedgerCapacity', options.ackLedgerCapacity ?? DEFAULT_ACK_LEDGER_CAPACITY);
   const decoder = new MessageDecoder();
   const eventSourceFactory = options.eventSourceFactory ?? browserEventSourceFactory();
   let sourceAvailability: 'ready' | 'unavailable' = eventSourceFactory ? 'ready' : 'unavailable';
