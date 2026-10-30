@@ -79,17 +79,23 @@ function commandTransport(options: { capacity?: number; connectTimeoutMs?: numbe
   return { harness, scope, sources, source };
 }
 
-it('decodes command SSE envelopes and closes the EventSource when the scoped consumers exit', async () => {
+it('decodes command SSE envelopes and turns an unknown topic into protocol-error Dirty', async () => {
   const { harness, scope, sources, source } = commandTransport();
   const received: number[] = [];
+  const dirty: Array<{ reason: string; gapStart?: number; delivered?: unknown }> = [];
   runCommandStream(harness.host, scope, source.commandResults, (event) => received.push(event.revision));
+  runCommandStream(harness.host, scope, source.dirty!, (signal) => dirty.push(signal));
   await flush();
   expect(sources[0].url).toBe('/api/v1/sites/site-1/commands/stream?fabId=fab-a');
-  sources[0].emit(commandEnvelope(0));
-  sources[0].emit(commandEnvelope(1));
-  sources[0].emit({ topic: 'unknown', payload: {} });
+  sources[0].emit(commandEnvelope(0), 'epoch-1:0');
+  sources[0].emit(commandEnvelope(1), 'epoch-1:1');
+  sources[0].emit({ topic: 'unknown', payload: {} }, 'epoch-1:2');
   await flush();
   expect(received).toEqual([0, 1]);
+  // R3-04: an unknown topic is a protocol error, never a silently skipped frame.
+  expect(dirty.at(-1)?.reason).toBe('protocol-error');
+  expect(dirty.at(-1)?.gapStart).toBeUndefined();
+  expect(dirty.at(-1)?.delivered).toBeUndefined();
 });
 
 it('reports SSE reconnection so runtimes can reconcile results outside the replay journal', async () => {
@@ -166,12 +172,21 @@ it('maps backend dirty control frames onto the bounded transport dirty contract'
   await flush();
   sources[0].emitNamed('dirty', JSON.stringify({ reason: 'store-fault', droppedCount: 6, epoch: 'epoch-2', sequence: 5, occurredAt: '2026-10-27T00:00:00Z' }));
   await flush();
-  // Malformed dirty frames are ignored, never treated as command state.
+  // Malformed dirty control frames are never silently ignored (R3-04): they are
+  // surfaced as invalid-control-frame Dirty so the runtime performs List recovery.
   sources[0].emitNamed('dirty', JSON.stringify({ reason: 'nonsense' }));
   await flush();
-  // ADR-010 §2: server classes map onto the transport reasons; a server frame
+  sources[0].emitNamed('dirty', 'not-json-at-all');
+  await flush();
+  // ADR-010 §2/§6.4: server classes map onto the transport reasons; a server frame
   // never advances a local delivered cursor (the origin is unknown).
-  expect(dirty.map((signal) => signal.reason)).toEqual(['server-overflow', 'stale-generation', 'store-fault']);
+  expect(dirty.map((signal) => signal.reason)).toEqual([
+    'server-overflow',
+    'stale-generation',
+    'store-fault',
+    'invalid-control-frame',
+    'invalid-control-frame',
+  ]);
   expect(dirty[0]).toMatchObject({ droppedCount: 4 });
   expect(dirty[0].delivered).toBeUndefined();
   expect(dirty[0].gapStart).toBeUndefined();
@@ -186,11 +201,43 @@ it('bounds the command bus and reports overflow instead of silently dropping fra
   runCommandStream(harness.host, scope, source.commandResults, () => {});
   await flush();
   sources[0].onopen?.();
-  for (let revision = 0; revision < 10; revision += 1) sources[0].emit(commandEnvelope(revision));
+  for (let revision = 0; revision < 10; revision += 1) {
+    sources[0].emit(commandEnvelope(revision), 'epoch-1:' + revision);
+  }
   await flush();
   expect(dirty.length).toBeGreaterThan(0);
   expect(dirty[0].reason).toBe('overflow');
   expect(dirty[0].droppedCount).toBeGreaterThanOrEqual(6);
+  // R3-02: no ACK exists yet, so the safe recovery prefix is unknown (List path).
+  expect(dirty[0].delivered).toBeUndefined();
+  expect(dirty[0].gapStart).toBe(4);
+  expect(dirty[0].gapEnd).toBe(9);
+});
+
+it('surfaces command-frame decode errors and keeps bounded payload-free diagnostics (R3-04)', async () => {
+  const { harness, scope, sources, source } = commandTransport();
+  const dirty: Array<{ reason: string }> = [];
+  runCommandStream(harness.host, scope, source.dirty!, (signal) => dirty.push(signal));
+  runCommandStream(harness.host, scope, source.commandResults, () => {});
+  await flush();
+  sources[0].onopen?.();
+  // Malformed JSON with a usable id: decode-error, delivered/safe prefix unknown.
+  sources[0].onmessage?.({ data: '{"topic": ', lastEventId: 'epoch-1:4' });
+  await flush();
+  expect(dirty.at(-1)?.reason).toBe('decode-error');
+  sources[0].onmessage?.({ data: 'not-json', lastEventId: 'epoch-1:5' });
+  await flush();
+  expect(dirty.at(-1)?.reason).toBe('decode-error');
+  const diagnostics = source.protocolDiagnostics;
+  expect(diagnostics.length).toBeGreaterThanOrEqual(2);
+  expect(diagnostics.length).toBeLessThanOrEqual(16);
+  expect(diagnostics.every((entry) => typeof entry.reason === 'string')).toBe(true);
+  expect(JSON.stringify(diagnostics)).not.toContain('not-json');
+  expect(source.cursors.acknowledged).toBeUndefined();
+  expect(source.availability).toBe('ready');
+  harness.host.runSync(Scope.close(scope, Exit.void));
+  await flush();
+  expect(sources[0].closed).toBe(true);
 });
 
 it('feeds telemetry frames through the Worker and exposes renderer tool states', () => {

@@ -25,6 +25,38 @@ export interface LiteBackendOptions {
 
 /** ADR-013/CR-08 safe degradation budget default. */
 export const DEFAULT_RECOVERY_BUDGET = 96;
+/** Hard upper bound for the device-loss rebuild budget (config fail-fast boundary). */
+export const MAX_RECOVERY_BUDGET = 96;
+
+/**
+ * Strict decimal parser for the acceptance-only ?perf&recoveryBudget=N probe seam.
+ * Returns undefined for absent/invalid values so the production default stays in effect
+ * (an invalid probe value must never silently become NaN/0/Infinity).
+ */
+function parseAcceptanceRecoveryBudget(): number | undefined {
+  if (typeof location === 'undefined') return undefined;
+  try {
+    const search = new URLSearchParams(location.search);
+    if (!search.has('perf')) return undefined;
+    const raw = search.get('recoveryBudget');
+    if (raw === null || !/^\d+$/.test(raw)) return undefined;
+    const parsed = Number(raw);
+    if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > MAX_RECOVERY_BUDGET) return undefined;
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+/** R3-09: product option must be a safe integer within the documented hard bound, else fail fast. */
+function validateRecoveryBudgetOption(value: number | undefined): void {
+  if (value === undefined) return;
+  if (!Number.isSafeInteger(value) || value < 1 || value > MAX_RECOVERY_BUDGET) {
+    throw new Error(
+      'createLiteBackend: recoveryBudget must be a safe integer in [1, ' + MAX_RECOVERY_BUDGET + '] (got ' + String(value) + ')',
+    );
+  }
+}
 
 /**
  * Native Babylon Lite implementation of the application ScenePort. Owns the Lite runtime
@@ -32,23 +64,24 @@ export const DEFAULT_RECOVERY_BUDGET = 96;
  * single idempotent mount/dispose lifetime; product/React code only sees the port.
  */
 export function createLiteBackend(options: LiteBackendOptions = {}): LiteScenePort {
+  // R3-09: program configuration is validated (fail-fast); an invalid value can never reach
+  // Math.trunc/Math.max and turn the circuit breaker into NaN/Infinity/unbounded retry.
+  validateRecoveryBudgetOption(options.recoveryBudget);
   // Acceptance-only seam: the ?perf bridge is a documented device-loss probe surface, so the
   // recovery budget may be lowered there to exercise the CR-08 circuit breaker on real WebGPU
   // without injecting ~100 losses (which is itself the exhaustion mode being prevented).
-  const acceptanceBudget = (() => {
-    if (typeof location === 'undefined') return Number.NaN;
+  // An explicit product option always wins; an invalid probe value is ignored with a diagnostic
+  // so the production default stays in effect.
+  const acceptanceBudget = options.recoveryBudget === undefined ? parseAcceptanceRecoveryBudget() : undefined;
+  if (options.recoveryBudget === undefined && acceptanceBudget === undefined && typeof location !== 'undefined') {
     try {
       const search = new URLSearchParams(location.search);
-      // Only an explicit ?perf&recoveryBudget=N lowers the budget; the plain ?perf
-      // device-loss probe surface must keep the production default (absent value
-      // would otherwise coerce to 0 and fail closed after the first loss).
-      const raw = search.has('perf') ? search.get('recoveryBudget') : null;
-      if (raw === null || raw.trim() === '') return Number.NaN;
-      return Number(raw);
-    } catch { return Number.NaN; }
-  })();
-  const requestedBudget = options.recoveryBudget ?? (Number.isFinite(acceptanceBudget) ? acceptanceBudget : undefined);
-  const recoveryBudget = Math.max(1, Math.trunc(requestedBudget ?? DEFAULT_RECOVERY_BUDGET));
+      if (search.has('perf') && search.has('recoveryBudget')) {
+        console.warn('[lite] ignoring invalid ?perf&recoveryBudget override; using the production recovery budget');
+      }
+    } catch { /* location is not a parseable URL; the acceptance seam is simply unavailable */ }
+  }
+  const recoveryBudget = options.recoveryBudget ?? acceptanceBudget ?? DEFAULT_RECOVERY_BUDGET;
   let runtime: LiteRuntime | undefined;
   let world: LiteWorld | undefined;
   let perf: PerfBridge | undefined;
@@ -306,6 +339,8 @@ export function createLiteBackend(options: LiteBackendOptions = {}): LiteScenePo
             onToolHover: hover => { if (active(options)) callbacks.onToolHover(hover); },
             onAmhsStats: stats => { if (active(options)) callbacks.onAmhsStats(stats); },
             getToolStates: () => callbacks.getToolStates(),
+            // R3-10: the scene is composed for one FAB; FAB-scoped instance ids must follow it.
+            fabCode: options.fabs[0]?.code ?? 'FAB-01',
           });
           // A compose that settles after abort/dispose must not retain the late GPU world.
           if (!active(options)) { ownedWorld.dispose(); ownedWorld = undefined; return () => {}; }

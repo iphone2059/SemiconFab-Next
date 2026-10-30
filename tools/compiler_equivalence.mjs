@@ -510,7 +510,7 @@ const main = async () => {
     equal: differences.length === 0 && scenarioFailures.length === 0 && [...on.authFailures, ...off.authFailures].length === 0,
     limitations: [
       'Wall-clock timers are real (not frozen); comparison is on quiescent step DOM/business state and HTTP surface, so execution counts and timings may differ while semantics must not.',
-      'Deterministic Math.random/crypto.randomUUID are injected; live SSE content comes from the single-FAB local fixture and is compared by DOM business text with numeric volatility normalized.',
+      'Deterministic Math.random/crypto.randomUUID are injected; live SSE content comes from the local dev fixture (architecture supports multiple FABs; current deployment defaults to one) and is compared by DOM business text with numeric volatility normalized.',
       'GPU device-loss/recovery semantics are covered by tools/gpu_gate.mjs (CORE-012), not by the compiler equivalence trace.',
     ],
   };

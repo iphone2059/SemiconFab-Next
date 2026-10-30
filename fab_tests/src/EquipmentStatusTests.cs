@@ -115,7 +115,9 @@ public sealed class EquipmentStatusTests
         var status = new EquipmentStatusService();
         var telemetry = new TelemetrySimulationService(directory, status);
         var siteId = SiteDirectory.DemoSiteId;
-        var fab = directory.PrimaryFab;
+        // FAB-01 identity is deterministic; the equipment/telemetry comparison is FAB-scoped and
+        // does not depend on the catalog size (current deployment default one FAB, 1..32 supported).
+        var fab = SiteDirectory.CreateFab(1);
         var t0 = new DateTimeOffset(2026, 10, 24, 4, 0, 0, TimeSpan.Zero);
 
         var snapshot = status.Get(siteId, fab.Id, t0);

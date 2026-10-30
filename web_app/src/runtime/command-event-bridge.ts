@@ -132,24 +132,30 @@ export class CommandEventBridge {
   }
 
   /**
-   * Apply one event to its workflow and acknowledge it only when the actor
-   * actually advanced to that revision (ADR-010 §2: stale/terminal/rejected
-   * events must not move the acknowledged cursor forward). Returns whether the
-   * event was applied.
+   * Apply one event to its workflow, then acknowledge it ONLY after the actor
+   * provably advanced to that revision (ADR-010 §6.2). Three states stay separate:
+   *  - observed: correlation registry saw the revision (dedupe/ordering only);
+   *  - applied: the actor projection advanced to the revision;
+   *  - acknowledged: transport ordered-ledger entry marked applied, which may still
+   *    be blocked behind an earlier pending entry until its own prefix is safe.
+   * Stale/terminal/duplicate revisions are observed but never acknowledged; a
+   * workflow that exposes no projection cannot prove application, so it is
+   * delivered (tests/custom adapters) but never acknowledged.
+   * Returns whether the event was delivered to the actor.
    */
   private applyToWorkflow(workflow: CommandWorkflow, event: CommandResultEvent): boolean {
     const before = workflow.projection?.revision;
     workflow.receive(event);
     const after = workflow.projection?.revision;
-    // When the workflow exposes a projection we can verify the actor accepted the
-    // revision (stale/terminal events must not acknowledge). A custom workflow
-    // without a projection cannot be verified and is trusted as applied: it is the
-    // only authority available.
     const verifiable = before !== undefined || after !== undefined;
-    if (verifiable && (after ?? -1) < event.revision) return false;
+    const applied = verifiable && (after ?? -1) >= event.revision;
+    if (verifiable && !applied) {
+      // Observed by correlation but rejected by the actor (terminal/stale): no ack.
+      return false;
+    }
     this.options.onResultDelivered?.(event);
-    this.source.acknowledge(event);
-    return !verifiable || (after ?? -1) >= event.revision;
+    if (applied) this.source.acknowledge(event);
+    return true;
   }
 
   private deliver(event: CommandResultEvent): void {

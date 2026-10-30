@@ -15,6 +15,9 @@ public static class SiteKpiCalculator
             throw new ArgumentException("Site KPI requires a common observation boundary.");
         static string Sum(IEnumerable<string> values) => values.Aggregate(BigInteger.Zero,
             (sum, value) => sum + BigInteger.Parse(value, NumberStyles.None, CultureInfo.InvariantCulture)).ToString(CultureInfo.InvariantCulture);
+        // The distinct-boundary check above proves every FAB execution shares the frozen
+        // observation end, so reading the first FAB's simulation time is a Site aggregate value,
+        // not a FAB-01 substitution. Lot/busy/count values are summed across all FABs.
         return new(run.SiteId, run.RunId, Sum(result.Fabs.Select(f => f.CompletedLots)),
             Sum(result.Fabs.Select(f => f.TotalLots)), Sum(result.Fabs.Select(f => f.BusyTimeUs)),
             result.Fabs[0].SimulationTimeUs, result.Fabs.Length);

@@ -459,9 +459,23 @@ public sealed class EquipmentCommandService
     /// Durable journal replay page for one FAB (ADR-008 2.2 / ADR-010 3). The requested epoch is
     /// mandatory and must equal the Site's current epoch; otherwise the caller must answer
     /// 409 journal-epoch-mismatch and reconcile authoritatively. Events are strictly increasing
-    /// and greater than <paramref name="afterSequence"/>; <c>nextAfterSequence</c> is the cursor for
-    /// the next page and always makes progress (the authoritative watermark when a FAB filter
-    /// produces an empty page). <c>hasGap</c> is true when retained sequences are missing.
+    /// and greater than <paramref name="afterSequence"/>.
+    ///
+    /// Gap rule (all comparisons in <see cref="long"/>, computed under the same Site lock):
+    /// <c>outsideRetainedWindow = afterSequence &lt; firstRetainedSequence - 1</c>,
+    /// <c>beyondLatest = afterSequence &gt; latestSequence</c>,
+    /// <c>hasGap = outsideRetainedWindow || beyondLatest || dropped &gt; 0</c>.
+    /// A legitimately empty Site (<c>latestSequence = 0</c>, <c>firstRetainedSequence = 1</c>,
+    /// <c>afterSequence = 0</c>) is therefore not a gap; a completely pruned retained window
+    /// (<c>latestSequence &gt; 0</c>, <c>firstRetainedSequence = latestSequence + 1</c>, old cursor)
+    /// is a gap even though the page contains no events. The gap is decided from the retention
+    /// bounds before any FAB filtering, so an empty page can never mask it.
+    ///
+    /// <c>nextAfterSequence</c> is the end of the Site sequence interval the server has scanned:
+    /// the last returned event when the FAB-filtered page was truncated, otherwise the
+    /// authoritative watermark (<c>latestSequence</c>); an already-ahead cursor is echoed back.
+    /// It is monotonic, and while <c>afterSequence &lt; latestSequence</c> it always advances, so
+    /// empty FAB-filtered pages cannot stall the recovery loop.
     /// </summary>
     public CommandJournalPageResult ReadCommandJournalPage(Guid siteId, Guid fabId, Guid requestedEpoch, long afterSequence, int limit)
     {
@@ -476,25 +490,37 @@ public sealed class EquipmentCommandService
             var latest = site.LatestSequence;
             var first = EffectiveFirstRetained(site);
             if (requestedEpoch != epoch) return new CommandJournalPageResult(null, new JournalEpochMismatch(epoch, first, latest));
+
+            // R3-01: explicit long-bounded retention checks. A fully empty retained window must be
+            // reported as a gap for cursors that predate firstRetainedSequence - 1, including when
+            // the FAB-filtered event list is empty.
+            var outsideRetainedWindow = afterSequence < first - 1;
+            var beyondLatest = afterSequence > latest;
             var dropped = 0L;
             var expected = afterSequence + 1;
-            foreach (var journalEvent in site.Journal.Where(journalEvent => journalEvent.Sequence > afterSequence))
+            foreach (var journalEvent in site.Journal)
             {
+                if (journalEvent.Sequence <= afterSequence) continue;
                 if (journalEvent.Sequence > expected) dropped += journalEvent.Sequence - expected;
                 expected = journalEvent.Sequence + 1;
             }
-            var hasGap = dropped > 0 || afterSequence > latest;
+            var hasGap = outsideRetainedWindow || beyondLatest || dropped > 0;
+
             var fabText = fabId.ToString("D");
-            var events = site.Journal
+            var filtered = site.Journal
                 .Where(journalEvent => journalEvent.Sequence > afterSequence &&
                                        string.Equals(journalEvent.FabId, fabText, StringComparison.Ordinal))
+                .ToArray();
+            var events = filtered
                 .Take(limit)
                 .Select(journalEvent => new CommandJournalEventDto(journalEvent.Sequence, journalEvent.FabId,
                     journalEvent.CommandId, journalEvent.Revision, journalEvent.Outcome, journalEvent.OccurredAt))
                 .ToArray();
-            var nextAfterSequence = events.Length > 0
-                ? events[^1].Sequence
-                : afterSequence < latest ? latest : afterSequence;
+
+            // The cursor never regresses; while afterSequence < latest it always advances.
+            var nextAfterSequence = events.Length == 0
+                ? beyondLatest ? afterSequence : Math.Max(afterSequence, latest)
+                : filtered.Length > events.Length ? events[^1].Sequence : Math.Max(events[^1].Sequence, latest);
             return new CommandJournalPageResult(new CommandJournalPageDto(epoch.ToString("D"), hasGap, first, latest,
                 nextAfterSequence, events), null);
         }

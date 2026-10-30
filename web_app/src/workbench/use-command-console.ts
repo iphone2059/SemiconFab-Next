@@ -66,6 +66,11 @@ export interface CommandConsoleController {
  * submission ledger (which command ids this console sent) plus the retry
  * idempotency key. It never mirrors a projection/outcome value, so no parallel
  * command cache exists beside the runtime.
+ *
+ * Session scope (ADR-010 §6.6 / R3-11 decision A): the ledger is never persisted.
+ * Browser refresh/SSE reconnect recovery guarantees **active** commands only;
+ * terminal history is not restored from this ledger and must be read from the
+ * independent history resource (runs/results or a future command-history API).
  */
 export function useCommandConsole({ siteId, fabId }: { siteId: string; fabId: string }): CommandConsoleController {
   const registry = useFabRuntimeRegistry();

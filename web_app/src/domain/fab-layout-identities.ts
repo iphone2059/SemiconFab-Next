@@ -22,12 +22,21 @@ const FAMILY_ORDER: Record<string, number> = {
   metrology: 6, inspection: 6, other: 6, packaging: 7, test: 7,
 };
 
-export function buildLayoutIdentities(layout: readonly FabLayoutTool[] = FAB_LAYOUT): LayoutIdentity[] {
+/**
+ * R3-10: instance identities are FAB-scoped. The default keeps the historical FAB-01 prefix
+ * for the frozen single-FAB fixtures, while product scenes/UI must pass the selected FAB code
+ * so that FAB-01..FAB-32 never share the same equipment instance ids.
+ */
+export function buildLayoutIdentities(
+  layout: readonly FabLayoutTool[] = FAB_LAYOUT,
+  fabCode = 'FAB-01',
+): LayoutIdentity[] {
+  const instancePrefix = (fabCode.trim() === '' ? 'FAB-01' : fabCode.trim()) + '/tool-';
   const bayCounts = new Map<string, number>();
   const rows = layout.map((tool, index) => {
     const ordinal = (bayCounts.get(tool.category) ?? 0) + 1;
     bayCounts.set(tool.category, ordinal);
-    return { instanceId: `FAB-01/tool-${String(index + 1).padStart(3, '0')}`, recordId: tool.recordId,
+    return { instanceId: `${instancePrefix}${String(index + 1).padStart(3, '0')}`, recordId: tool.recordId,
       machineId: `${MIMAC_GROUP[tool.category]}_${String(ordinal).padStart(2, '0')}`, replayTarget: false };
   });
   const order = originalLayoutRenderOrder(layout).map(index => ({ index }));
@@ -38,6 +47,10 @@ export function buildLayoutIdentities(layout: readonly FabLayoutTool[] = FAB_LAY
 }
 
 export const TWIN_LAYOUT_IDENTITIES = buildLayoutIdentities();
+
+/** Per-FAB layout identities for multi-FAB product scenes/UI (FAB-01..FAB-32 isolation). */
+export const layoutIdentitiesForFab = (fabCode: string): LayoutIdentity[] =>
+  buildLayoutIdentities(FAB_LAYOUT, fabCode);
 
 
 export function originalLayoutRenderOrder(layout: readonly FabLayoutTool[] = FAB_LAYOUT): number[] {

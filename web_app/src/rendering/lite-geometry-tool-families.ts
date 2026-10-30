@@ -4,7 +4,7 @@ import {
   type EngineContext, type Mesh, type PbrMaterialProps, type SceneContext,
 } from '@babylonjs/lite';
 import { FAB_LAYOUT } from '@/domain/fab-layout';
-import { TWIN_LAYOUT_IDENTITIES, type LayoutIdentity } from '@/domain/fab-layout-identities';
+import { layoutIdentitiesForFab, type LayoutIdentity } from '@/domain/fab-layout-identities';
 import { originalEquipmentParts, type OriginalToolPart } from '@/rendering/lite-geometry-original-tool-parts';
 
 export interface EquipmentPartRef {
@@ -23,8 +23,10 @@ export interface LiteEquipment {
   /** Call from the owning runtime's lost notification, before native scene rebuilding. */
 }
 /** Native geometry/material batches. Placement identity never depends on batch order. */
-export function createLiteEquipment(scene: SceneContext, engine: EngineContext): LiteEquipment {
-  const tools: EquipmentTool[] = TWIN_LAYOUT_IDENTITIES.map((identity, layoutIndex) => ({
+export function createLiteEquipment(scene: SceneContext, engine: EngineContext, fabCode = 'FAB-01'): LiteEquipment {
+  // R3-10: equipment instance ids are FAB-scoped; a scene mounted for FAB-02 must not reuse
+  // FAB-01 ids (the default keeps the frozen single-FAB fixture behaviour).
+  const tools: EquipmentTool[] = layoutIdentitiesForFab(fabCode).map((identity, layoutIndex) => ({
     ...identity, layoutIndex, parts: [],
   }));
   const batches: { mesh: Mesh; matrices: number[]; owners: EquipmentTool[] }[] = [];

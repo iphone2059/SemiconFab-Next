@@ -5,7 +5,7 @@ export const ONBOARDING_KEY = 'semicon_twin_onboarding_dismissed';
 
 /** Frozen first-run onboarding copy (zh source strings translated by TwinLocale). */
 export const ONBOARDING_STEPS = [
-  { title: '一个单 FAB 洁净室', body: '121 台设备、双环 OHT、天花板 FFU 与 Subfab 都在同一场景中。' },
+  { title: '一个独立 FAB 洁净室', body: '121 台设备、双环 OHT、天花板 FFU 与 Subfab 都在同一场景中；架构支持多个独立 FAB。' },
   { title: '层级与空间模式', body: '用 L1 / B1 / DUAL / Explode 切换楼层和拆解；设备卡可打开右侧检查器。' },
   { title: '开始五站导览', body: 'Tour 会依次带你查看光刻、刻蚀、OHT 和 Subfab。按 Esc 可退出。' },
 ];

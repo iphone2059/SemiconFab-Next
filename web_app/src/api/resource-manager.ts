@@ -32,6 +32,33 @@ type AnyWritable = Atom.Writable<AnyResult, AnyResult>;
 const MAX_ENTRIES = 256;
 /** ADR-006 §2.4.6: bounded Ignore diagnostics (newest last). */
 const MAX_DIAGNOSTICS = 32;
+/**
+ * R3-06: one bounded safe retry per poll-owner lifetime. After a retry the owner is
+ * cleared and polling stays stopped for that generation; a later retain/release
+ * cycle creates a new ResourceScope generation and may restart polling.
+ */
+const MAX_POLL_RETRIES = 1;
+/** R3-06: bounded control-diagnostic ring for poll fork/fiber failures (newest last). */
+const MAX_POLL_DIAGNOSTICS = 32;
+
+/**
+ * Polling owner lifecycle diagnostic (bounded control metadata, allowed by
+ * ADR-006 §2.2 as `lastDiagnostic` + a manager-level bounded ring). It is NOT a
+ * commit decision, so it is kept out of `manager.diagnostics` (frozen
+ * `ResourceDiagnostic`/IgnoreReason contract in api/resource.ts).
+ */
+interface PollControlDiagnostic {
+  readonly key: ResourceKey;
+  /** Which async branch observed the failure. */
+  readonly phase: 'fork-rejected' | 'fiber-terminated';
+  /** Bounded human-readable failure reason (cause name/message, truncated). */
+  readonly reason: string;
+  /** Owner generation the failing callback had captured. */
+  readonly generation: number;
+  readonly at: number;
+  /** Explicit termination policy outcome for the CURRENT generation. */
+  readonly action: 'retry-scheduled' | 'stopped';
+}
 
 type TimerHandle = ReturnType<typeof setTimeout>;
 
@@ -60,6 +87,12 @@ interface ManagerEntry {
   scopeGeneration: number;
   pollFiber: Fiber.Fiber<unknown, unknown> | undefined;
   polling: boolean;
+  /** R3-06: retries already spent by the current poll-owner lifetime. */
+  pollRetryCount: number;
+  /** R3-06: bounded retry timer; always cleared by stopPolling/closeScope. */
+  pollRetryTimer: TimerHandle | undefined;
+  /** R3-06: last poll-control failure for this entry (bounded control metadata). */
+  lastDiagnostic: PollControlDiagnostic | undefined;
   idleTimer: TimerHandle | undefined;
   idleAt: number | undefined;
   removed: boolean;
@@ -134,6 +167,9 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
   };
 
   const closeScope = (entry: ManagerEntry): void => {
+    // R3-06 invariant: a closing ResourceScope must never leave polling=true without
+    // an owner. All release paths call stopPolling first; this is the defensive guard.
+    if (entry.polling || entry.pollFiber || entry.pollRetryTimer) stopPolling(entry);
     const scope = entry.scope;
     entry.scope = undefined;
     if (!scope) return;
@@ -141,11 +177,29 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
     if (finalizer) void host.services.runPromise(finalizer).catch(() => undefined);
   };
 
+  /** Bounded control-diagnostic ring (R3-06; newest last, max 32; no payloads). */
+  const pollDiagnostics: PollControlDiagnostic[] = [];
+  const recordPollDiagnostic = (entry: ManagerEntry, diagnostic: PollControlDiagnostic): void => {
+    entry.lastDiagnostic = diagnostic;
+    pollDiagnostics.push(diagnostic);
+    if (pollDiagnostics.length > MAX_POLL_DIAGNOSTICS) {
+      pollDiagnostics.splice(0, pollDiagnostics.length - MAX_POLL_DIAGNOSTICS);
+    }
+  };
+
+  const clearPollRetryTimer = (entry: ManagerEntry): void => {
+    if (entry.pollRetryTimer !== undefined) {
+      clearTimeout(entry.pollRetryTimer);
+      entry.pollRetryTimer = undefined;
+    }
+  };
+
   const stopPolling = (entry: ManagerEntry): void => {
     entry.polling = false;
     // ADR-013 §1.4: releasing the poll owner invalidates every fork callback that
     // captured the previous ResourceScope generation.
     entry.scopeGeneration += 1;
+    clearPollRetryTimer(entry);
     const fiber = entry.pollFiber;
     entry.pollFiber = undefined;
     if (fiber) void host.services.runPromise(Fiber.interrupt(fiber)).catch(() => undefined);
@@ -185,13 +239,94 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
   /**
    * STREAM: the only polling owner. A ResourceScope owns exactly one fiber per
    * key; the loop only calls refresh (itself single-flight). No component timer.
+   *
+   * R3-06 async-branch audit (owner / generation / late-result handling):
+   *
+   * | branch                    | ownership predicate                                                | late-result policy |
+   * |---------------------------|--------------------------------------------------------------------|--------------------|
+   * | .then(forkIn resolved)    | !removed && polling && scopeGeneration===started && scope===scope  | stale -> interrupt fiber, never store owner; current -> store owner + observe |
+   * | .catch(forkIn rejected)   | isCurrentPollOwner(entry, startedGeneration, scope)                | stale -> no-op (never reset a newer generation); current -> clear owner + bounded diagnostic + <=1 retry or stop |
+   * | fiber exit observer       | isCurrentPollOwner(entry, startedGeneration, scope)                | release/dispose/scope-close -> stale no-op; current abnormal -> clear owner + bounded diagnostic + <=1 retry or stop |
+   * | retry timer               | rechecks removed/polling/scope/generation/subscribers at fire time | stale -> no-op; current -> start owner with retry=true |
+   * | scope close / stopPolling | stopPolling clears owner and bumps generation first                | in-flight callbacks become stale |
+   * | idle-TTL release          | releaseEntry -> stopPolling -> generation++                        | same as release |
    */
-  const startPolling = (entry: ManagerEntry): void => {
+  const isCurrentPollOwner = (entry: ManagerEntry, startedGeneration: number, scope: Scope.Closeable): boolean =>
+    !entry.removed &&
+    !isDisposed() &&
+    entry.polling &&
+    entry.scopeGeneration === startedGeneration &&
+    entry.scope === scope;
+
+  /** Bounded, payload-free reason string (R3-04-style diagnostics hygiene). */
+  const describePollFailure = (cause: unknown): string => {
+    if (cause instanceof Error) return (cause.name + ': ' + cause.message).slice(0, 120);
+    if (typeof cause === 'string') return cause.slice(0, 120);
+    return 'non-error poll termination';
+  };
+
+  /**
+   * R3-06 current-generation termination policy: clear the owner synchronously
+   * (never polling=true without an active owner), append one bounded control
+   * diagnostic, allow at most MAX_POLL_RETRIES safe retry in the same generation,
+   * then stop for this generation. A later retain/release cycle creates a new
+   * ResourceScope generation and may restart polling.
+   */
+  const terminatePollOwner = (
+    entry: ManagerEntry,
+    startedGeneration: number,
+    scope: Scope.Closeable,
+    phase: PollControlDiagnostic['phase'],
+    cause: unknown,
+  ): void => {
+    if (!isCurrentPollOwner(entry, startedGeneration, scope)) {
+      // Stale callback from a released/old generation: never touch a newer owner.
+      return;
+    }
+    entry.polling = false;
+    entry.pollFiber = undefined;
+    const canRetry = entry.pollRetryCount < MAX_POLL_RETRIES &&
+      entry.subscribers > 0 &&
+      !entry.removed &&
+      !isDisposed() &&
+      entry.scope === scope &&
+      entry.scopeGeneration === startedGeneration;
+    recordPollDiagnostic(entry, {
+      key: entry.key,
+      phase,
+      reason: describePollFailure(cause),
+      generation: startedGeneration,
+      at: Date.now(),
+      action: canRetry ? 'retry-scheduled' : 'stopped',
+    });
+    if (!canRetry) return;
+    entry.pollRetryCount += 1;
+    const pollMs = entry.definition.policy.pollMs;
+    const retryDelayMs = pollMs !== undefined && Number.isFinite(pollMs) && pollMs > 0 ? pollMs : 0;
+    clearPollRetryTimer(entry);
+    entry.pollRetryTimer = setTimeout(() => {
+      entry.pollRetryTimer = undefined;
+      if (isDisposed() || entry.removed) return;
+      if (entry.polling) return; // a newer owner already started
+      if (entry.scope !== scope || entry.scopeGeneration !== startedGeneration) return; // stale generation
+      if (entry.subscribers === 0) return; // released while waiting
+      startPolling(entry, true);
+    }, retryDelayMs);
+    unrefTimer(entry.pollRetryTimer);
+  };
+
+  const startPolling = (entry: ManagerEntry, retry = false): void => {
     const pollMs = entry.definition.policy.pollMs;
     // Synchronous ownership guard: fork resolution is async, so pollFiber alone
     // cannot prevent a second retain in the same tick from forking a second loop.
     if (pollMs === undefined || entry.polling || !entry.scope) return;
     if (!Number.isFinite(pollMs) || pollMs <= 0) return;
+    if (!retry) {
+      // A fresh subscription lifetime starts with a clean retry budget and no
+      // pending retry from a previous owner of the same generation.
+      entry.pollRetryCount = 0;
+      clearPollRetryTimer(entry);
+    }
     entry.polling = true;
     const scope = entry.scope;
     const startedGeneration = entry.scopeGeneration;
@@ -217,8 +352,31 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
           return;
         }
         entry.pollFiber = fiber;
+        // R3-06: a stored owner fiber must never terminate while polling stays true.
+        // Observe its terminal Exit in the same generation; release/dispose/scope
+        // close paths clear the owner first, so their interruptions become stale no-ops.
+        void host.services.runPromise(Fiber.await(fiber))
+          .then((exit) => {
+            terminatePollOwner(
+              entry,
+              startedGeneration,
+              scope,
+              'fiber-terminated',
+              Exit.isSuccess(exit)
+                ? new Error('poll fiber completed while it still owned the scope')
+                : Cause.squash(exit.cause),
+            );
+          })
+          // The observer itself can only be interrupted by runtime disposal, where
+          // releaseEntry/closeScope already own the cleanup; never touch a new owner here.
+          .catch(() => undefined);
       })
-      .catch(() => { entry.polling = false; });
+      .catch((cause) => {
+        // R3-06: a fork rejection must prove it still owns the CURRENT generation
+        // before clearing any owner state; a stale rejection is a no-op and can
+        // never reset the polling state of a newer generation.
+        terminatePollOwner(entry, startedGeneration, scope, 'fork-rejected', cause);
+      });
   };
 
   const ensureCapacity = (key: ResourceKey): void => {
@@ -260,6 +418,9 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
       scopeGeneration: 0,
       pollFiber: undefined,
       polling: false,
+      pollRetryCount: 0,
+      pollRetryTimer: undefined,
+      lastDiagnostic: undefined,
       idleTimer: undefined,
       idleAt: undefined,
       removed: false,

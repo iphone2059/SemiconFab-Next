@@ -1,7 +1,11 @@
 import { Effect, Exit, Scope } from 'effect';
 import type {
+  CommandCursor,
   CommandEventSource,
+  CommandProtocolDiagnostic,
   CommandResultEvent,
+  CommandSourceCursors,
+  CommandStreamDirty,
 } from '@/contracts/command-events.contract';
 import { createSseCommandEventSource } from '@/realtime/command-event-source.transport';
 import { COMMAND_RESULT_TOPIC } from '@/realtime/message-decoder';
@@ -9,40 +13,13 @@ import { runCommandStream } from '@/runtime/command-stream';
 import { type CommandTestRuntime, createCommandTestRuntime } from '../../../support/command-fakes.ts';
 
 /**
- * ADR-010 (Round 2) contract shapes. Until the frozen contract change lands in
- * contracts/command-events.contract.ts these structural aliases let the RED
- * tests compile against the target API without weakening the assertions; the
- * GREEN step removes the casts.
+ * Round 3 (ADR-010 §6.2/§6.4) SSE test fixtures.
+ *
+ * The harness uses the real SSE transport with an injectable EventSource and lets
+ * each test choose whether deliveries are immediately acknowledged (simulating an
+ * actor that applies synchronously) or acknowledged manually to exercise the
+ * ordered ACK ledger / cover() safe-watermark semantics.
  */
-export interface RoundTwoCommandCursor {
-  readonly epoch: string;
-  readonly sequence: number;
-}
-
-export interface RoundTwoCursors {
-  readonly observed?: RoundTwoCommandCursor;
-  readonly delivered?: RoundTwoCommandCursor;
-  readonly acknowledged?: RoundTwoCommandCursor;
-}
-
-export interface RoundTwoDirty {
-  readonly reason: string;
-  readonly droppedCount: number;
-  readonly delivered?: RoundTwoCommandCursor;
-  readonly gapStart?: number;
-  readonly gapEnd?: number;
-  readonly epoch?: string;
-  readonly sequence?: number;
-}
-
-export interface RoundTwoCommandEventSource extends CommandEventSource {
-  acknowledge(event: CommandResultEvent): void;
-  readonly cursors: RoundTwoCursors;
-}
-
-export const asRoundTwoSource = (source: CommandEventSource): RoundTwoCommandEventSource =>
-  source as unknown as RoundTwoCommandEventSource;
-
 export interface FakeEventSourceOptions {
   readonly url: string;
 }
@@ -64,6 +41,10 @@ export class FakeEventSource {
   }
   emit(payload: unknown, lastEventId?: string): void {
     this.onmessage?.({ data: JSON.stringify(payload), lastEventId });
+  }
+  /** Raw (possibly malformed) data frame, bypassing JSON.stringify. */
+  emitData(data: string, lastEventId?: string): void {
+    this.onmessage?.({ data, lastEventId });
   }
   emitNamed(type: string, data: string, lastEventId?: string): void {
     for (const listener of this.listeners.get(type) ?? []) listener({ data, lastEventId });
@@ -92,26 +73,46 @@ export const commandEnvelope = (input: {
   },
 });
 
+/** SSE id line for the Site journal cursor (epoch:sequence). */
+export const cursorId = (epoch: string, sequence: number): string => epoch + ':' + sequence;
+
 export interface TransportHarness {
   readonly harness: CommandTestRuntime;
   readonly scope: Scope.Closeable;
   readonly sources: FakeEventSource[];
-  readonly source: RoundTwoCommandEventSource;
-  readonly received: number[];
-  readonly dirty: RoundTwoDirty[];
+  readonly source: CommandEventSource;
+  readonly received: CommandResultEvent[];
+  readonly receivedRevisions: number[];
+  readonly dirty: CommandStreamDirty[];
   readonly acked: CommandResultEvent[];
   readonly statuses: string[];
   readonly failures: unknown[];
   readonly gaps: unknown[];
+  /** Latest bounded protocol diagnostics snapshot (payload-free). */
+  diagnostics(): readonly CommandProtocolDiagnostic[];
+  /** Conservative cursor snapshot of the real transport. */
+  cursors(): CommandSourceCursors;
+  /** Authoritative recovery safe watermark (ADR-010 §6.2). */
+  cover(cursor: CommandCursor): void;
+  /** Manually acknowledge one delivered event (ordered-ledger tests). */
+  acknowledge(event: CommandResultEvent): void;
   closeTransportScope(): void;
 }
 
+export interface TransportHarnessOptions {
+  readonly capacity?: number;
+  readonly connectTimeoutMs?: number;
+  readonly ackLedgerCapacity?: number;
+  /** Default true: acknowledge every delivered event immediately (applied actor). */
+  readonly autoAck?: boolean;
+}
+
 /** Real SSE transport with an injectable EventSource and a bounded capacity. */
-export function createTransportHarness(options: { capacity?: number; connectTimeoutMs?: number } = {}): TransportHarness {
+export function createTransportHarness(options: TransportHarnessOptions = {}): TransportHarness {
   const harness = createCommandTestRuntime();
   const scope = Scope.makeUnsafe();
   const sources: FakeEventSource[] = [];
-  const raw = createSseCommandEventSource('/api/v1/sites/site-1/commands/stream?fabId=fab-a', {
+  const source = createSseCommandEventSource('/api/v1/sites/site-1/commands/stream?fabId=fab-a', {
     host: {
       addFinalizer: (finalizer) => {
         harness.host.runSync(Scope.addFinalizer(scope, Effect.sync(finalizer)));
@@ -124,24 +125,27 @@ export function createTransportHarness(options: { capacity?: number; connectTime
     },
     ...(options.capacity !== undefined ? { capacity: options.capacity } : {}),
     ...(options.connectTimeoutMs !== undefined ? { connectTimeoutMs: options.connectTimeoutMs } : {}),
+    ...(options.ackLedgerCapacity !== undefined ? { ackLedgerCapacity: options.ackLedgerCapacity } : {}),
   });
-  const source = asRoundTwoSource(raw);
-  const received: number[] = [];
-  const dirty: RoundTwoDirty[] = [];
+  const autoAck = options.autoAck !== false;
+  const received: CommandResultEvent[] = [];
+  const receivedRevisions: number[] = [];
+  const dirty: CommandStreamDirty[] = [];
   const acked: CommandResultEvent[] = [];
   const statuses: string[] = [];
   const failures: unknown[] = [];
   const gaps: unknown[] = [];
-  const acknowledge = (source as { acknowledge?: (event: CommandResultEvent) => void }).acknowledge;
   runCommandStream(harness.host, scope, source.commandResults, (event) => {
-    received.push(event.revision);
-    // ADR-010 §2: acknowledge only after the event has been applied. The RED run
-    // on the baseline has no acknowledge capability yet; the guard keeps the
-    // failure an assertion failure instead of a fiber defect.
-    if (typeof acknowledge === 'function') acknowledge.call(source, event);
-    acked.push(event);
+    received.push(event);
+    receivedRevisions.push(event.revision);
+    // Simulate an actor that applied the revision synchronously; ordered-ledger
+    // tests disable this and call acknowledge()/cover() explicitly.
+    if (autoAck) {
+      source.acknowledge(event);
+      acked.push(event);
+    }
   });
-  runCommandStream(harness.host, scope, source.dirty!, (signal) => dirty.push(signal as unknown as RoundTwoDirty));
+  runCommandStream(harness.host, scope, source.dirty!, (signal) => dirty.push(signal));
   runCommandStream(harness.host, scope, source.connectionStatus!, (status) => statuses.push(status));
   runCommandStream(harness.host, scope, source.transportFailures!, (failure) => failures.push(failure));
   runCommandStream(harness.host, scope, source.gaps!, (gap) => gaps.push(gap));
@@ -151,11 +155,19 @@ export function createTransportHarness(options: { capacity?: number; connectTime
     sources,
     source,
     received,
+    receivedRevisions,
     dirty,
     acked,
     statuses,
     failures,
     gaps,
+    diagnostics: () => source.protocolDiagnostics,
+    cursors: () => source.cursors,
+    cover: (cursor) => source.cover(cursor),
+    acknowledge: (event) => {
+      source.acknowledge(event);
+      acked.push(event);
+    },
     closeTransportScope: () => {
       harness.host.runSync(Scope.close(scope, Exit.void));
     },

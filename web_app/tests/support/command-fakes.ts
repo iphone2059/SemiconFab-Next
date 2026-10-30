@@ -5,7 +5,9 @@ import type {
   CommandCursor,
   CommandEventSource,
   CommandOutcome,
+  CommandProtocolDiagnostic,
   CommandResultEvent,
+  CommandSourceAvailability,
   CommandSourceCursors,
   CommandStreamDirty,
   CommandStreamGap,
@@ -150,12 +152,26 @@ export class FakeCommandEventSource implements CommandEventSource {
     decrement: () => { this.dirtyCount = Math.max(0, this.dirtyCount - 1); },
   });
 
-  /** ADR-010 §2: a delivered event may be acknowledged by the consumer. */
+  /** ADR-010 §6.2 test double: the consumer reports an applied event. The real
+   * ordered-ledger prefix enforcement is covered against the SSE transport; this
+   * fake only tracks the observable cursor for FabRuntime-level tests. */
   acknowledge(event: CommandResultEvent): void {
     this.acknowledgedCursorValue = advanceFakeCursor(this.acknowledgedCursorValue, {
       epoch: 'epoch-1',
       sequence: event.revision,
     });
+  }
+
+  /** ADR-010 §6.2: authoritative recovery safe watermark from FabRuntime. */
+  cover(cursor: CommandCursor): void {
+    this.acknowledgedCursorValue = advanceFakeCursor(this.acknowledgedCursorValue, cursor);
+    this.deliveredCursor = advanceFakeCursor(this.deliveredCursor, cursor);
+  }
+
+  readonly availability: CommandSourceAvailability = 'ready';
+
+  get protocolDiagnostics(): readonly CommandProtocolDiagnostic[] {
+    return [];
   }
 
   get cursors(): CommandSourceCursors {

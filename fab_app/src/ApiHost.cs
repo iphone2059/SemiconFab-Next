@@ -25,6 +25,9 @@ internal static class ApiHost
         if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
             builder.WebHost.UseUrls("http://127.0.0.1:5080");
         var data = Path.GetFullPath(builder.Configuration["Fab:DataDirectory"] ?? Path.Combine(builder.Environment.ContentRootPath, ".local", "data"));
+        // The current deployment defaults to one FAB, while the architecture supports 1..32
+        // independent FABs via explicit Fab:FabCount. Every FAB-scoped endpoint must therefore
+        // carry/cross-check a fabId and never substitute FAB-01 silently.
         var fabCount = builder.Configuration.GetValue("Fab:FabCount", SiteDirectory.DefaultFabCount);
         var commandOptions = new EquipmentCommandOptions
         {
@@ -99,42 +102,16 @@ internal static class ApiHost
         app.MapGet("/health/live", () => Results.Ok(new { status = "live" }));
         app.MapGet("/health/ready", () => Results.Ok(new { status = "ready", environment = "Development", metadataStore = "local-file", productionReady = false })).RequireAuthorization();
         var api = app.MapGroup("/api/v1").RequireAuthorization();
+        // Model-level legacy catalog (not Site/FAB-scoped): catalog records describe equipment models
+        // and vendors, so no fabId applies.
         api.MapGet("/catalog", (string? domain, string? category, string? q, CatalogService catalog) => catalog.Query(domain, category, q));
         api.MapGet("/catalog/{id:guid}", (Guid id, CatalogService catalog) =>
             catalog.Find(id) is { } entry ? Results.Ok(entry) : Results.Problem(statusCode: 404, title: "Catalog record not found"));
+        // Site-level catalog: returns the Site and every FAB identity it owns. Site aggregates never
+        // substitute FAB-01 for a specific FAB; FAB-scoped data uses the /fabs/{fabId}/... routes.
         api.MapGet("/sites", (SiteDirectory catalog) => catalog.GetSites());
-        api.MapGet("/sites/{siteId:guid}/equipment-status", (Guid siteId, EquipmentStatusService status, SiteDirectory directory) =>
-            directory.TryGetSite(siteId, out var site)
-                ? Results.Ok(status.Get(siteId, site.Fabs[0].Id))
-                : Results.Problem(statusCode: 404, title: "Site not found"));
-        api.MapGet("/sites/{siteId:guid}/equipment-status/stream", async (Guid siteId, EquipmentStatusService status, SiteDirectory directory, HttpContext context, CancellationToken cancellationToken) =>
-        {
-            if (!directory.TryGetSite(siteId, out var site))
-            {
-                await Results.Problem(statusCode: 404, title: "Site not found").ExecuteAsync(context);
-                return;
-            }
-            var fabId = site.Fabs[0].Id;
-            context.Response.Headers.ContentType = "text/event-stream";
-            context.Response.Headers.CacheControl = "no-cache";
-            context.Response.Headers.Connection = "keep-alive";
-            context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
-            try
-            {
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    var snapshot = status.Get(siteId, fabId);
-                    var json = System.Text.Json.JsonSerializer.Serialize(snapshot, SseJsonOptions);
-                    await context.Response.WriteAsync($"data: {json}\n\n", cancellationToken);
-                    await context.Response.Body.FlushAsync(cancellationToken);
-                    await Task.Delay(TimeSpan.FromSeconds(4), cancellationToken);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // Client disconnected.
-            }
-        });
+        // FAB-level equipment status and stream. The former Site-level aliases that silently
+        // substituted FAB-01 were removed; clients must pass an explicit fabId (multi-FAB safe).
         api.MapGet("/sites/{siteId:guid}/fabs/{fabId:guid}/equipment-status", (Guid siteId, Guid fabId, EquipmentStatusService status, SiteDirectory directory, IFabAuthorization authorization, HttpContext context) =>
             directory.TryGetFab(siteId, fabId, out var fab) && authorization.IsAuthorized(siteId, fab.Id, context.User)
                 ? Results.Ok(status.Get(siteId, fabId))
@@ -166,6 +143,8 @@ internal static class ApiHost
                 // Client disconnected.
             }
         });
+        // FAB-level command submission: siteId is the ownership/authorization scope and the body
+        // carries the required target FAB identity; there is no Site-wide command target.
         api.MapPost("/sites/{siteId:guid}/commands", (Guid siteId, EquipmentCommandRequest? request, HttpContext context,
             EquipmentCommandService commands, SiteDirectory directory, IFabAuthorization authorization) =>
         {
@@ -202,6 +181,8 @@ internal static class ApiHost
                 _ => Results.Accepted($"/api/v1/commands/{result.Command!.CommandId}", result.Command)
             };
         });
+        // FAB-level authoritative command lookup: the command identity is (siteId, fabId, commandId)
+        // and both parent identities are encoded in the stored command instead of the path.
         api.MapGet("/commands/{commandId:guid}", (Guid commandId, EquipmentCommandService commands, IFabAuthorization authorization, HttpContext context) =>
         {
             var command = commands.Get(commandId);
@@ -268,6 +249,8 @@ internal static class ApiHost
                     });
             return Results.Ok(result.Page!);
         });
+        // FAB-scoped command SSE: the fabId query parameter is required; there is deliberately no
+        // Site-wide command stream that could silently mix or pick one FAB's events.
         api.MapGet("/sites/{siteId:guid}/commands/stream", async (Guid siteId, string? fabId, EquipmentCommandService commands,
             SiteDirectory directory, IFabAuthorization authorization, HttpContext context, CancellationToken cancellationToken) =>
         {
@@ -355,6 +338,7 @@ internal static class ApiHost
                 // Client disconnected.
             }
         });
+        // FAB-scoped telemetry SSE (the fabId path segment is the telemetry identity).
         api.MapGet("/sites/{siteId:guid}/fabs/{fabId:guid}/telemetry/stream", async (Guid siteId, Guid fabId, TelemetrySimulationService telemetry,
             IFabAuthorization authorization, HttpContext context, CancellationToken cancellationToken) =>
         {
@@ -386,7 +370,11 @@ internal static class ApiHost
                 // Client disconnected.
             }
         });
+        // Model-level capability descriptor: not Site/FAB-scoped and intentionally identical for all FABs.
         api.MapGet("/capabilities", () => new { contractVersion = 1, model = "SYNTHETIC_FIFO_SINGLE_TOOL_V1", independent = true, sharedCapacity = false, otControl = false, postgresql = false, binaryRealtime = false, productionReady = false });
+        // Site-level Run resources: a Run scenario validates a non-empty, duplicate-free subset of the
+        // configured Site's FABs (1..32 explicit via Fab:FabCount; current deployment default one),
+        // never an implicit FAB-01.
         api.MapGet("/runs", (IRunService runs) => runs.List());
         api.MapPost("/runs", (CreateRunRequest request, HttpContext context, IRunService runs, SiteDirectory catalog) =>
         {
@@ -399,6 +387,8 @@ internal static class ApiHost
             context.Response.Headers.ETag = $"\"{run.Version}\"";
             return Results.Accepted($"/api/v1/runs/{run.RunId}", run);
         });
+        // Run resources are Site-level: a Run's frozen scenario carries its Site identity, and each
+        // execution inside it is FAB-scoped by fabId (never collapsed to FAB-01).
         api.MapGet("/runs/{id:guid}", (Guid id, IRunService runs, HttpContext context) =>
         {
             var run = runs.Get(id);
@@ -412,6 +402,8 @@ internal static class ApiHost
             var result = runs.GetResults(id);
             return result is null ? Results.Problem(statusCode: 409, title: "Run results are not committed") : Results.Ok(result);
         });
+        // Site-level KPI: SiteKpiCalculator aggregates every FAB execution of the requested Run and
+        // validates a common observation boundary; it never substitutes FAB-01 for the Site.
         api.MapGet("/sites/{siteId:guid}/kpi", (Guid siteId, Guid runId, IRunService runs) =>
         {
             var run = runs.Get(runId);

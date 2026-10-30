@@ -30,6 +30,8 @@ export interface LiteWorldCallbacks {
   onToolHover?(hover: HoveredTool | null): void;
   /** Latest Redux tool-state snapshot, read once per rendered frame like the legacy backend. */
   getToolStates?(): readonly FabToolState[];
+  /** R3-10: FAB code of this scene (product default has three independent FABs). */
+  readonly fabCode?: string;
 }
 export interface LiteWorldPerf {
   readonly frames: number;
@@ -224,7 +226,7 @@ export async function createLiteWorld(
     // Observe uncaptured GPU validation errors from the very first native allocation of this world.
     detachGpuError = onEngineGpuError(engine, error => gpuErrors.push(error.message));
     stage('equipment');
-    equipment = createLiteEquipment(scene, engine);
+    equipment = createLiteEquipment(scene, engine, callbacks.fabCode ?? 'FAB-01');
     stage('structure');
     structure = createLiteStaticStructure(scene, engine);
     stage('motion');
@@ -386,7 +388,8 @@ export async function createLiteWorld(
     },
     setView(preset, fabId) {
       if (disposed) return;
-      // Single-FAB product layout: every fabId focuses the same source target (legacy fabTargets map).
+      // Each viewer renders one FAB scene with FAB-scoped instance ids (R3-10); every FAB shares
+      // the same source target geometry, so fabId focuses the common target (legacy fabTargets map).
       const focus = fabId ? fabTarget : undefined;
       if ((preset === 'focus' || preset === 'iso') && focus) cameraControl.preset(preset, 1000, focus);
       else cameraControl.preset(preset, 1000);

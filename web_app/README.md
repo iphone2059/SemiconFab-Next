@@ -4,7 +4,7 @@ SemiconFab-Next 唯一 Web 前端：Vite + React 单页站点。**Effect 4 + 严
 
 React Compiler 使用 **Rust/Oxc**：`@vitejs/plugin-react@6.1.2` 的 `compiler` 选项驱动 `oxc-transform-react@0.156.0`（experimental，非 Babel）；`oxlint@1.90.0` 的 React correctness 规则作为静态门禁。
 
-当前产品与所有测试仅使用一个活动 FAB（FAB-01）。按 FAB 装配的 Runtime/遥测/设备状态、复合身份与集合契约保留，支持将来扩展；当前不要求多 FAB 部署/验收。
+当前部署默认 1 个 FAB；架构必须支持 1–32 个相互独立、完整配置的 FAB（`Fab:FabCount` 显式配置），统一管理与监控。前端按 FAB 装配 Runtime/遥测/设备状态并用复合身份 `(siteId, fabId)` 隔离，页面/路由/数据层不得假设只有一个 FAB；浏览器验收可聚焦单个 FAB 渲染（跨 FAB 隔离由集成测试覆盖）。命令恢复仅保证活动命令，终态历史跨刷新不保证（ADR-010 §6.6）。
 
 ## 目录（实际）
 

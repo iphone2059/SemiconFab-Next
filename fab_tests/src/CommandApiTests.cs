@@ -828,6 +828,8 @@ public sealed class CommandApiTests
     {
         var sites = await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites");
         var site = Assert.Single(sites!);
+        // Command API tests target FAB-01 of the current single-FAB deployment default; every
+        // command endpoint stays FAB-scoped so an explicit multi-FAB catalog needs no code change.
         return (site.SiteId, Assert.Single(site.Fabs).FabId);
     }
 

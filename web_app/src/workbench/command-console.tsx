@@ -27,7 +27,7 @@ function ProjectionRow({ fabId, commandId }: { fabId: string; commandId: string 
 export function CommandConsole({ siteId, fabId }: { siteId: string; fabId: string }) {
   const console = useCommandConsole({ siteId, fabId });
   return (
-    <Panel title="设备命令" subtitle="HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。">
+    <Panel title="设备命令" subtitle="HTTP 提交 → SSE 命令流 → XState v6 工作流；本面板只读投影。刷新/断线恢复只保证活动命令（ADR-010 §6.6），终态历史请从运行历史/独立历史资源查看。">
       <form
         onSubmit={(event) => {
           void console.submit(event);

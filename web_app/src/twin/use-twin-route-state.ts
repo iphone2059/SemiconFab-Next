@@ -147,6 +147,9 @@ export function useTwinRouteState({
     : fabId
       ? sitesData.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId))
       : sitesData.find((value) => value.siteId === siteId) ?? sitesData[0];
+  // R3-10: the URL owns FAB identity. Only when the URL has no fabId (or references unknown
+  // data) do we fall back to the first configured FAB; a Site normally has 3 independent FABs,
+  // so this is an explicit default selection rather than a single-FAB assumption.
   const selectedFabId = (fabId ?? site?.fabs[0]?.fabId);
   const fab = (site ? site.fabs.find((value) => value.fabId === selectedFabId) ?? site.fabs[0] : undefined);
 

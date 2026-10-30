@@ -11,14 +11,17 @@ import {
 } from '../../support/command-fakes.ts';
 
 /**
- * Matrix item 2 (frontend half, ADR-010 3, CR-02): recovery must loop journal
+ * Matrix item 2 (frontend half, ADR-010 §3/§6.3, CR-02): recovery must loop journal
  * pages with an explicit epoch until the authoritative latestSequence, validate
- * every page (epoch continuity, strictly increasing sequences, no holes) and fall
- * back to the authoritative FAB listing on epoch mismatch / gap / malformed page.
+ * every page (epoch equality, strict Site-sequence increase, cursor bounds and
+ * nextAfterSequence progress) and fall back to the authoritative FAB listing on
+ * epoch mismatch / server hasGap / malformed page.
  *
- * RED baseline: the current FabRuntime fetches one page (limit 256) without an
- * epoch and silently stops; these assertions fail until the recovery state
- * machine + pagination loop land.
+ * R3-03: the Site sequence is global while the page is FAB-filtered, so a FAB-A
+ * page may legitimately be 1,3,5,7. A gap between two FAB-A events is never proof
+ * of a journal hole; only the server hasGap flag (or an epoch error) is
+ * authoritative. Fixtures therefore return FAB-A events only (no FAB-B rows are
+ * ever placed into a FAB page).
  */
 const fabs: TestFab[] = [];
 afterEach(async () => {
@@ -153,22 +156,19 @@ describe('matrix 2: journal pagination with epoch (ADR-010 3)', () => {
     expect(recoveryState(created.runtime)?.phase).toBe('Healthy');
   });
 
-  it('treats a sequence hole as a gap and recovers from the authoritative list', async () => {
+  it('treats the server hasGap flag as authoritative and recovers from the list', async () => {
     const source = new FakeCommandEventSource();
     const gateway = baseGateway({
       getCommandJournalPage: async () =>
         ({
           epoch: 'epoch-1',
-          hasGap: false,
-          firstRetainedSequence: 0,
+          // Server-classified loss: the only authoritative neighbour-gap signal.
+          hasGap: true,
+          firstRetainedSequence: 5,
           latestSequence: 10,
-          events: [
-            { sequence: 2, fabId: 'fab-a', commandId: 'cmd-1', revision: 2, outcome: 'executing', occurredAt: 'now' },
-            // sequence 3 is missing: a silent hole must force authoritative recovery.
-            { sequence: 4, fabId: 'fab-a', commandId: 'cmd-1', revision: 4, outcome: 'executing', occurredAt: 'now' },
-          ],
-          nextAfterSequence: 4,
-        }) as unknown as CommandJournalPage,
+          events: [],
+          nextAfterSequence: 8,
+        }) as CommandJournalPage,
       listFabCommands: async () =>
         emptyRecoveryList([commandRecord({ fabId: 'fab-a', commandId: 'cmd-1', revision: 9, outcome: 'executing' })]),
     });
@@ -180,50 +180,41 @@ describe('matrix 2: journal pagination with epoch (ADR-010 3)', () => {
     emitDirty(source, { reason: 'overflow', droppedCount: 1, delivered: { epoch: 'epoch-1', sequence: 1 }, gapStart: 2 });
     await expect.poll(() => gateway.listCalls.length, { timeout: 2_000 }).toBeGreaterThan(listCallsBefore);
     await expect.poll(() => created.runtime.getProjection('cmd-1')?.revision, { timeout: 2_000 }).toBe(9);
+    expect(created.runtime.lastJournalPage).toMatchObject({ hasGap: true, epoch: 'epoch-1' });
   });
 
-  it('continues across a page whose events are all another FAB (sequence watermark decides)', async () => {
+  it('accepts a FAB-filtered sparse Site page (FAB-A 1,3,5,7) without listing', async () => {
     const source = new FakeCommandEventSource();
-    let pageRequests = 0;
+    const sparsePages: Array<{ afterSequence?: number }> = [];
     const gateway = baseGateway({
       getCommandJournalPage: async (_siteId: string, _fabId: string, cursor: { afterSequence?: number }) => {
-        pageRequests += 1;
-        const after = cursor.afterSequence ?? 0;
-        if (after === 0) {
-          return {
-            epoch: 'epoch-1', hasGap: false, firstRetainedSequence: 0, latestSequence: 10,
-            events: [
-              { sequence: 1, fabId: 'fab-b', commandId: 'other', revision: 1, outcome: 'executing', occurredAt: 'now' },
-              { sequence: 2, fabId: 'fab-b', commandId: 'other', revision: 2, outcome: 'executing', occurredAt: 'now' },
-            ],
-            nextAfterSequence: 2,
-          } as unknown as CommandJournalPage;
-        }
-        // Sequences stay site-wide contiguous (3..10); only the last event is ours.
+        sparsePages.push({ ...cursor });
+        // Site-global sequence 1..10; only FAB-A rows 1,3,5,7 are part of this
+        // FAB's page. FAB-B rows are never returned by a FAB-filtered endpoint.
         return {
-          epoch: 'epoch-1', hasGap: false, firstRetainedSequence: 0, latestSequence: 10,
-          events: Array.from({ length: 8 }, (_, index) => {
-            const sequence = index + 3;
-            const ours = sequence === 10;
-            return {
-              sequence,
-              fabId: ours ? 'fab-a' : 'fab-b',
-              commandId: ours ? 'cmd-1' : 'other',
-              revision: sequence,
-              outcome: ours ? ('succeeded' as const) : ('executing' as const),
-              occurredAt: 'now',
-            };
-          }),
+          epoch: 'epoch-1', hasGap: false, firstRetainedSequence: 1, latestSequence: 10,
+          events: [
+            { sequence: 1, fabId: 'fab-a', commandId: 'cmd-1', revision: 1, outcome: 'accepted', occurredAt: 'now' },
+            { sequence: 3, fabId: 'fab-a', commandId: 'cmd-1', revision: 3, outcome: 'executing', occurredAt: 'now' },
+            { sequence: 5, fabId: 'fab-a', commandId: 'cmd-1', revision: 5, outcome: 'executing', occurredAt: 'now' },
+            { sequence: 7, fabId: 'fab-a', commandId: 'cmd-1', revision: 7, outcome: 'succeeded', occurredAt: 'now' },
+          ],
           nextAfterSequence: 10,
-        } as unknown as CommandJournalPage;
+        } as CommandJournalPage;
       },
     });
     const created = fab({ source, gateway });
     created.runtime.start();
     created.runtime.trackCommand('cmd-1');
-    await flush(5);
-    emitDirty(source, { reason: 'overflow', droppedCount: 1, delivered: { epoch: 'epoch-1', sequence: 0 }, gapStart: 1 });
-    await expect.poll(() => created.runtime.getProjection('cmd-1')?.revision, { timeout: 2_000 }).toBe(10);
-    expect(pageRequests).toBe(2);
+    await expect.poll(() => created.runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
+    const listCallsBefore = gateway.listCalls.length;
+    emitDirty(source, { reason: 'overflow', droppedCount: 4, delivered: { epoch: 'epoch-1', sequence: 0 }, gapStart: 1 });
+    await expect.poll(() => created.runtime.getProjection('cmd-1')?.revision, { timeout: 2_000 }).toBe(7);
+    expect(created.runtime.getProjection('cmd-1')?.outcome).toBe('succeeded');
+    // One page was enough: nextAfterSequence (10) reached latestSequence (10); the
+    // sparse FAB sequence was never interpreted as a hole and needed no list.
+    expect(sparsePages).toHaveLength(1);
+    expect(sparsePages[0]?.afterSequence).toBe(0);
+    expect(gateway.listCalls.length).toBe(listCallsBefore);
   });
 });

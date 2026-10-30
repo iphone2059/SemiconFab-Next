@@ -73,8 +73,18 @@ export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode
       );
     };
     // ADR-011 §2.1: the gateway returns native Effects and never runs them; the
-    // FabRuntime executes recovery effects through AppRuntime.runPromise.
+    // FabRuntime executes them through the AppRuntime boundary.
+    // R3-07: the composition root must declare its recovery authority explicitly.
+    // A browser production build always has fetch; if it is missing there, fail
+    // fast instead of silently assembling a runtime that can never recover. The
+    // jsdom/Storybook composition (no fetch) is an explicit display-only runtime
+    // whose recovery phase is observable as Unavailable (never Healthy).
     const gateway = typeof fetch === 'function' ? createHttpCommandGateway() : undefined;
+    if (gateway === undefined && import.meta.env.PROD) {
+      throw new Error(
+        'Command recovery authority unavailable: this composition root must provide a CommandGateway (fetch is missing).',
+      );
+    }
     const factory = new FabRuntimeFactory({
       runtime: appRuntime,
       parentScope: rootScope,

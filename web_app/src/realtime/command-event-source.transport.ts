@@ -3,6 +3,8 @@ import type {
   CommandConnectionStatus,
   CommandCursor,
   CommandEventSource,
+  CommandProtocolDiagnostic,
+  CommandProtocolDiagnosticKind,
   CommandResultEvent,
   CommandSourceCursors,
   CommandStreamDirty,
@@ -11,7 +13,12 @@ import type {
   CommandTransportFailure,
 } from '@/contracts/command-events.contract';
 import { type CommandDirtyReason, commandDirtySchema } from '@/api/command-recovery.schema';
-import { MessageDecoder } from '@/realtime/message-decoder';
+import {
+  COMMAND_RESULT_TOPIC,
+  MessageDecoder,
+  RealtimeDecodeError,
+  type DecodedRealtimeMessage,
+} from '@/realtime/message-decoder';
 
 interface SseMessageLike {
   readonly data: string;
@@ -49,7 +56,16 @@ export interface SseCommandEventSourceOptions {
   readonly connectTimeoutMs?: number;
   /** Delay before a failed/interrupted connection is reopened. */
   readonly reconnectDelayMs?: number;
+  /**
+   * Ordered ACK ledger bound (ADR-010 §6.2). Reaching the bound is a Dirty signal
+   * and blocks further ACK tracking; pending entries are never evicted to advance
+   * the acknowledged cursor (default 256).
+   */
+  readonly ackLedgerCapacity?: number;
 }
+
+export const DEFAULT_ACK_LEDGER_CAPACITY = 256;
+export const MAX_PROTOCOL_DIAGNOSTICS = 16;
 
 type BufferPolicy = 'mark-dirty' | 'coalesce-newest';
 
@@ -65,13 +81,22 @@ interface LossEpisode {
   gapEnd: number;
 }
 
-/** Bounded per-consumer delivery accounting for one recorded event. */
-const MAX_REMEMBERED_EVENTS = 2048;
+/** Ordered ACK ledger status (ADR-010 §6.2). */
+type AckLedgerStatus = 'pending' | 'applied' | 'covered';
+
+interface AckLedgerEntry {
+  readonly epoch: string;
+  readonly sequence: number;
+  readonly fabId: string;
+  readonly commandId: string;
+  readonly revision: number;
+  status: AckLedgerStatus;
+}
 
 /**
- * Server-classified dirty causes (CommandDirtyDto) mapped onto the ADR-010 §2
- * transport reasons. All of them require authoritative reconciliation, and none
- * of them may be mistaken for a delivered journal position.
+ * Server-classified dirty causes (CommandDirtyDto) mapped onto the transport
+ * reasons. They require authoritative reconciliation and may never be mistaken
+ * for a safely delivered journal position.
  */
 const SERVER_DIRTY_REASON: Record<CommandDirtyReason, CommandStreamDirtyReason> = {
   'retention-trim': 'server-overflow',
@@ -91,15 +116,24 @@ function parseServerDirty(data: string): { reason: CommandDirtyReason; droppedCo
   }
 }
 
-/** Monotonic per-epoch cursor advance; a new epoch restarts the sequence order. */
+/** Monotonic per-epoch cursor advance for diagnostics-only cursors. */
 function advanceCursor(current: CommandCursor | undefined, candidate: CommandCursor): CommandCursor {
   if (!current) return candidate;
   if (current.epoch === candidate.epoch) {
     return candidate.sequence >= current.sequence ? candidate : current;
   }
-  // A different epoch is not comparable; the newest observed epoch wins and the
-  // consumer must run authoritative recovery before trusting continuation.
   return candidate;
+}
+
+/**
+ * The acknowledged (safe) cursor can only advance inside the epoch it was
+ * established in; an epoch switch is an authoritative-cover decision, never a
+ * side effect of data frames/acks.
+ */
+function advanceSafeAcknowledged(current: CommandCursor | undefined, candidate: CommandCursor): CommandCursor {
+  if (!current) return candidate;
+  if (current.epoch !== candidate.epoch) return current;
+  return candidate.sequence > current.sequence ? candidate : current;
 }
 
 /**
@@ -197,29 +231,42 @@ export function parseCommandReplayGap(data: string, cursor: { epoch?: string; se
   };
 }
 
+function isJsonObject(data: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(data);
+    return typeof parsed === 'object' && parsed !== null;
+  } catch {
+    return false;
+  }
+}
+
 function browserEventSourceFactory(): ((url: string) => EventSourceLike) | undefined {
   if (typeof EventSource === 'undefined') return undefined;
   return (target) => new EventSource(target) as unknown as EventSourceLike;
 }
 
 /**
- * Command-result transport backed by one FAB SSE stream (ADR-010 §2).
+ * Command-result transport backed by one FAB SSE stream (ADR-010 §2/§6.2/§6.4).
  *
  * Ownership: every consumer Stream is a child of the supplied
  * CommandTransportScope; the first commandResults consumer opens one EventSource,
  * the last consumer (or Scope close) closes it, and Scope finalizers clear every
  * timer. Each connection attempt carries a generation token: callbacks from a
- * closed/replaced connection are rejected and reported as stale-generation
- * dirty signals instead of corrupting the current connection state.
+ * closed/replaced connection are rejected and reported as stale-generation dirty
+ * signals instead of corrupting the current connection state.
  *
- * Three cursors, never mixed:
+ * Ordered ACK ledger (never max(sequence)):
  *  - observed: highest parsed SSE id (diagnostics/dedupe only);
- *  - delivered: highest frame actually accepted by the bounded consumer queue;
- *  - acknowledged: highest delivered frame the consumer applied via acknowledge().
- * A full queue drops the frame BEFORE delivered advances, records the exact
- * dropped sequence range into the dirty signal and keeps the conservative
- * delivered cursor as the authoritative recovery start point. There is no
- * unbounded PubSub and no global Effect runner here.
+ *  - delivered: highest frame accepted by the bounded consumer queue (diagnostics);
+ *  - acknowledged: highest SAFE prefix — every entry up to it is applied|covered.
+ * Every delivered frame with a usable id is appended to a bounded ordered ledger
+ * as 'pending'; the bridge marks it 'applied' only after the actor advanced;
+ * authoritative recovery calls cover(cursor) to mark entries 'covered'. The
+ * acknowledged cursor advances only across a contiguous applied|covered prefix, so
+ * a later applied event can never skip an earlier pending one. Ledger saturation,
+ * epoch discontinuity and protocol errors become Dirty (List recovery); pending
+ * entries are never evicted to move the cursor forward. Protocol diagnostics are
+ * bounded and payload-free. There is no unbounded PubSub and no global runner here.
  */
 export function createSseCommandEventSource(
   url: string,
@@ -228,6 +275,7 @@ export function createSseCommandEventSource(
   const capacity = Math.max(1, options.capacity ?? 256);
   const connectTimeoutMs = Math.max(1, options.connectTimeoutMs ?? 10_000);
   const reconnectDelayMs = Math.max(0, options.reconnectDelayMs ?? 250);
+  const ackLedgerCapacity = Math.max(1, options.ackLedgerCapacity ?? DEFAULT_ACK_LEDGER_CAPACITY);
   const decoder = new MessageDecoder();
   const state: {
     status: CommandConnectionStatus;
@@ -245,53 +293,76 @@ export function createSseCommandEventSource(
   let finalizerRegistered = false;
   let droppedTotal = 0;
   let lossEpisode: LossEpisode | undefined;
-  /** Delivered event -> journal cursor, bounded; acknowledge() consumes entries. */
-  const rememberedEvents = new Map<string, CommandCursor>();
 
-  const eventKey = (event: CommandResultEvent): string =>
+  /** Ordered delivered ledger (arrival order == Site sequence order per generation). */
+  const ledger: AckLedgerEntry[] = [];
+  const ledgerByEventIdentity = new Map<string, AckLedgerEntry>();
+  let ledgerEpoch: string | undefined;
+  /** Capacity episode: no further ACK tracking until an authoritative cover drains it. */
+  let ledgerSaturated = false;
+  /**
+   * Sticky safety latch: once the ledger saturated, frames that were delivered but
+   * never tracked must not be silently skipped by a later ACK. Only an
+   * authoritative cover can release the safe prefix again (ADR-010 §6.2).
+   */
+  let ackBlockedUntilCover = false;
+  /** One Dirty signal per stalled-prefix episode (later applied behind a pending head). */
+  let prefixStallSignalled = false;
+
+  const protocolDiagnosticLog: CommandProtocolDiagnostic[] = [];
+
+  const eventIdentity = (event: Pick<CommandResultEvent, 'fabId' | 'commandId' | 'revision'>): string =>
     event.fabId + '\u0000' + event.commandId + '\u0000' + event.revision;
+  const entryIdentity = (entry: AckLedgerEntry): string =>
+    eventIdentity({ fabId: entry.fabId, commandId: entry.commandId, revision: entry.revision });
 
-  const rememberEvent = (event: CommandResultEvent, cursor: CommandCursor): void => {
-    rememberedEvents.set(eventKey(event), cursor);
-    if (rememberedEvents.size <= MAX_REMEMBERED_EVENTS) return;
-    const oldest = rememberedEvents.keys().next().value;
-    if (oldest !== undefined) rememberedEvents.delete(oldest);
+  /** Bounded, payload-free protocol diagnostics (ADR-010 §6.4). */
+  const recordDiagnostic = (
+    kind: CommandProtocolDiagnosticKind,
+    reason: string,
+    cursor?: CommandCursor,
+  ): void => {
+    protocolDiagnosticLog.push({
+      at: Date.now(),
+      kind,
+      reason,
+      ...(cursor ? { epoch: cursor.epoch, sequence: cursor.sequence } : {}),
+    });
+    while (protocolDiagnosticLog.length > MAX_PROTOCOL_DIAGNOSTICS) protocolDiagnosticLog.shift();
   };
 
   /**
-   * Conservative recovery start: the acknowledged cursor when it is at or before
-   * delivered in the same epoch, otherwise delivered. Cursors from different
-   * epochs are not comparable, so the acknowledged (older) epoch is conservative.
+   * Dirty signals always carry the last SAFE cursor (acknowledged), never a
+   * delivered-but-unapplied position: recovery must not skip pending events.
    */
-  const conservativeDelivered = (): CommandCursor | undefined => {
-    const delivered = state.delivered;
-    const acknowledged = state.acknowledged;
-    if (!delivered) return acknowledged;
-    if (!acknowledged) return delivered;
-    if (delivered.epoch !== acknowledged.epoch) return acknowledged;
-    return acknowledged.sequence <= delivered.sequence ? acknowledged : delivered;
-  };
-
   const dirty = new BoundedSignal<CommandStreamDirty>(1, 'coalesce-newest');
-  /**
-   * Publish a dirty signal. droppedIncrement is added to the monotonic counter;
-   * the exact gap range is attached only for local bus losses (an unknown server
-   * gap must omit gapStart so the consumer performs full authoritative recovery).
-   */
   const publishDirty = (
     reason: CommandStreamDirtyReason,
     droppedIncrement: number,
     includeEpisode: boolean,
   ): void => {
     droppedTotal += droppedIncrement;
-    const delivered = conservativeDelivered();
+    const safe = state.acknowledged;
     const episode = includeEpisode ? lossEpisode : undefined;
     dirty.publish({
       reason,
       droppedCount: droppedTotal,
-      ...(delivered ? { delivered } : {}),
+      ...(safe ? { delivered: { ...safe } } : {}),
       ...(episode ? { gapStart: episode.gapStart, gapEnd: episode.gapEnd } : {}),
     });
+  };
+  /**
+   * Protocol-level Dirty: no gapStart (origin not provable) and no ACK advance;
+   * the consumer must run authoritative List recovery (ADR-010 §6.4).
+   */
+  const publishProtocolDirty = (
+    reason: CommandStreamDirtyReason,
+    kind: CommandProtocolDiagnosticKind,
+    detail: string,
+    cursor?: CommandCursor,
+  ): void => {
+    recordDiagnostic(kind, detail, cursor);
+    publishDirty(reason, 0, false);
   };
   const publishControl = <A>(channel: BoundedSignal<A>, value: A): void => {
     const outcome = channel.publish(value);
@@ -304,16 +375,154 @@ export function createSseCommandEventSource(
   const failures = new BoundedSignal<CommandTransportFailure>(capacity, 'mark-dirty');
   const reconnections = new BoundedSignal<void>(capacity, 'mark-dirty');
 
+  /** Advance the safe cursor over a contiguous applied|covered ledger prefix. */
+  const drainAcknowledgedPrefix = (): void => {
+    // A saturated ledger may have delivered frames without tracking them; the safe
+    // prefix must not advance until an authoritative cover proves the watermark.
+    if (ackBlockedUntilCover) return;
+    while (ledger.length > 0) {
+      const head = ledger[0];
+      if (head.status === 'pending') break;
+      ledger.shift();
+      ledgerByEventIdentity.delete(entryIdentity(head));
+      state.acknowledged = advanceSafeAcknowledged(state.acknowledged, {
+        epoch: head.epoch,
+        sequence: head.sequence,
+      });
+    }
+    if (ledger.length === 0) {
+      ledgerEpoch = undefined;
+      ledgerSaturated = false;
+      prefixStallSignalled = false;
+    }
+  };
+
+  /**
+   * Append one delivered frame to the ordered ledger. The entry stays 'pending'
+   * until the bridge reports the actor applied it; the acknowledged cursor never
+   * moves here. Capacity/epoch/non-monotonic conditions degrade to Dirty.
+   */
+  const appendLedgerEntry = (event: CommandResultEvent, cursor: CommandCursor): void => {
+    if (ledgerSaturated || ackBlockedUntilCover) return; // already Dirty; wait for authoritative cover
+    const acknowledged = state.acknowledged;
+    if (acknowledged && acknowledged.epoch === cursor.epoch && cursor.sequence <= acknowledged.sequence) {
+      // The frame is at/before the safe prefix: already applied or covered.
+      return;
+    }
+    const expectedEpoch = ledgerEpoch ?? acknowledged?.epoch;
+    if (expectedEpoch !== undefined && cursor.epoch !== expectedEpoch) {
+      publishProtocolDirty(
+        'stale-generation',
+        'epoch',
+        'data frame epoch differs from the safe acknowledged epoch; authoritative recovery required',
+        cursor,
+      );
+      return;
+    }
+    const tail = ledger[ledger.length - 1];
+    if (tail && tail.epoch === cursor.epoch) {
+      if (cursor.sequence === tail.sequence) return; // duplicate frame already tracked
+      if (cursor.sequence < tail.sequence) {
+        publishProtocolDirty('protocol-error', 'decode', 'non-monotonic SSE journal sequence', cursor);
+        return;
+      }
+    }
+    if (ledger.length >= ackLedgerCapacity) {
+      // Never evict a pending entry to advance the cursor: block ACK tracking and
+      // require authoritative recovery to cover the backlog (ADR-010 §6.2). The
+      // latch stays until cover() even if the tracked prefix later drains, because
+      // the untracked frames between them are not provably applied.
+      ledgerSaturated = true;
+      ackBlockedUntilCover = true;
+      publishProtocolDirty(
+        'ack-ledger-overflow',
+        'ack-ledger',
+        'ordered ACK ledger reached capacity; awaiting authoritative cover',
+        cursor,
+      );
+      return;
+    }
+    ledgerEpoch = cursor.epoch;
+    const entry: AckLedgerEntry = {
+      epoch: cursor.epoch,
+      sequence: cursor.sequence,
+      fabId: event.fabId,
+      commandId: event.commandId,
+      revision: event.revision,
+      status: 'pending',
+    };
+    ledger.push(entry);
+    ledgerByEventIdentity.set(eventIdentity(event), entry);
+  };
+
+  const acknowledge = (event: CommandResultEvent): void => {
+    const entry = ledgerByEventIdentity.get(eventIdentity(event));
+    if (!entry || entry.status !== 'pending') return;
+    entry.status = 'applied';
+    const head = ledger[0];
+    if (!prefixStallSignalled && head !== undefined && head !== entry && head.status === 'pending') {
+      // A later event was applied while an earlier delivered event is not (e.g. its
+      // command never got an actor). The safe prefix must not jump it: signal Dirty
+      // once so the consumer covers the blocked range via authoritative recovery.
+      prefixStallSignalled = true;
+      publishProtocolDirty(
+        'slow-consumer',
+        'ack-ledger',
+        'applied event blocked behind an earlier pending delivery; authoritative recovery required',
+        { epoch: head.epoch, sequence: head.sequence },
+      );
+    }
+    drainAcknowledgedPrefix();
+  };
+
+  /**
+   * Authoritative recovery safe watermark (ADR-010 §6.2). Marks entries at/before
+   * the cursor covered and advances the safe prefix; an authoritative epoch
+   * replacement is accepted ONLY here. A late/older-generation cover must not be
+   * issued by the owner (FabRuntime serializes cover per recovery generation); the
+   * transport additionally never regresses the same-epoch acknowledged sequence.
+   */
+  const cover = (cursor: CommandCursor): void => {
+    for (const entry of ledger) {
+      if (entry.epoch !== cursor.epoch || entry.sequence <= cursor.sequence) entry.status = 'covered';
+    }
+    const acknowledged = state.acknowledged;
+    if (!acknowledged) {
+      state.acknowledged = { ...cursor };
+    } else if (acknowledged.epoch === cursor.epoch) {
+      if (cursor.sequence > acknowledged.sequence) state.acknowledged = { ...cursor };
+    } else {
+      // Authoritative epoch replacement (never a data-frame side effect). The owner
+      // guarantees only the current recovery generation reaches this branch.
+      state.acknowledged = { ...cursor };
+    }
+    const delivered = state.delivered;
+    state.delivered = delivered && delivered.epoch === cursor.epoch
+      ? (cursor.sequence > delivered.sequence ? { ...cursor } : delivered)
+      : { ...cursor };
+    ledgerEpoch = cursor.epoch;
+    ledgerSaturated = false;
+    ackBlockedUntilCover = false;
+    prefixStallSignalled = false;
+    drainAcknowledgedPrefix();
+  };
+
   const recordDeliveredFrame = (event: CommandResultEvent, cursor: CommandCursor | undefined): void => {
     const outcome = commandResults.publish(event);
-    if (outcome.accepted && cursor) {
-      state.delivered = advanceCursor(state.delivered, cursor);
-      rememberEvent(event, cursor);
+    if (outcome.accepted) {
+      if (cursor) {
+        state.delivered = advanceCursor(state.delivered, cursor);
+        appendLedgerEntry(event, cursor);
+      } else {
+        // Cannot prove the frame identity: deliver for visibility but never ACK;
+        // force authoritative List recovery (no gapStart).
+        publishProtocolDirty('protocol-error', 'decode', 'command frame has no usable journal id');
+      }
     }
     if (outcome.dropped > 0) {
       // The frame is lost for at least one bounded consumer. Record the exact
-      // sequence range (when the id line is usable) and report the conservative
-      // delivered cursor; never advance cursors on a dropped frame.
+      // sequence range (when the id line is usable) and keep the safe cursor as the
+      // recovery start; never advance delivered/acknowledged on a dropped frame.
       if (cursor) {
         lossEpisode = lossEpisode
           ? { gapStart: Math.min(lossEpisode.gapStart, cursor.sequence), gapEnd: Math.max(lossEpisode.gapEnd, cursor.sequence) }
@@ -329,18 +538,11 @@ export function createSseCommandEventSource(
     }
   };
 
-  const acknowledge = (event: CommandResultEvent): void => {
-    const key = eventKey(event);
-    const cursor = rememberedEvents.get(key);
-    if (!cursor) return;
-    rememberedEvents.delete(key);
-    state.acknowledged = advanceCursor(state.acknowledged, cursor);
-  };
-
   const snapshotCursors = (): CommandSourceCursors => ({
     ...(state.observed ? { observed: { ...state.observed } } : {}),
     ...(state.delivered ? { delivered: { ...state.delivered } } : {}),
     ...(state.acknowledged ? { acknowledged: { ...state.acknowledged } } : {}),
+    pendingAcknowledgements: ledger.length,
   });
 
   let lastStatus: CommandConnectionStatus = 'connecting';
@@ -402,6 +604,19 @@ export function createSseCommandEventSource(
     scheduleReconnect();
   };
 
+  /** Fixed, payload-free classification of a command data frame decode failure. */
+  const classifyCommandFrameDecodeError = (
+    cause: unknown,
+  ): { readonly reason: 'decode-error' | 'protocol-error'; readonly detail: string } => {
+    if (cause instanceof RealtimeDecodeError) {
+      if (cause.topic !== undefined && cause.topic !== COMMAND_RESULT_TOPIC) {
+        return { reason: 'protocol-error', detail: 'unknown realtime topic on the command stream' };
+      }
+      return { reason: 'decode-error', detail: 'invalid command result frame' };
+    }
+    return { reason: 'decode-error', detail: 'command frame could not be decoded' };
+  };
+
   const open = (): void => {
     if (stopped || state.source) return;
     const generation = state.generation + 1;
@@ -428,27 +643,41 @@ export function createSseCommandEventSource(
     const isCurrent = (): boolean => !stopped && state.source === source && state.generation === generation;
     const isStale = (): boolean => {
       if (isCurrent()) return false;
+      recordDiagnostic('epoch', 'stale connection generation callback dropped');
       publishDirty('stale-generation', 0, false);
       return true;
     };
 
     const onReplayGap = (event: SseMessageLike): void => {
       if (isStale()) return;
+      if (!isJsonObject(event.data)) {
+        // The gap signal is still authoritative (replay could not cover), but the
+        // malformed control payload itself is a bounded diagnostic.
+        recordDiagnostic('control-frame', 'replay-gap control frame was not JSON', parseFullCursor(event.lastEventId));
+      }
       const observed = parseCommandCursor(event.lastEventId);
       publishControl(gaps, parseCommandReplayGap(event.data, observed));
     };
     const onServerDirty = (event: SseMessageLike): void => {
       if (isStale()) return;
       const frame = parseServerDirty(event.data);
-      if (!frame) return;
+      if (!frame) {
+        publishProtocolDirty(
+          'invalid-control-frame',
+          'control-frame',
+          'server dirty control frame could not be decoded',
+          parseFullCursor(event.lastEventId),
+        );
+        return;
+      }
       // The frame's cursor is a server position, never our delivered position: it
       // must not advance any local cursor. droppedCount stays monotonic.
       droppedTotal = Math.max(droppedTotal, frame.droppedCount);
-      const delivered = conservativeDelivered();
+      const safe = state.acknowledged;
       dirty.publish({
         reason: SERVER_DIRTY_REASON[frame.reason],
         droppedCount: droppedTotal,
-        ...(delivered ? { delivered } : {}),
+        ...(safe ? { delivered: { ...safe } } : {}),
       });
     };
     source.addEventListener?.('replay-gap', onReplayGap);
@@ -470,13 +699,24 @@ export function createSseCommandEventSource(
       if (isStale()) return;
       const cursor = parseFullCursor(event.lastEventId);
       if (cursor) state.observed = advanceCursor(state.observed, cursor);
+      let decoded: DecodedRealtimeMessage;
       try {
-        const decoded = decoder.decode(event.data);
-        if (decoded.kind === 'command') recordDeliveredFrame(decoded.event, cursor);
-      } catch {
-        // Malformed frames are transport noise; authoritative reconciliation
-        // recovers the command state instead of guessing from the frame.
+        decoded = decoder.decode(event.data);
+      } catch (cause) {
+        // ADR-010 §6.4: a data frame that cannot be decoded is a correctness event,
+        // never silently skipped. Publish dirty (no gapStart => authoritative List)
+        // and never ACK the frame.
+        const classified = classifyCommandFrameDecodeError(cause);
+        publishProtocolDirty(classified.reason, 'decode', classified.detail, cursor);
+        return;
       }
+      if (decoded.kind !== 'command') {
+        // The dedicated command stream only carries command results; another topic
+        // is a protocol error and must trigger authoritative recovery.
+        publishProtocolDirty('protocol-error', 'decode', 'non-command topic on the command stream', cursor);
+        return;
+      }
+      recordDeliveredFrame(decoded.event, cursor);
     };
     source.onerror = (event) => {
       if (isStale()) return;
@@ -484,7 +724,7 @@ export function createSseCommandEventSource(
       publishControl(failures, { message: 'command stream transport error', cause: event });
       // EventSource would auto-reconnect with an unowned timer; the transport owns
       // the single connection explicitly and reopens after reconnectDelayMs. The
-      // recovery start point is the acknowledged cursor exposed via cursors.
+      // recovery start point is the safe acknowledged cursor exposed via cursors.
       restartConnection();
     };
 
@@ -522,6 +762,11 @@ export function createSseCommandEventSource(
     transportFailures: failures.stream,
     dirty: dirty.stream,
     acknowledge,
+    cover,
+    availability: 'ready',
+    get protocolDiagnostics(): readonly CommandProtocolDiagnostic[] {
+      return protocolDiagnosticLog.slice();
+    },
     get cursors(): CommandSourceCursors {
       return snapshotCursors();
     },

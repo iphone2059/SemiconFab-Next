@@ -47,16 +47,36 @@ public sealed class ApiTests
     }
 
     [Fact]
-    public async Task SiteHasOneDefaultFabWithStableFab01Id()
+    public async Task SiteDefaultsToSingleFabWithStableDeterministicId()
     {
         using var factory = Factory();
         using var client = Authorized(factory);
         var sites = await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites");
         var site = Assert.Single(sites!);
         Assert.Equal(64, site.TemplateHash.Length);
+        // Current deployment default is one FAB; the architecture supports 1..32 independent FABs.
+        Assert.Equal(1, SiteDirectory.DefaultFabCount);
         var fab = Assert.Single(site.Fabs);
         Assert.Equal("FAB-01", fab.Code);
         Assert.Equal(ExpectedFabId("FAB-01"), fab.FabId);
+    }
+
+    [Fact]
+    public async Task MultiFabCatalogIsExplicitlyConfigurableWithDeterministicIds()
+    {
+        using var factory = Factory(("Fab:FabCount", "3"));
+        using var client = Authorized(factory);
+        var sites = await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites");
+        var site = Assert.Single(sites!);
+        Assert.Equal(3, site.Fabs.Length);
+        Assert.Equal(new[] { "FAB-01", "FAB-02", "FAB-03" }, site.Fabs.Select(fab => fab.Code).ToArray());
+        Assert.Equal(3, site.Fabs.Select(fab => fab.FabId).Distinct(StringComparer.Ordinal).Count());
+        foreach (var fab in site.Fabs)
+            Assert.Equal(ExpectedFabId(fab.Code), fab.FabId);
+        // FAB-01 keeps its stable identity; FAB-02/03 are deterministic, not aliases.
+        Assert.Equal(ExpectedFabId("FAB-01"), site.Fabs[0].FabId);
+        Assert.Equal(SiteDirectory.CreateFab(2).Id.ToString("D"), site.Fabs[1].FabId);
+        Assert.Equal(SiteDirectory.CreateFab(3).Id.ToString("D"), site.Fabs[2].FabId);
     }
 
     [Fact]
@@ -117,6 +137,8 @@ public sealed class ApiTests
         using var factory = Factory();
         using var client = Authorized(factory);
         var site = Assert.Single((await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites"))!);
+        // Current deployment default is one FAB; a Run scenario may select any non-empty subset of
+        // the Site's FABs (multi-FAB coverage uses an explicit Fab:FabCount=3 factory).
         var fab = Assert.Single(site.Fabs);
         var request = new CreateRunRequest(new ScenarioDefinition(
             1, site.SiteId, "INDEPENDENT", "42", "100000", "0",
@@ -145,6 +167,44 @@ public sealed class ApiTests
         using var totals = System.Text.Json.JsonDocument.Parse(await kpi.Content.ReadAsStringAsync());
         Assert.Equal("3", totals.RootElement.GetProperty("completedLots").GetString());
         Assert.Equal(1, totals.RootElement.GetProperty("fabCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task ExplicitlyConfiguredThreeFabRunPersistsAllIndependentFabsAndAggregatesSiteKpi()
+    {
+        using var factory = Factory(("Fab:FabCount", "3"));
+        using var client = Authorized(factory);
+        var site = Assert.Single((await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites"))!);
+        Assert.Equal(3, site.Fabs.Length);
+        var request = new CreateRunRequest(new ScenarioDefinition(
+            1, site.SiteId, "INDEPENDENT", "42", "100000", "0",
+            site.Fabs.Select(fab => new FabScenario(fab.FabId, fab.Code, 3, "1000")).ToArray()));
+        using var response = await Post(client, request, "three-fab");
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var created = (await response.Content.ReadFromJsonAsync<RunSummary>())!;
+        Assert.Equal(3, created.Executions.Length);
+        Assert.Equal(site.Fabs.Select(fab => fab.FabId).OrderBy(value => value, StringComparer.Ordinal),
+            created.Executions.Select(execution => execution.FabId).OrderBy(value => value, StringComparer.Ordinal));
+
+        RunSummary run = created;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        while (run.Status is not ("COMPLETED" or "FAILED"))
+        {
+            await Task.Delay(50, timeout.Token);
+            run = (await client.GetFromJsonAsync<RunSummary>($"/api/v1/runs/{created.RunId}", timeout.Token))!;
+        }
+        Assert.Equal("COMPLETED", run.Status);
+        var result = (await client.GetFromJsonAsync<RunResult>($"/api/v1/runs/{created.RunId}/results"))!;
+        Assert.Equal(3, result.Fabs.Length);
+        Assert.Equal(site.Fabs.Select(fab => fab.FabId).OrderBy(value => value, StringComparer.Ordinal),
+            result.Fabs.Select(fab => fab.FabId).OrderBy(value => value, StringComparer.Ordinal));
+
+        using var kpi = await client.GetAsync($"/api/v1/sites/{site.SiteId}/kpi?runId={created.RunId}");
+        Assert.Equal(HttpStatusCode.OK, kpi.StatusCode);
+        using var totals = System.Text.Json.JsonDocument.Parse(await kpi.Content.ReadAsStringAsync());
+        // Site KPI aggregates every FAB execution of the Run; it is not one FAB's value.
+        Assert.Equal("9", totals.RootElement.GetProperty("completedLots").GetString());
+        Assert.Equal(3, totals.RootElement.GetProperty("fabCount").GetInt32());
     }
 
     [Fact]

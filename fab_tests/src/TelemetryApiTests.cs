@@ -76,6 +76,7 @@ public sealed class TelemetryApiTests
         using var clientA = Authorized(factory);
         using var clientB = Authorized(factory);
         var site = await SiteAsync(clientA);
+        // Current deployment default is one FAB; multi-FAB catalogs are explicit via Fab:FabCount.
         var fabId = Assert.Single(site.Fabs).FabId;
         using var timeout = new CancellationTokenSource(StreamTimeout);
 

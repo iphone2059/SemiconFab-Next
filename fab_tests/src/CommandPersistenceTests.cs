@@ -281,6 +281,118 @@ public sealed class CommandPersistenceTests : IDisposable
         Assert.Single(reset.ListFabCommands(SiteId, Guid.Parse(FabId), EquipmentCommandService.StatusAll, -1).Commands);
     }
 
+    [Fact]
+    public void EmptySiteJournalPageIsNotGap()
+    {
+        var root = Root();
+        var service = Service(root, FastOptions());
+        var epoch = service.GetJournalEpoch(SiteId);
+        var page = service.ReadCommandJournalPage(SiteId, Guid.Parse(FabId), epoch, 0,
+            EquipmentCommandService.DefaultJournalPageLimit);
+        Assert.NotNull(page.Page);
+        Assert.False(page.Page!.HasGap);
+        Assert.Empty(page.Page.Events);
+        Assert.Equal(1, page.Page.FirstRetainedSequence);
+        Assert.Equal(0, page.Page.LatestSequence);
+        Assert.Equal(0, page.Page.NextAfterSequence);
+
+        // A legitimately empty Site must also replay without a gap for the initial cursor.
+        var replay = service.ReadJournal(SiteId, $"{epoch:D}:0", FabId);
+        Assert.False(replay.HasGap);
+        Assert.Equal(1, replay.FirstRetainedSequence);
+        Assert.Equal(0, replay.LatestSequence);
+        Assert.Null(service.CreateDirty(replay, $"{epoch:D}:0"));
+    }
+
+    [Fact]
+    public async Task CompletelyPrunedRetainedWindowReportsGap()
+    {
+        var root = Root();
+        var clock = new ManualClock();
+        var options = FastOptions(new EquipmentCommandOptions { TerminalTtl = TimeSpan.FromSeconds(30) });
+        var service = Service(root, options, clock);
+        var first = Submit(service, "equipment-0", "empty-window-1");
+        await WaitTerminalAsync(service, first.CommandId);
+        var second = Submit(service, "equipment-1", "empty-window-2");
+        await WaitTerminalAsync(service, second.CommandId);
+        clock.Advance(TimeSpan.FromSeconds(31));
+        Assert.Equal(2, service.PruneTerminalCommands());
+
+        var epoch = service.GetJournalEpoch(SiteId);
+        var page = service.ReadCommandJournalPage(SiteId, Guid.Parse(FabId), epoch, 0,
+            EquipmentCommandService.DefaultJournalPageLimit);
+        Assert.NotNull(page.Page);
+        Assert.True(page.Page!.HasGap);
+        Assert.Empty(page.Page.Events);
+        Assert.Equal(6, page.Page.LatestSequence);
+        Assert.Equal(7, page.Page.FirstRetainedSequence); // latest + 1 for a fully pruned window.
+        Assert.Equal(6, page.Page.NextAfterSequence); // the scanned Site watermark, not the old cursor.
+
+        // The exact boundary before the (now empty) retained window is not a gap.
+        var boundary = service.ReadCommandJournalPage(SiteId, Guid.Parse(FabId), epoch, 6,
+            EquipmentCommandService.DefaultJournalPageLimit);
+        Assert.NotNull(boundary.Page);
+        Assert.False(boundary.Page!.HasGap);
+        Assert.Empty(boundary.Page.Events);
+        Assert.Equal(6, boundary.Page.NextAfterSequence);
+
+        // SSE replay of the same old cursor must be an explicit gap, never a silent empty replay.
+        var replay = service.ReadJournal(SiteId, $"{epoch:D}:0", FabId);
+        Assert.True(replay.HasGap);
+        Assert.True(replay.CursorAccepted);
+        Assert.Equal(6, replay.DroppedCount);
+        Assert.NotNull(service.CreateDirty(replay, $"{epoch:D}:0"));
+        var caughtUp = service.ReadJournal(SiteId, $"{epoch:D}:6", FabId);
+        Assert.False(caughtUp.HasGap);
+    }
+
+    [Fact]
+    public async Task InteriorRetentionHoleIsReportedAsGap()
+    {
+        var root = Root();
+        var options = FastOptions();
+        var first = Service(root, options);
+        var commands = new List<string>();
+        for (var index = 0; index < 3; index++)
+        {
+            var command = Submit(first, $"equipment-{index}", $"hole-{index}");
+            commands.Add(command.CommandId);
+            // Wait for the terminal revision so each command contributes exactly three ordered events
+            // (accepted/executing/succeeded), giving Site sequences 1..3, 4..6 and 7..9.
+            await WaitTerminalAsync(first, command.CommandId);
+        }
+        Assert.Equal(9, first.ReadJournal(SiteId, null).LatestSequence);
+
+        // Simulate a durable retention transaction that prunes a middle command (the other two stay).
+        // Retention holes are contract-legal inside the cursor window; the page must mark them as gaps.
+        var store = new SqliteCommandStore(TestDataDirectory.DatabasePath(root));
+        var recovered = store.Recover(SiteId);
+        Assert.Equal(9, recovered.LatestSequence);
+        store.CommitRetention(SiteId, new CommandRetentionUpdate(1, [commands[1]]));
+
+        var restarted = Service(root, options);
+        var page = restarted.ReadCommandJournalPage(SiteId, Guid.Parse(FabId), restarted.GetJournalEpoch(SiteId), 0,
+            EquipmentCommandService.DefaultJournalPageLimit);
+        Assert.NotNull(page.Page);
+        Assert.True(page.Page!.HasGap);
+        Assert.Equal(1, page.Page.FirstRetainedSequence);
+        Assert.Equal(9, page.Page.LatestSequence);
+        Assert.Equal(new long[] { 1, 2, 3, 7, 8, 9 }, page.Page.Events.Select(item => item.Sequence).ToArray());
+        Assert.Equal(9, page.Page.NextAfterSequence);
+
+        // The exact boundary before the hole is a gap (the hole is inside the requested range).
+        var boundary = restarted.ReadCommandJournalPage(SiteId, Guid.Parse(FabId), restarted.GetJournalEpoch(SiteId), 3,
+            EquipmentCommandService.DefaultJournalPageLimit);
+        Assert.True(boundary.Page!.HasGap);
+        Assert.Equal(new long[] { 7, 8, 9 }, boundary.Page.Events.Select(item => item.Sequence).ToArray());
+
+        // A cursor already past the hole replays the contiguous tail without a gap.
+        var afterHole = restarted.ReadCommandJournalPage(SiteId, Guid.Parse(FabId), restarted.GetJournalEpoch(SiteId), 6,
+            EquipmentCommandService.DefaultJournalPageLimit);
+        Assert.False(afterHole.Page!.HasGap);
+        Assert.Equal(new long[] { 7, 8, 9 }, afterHole.Page.Events.Select(item => item.Sequence).ToArray());
+    }
+
     private string Root()
     {
         var root = TestDataDirectory.Create();
@@ -347,4 +459,13 @@ public sealed class CommandPersistenceTests : IDisposable
         MaxTerminalCommands = source?.MaxTerminalCommands ?? 512,
         MaxJournalEventsPerSite = source?.MaxJournalEventsPerSite ?? 4096
     };
+
+    private sealed class ManualClock : TimeProvider
+    {
+        private DateTimeOffset now = DateTimeOffset.Parse("2026-10-30T00:00:00Z");
+
+        public override DateTimeOffset GetUtcNow() => now;
+
+        public void Advance(TimeSpan by) => now += by;
+    }
 }

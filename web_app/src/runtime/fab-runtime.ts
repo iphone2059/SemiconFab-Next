@@ -1,5 +1,4 @@
-import { Effect, Exit, Scope } from 'effect';
-import type * as Fiber from 'effect/Fiber';
+import { Duration, Effect, Exit, Fiber, Option, Scope } from 'effect';
 import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import type {
   CommandConnectionStatus,
@@ -30,6 +29,7 @@ import type { CommandRecoveryEviction } from '@/runtime/command-event-recovery';
 import { CommandEventRecovery } from '@/runtime/command-event-recovery';
 import { CommandProjectionStore, type CommandProjectionAtom } from '@/runtime/command-projection.store';
 import {
+  DEFAULT_MAX_QUEUED_RECONCILIATIONS,
   type FabReconciliationSchedulerStats,
   type PhysicalRequestBudget,
   type ReconciliationDropDiagnostic,
@@ -56,8 +56,21 @@ export interface FabRuntimeRetentionOptions {
   readonly now?: () => number;
 }
 
-/** ADR-010 §4 recovery state machine phases (never collapsed into a boolean). */
-export type CommandRecoveryPhase = 'Healthy' | 'Dirty' | 'Recovering' | 'WaitingRetry' | 'Unrecoverable';
+/**
+ * ADR-010 §4 recovery state machine phases (never collapsed into a boolean).
+ * `Unavailable` is the R3-07 display-only state: a runtime assembled without an
+ * authoritative gateway can never be Healthy and never claims recovery.
+ */
+export type CommandRecoveryPhase =
+  | 'Healthy'
+  | 'Dirty'
+  | 'Recovering'
+  | 'WaitingRetry'
+  | 'Unrecoverable'
+  | 'Unavailable';
+
+/** R3-07: explicit command-recovery authority of one FabRuntime. */
+export type CommandRecoveryAvailability = 'available' | 'unavailable';
 
 export type CommandRecoveryDirtyCause =
   | CommandStreamDirtyReason
@@ -66,7 +79,9 @@ export type CommandRecoveryDirtyCause =
   | 'transport-failure'
   | 'queue-capacity'
   | 'recovery-eviction'
-  | 'refresh';
+  | 'refresh'
+  | 'no-authority'
+  | 'protocol-error';
 
 export interface CommandRecoveryDiagnostic {
   readonly at: number;
@@ -82,6 +97,12 @@ export const DEFAULT_RECOVERY_MAX_ATTEMPTS = 8;
 export const DEFAULT_RECOVERY_JOURNAL_PAGE_LIMIT = 256;
 const DEFAULT_MAX_JOURNAL_PAGES = 10_000;
 const MAX_RECOVERY_DIAGNOSTICS = 32;
+/** R3-05: every journal/list recovery request is an owned Effect bounded by this deadline. */
+export const DEFAULT_RECOVERY_REQUEST_TIMEOUT_MS = 10_000;
+/** R3-08: bounded post-snapshot compensation passes before a drop episode is Unrecoverable. */
+export const DEFAULT_MAX_COMPENSATION_PASSES = 4;
+/** R3-08: pending drop intents are bounded; the next authoritative snapshot converges the rest. */
+const MAX_PENDING_RECOVERY_DROPS = 256;
 
 export interface FabRuntimeRecoveryOptions {
   /** Backoff schedule indexed by failed attempt (last value repeats). */
@@ -94,6 +115,18 @@ export interface FabRuntimeRecoveryOptions {
   readonly maxJournalPages?: number;
   /** Authoritative list filter used for refresh/gap/queue-capacity recovery (default active). */
   readonly listFilter?: CommandRecoveryFilter;
+  /**
+   * R3-05: per-request deadline for journal/list recovery (default 10s). The
+   * timeout interrupts the owned recovery fiber, which aborts the fetch signal and
+   * only then releases the shared physical permit.
+   */
+  readonly requestTimeoutMs?: number;
+  /**
+   * R3-08: bounded compensation passes after a drop observed after the
+   * authoritative snapshot was taken. 0 = the first post-snapshot drop is
+   * immediately Unrecoverable.
+   */
+  readonly maxCompensationPasses?: number;
 }
 
 export interface FabRuntimeOptions {
@@ -114,8 +147,16 @@ export interface FabRuntimeOptions {
    * CommandTransportScope that owns the EventSource and consumer fibers.
    */
   readonly sourceFor: (fabId: string, scope: Scope.Scope) => CommandEventSource;
-  /** Native-Effect authoritative gateway (ADR-011 §2.1); executed via runtime.runPromise only. */
-  readonly gateway?: CommandGateway;
+  /**
+   * R3-07: REQUIRED explicit command-recovery authority. A composition root must
+   * state whether authoritative recovery exists: pass the native-Effect
+   * CommandGateway (ADR-011 §2.1), or `undefined` to declare an explicitly
+   * display-only runtime (Storybook/jsdom only). A display-only runtime never
+   * schedules recovery, never creates a recovery timer and stays in the observable
+   * `Unavailable` phase with a no-authority diagnostic; it can never become Healthy.
+   * There is no implicit "no gateway => recovered" path.
+   */
+  readonly gateway: CommandGateway | undefined;
   /** Test seam; production defaults to XStateCommandWorkflowAdapter. */
   readonly createWorkflow?: CommandWorkflowFactory;
   /** Test seam for retention bounds/clock; production keeps the defaults. */
@@ -164,6 +205,8 @@ interface ResolvedRecovery {
   readonly journalPageLimit: number;
   readonly maxJournalPages: number;
   readonly listFilter: CommandRecoveryFilter;
+  readonly requestTimeoutMs: number;
+  readonly maxCompensationPasses: number;
 }
 
 function resolveRecovery(options: FabRuntimeRecoveryOptions | undefined): ResolvedRecovery {
@@ -175,6 +218,8 @@ function resolveRecovery(options: FabRuntimeRecoveryOptions | undefined): Resolv
     journalPageLimit: Math.min(1000, Math.max(1, options?.journalPageLimit ?? DEFAULT_RECOVERY_JOURNAL_PAGE_LIMIT)),
     maxJournalPages: Math.max(1, options?.maxJournalPages ?? DEFAULT_MAX_JOURNAL_PAGES),
     listFilter: options?.listFilter ?? 'active',
+    requestTimeoutMs: Math.max(1, options?.requestTimeoutMs ?? DEFAULT_RECOVERY_REQUEST_TIMEOUT_MS),
+    maxCompensationPasses: Math.max(0, options?.maxCompensationPasses ?? DEFAULT_MAX_COMPENSATION_PASSES),
   };
 }
 
@@ -190,8 +235,48 @@ interface PendingRecoveryRequest {
   cause?: CommandRecoveryDirtyCause;
 }
 
+/** R3-08: durable intent of one scheduler queue-capacity drop (bounded, never a hidden retry queue). */
+interface RecoveryDropIntent {
+  /** Monotonic drop generation; a pass snapshot covers every drop generation <= its dropBarrier. */
+  readonly generation: number;
+  readonly commandId: string;
+  readonly droppedTotal: number;
+}
+
+/** R3-05/R3-08: one authoritative snapshot produced by one recovery pass generation. */
+interface RecoverySnapshot {
+  readonly generation: number;
+  readonly kind: 'journal' | 'list';
+  readonly epoch: string;
+  /** Authoritative watermark (journal next cursor / list latestSequence). */
+  readonly sequence: number;
+  /** Highest drop generation that existed when this pass started; covered by this snapshot. */
+  readonly dropBarrier: number;
+  readonly pages: number;
+  readonly appliedRecords: number;
+  readonly startedAt: number;
+  readonly finishedAt: number;
+}
+
+/** R3-08 observable evidence of the last authoritative snapshot (covered vs pending drops). */
+export interface CommandRecoverySnapshotState {
+  readonly generation: number;
+  readonly kind: 'journal' | 'list';
+  readonly epoch: string;
+  readonly sequence: number;
+  readonly pages: number;
+  readonly appliedRecords: number;
+  readonly dropBarrier: number;
+  readonly coveredDrops: number;
+  readonly needsNextAuthoritativePass: boolean;
+  readonly startedAt: number;
+  readonly finishedAt: number;
+}
+
 export interface CommandRecoveryState {
   readonly phase: CommandRecoveryPhase;
+  /** R3-07: explicit authority; `unavailable` runtimes never report Healthy. */
+  readonly availability: CommandRecoveryAvailability;
   /** Attempts made in the current dirty episode (reset after recovery). */
   readonly attempts: number;
   readonly maxAttempts: number;
@@ -202,6 +287,18 @@ export interface CommandRecoveryState {
   readonly lastRecoveredAt?: number;
   /** Last authoritative watermark (journal latestSequence or list latestSequence). */
   readonly authoritativeWatermark?: CommandCursor;
+  /** R3-05: monotonic recovery generation; a stale generation may never write state. */
+  readonly recoveryGeneration: number;
+  /** R3-05: true while a recovery pass owner fiber is running. */
+  readonly recovering: boolean;
+  /** R3-08: a recovery pass is queued/armed for the current dirty episode. */
+  readonly recoveryPending: boolean;
+  /** R3-08: post-snapshot drops still require the next authoritative pass (never Healthy). */
+  readonly needsNextAuthoritativePass: boolean;
+  /** R3-08: total drops proven covered by an authoritative snapshot (not retried). */
+  readonly coveredDropCount: number;
+  /** R3-08: bounded post-snapshot compensation attempts used in this episode. */
+  readonly compensationAttempts: number;
 }
 
 export interface PhysicalRequestStats {
@@ -230,6 +327,33 @@ class RecoveryAborted extends Error {
   }
 }
 
+/** R3-05: one recovery HTTP request exceeded its Effect.timeout deadline. */
+class RecoveryTimeout extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RecoveryTimeout';
+  }
+}
+
+/** R3-01/R3-03: an authoritative response violated the frozen recovery contract. */
+class RecoveryProtocolError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RecoveryProtocolError';
+  }
+}
+
+/** One typed recovery-pass failure with its classified retry/terminal semantics. */
+class RecoveryPassFailure extends Error {
+  constructor(
+    readonly classified: ClassifiedRecoveryError,
+    readonly cause: unknown,
+  ) {
+    super(classified.message);
+    this.name = 'RecoveryPassFailure';
+  }
+}
+
 /**
  * Per-FAB command runtime (ADR-007 §2/§3, ADR-010 §4): the only assembly point of
  * the realtime source, the CommandEventBridge, the authoritative scheduler, the
@@ -238,15 +362,20 @@ class RecoveryAborted extends Error {
  * Scope tree owned here:
  *   FabScope
  *     ├── CommandTransportScope   (EventSource + every signal/command consumer fiber)
+ *     ├── RecoveryScope           (R3-05: the single owned recovery pass fiber)
  *     ├── ReconciliationSchedulerScope (scheduler-owned; one scheduler per FAB)
  *     └── CommandScope(commandId) (XState actor acquired with Effect.acquireRelease)
  *
- * Recovery (ADR-010): transport gaps/dirty/reconnects enter Dirty; a coalesced
- * pass loops the epoch-scoped journal until the authoritative latestSequence,
- * validates epoch/continuity/holes and falls back to the authoritative FAB list
- * on epoch mismatch, hasGap or any invalid page. Dirty is cleared only when the
- * authoritative watermark was reached/applied; retryable failures keep Dirty and
- * retry with bounded backoff and are observable through recoveryState.
+ * Recovery (ADR-010 §6): transport gaps/dirty/reconnects enter Dirty; one
+ * coalesced pass runs as a scoped Effect fiber (R3-05 RecoveryScope) and loops the
+ * epoch-scoped journal until the authoritative latestSequence. FAB-filtered pages
+ * are validated as sparse Site sequences (strict increase + cursor bounds +
+ * nextAfterSequence progress); epoch mismatch, server hasGap and any invalid page
+ * fall back to the authoritative FAB list. The phase clears to Healthy only after
+ * the authoritative watermark was applied, the bounded post-recovery batch ran and
+ * every recorded drop was proven covered (R3-08); retryable failures keep Dirty and
+ * retry with bounded backoff. A runtime assembled without a gateway stays in the
+ * observable Unavailable phase (R3-07).
  */
 export class FabRuntime {
   readonly siteId: string;
@@ -256,8 +385,13 @@ export class FabRuntime {
   private readonly fabScope: Scope.Closeable;
   private readonly transportScope: Scope.Closeable;
   private readonly source: CommandEventSource;
-  private readonly gateway?: CommandGateway;
+  private readonly gateway: CommandGateway | undefined;
   private readonly physicalBudget: PhysicalRequestBudget;
+  /** R3-05: FabScope child that owns every recovery pass fiber (interrupted on dispose). */
+  private readonly recoveryScope: Scope.Closeable;
+  /** R3-07: explicit authority declaration; unavailable = display-only, never Healthy. */
+  private readonly recoveryAvailable: boolean;
+  private readonly maxQueuedReconciliations: number;
   private readonly projectionStore: CommandProjectionStore;
   private readonly scheduler: FabReconciliationScheduler;
   private readonly bridge: CommandEventBridge;
@@ -281,12 +415,28 @@ export class FabRuntime {
 
   private recoveryScheduled = false;
   private passRunning = false;
-  /** True while the post-recovery unified scheduler batch runs (drops are covered by it). */
+  /** True while the post-recovery unified scheduler batch runs (drops are classified against it). */
   private recoveryBatchRunning = false;
   private recoveryPending = false;
   private pendingRecovery: PendingRecoveryRequest | undefined;
   private activeRecoveryRequest: PendingRecoveryRequest | undefined;
   private retryTimer?: ReturnType<typeof setTimeout>;
+
+  /** R3-05: owner generation + fiber handle of the one in-flight recovery pass. */
+  private recoveryGeneration = 0;
+  private recoveryFiber: Fiber.Fiber<void, never> | undefined;
+  /** R3-08: monotonic drop generation; snapshot barriers prove which drops were covered. */
+  private dropGeneration = 0;
+  private pendingDrops: RecoveryDropIntent[] = [];
+  private coveredDropCount = 0;
+  private coveredDropsThisPass = 0;
+  private compensationAttempts = 0;
+  private compensationNoProgressRounds = 0;
+  private compensationBaseline: { readonly coveredDrops: number; readonly sequence: number | undefined } | undefined;
+  private needsNextAuthoritativePass = false;
+  /** R3-08: suppress per-record reconcile scheduling while an authoritative snapshot is applied. */
+  private suppressSnapshotScheduling = false;
+  private lastSnapshotState?: CommandRecoverySnapshotState;
   private phase: CommandRecoveryPhase = 'Healthy';
   private attempts = 0;
   private lastError?: string;
@@ -312,13 +462,24 @@ export class FabRuntime {
     this.fabId = options.fabId;
     this.runtime = options.runtime;
     this.gateway = options.gateway;
+    this.recoveryAvailable = options.gateway !== undefined;
     this.lazyCommandSubscription = options.lazyCommandSubscription === true;
     this.retention = resolveRetention(options.retention);
     this.recoveryOptions = resolveRecovery(options.recovery);
+    this.maxQueuedReconciliations = Math.max(1, options.maxQueuedReconciliations ?? DEFAULT_MAX_QUEUED_RECONCILIATIONS);
 
     // FabScope is the only Scope this class closes; its children are created from it.
     this.fabScope = Scope.forkUnsafe(options.parentScope);
     this.transportScope = Scope.forkUnsafe(this.fabScope);
+    // R3-05: the RecoveryScope is a FabScope child; every recovery pass fiber (and
+    // its journal/list request) is owned by it and interrupted on dispose.
+    this.recoveryScope = Scope.forkUnsafe(this.fabScope);
+    if (!this.recoveryAvailable) {
+      // R3-07: no authoritative gateway is an explicit display-only composition,
+      // never an implicit "already recovered" state.
+      this.phase = 'Unavailable';
+      this.recordDiagnostic('no-authority', 'authoritative command gateway is not configured: display-only runtime (recovery unavailable)');
+    }
     // ADR-011 §2.2: exactly one physical HTTP budget per FAB; reconciliation and
     // recovery (journal/list) share the same four slots.
     this.physicalBudget = createPhysicalRequestBudget(4);
@@ -352,15 +513,11 @@ export class FabRuntime {
       timeoutMs: options.reconcileTimeoutMs,
       onDrop: (diagnostic) => {
         this.lastDrop = diagnostic;
-        // CR-08: the scheduler no longer hides a retry buffer; the drop is durable
-        // recovery intent and the authoritative list is the only convergence path.
-        // A drop observed while the authoritative recovery pass / its post-recovery
-        // reconciliation batch is already running is covered by that pass; scheduling
-        // another pass from it would livelock when tracked commands exceed the queue
-        // capacity (bounded intent, no unbounded recovery loop).
-        if (this.phase === 'Recovering' || this.recoveryBatchRunning) return;
-        this.recordDiagnostic('queue-capacity', 'droppedTotal=' + diagnostic.droppedTotal);
-        this.enterDirty({ listOnly: true, cause: 'queue-capacity' });
+        // CR-08/R3-08: the scheduler keeps no hidden retry buffer. Every drop is a
+        // generation-stamped recovery intent; the next authoritative snapshot
+        // decides whether it was covered (no retry) or still needs a pass (never a
+        // silent Healthy).
+        this.recordDropIntent(diagnostic);
       },
       onReconciled: (commandId) => this.afterDelivery(commandId),
     });
@@ -388,15 +545,40 @@ export class FabRuntime {
       this.bridge.start();
       this.bridgeStarted = true;
     }
+    if (!this.recoveryAvailable) {
+      // R3-07: display-only composition. Transport signals still deliver live
+      // events to actors, but no recovery request/timer exists and the phase is
+      // permanently Unavailable (never Healthy, never Unrecoverable).
+      this.setPhase('Unavailable');
+      this.recordDiagnostic('no-authority', 'start(): command recovery unavailable; live events only, phase stays Unavailable');
+      this.scheduleSweep();
+      return;
+    }
     // Startup/refresh recovery: the authoritative list is the only recovery entry
     // for a page that never saw the submit (ADR-008 §2.4/ADR-010 §4).
     this.enterDirty({ listOnly: true, cause: 'refresh' });
     this.scheduleSweep();
   }
 
+  /**
+   * Pause semantics (R3-05): stop() stops the transport consumer fibers and
+   * *interrupts the in-flight recovery pass fiber* (aborting its journal/list
+   * fetch and releasing the shared physical permit) before returning. Pending
+   * recovery intent and drop generations are retained; the next start() re-arms
+   * the authoritative pass. No recovery network request or retry timer survives
+   * stop(). The reconciliation scheduler stays alive so an explicit
+   * reconcileCommand()/dispose() path is unaffected.
+   */
   stop(): void {
     if (!this.started) return;
     this.started = false;
+    this.interruptRecoveryPass();
+    this.clearRetryTimer();
+    this.nextRetryAt = undefined;
+    if (this.recoveryAvailable && this.phase !== 'Unrecoverable' && this.phase !== 'Unavailable') {
+      // Paused while dirty: observable and never Healthy until a new snapshot.
+      this.setPhase('Dirty');
+    }
     if (this.bridgeStarted) {
       this.bridge.stop();
       this.bridgeStarted = false;
@@ -404,7 +586,6 @@ export class FabRuntime {
     for (const fiber of this.signalFibers) stopCommandStream(this.runtime, fiber);
     this.signalFibers.length = 0;
     this.clearSweepTimer();
-    this.clearRetryTimer();
   }
 
   /** Create the workflow for a submitted command; replays results held before registration. */
@@ -453,7 +634,10 @@ export class FabRuntime {
     this.bridge.flushRecovery();
     this.afterDelivery(commandId);
     const revision = workflow.projection?.revision ?? -1;
-    if (this.phase !== 'Healthy' || !this.hasLocalEvidence(commandId) || revision < 0) {
+    // R3-08: while an authoritative snapshot is being applied, recovered commands
+    // are converged by the bounded post-recovery batch, not by one reconcile per
+    // tracked record (that is what used to overflow the 128-item scheduler queue).
+    if (!this.suppressSnapshotScheduling && (this.phase !== 'Healthy' || !this.hasLocalEvidence(commandId) || revision < 0)) {
       void this.scheduler.schedule(commandId);
     }
     return workflow;
@@ -505,8 +689,15 @@ export class FabRuntime {
   get recoveryState(): CommandRecoveryState {
     return {
       phase: this.phase,
+      availability: this.recoveryAvailable ? 'available' : 'unavailable',
       attempts: this.attempts,
       maxAttempts: this.recoveryOptions.maxAttempts,
+      recoveryGeneration: this.recoveryGeneration,
+      recovering: this.passRunning,
+      recoveryPending: this.recoveryPending || this.pendingRecovery !== undefined,
+      needsNextAuthoritativePass: this.needsNextAuthoritativePass,
+      coveredDropCount: this.coveredDropCount,
+      compensationAttempts: this.compensationAttempts,
       ...(this.lastError !== undefined ? { lastError: this.lastError } : {}),
       ...(this.lastDirtyCause !== undefined ? { lastDirtyCause: this.lastDirtyCause } : {}),
       ...(this.recoveryCursor !== undefined ? { recoveryCursor: { ...this.recoveryCursor } } : {}),
@@ -519,6 +710,21 @@ export class FabRuntime {
   /** Read-only bounded recovery diagnostics (newest last). */
   get recoveryHistory(): readonly CommandRecoveryDiagnostic[] {
     return this.recoveryDiagnosticLog;
+  }
+
+  /** R3-07: explicit authority marker for UI/diagnostics. */
+  get recoveryAvailability(): CommandRecoveryAvailability {
+    return this.recoveryAvailable ? 'available' : 'unavailable';
+  }
+
+  /** R3-08: evidence of the last authoritative snapshot (covered drops vs pending drops). */
+  get lastRecoverySnapshot(): CommandRecoverySnapshotState | undefined {
+    return this.lastSnapshotState;
+  }
+
+  /** R3-08: drop intents not yet proven covered by an authoritative snapshot. */
+  get pendingDropCount(): number {
+    return this.pendingDrops.length;
   }
 
   /** ADR-011 §2.2: the FAB-wide physical HTTP slots shared by recovery + reconciliation. */
@@ -595,18 +801,32 @@ export class FabRuntime {
   }
 
   /**
-   * Fixed teardown order (ADR-007 §2): scheduler -> transport -> command scopes ->
-   * projections -> FabScope. Idempotent; Scope finalizers guarantee exactly-once.
-   * Recovery retry timers are cleared here so teardown leaves no timer/fiber work.
+   * Fixed teardown order (ADR-007 §2, R3-05): stop the transport consumers and
+   * interrupt the recovery pass -> close the RecoveryScope (aborting every
+   * journal/list fetch and returning its shared physical permit) -> scheduler ->
+   * transport scope -> command scopes -> projections -> FabScope. Idempotent; the
+   * recovery generation is invalidated before teardown so a late callback can
+   * never write the projection store, change the recovery phase or schedule
+   * another pass.
    */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.stop();
+    // Even a never-started runtime must invalidate its generation so any queued
+    // microtask/fiber sees isRecoveryCurrent() === false.
+    this.recoveryGeneration += 1;
     this.clearRetryTimer();
     this.pendingRecovery = undefined;
+    this.activeRecoveryRequest = undefined;
+    this.pendingDrops = [];
     this.recoveryPending = false;
     this.recoveryBatchRunning = false;
+    this.needsNextAuthoritativePass = false;
+    // R3-05: interrupt the recovery work while the shared budget still exists;
+    // Scope.close waits for the interruption finalizers (fetch abort + permit
+    // release), so no recovery callback runs after dispose returns.
+    this.runtime.runSync(Scope.close(this.recoveryScope, Exit.void));
     this.scheduler.dispose();
     this.runtime.runSync(Scope.close(this.transportScope, Exit.void));
     for (const [commandId, commandScope] of [...this.commandScopes]) {
@@ -695,6 +915,18 @@ export class FabRuntime {
     if (this.disposed) return;
     this.mergeRecoveryRequest(input);
     if (input.cause !== undefined) this.lastDirtyCause = input.cause;
+    if (!this.recoveryAvailable) {
+      // R3-07: a display-only runtime records the request but never claims
+      // Dirty/Recovering/Healthy: there is no authoritative gateway to converge on.
+      this.setPhase('Unavailable');
+      this.recordDiagnostic(input.cause ?? 'no-authority', 'recovery request observed but authoritative recovery is unavailable');
+      return;
+    }
+    // A new external dirty signal starts a fresh bounded compensation episode.
+    this.compensationAttempts = 0;
+    this.compensationNoProgressRounds = 0;
+    this.compensationBaseline = undefined;
+    this.needsNextAuthoritativePass = false;
     this.clearRetryTimer();
     this.nextRetryAt = undefined;
     if (this.phase === 'Unrecoverable') this.attempts = 0;
@@ -759,12 +991,172 @@ export class FabRuntime {
   }
 
   private scheduleRecoveryPass(): void {
-    if (this.recoveryScheduled || this.disposed) return;
+    if (this.recoveryScheduled || this.disposed || !this.recoveryAvailable) return;
     this.recoveryScheduled = true;
     queueMicrotask(() => {
       this.recoveryScheduled = false;
-      void this.runRecoveryPass();
+      if (this.disposed || !this.started || !this.recoveryAvailable) return;
+      this.launchRecoveryPass();
     });
+  }
+
+  /**
+   * R3-05: start the one owned recovery pass. The pass is an explicit Effect
+   * fiber in the RecoveryScope, never a bare `void runPromise` network task; its
+   * journal/list requests are child Effects bounded by Effect.timeout, so
+   * interrupting the fiber aborts fetch and releases the shared physical permit.
+   */
+  private launchRecoveryPass(): void {
+    if (this.disposed || !this.started || !this.recoveryAvailable) return;
+    if (this.passRunning) {
+      this.recoveryPending = true;
+      return;
+    }
+    const request = this.takeRecoveryRequest();
+    this.passRunning = true;
+    this.clearRetryTimer();
+    this.nextRetryAt = undefined;
+    this.setPhase('Recovering');
+    this.attempts += 1;
+    this.recoveryCursor = request.cursor;
+    this.runRecoveryPassFiber(request);
+  }
+
+  /** Fork the pass program into the RecoveryScope (the only owner of recovery work). */
+  private runRecoveryPassFiber(request: PendingRecoveryRequest): void {
+    const generation = ++this.recoveryGeneration;
+    const dropsAtStart = this.dropGeneration;
+    this.coveredDropsThisPass = 0;
+    const program = this.executeRecoveryEffect(generation, request, dropsAtStart).pipe(
+      Effect.flatMap((snapshot) => this.completeRecoveryEffect(generation, snapshot)),
+      Effect.catch((failure: RecoveryPassFailure) => Effect.sync(() => {
+        if (this.isRecoveryCurrent(generation)) this.handleRecoveryFailure(failure, request, generation);
+      })),
+      Effect.catchDefect((defect) => Effect.sync(() => {
+        if (this.isRecoveryCurrent(generation)) {
+          this.handleRecoveryFailure(
+            new RecoveryPassFailure(classifyRecoveryError(defect), defect),
+            request,
+            generation,
+          );
+        }
+      })),
+      Effect.ensuring(Effect.sync(() => this.finishRecoveryPass(generation))),
+    );
+    try {
+      this.recoveryFiber = this.runtime.runSync(Effect.forkIn(program, this.recoveryScope));
+    } catch (cause) {
+      // The execution boundary itself refused the pass (e.g. an already-disposed
+      // runner): surface it through the same bounded failure path instead of
+      // leaving the state machine stuck in Recovering.
+      this.finishRecoveryPass(generation);
+      if (this.isRecoveryCurrent(generation)) {
+        this.handleRecoveryFailure(new RecoveryPassFailure(classifyRecoveryError(cause), cause), request, generation);
+      }
+    }
+  }
+
+  /**
+   * R3-05: interrupt the current recovery pass (stop/dispose). The generation is
+   * bumped first so a late continuation can never write projectionStore/phase or
+   * schedule reconciliation, then the owned fiber is interrupted (fetch abort)
+   * before the call returns.
+   */
+  private interruptRecoveryPass(): void {
+    this.recoveryGeneration += 1;
+    this.passRunning = false;
+    this.recoveryBatchRunning = false;
+    this.recoveryPending = false;
+    this.suppressSnapshotScheduling = false;
+    const fiber = this.recoveryFiber;
+    this.recoveryFiber = undefined;
+    if (fiber !== undefined) this.runtime.runSync(Fiber.interrupt(fiber));
+  }
+
+  /** Owner-local completion; only the current generation may clear the owner or arm another pass. */
+  private finishRecoveryPass(generation: number): void {
+    if (generation === this.recoveryGeneration) {
+      this.passRunning = false;
+      this.recoveryBatchRunning = false;
+      this.recoveryFiber = undefined;
+    }
+    if (this.disposed || !this.started || generation !== this.recoveryGeneration) return;
+    if (this.recoveryPending || this.pendingRecovery !== undefined) {
+      this.recoveryPending = false;
+      this.clearRetryTimer();
+      this.nextRetryAt = undefined;
+      if (this.phase !== 'Unrecoverable' && this.phase !== 'Unavailable' && this.phase !== 'WaitingRetry') {
+        this.setPhase('Dirty');
+      }
+      this.scheduleRecoveryPass();
+    }
+  }
+
+  /** True only for the owner generation of a live, started runtime (late-result guard). */
+  private isRecoveryCurrent(generation: number): boolean {
+    return !this.disposed && this.started && generation === this.recoveryGeneration;
+  }
+
+  private ensureRecoveryCurrent(generation: number): Effect.Effect<void, RecoveryPassFailure> {
+    const self = this;
+    return Effect.suspend((): Effect.Effect<void, RecoveryPassFailure> => self.isRecoveryCurrent(generation)
+      ? Effect.void
+      : Effect.fail(new RecoveryPassFailure(
+        { message: 'recovery generation superseded', unrecoverable: false, epochMismatch: false },
+        new RecoveryAborted(),
+      )));
+  }
+
+  /**
+   * R3-08: record one scheduler queue-capacity drop as durable intent. Drops are
+   * stamped with a monotonic generation; a snapshot with dropBarrier >= generation
+   * proves the drop was covered (recorded, never retried), while a later drop
+   * forces needsNextAuthoritativePass and a bounded compensation pass.
+   */
+  private recordDropIntent(diagnostic: ReconciliationDropDiagnostic): void {
+    this.dropGeneration += 1;
+    this.pendingDrops.push({
+      generation: this.dropGeneration,
+      commandId: diagnostic.commandId,
+      droppedTotal: diagnostic.droppedTotal,
+    });
+    while (this.pendingDrops.length > MAX_PENDING_RECOVERY_DROPS) this.pendingDrops.shift();
+    if (!this.recoveryAvailable) {
+      this.recordDiagnostic('queue-capacity', 'droppedTotal=' + diagnostic.droppedTotal + ' (recovery unavailable: recorded only)');
+      return;
+    }
+    this.recordDiagnostic(
+      'queue-capacity',
+      'droppedTotal=' + diagnostic.droppedTotal + ' dropGeneration=' + this.dropGeneration +
+        ' phase=' + this.phase + ' recovering=' + this.passRunning,
+    );
+    if (this.passRunning || this.phase === 'Recovering' || this.recoveryBatchRunning) {
+      // Covered-or-pending is decided against the snapshot barrier, never silently.
+      return;
+    }
+    this.enterDirty({ listOnly: true, cause: 'queue-capacity' });
+  }
+
+  /**
+   * R3-08: prove which recorded drops the authoritative snapshot covered. A drop
+   * generation <= the pass's dropBarrier existed before the snapshot was taken, so
+   * the authoritative state supersedes its reconciliation intent.
+   */
+  private resolveCoveredDrops(dropBarrier: number): number {
+    if (this.pendingDrops.length === 0) return 0;
+    const remaining: RecoveryDropIntent[] = [];
+    let covered = 0;
+    for (const drop of this.pendingDrops) {
+      if (drop.generation <= dropBarrier) covered += 1;
+      else remaining.push(drop);
+    }
+    this.pendingDrops = remaining;
+    if (covered > 0) {
+      this.coveredDropCount += covered;
+      this.coveredDropsThisPass += covered;
+      this.recordDiagnostic('queue-capacity', covered + ' drop(s) covered by authoritative recovery generation ' + this.recoveryGeneration);
+    }
+    return covered;
   }
 
   private setPhase(phase: CommandRecoveryPhase): void {
@@ -782,171 +1174,409 @@ export class FabRuntime {
   }
 
   /**
-   * One coalesced recovery pass (ADR-010 §4). Dirty is cleared only on success of
-   * an authoritative watermark/list snapshot; retryable failures keep Dirty and
-   * schedule a bounded backoff retry.
+   * R3-05/R3-08: resolve and apply one authoritative snapshot in the owned
+   * recovery fiber. Typed failures are classified by the caller; interruption
+   * (stop/dispose/timeout) exits through Effect interruption and never reaches the
+   * success continuation.
    */
-  private async runRecoveryPass(): Promise<void> {
-    if (this.disposed || !this.started) return;
-    if (this.passRunning) {
-      this.recoveryPending = true;
-      return;
-    }
-    this.passRunning = true;
-    this.clearRetryTimer();
-    this.nextRetryAt = undefined;
-    this.setPhase('Recovering');
-    this.attempts += 1;
-    const request = this.takeRecoveryRequest();
-    this.recoveryCursor = request.cursor;
-    try {
-      const watermark = await this.executeRecovery(request);
-      if (this.disposed) return;
-      this.authoritativeWatermark = watermark;
-      this.lastRecoveredAt = this.retention.now();
-      this.attempts = 0;
-      this.lastError = undefined;
-      this.activeRecoveryRequest = undefined;
-      this.setPhase('Healthy');
-      this.recordDiagnostic('recovered', watermark !== undefined ? watermark.epoch + ':' + watermark.sequence : 'no-authority');
-      // ADR-010 §4: after recovering events, run one unified reconciliation pass so
-      // the tracked actors converge (fire-and-forget through the single scheduler).
-      // Drops during this bounded batch are already accounted for by the recovery.
-      this.recoveryBatchRunning = true;
-      void this.scheduler
-        .scheduleMany(this.activeCommandIds())
-        .finally(() => {
-          this.recoveryBatchRunning = false;
-        });
-    } catch (cause) {
-      if (this.disposed) return;
-      this.handleRecoveryFailure(cause, request);
-    } finally {
-      this.passRunning = false;
-      if (this.recoveryPending || this.pendingRecovery !== undefined) {
-        this.recoveryPending = false;
-        if (!this.disposed && this.started) {
-          this.clearRetryTimer();
-          this.nextRetryAt = undefined;
-          if (this.phase !== 'Unrecoverable') this.setPhase('Dirty');
-          this.scheduleRecoveryPass();
-        }
+  private executeRecoveryEffect(
+    generation: number,
+    request: PendingRecoveryRequest,
+    dropsAtStart: number,
+  ): Effect.Effect<RecoverySnapshot, RecoveryPassFailure> {
+    const self = this;
+    return Effect.suspend((): Effect.Effect<RecoverySnapshot, RecoveryPassFailure> => {
+      const gateway = self.gateway;
+      if (gateway === undefined) {
+        return Effect.fail(new RecoveryPassFailure(
+          { message: 'authoritative command gateway is not configured', unrecoverable: true, epochMismatch: false },
+          new Error('no-authoritative-gateway'),
+        ));
       }
-    }
-  }
-
-  private async executeRecovery(request: PendingRecoveryRequest): Promise<CommandCursor | undefined> {
-    const gateway = this.gateway;
-    if (!gateway) return undefined;
-    const start = request.cursor ?? this.acknowledgedCursor();
-    if (request.listOnly || start === undefined) {
-      const list = await this.runListRecovery(gateway);
-      return { epoch: list.epoch, sequence: list.latestSequence };
-    }
-    try {
-      return await this.runJournalRecovery(gateway, start);
-    } catch (cause) {
-      if (!(cause instanceof RecoveryNeedsAuthority)) throw cause;
-      this.recordDiagnostic('replay-gap', cause.message);
-      const list = await this.runListRecovery(gateway);
-      return { epoch: list.epoch, sequence: list.latestSequence };
-    }
-  }
-
-  private async runGateway<A>(effect: Effect.Effect<A, CommandGatewayError>): Promise<A> {
-    // ADR-011: the composition-root runner executes the top-level Effect; the
-    // shared physical budget wraps every recovery HTTP request (4 slots per FAB).
-    return this.runtime.runPromise(this.physicalBudget.withPermit(effect));
+      const start = request.cursor ?? self.acknowledgedCursor();
+      if (request.listOnly || start === undefined) {
+        return self.listRecoveryEffect(generation, gateway, dropsAtStart);
+      }
+      return self.journalRecoveryEffect(generation, gateway, start, dropsAtStart).pipe(
+        Effect.catch((cause: RecoveryNeedsAuthority | RecoveryPassFailure) => {
+          if (cause instanceof RecoveryNeedsAuthority) {
+            self.recordDiagnostic('replay-gap', cause.message);
+            return self.listRecoveryEffect(generation, gateway, dropsAtStart);
+          }
+          if (cause.classified.epochMismatch) {
+            self.recordDiagnostic('replay-gap', cause.message);
+            return self.listRecoveryEffect(generation, gateway, dropsAtStart);
+          }
+          return Effect.fail(cause);
+        }),
+      );
+    });
   }
 
   /**
-   * Loop epoch-scoped journal pages until the authoritative latestSequence.
-   * Every page is validated: same epoch, strictly increasing sequences, no holes,
-   * forward progress. Any violation falls back to the authoritative FAB list.
+   * R3-05: one recovery HTTP request as a child Effect. The shared physical
+   * budget wraps the real gateway Effect; Effect.timeout interrupts it, which
+   * aborts the fetch signal and only then releases the permit (ensuring order).
+   * The owner generation is checked before and after so a stale generation can
+   * never apply a result.
    */
-  private async runJournalRecovery(gateway: CommandGateway, start: CommandCursor): Promise<CommandCursor> {
-    const epoch = start.epoch;
-    let cursor: CommandCursor = { ...start };
-    let pages = 0;
-    for (;;) {
-      pages += 1;
-      if (pages > this.recoveryOptions.maxJournalPages) {
-        throw new RecoveryNeedsAuthority('journal recovery exceeded the page budget');
+  private recoveryRequestEffect<A>(
+    generation: number,
+    request: Effect.Effect<A, CommandGatewayError>,
+  ): Effect.Effect<A, RecoveryPassFailure> {
+    const self = this;
+    return Effect.gen(function* () {
+      yield* self.ensureRecoveryCurrent(generation);
+      const outcome = yield* self.physicalBudget.withPermit(request).pipe(
+        Effect.timeoutOption(Duration.millis(self.recoveryOptions.requestTimeoutMs)),
+        Effect.catch((error: CommandGatewayError) => Effect.fail(
+          new RecoveryPassFailure(classifyRecoveryError(error), error),
+        )),
+      );
+      if (Option.isSome(outcome)) {
+        yield* self.ensureRecoveryCurrent(generation);
+        return outcome.value;
       }
-      let page: CommandJournalPage;
+      const timeout = new RecoveryTimeout(
+        'recovery request exceeded ' + self.recoveryOptions.requestTimeoutMs + 'ms',
+      );
+      return yield* Effect.fail(new RecoveryPassFailure(classifyRecoveryError(timeout), timeout));
+    });
+  }
+
+  /**
+   * R3-01/R3-07: authoritative FAB listing (refresh/gap/epoch/queue-capacity
+   * recovery). The list watermark and every record identity are validated before
+   * any state is applied; an inconsistent authoritative response is a protocol
+   * failure, never a silent success.
+   */
+  private listRecoveryEffect(
+    generation: number,
+    gateway: CommandGateway,
+    dropsAtStart: number,
+  ): Effect.Effect<RecoverySnapshot, RecoveryPassFailure> {
+    const self = this;
+    return Effect.gen(function* () {
+      yield* self.ensureRecoveryCurrent(generation);
+      const list = yield* self.recoveryRequestEffect(
+        generation,
+        gateway.listFabCommands(self.siteId, self.fabId, self.recoveryOptions.listFilter),
+      );
+      yield* self.ensureRecoveryCurrent(generation);
+      const protocolError = validateRecoveryList(list, self.fabId);
+      if (protocolError !== undefined) {
+        const error = new RecoveryProtocolError(protocolError);
+        return yield* Effect.fail(new RecoveryPassFailure(classifyRecoveryError(error), error));
+      }
+      self.lastRecoveryListValue = list;
+      const startedAt = self.retention.now();
+      let appliedRecords = 0;
+      self.suppressSnapshotScheduling = true;
       try {
-        page = await this.runGateway(
-          gateway.getCommandJournalPage(this.siteId, this.fabId, {
+        for (const record of list.commands) {
+          yield* self.ensureRecoveryCurrent(generation);
+          if (record.terminal) continue;
+          if (!self.workflows.has(record.commandId)) self.trackCommand(record.commandId);
+          self.bridge.receive({
+            fabId: record.fabId,
+            commandId: record.commandId,
+            revision: record.revision,
+            outcome: record.outcome,
+            occurredAt: record.occurredAt,
+          });
+          appliedRecords += 1;
+        }
+      } finally {
+        self.suppressSnapshotScheduling = false;
+      }
+      yield* self.ensureRecoveryCurrent(generation);
+      const snapshot: RecoverySnapshot = {
+        generation,
+        kind: 'list',
+        epoch: list.epoch,
+        sequence: list.latestSequence,
+        dropBarrier: dropsAtStart,
+        pages: 1,
+        appliedRecords,
+        startedAt,
+        finishedAt: self.retention.now(),
+      };
+      return snapshot;
+    });
+  }
+
+  /**
+   * R3-03: loop epoch-scoped journal pages until the authoritative
+   * nextAfterSequence reaches latestSequence. FAB-filtered pages are sparse: the
+   * only continuity rules are strict Site-sequence increase, epoch equality,
+   * cursor bounds and nextAfterSequence progress; a neighbour gap is never proof
+   * of a Site journal hole (server hasGap is the only gap authority). Every
+   * validation failure is RecoveryNeedsAuthority -> authoritative FAB list.
+   */
+  private journalRecoveryEffect(
+    generation: number,
+    gateway: CommandGateway,
+    start: CommandCursor,
+    dropsAtStart: number,
+  ): Effect.Effect<RecoverySnapshot, RecoveryNeedsAuthority | RecoveryPassFailure> {
+    const self = this;
+    return Effect.gen(function* () {
+      const epoch = start.epoch;
+      const startedAt = self.retention.now();
+      let cursor: CommandCursor = { ...start };
+      let pages = 0;
+      let appliedRecords = 0;
+      let previousLatestSequence = -1;
+      let previousFirstRetainedSequence = -1;
+      for (;;) {
+        pages += 1;
+        if (pages > self.recoveryOptions.maxJournalPages) {
+          return yield* Effect.fail(new RecoveryNeedsAuthority('journal recovery exceeded the page budget'));
+        }
+        yield* self.ensureRecoveryCurrent(generation);
+        const page = yield* self.recoveryRequestEffect(
+          generation,
+          gateway.getCommandJournalPage(self.siteId, self.fabId, {
             epoch,
             afterSequence: cursor.sequence,
-            limit: this.recoveryOptions.journalPageLimit,
+            limit: self.recoveryOptions.journalPageLimit,
           }),
         );
-      } catch (cause) {
-        if (isCommandGatewayError(cause) && cause._tag === 'CommandJournalEpochMismatch') {
-          throw new RecoveryNeedsAuthority('journal epoch mismatch: ' + cause.message);
+        yield* self.ensureRecoveryCurrent(generation);
+        self.lastJournalPageValue = page;
+        const violation = validateJournalPage(page, {
+          fabId: self.fabId,
+          epoch,
+          cursorSequence: cursor.sequence,
+          previousLatestSequence,
+          previousFirstRetainedSequence,
+        });
+        if (violation !== undefined) {
+          return yield* Effect.fail(new RecoveryNeedsAuthority(violation));
         }
-        throw cause;
-      }
-      if (this.disposed) throw new RecoveryAborted();
-      this.lastJournalPageValue = page;
-      if (page.epoch !== epoch) {
-        throw new RecoveryNeedsAuthority('journal epoch changed between pages: ' + page.epoch + ' != ' + epoch);
-      }
-      if (page.hasGap) throw new RecoveryNeedsAuthority('journal page reported hasGap');
-
-      let expected = cursor.sequence;
-      for (const event of page.events) {
-        if (event.sequence <= expected) {
-          throw new RecoveryNeedsAuthority('journal page replayed a non-increasing sequence ' + event.sequence);
+        previousLatestSequence = page.latestSequence;
+        previousFirstRetainedSequence = page.firstRetainedSequence;
+        for (const event of page.events) {
+          self.bridge.receive(toResultEvent(event));
+          appliedRecords += 1;
         }
-        if (event.sequence !== expected + 1) {
-          throw new RecoveryNeedsAuthority('journal sequence hole: expected ' + (expected + 1) + ' got ' + event.sequence);
+        cursor = { epoch, sequence: page.nextAfterSequence };
+        if (page.nextAfterSequence >= page.latestSequence) {
+          const snapshot: RecoverySnapshot = {
+            generation,
+            kind: 'journal',
+            epoch,
+            sequence: page.nextAfterSequence,
+            dropBarrier: dropsAtStart,
+            pages,
+            appliedRecords,
+            startedAt,
+            finishedAt: self.retention.now(),
+          };
+          return snapshot;
         }
-        expected = event.sequence;
-        if (event.fabId === this.fabId) this.bridge.receive(toResultEvent(event));
       }
-      const next = typeof page.nextAfterSequence === 'number'
-        ? page.nextAfterSequence
-        : page.events.length > 0
-          ? page.events[page.events.length - 1].sequence
-          : cursor.sequence;
-      if (next < cursor.sequence) throw new RecoveryNeedsAuthority('journal page moved the cursor backwards');
-      cursor = { epoch, sequence: next };
-      if (next >= page.latestSequence) return cursor;
-      if (page.events.length === 0) {
-        throw new RecoveryNeedsAuthority('journal page made no progress before the authoritative watermark');
-      }
-    }
+    });
   }
 
-  /** Authoritative FAB listing: refresh/gap/epoch-mismatch/queue-capacity recovery. */
-  private async runListRecovery(gateway: CommandGateway): Promise<CommandRecoveryList> {
-    const list = await this.runGateway(
-      gateway.listFabCommands(this.siteId, this.fabId, this.recoveryOptions.listFilter),
+  /**
+   * R3-08: after a verified snapshot, run the bounded post-recovery reconciliation
+   * batch and only then decide Healthy. A drop observed after the snapshot makes
+   * needsNextAuthoritativePass true, so the pass can never return to Healthy for it.
+   */
+  private completeRecoveryEffect(
+    generation: number,
+    snapshot: RecoverySnapshot,
+  ): Effect.Effect<void, RecoveryPassFailure> {
+    const self = this;
+    return Effect.gen(function* () {
+      yield* self.ensureRecoveryCurrent(generation);
+      self.applyRecoverySnapshot(snapshot);
+      const covered = self.resolveCoveredDrops(snapshot.dropBarrier);
+      self.lastSnapshotState = {
+        generation: snapshot.generation,
+        kind: snapshot.kind,
+        epoch: snapshot.epoch,
+        sequence: snapshot.sequence,
+        pages: snapshot.pages,
+        appliedRecords: snapshot.appliedRecords,
+        dropBarrier: snapshot.dropBarrier,
+        coveredDrops: covered,
+        needsNextAuthoritativePass: self.pendingDrops.length > 0,
+        startedAt: snapshot.startedAt,
+        finishedAt: snapshot.finishedAt,
+      };
+      self.recoveryBatchRunning = true;
+      yield* self.reconcileActiveBatchEffect(generation).pipe(
+        Effect.ensuring(Effect.sync(() => {
+          self.recoveryBatchRunning = false;
+        })),
+      );
+      yield* self.ensureRecoveryCurrent(generation);
+      if (self.pendingDrops.length > 0) {
+        self.needsNextAuthoritativePass = true;
+        const previous = self.lastSnapshotState;
+        if (previous !== undefined) self.lastSnapshotState = { ...previous, needsNextAuthoritativePass: true };
+        self.scheduleCompensationPass(generation);
+        return;
+      }
+      self.needsNextAuthoritativePass = false;
+      self.compensationAttempts = 0;
+      self.compensationNoProgressRounds = 0;
+      self.compensationBaseline = undefined;
+      self.activeRecoveryRequest = undefined;
+      self.setPhase('Healthy');
+      self.recordDiagnostic(
+        'recovered',
+        snapshot.epoch + ':' + snapshot.sequence + ' (' + snapshot.kind + ', dropBarrier=' + snapshot.dropBarrier + ')',
+      );
+    });
+  }
+
+  /**
+   * Apply the authoritative watermark and sign the transport safe watermark
+   * (R3-02 seam). Only the current recovery generation reaches this method, so
+   * source.cover() can never be driven by a stale/old-generation snapshot.
+   */
+  private applyRecoverySnapshot(snapshot: RecoverySnapshot): void {
+    const watermark: CommandCursor = { epoch: snapshot.epoch, sequence: snapshot.sequence };
+    this.authoritativeWatermark = watermark;
+    this.lastRecoveredAt = this.retention.now();
+    this.attempts = 0;
+    this.lastError = undefined;
+    this.activeRecoveryRequest = undefined;
+    // R3-02/R3-05: mark ledger entries at/before the authoritative cursor covered.
+    // The transport never regresses the same-epoch acknowledged sequence.
+    this.source.cover(watermark);
+  }
+
+  /**
+   * R3-08: converge tracked active commands through the one scheduler in bounded
+   * batches sized by the remaining scheduler queue capacity, so the recovery pass
+   * itself never overflows the queue and never loops the same 128 commands.
+   * Commands with pending drop intents are reconciled first (priority).
+   */
+  private reconcileActiveBatchEffect(generation: number): Effect.Effect<void, RecoveryPassFailure> {
+    const self = this;
+    return Effect.gen(function* () {
+      const pending = self.prioritizedActiveCommandIds();
+      let idleRounds = 0;
+      while (pending.length > 0) {
+        yield* self.ensureRecoveryCurrent(generation);
+        // Never schedule into a full queue: that would turn the recovery batch
+        // itself into a queue-capacity drop. Wait for queued entries to drain.
+        const capacity = self.maxQueuedReconciliations - self.scheduler.stats.queued;
+        if (capacity <= 0) {
+          idleRounds += 1;
+          if (idleRounds > 64) {
+            return yield* Effect.fail(new RecoveryPassFailure(
+              { message: 'recovery batch could not drain the scheduler queue', unrecoverable: false, epochMismatch: false },
+              new Error('scheduler-queue-stayed-full'),
+            ));
+          }
+          yield* Effect.sleep(Duration.millis(1));
+          continue;
+        }
+        idleRounds = 0;
+        const chunk = pending.splice(0, capacity);
+        yield* self.awaitSchedulerBatch(chunk);
+      }
+    });
+  }
+
+  /** Await one scheduler batch chunk; interruption abandons only the wait, not scheduler work. */
+  private awaitSchedulerBatch(chunk: readonly string[]): Effect.Effect<void, RecoveryPassFailure> {
+    const self = this;
+    return Effect.tryPromise({
+      try: (signal) => new Promise<void>((resolve) => {
+        let settled = false;
+        const settle = (): void => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+        signal.addEventListener('abort', settle, { once: true });
+        void self.scheduler.scheduleMany(chunk).then(settle, settle);
+      }),
+      catch: (cause) => new RecoveryPassFailure(classifyRecoveryError(cause), cause),
+    });
+  }
+
+  private prioritizedActiveCommandIds(): string[] {
+    const active = new Set(this.activeCommandIds());
+    const prioritized: string[] = [];
+    const seen = new Set<string>();
+    for (const drop of this.pendingDrops) {
+      if (!active.has(drop.commandId) || seen.has(drop.commandId)) continue;
+      seen.add(drop.commandId);
+      prioritized.push(drop.commandId);
+    }
+    for (const commandId of active) if (!seen.has(commandId)) prioritized.push(commandId);
+    return prioritized;
+  }
+
+  /**
+   * R3-08: a drop observed after the snapshot cannot be masked. Compensation is
+   * bounded by maxCompensationPasses plus a progress proof (covered drops or
+   * watermark advance); exhaustion is observable Unrecoverable, never Healthy.
+   */
+  private scheduleCompensationPass(generation: number): void {
+    if (!this.isRecoveryCurrent(generation)) return;
+    this.compensationAttempts += 1;
+    this.needsNextAuthoritativePass = true;
+    const current = { coveredDrops: this.coveredDropCount, sequence: this.authoritativeWatermark?.sequence };
+    if (this.compensationBaseline === undefined) {
+      this.compensationBaseline = current;
+    } else if (this.compensationBaseline.coveredDrops === current.coveredDrops
+      && this.compensationBaseline.sequence === current.sequence) {
+      this.compensationNoProgressRounds += 1;
+    } else {
+      this.compensationBaseline = current;
+      this.compensationNoProgressRounds = 0;
+    }
+    this.recordDiagnostic(
+      'queue-capacity',
+      'post-snapshot drop(s) remain: compensation attempt ' + this.compensationAttempts +
+        '/' + this.recoveryOptions.maxCompensationPasses + ' coveredThisPass=' + this.coveredDropsThisPass,
     );
-    if (this.disposed) throw new RecoveryAborted();
-    this.lastRecoveryListValue = list;
-    for (const record of list.commands) {
-      if (this.disposed) throw new RecoveryAborted();
-      if (record.fabId !== this.fabId) continue;
-      if (record.terminal) continue;
-      // Unconfirmed commands from a previous page lifetime are tracked and then
-      // reconciled; the local stream may hold no evidence for them.
-      if (!this.workflows.has(record.commandId)) this.trackCommand(record.commandId);
-      this.bridge.receive({
-        fabId: record.fabId,
-        commandId: record.commandId,
-        revision: record.revision,
-        outcome: record.outcome,
-        occurredAt: record.occurredAt,
-      });
+    if (this.compensationAttempts > this.recoveryOptions.maxCompensationPasses || this.compensationNoProgressRounds >= 2) {
+      const unresolved = this.pendingDrops.length;
+      this.pendingDrops = [];
+      this.needsNextAuthoritativePass = false;
+      this.lastError = 'authoritative recovery could not cover post-snapshot reconciliation drops';
+      this.recordDiagnostic('error', this.lastError + ' (unresolved=' + unresolved + ')');
+      this.activeRecoveryRequest = undefined;
+      this.setPhase('Unrecoverable');
+      return;
     }
-    return list;
+    const delay = this.recoveryOptions.backoffMs[
+      Math.min(this.compensationAttempts - 1, this.recoveryOptions.backoffMs.length - 1)
+    ];
+    this.nextRetryAt = this.retention.now() + delay;
+    this.setPhase('WaitingRetry');
+    this.clearRetryTimer();
+    const expectedGeneration = generation;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      this.nextRetryAt = undefined;
+      if (this.disposed || !this.started || this.recoveryGeneration !== expectedGeneration) return;
+      this.setPhase('Dirty');
+      this.scheduleRecoveryPass();
+    }, delay);
   }
 
-  private handleRecoveryFailure(cause: unknown, request: PendingRecoveryRequest): void {
-    const classified = classifyRecoveryError(cause);
+  /**
+   * Classify one failed pass and schedule the bounded backoff retry. The owner
+   * generation is checked first: a stale failure (stop/dispose/replacement) can
+   * never change phase, counters or timers.
+   */
+  private handleRecoveryFailure(
+    failure: RecoveryPassFailure,
+    request: PendingRecoveryRequest,
+    generation: number,
+  ): void {
+    if (!this.isRecoveryCurrent(generation)) return;
+    const classified = failure.classified;
     this.lastError = classified.message;
     this.recordDiagnostic('error', classified.message);
     this.activeRecoveryRequest = request;
@@ -960,6 +1590,10 @@ export class FabRuntime {
     if (classified.unrecoverable || this.attempts >= this.recoveryOptions.maxAttempts) {
       this.activeRecoveryRequest = undefined;
       this.setPhase('Unrecoverable');
+      this.recordDiagnostic(
+        'error',
+        'recovery stopped after ' + this.attempts + '/' + this.recoveryOptions.maxAttempts + ' attempt(s)',
+      );
       return;
     }
     const delay = this.recoveryOptions.backoffMs[
@@ -968,10 +1602,12 @@ export class FabRuntime {
     this.nextRetryAt = this.retention.now() + delay;
     this.setPhase('WaitingRetry');
     this.clearRetryTimer();
+    const expectedGeneration = generation;
     this.retryTimer = setTimeout(() => {
       this.retryTimer = undefined;
       this.nextRetryAt = undefined;
-      if (this.disposed || !this.started) return;
+      if (this.disposed || !this.started || this.recoveryGeneration !== expectedGeneration) return;
+      this.setPhase('Dirty');
       this.scheduleRecoveryPass();
     }, delay);
   }
@@ -1115,6 +1751,11 @@ function isCommandGatewayError(cause: unknown): cause is CommandGatewayError {
 function classifyRecoveryError(cause: unknown): ClassifiedRecoveryError {
   const message = cause instanceof Error ? cause.message : String(cause);
   if (cause instanceof RecoveryAborted) return { message, unrecoverable: true, epochMismatch: false };
+  // R3-05: a request timeout is a retryable recovery failure (bounded backoff).
+  if (cause instanceof RecoveryTimeout) return { message, unrecoverable: false, epochMismatch: false };
+  // R3-01/R3-03: a contract-violating authoritative response is retried only a
+  // bounded number of times, never silently accepted.
+  if (cause instanceof RecoveryProtocolError) return { message, unrecoverable: false, epochMismatch: false };
   if (!isCommandGatewayError(cause)) return { message, unrecoverable: false, epochMismatch: false };
   switch (cause._tag) {
     case 'CommandRequestAborted':
@@ -1138,4 +1779,93 @@ function toResultEvent(event: CommandJournalEvent): CommandResultEvent {
     outcome: event.outcome,
     occurredAt: event.occurredAt,
   };
+}
+
+/** A journal watermark must be a finite, non-negative safe integer (never NaN/Infinity/negative). */
+function isAuthoritativeSequence(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+interface JournalPageValidationContext {
+  readonly fabId: string;
+  /** Epoch of the first page; every page of one recovery must stay in it. */
+  readonly epoch: string;
+  /** Requested afterSequence; events must be strictly after it. */
+  readonly cursorSequence: number;
+  /** Previous page latestSequence (-1 for the first page); watermarks never regress. */
+  readonly previousLatestSequence: number;
+  /** Previous page firstRetainedSequence (-1 for the first page); retention only advances. */
+  readonly previousFirstRetainedSequence: number;
+}
+
+/**
+ * R3-01/R3-03: validate one journal page against the frozen recovery contract.
+ * Returns a RecoveryNeedsAuthority reason, or undefined when the page is safe to
+ * apply. It deliberately does NOT assert contiguous FAB sequences: the Site
+ * sequence is global while the page is FAB-filtered, so [1,3,5,7] is legal.
+ * Gaps are only authoritative when the server says hasGap (or the epoch changed).
+ */
+function validateJournalPage(page: CommandJournalPage, context: JournalPageValidationContext): string | undefined {
+  // Server hasGap is authoritative: fall back to the authoritative list at once.
+  if (page.hasGap) return 'journal page reported hasGap';
+  if (page.epoch !== context.epoch) {
+    return 'journal epoch changed between pages: ' + String(page.epoch) + ' != ' + context.epoch;
+  }
+  if (!isAuthoritativeSequence(page.firstRetainedSequence)) return 'journal firstRetainedSequence is not a finite non-negative integer';
+  if (!isAuthoritativeSequence(page.latestSequence)) return 'journal latestSequence is not a finite non-negative integer';
+  if (!isAuthoritativeSequence(page.nextAfterSequence)) return 'journal nextAfterSequence is not a finite non-negative integer';
+  if (page.firstRetainedSequence > page.latestSequence + 1) {
+    return 'journal firstRetainedSequence ' + page.firstRetainedSequence + ' exceeds latestSequence+1 ' + (page.latestSequence + 1);
+  }
+  // Same-epoch server watermarks never regress; new writes may increase them.
+  if (context.previousFirstRetainedSequence > page.firstRetainedSequence) {
+    return 'journal firstRetainedSequence moved backwards: ' + page.firstRetainedSequence + ' < ' + context.previousFirstRetainedSequence;
+  }
+  if (context.previousLatestSequence > page.latestSequence) {
+    return 'journal latestSequence moved backwards: ' + page.latestSequence + ' < ' + context.previousLatestSequence;
+  }
+  // R3-01: a cursor before the retained window must never be treated as success.
+  if (context.cursorSequence < page.firstRetainedSequence - 1) {
+    return 'journal cursor ' + context.cursorSequence + ' is outside the retained window (firstRetainedSequence=' + page.firstRetainedSequence + ')';
+  }
+  if (context.cursorSequence > page.latestSequence) {
+    return 'journal cursor ' + context.cursorSequence + ' is beyond latestSequence ' + page.latestSequence;
+  }
+  if (page.nextAfterSequence < context.cursorSequence) {
+    return 'journal nextAfterSequence ' + page.nextAfterSequence + ' moved the cursor backwards from ' + context.cursorSequence;
+  }
+  if (page.nextAfterSequence > page.latestSequence) {
+    return 'journal nextAfterSequence ' + page.nextAfterSequence + ' exceeds latestSequence ' + page.latestSequence;
+  }
+  if (context.cursorSequence < page.latestSequence && page.nextAfterSequence <= context.cursorSequence) {
+    return 'journal page made no progress before the authoritative watermark ' + page.latestSequence;
+  }
+  let previousSequence = context.cursorSequence;
+  for (const event of page.events) {
+    if (event.fabId !== context.fabId) {
+      return 'foreign FAB event: ' + String(event.fabId) + ' != ' + context.fabId;
+    }
+    if (!isAuthoritativeSequence(event.sequence)) return 'journal event sequence is not a finite non-negative integer';
+    if (event.sequence <= previousSequence) {
+      return 'non-monotonic journal event: ' + event.sequence + ' after ' + previousSequence;
+    }
+    if (event.sequence > page.nextAfterSequence) {
+      return 'event beyond next cursor: ' + event.sequence + ' > ' + page.nextAfterSequence;
+    }
+    previousSequence = event.sequence;
+  }
+  return undefined;
+}
+
+/** R3-01/R3-07: an authoritative list snapshot must be internally consistent before it is applied. */
+function validateRecoveryList(list: CommandRecoveryList, fabId: string): string | undefined {
+  if (typeof list.epoch !== 'string' || list.epoch.length === 0) return 'recovery list epoch is not a non-empty string';
+  if (!isAuthoritativeSequence(list.latestSequence)) return 'recovery list latestSequence is not a finite non-negative integer';
+  for (const record of list.commands) {
+    if (record.fabId !== fabId) {
+      return 'recovery list contains a foreign FAB record: ' + String(record.fabId) + ' != ' + fabId;
+    }
+    if (!isAuthoritativeSequence(record.revision)) return 'recovery list record revision is not a finite non-negative integer';
+  }
+  return undefined;
 }

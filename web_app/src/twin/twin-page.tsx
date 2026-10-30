@@ -7,7 +7,7 @@ import type { AmhsStats, CutAxis } from '@/contracts/scene.port';
 import { FAB_TOOL_STATE_META, type FabToolState } from '@/domain/fab-layout';
 import { YIELD_SCENARIOS } from '@/domain/fab-yield';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '@/domain/simulation-original-tour';
-import { TWIN_LAYOUT_IDENTITIES } from '@/domain/simulation-twin-equipment';
+import { layoutIdentitiesForFab } from '@/domain/fab-layout-identities';
 import { cleanroomPressureField } from '@/domain/fab-cleanroom-pressure';
 import { researchClock } from '@/domain/simulation-research-replay';
 import { createTwinUiState, projectTwinSceneState, type EntryMode } from '@/twin/twin-state';
@@ -82,6 +82,8 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
     fabId, search, onSearchChange, siteId, mode, language, theme, t,
   });
   const telemetry = useFabTelemetry(selectedFabId);
+  // R3-10: instance ids are FAB-scoped (a FAB-02 viewer must not show FAB-01 tool ids).
+  const layoutIdentities = useMemo(() => layoutIdentitiesForFab(fab?.code ?? 'FAB-01'), [fab?.code]);
   // The tour controller is scoped to the viewer it writes to: a FAB switch or a
   // viewer recreation (new epoch) must stop the running tour, not drive the new scene.
   const {
@@ -280,8 +282,8 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
             <span className="twin-chip">{t(FAB_TOOL_STATE_META[toolStates[selected.index] ?? selected.state].label)}</span>
             <dl>
               <dt>{t("FAB 实例")}</dt><dd>{fab?.code ?? 'FAB'} / #{String(selected.index + 1).padStart(3, '0')}</dd>
-              <dt>{t("实例标识")}</dt><dd>{TWIN_LAYOUT_IDENTITIES[selected.index]?.instanceId}</dd>
-              <dt>{t("回放别名")}</dt><dd>{TWIN_LAYOUT_IDENTITIES[selected.index]?.machineId}{!TWIN_LAYOUT_IDENTITIES[selected.index]?.replayTarget ? t(" · 原版别名被覆盖") : ''}</dd>
+              <dt>{t("实例标识")}</dt><dd>{layoutIdentities[selected.index]?.instanceId}</dd>
+              <dt>{t("回放别名")}</dt><dd>{layoutIdentities[selected.index]?.machineId}{!layoutIdentities[selected.index]?.replayTarget ? t(" · 原版别名被覆盖") : ''}</dd>
               <dt>{t("尺寸 (mm)")}</dt><dd>{(selected.width * 1000).toFixed(0)} × {(selected.depth * 1000).toFixed(0)} × {(selected.height * 1000).toFixed(0)}</dd>
               <dt>{t("位置 (m)")}</dt><dd>{selected.x.toFixed(2)}, {selected.z.toFixed(2)}</dd>
               <dt>{t("来源")}</dt><dd>{t("本地布局 / OEM 目录")}</dd>
@@ -422,7 +424,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
 
         <footer id="bottom-hud-footer" className="twin-bottom">
           <span className="twin-status" title={status}><i className={lifecycle === 'ready' ? 'ok' : ''} />{lifecycle === 'ready' ? 'WebGPU' : status}</span>
-          <span>{fab ? `${fab.code} · ${t("单 FAB")}` : t("FAB-01 · 单 FAB")}</span>
+          <span>{fab ? `${fab.code} · ${t("独立 FAB")}` : t("FAB 视图")}</span>
           <span className="twin-footer-legend" aria-label={t("工艺分区图例")}>{[['光刻','#d99e3d'],['刻蚀','#c26b6b'],['薄膜','#d68a4a'],['Cu','#a98467'],['注入','#8b7bb5'],['扩散','#5c9b78'],['CMP/清洗','#4f9b9b'],['量测','#5b82b5'],['封装','#b06c96'],['Subfab','#4f6fa8']].map(([name,color])=><i key={name} title={name} style={{background:color}} />)}</span>
           <AmhsOhtReadout />
           <span>{mode === 'research' ? `REPLAY · WIP ${researchSnapshot?.wip ?? 0} · ACTIVE ${researchSnapshot?.activeTools ?? 0}` : `${stateCounts.running} RUN · ${stateCounts.idle} IDLE · ${stateCounts.down} DOWN · ${stateCounts.maint} MAINT`}</span>

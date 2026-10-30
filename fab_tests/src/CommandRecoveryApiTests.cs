@@ -190,12 +190,14 @@ public sealed class CommandRecoveryApiTests : IDisposable
     public async Task JournalPageHandlesCrossFabSparseSequencesWithProgress()
     {
         var root = Root();
-        using var factory = Factory(root, LongOptions(), fabCount: 2);
+        // Explicit multi-FAB architecture coverage: the deployment default stays one FAB.
+        using var factory = Factory(root, LongOptions(), fabCount: 3);
         using var client = Authorized(factory);
         var sites = await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites");
         var site = Assert.Single(sites!);
-        Assert.Equal(2, site.Fabs.Length);
+        Assert.Equal(3, site.Fabs.Length);
         var siteId = site.SiteId;
+        Assert.Equal(3, site.Fabs.Select(fab => fab.FabId).Distinct(StringComparer.Ordinal).Count());
         var firstFab = site.Fabs[0].FabId;
         var secondFab = site.Fabs[1].FabId;
         var service = factory.Services.GetRequiredService<EquipmentCommandService>();
@@ -222,13 +224,11 @@ public sealed class CommandRecoveryApiTests : IDisposable
         // progress (nextAfterSequence advances to the authoritative watermark) so loops terminate.
         var cursor = 0L;
         var applied = 0;
-        var emptyPages = 0;
         var pages = 0;
         while (cursor < 20)
         {
             var pageResult = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence={cursor}&limit=3");
             var pageEvents = pageResult.GetProperty("events").EnumerateArray().ToArray();
-            if (pageEvents.Length == 0) emptyPages++;
             applied += pageEvents.Length;
             var next = pageResult.GetProperty("nextAfterSequence").GetInt64();
             Assert.True(next > cursor, "nextAfterSequence must make progress for sparse FAB sequences.");
@@ -237,7 +237,14 @@ public sealed class CommandRecoveryApiTests : IDisposable
             Assert.True(pages < 100, "The sparse journal pagination loop did not terminate.");
         }
         Assert.Equal(10, applied);
-        Assert.True(emptyPages >= 1);
+        Assert.Equal(20, cursor);
+
+        // The last FAB event (19) is followed only by the other FAB's event (20): a direct request
+        // after it yields a legitimately empty FAB page whose cursor advances to the Site watermark.
+        var emptyPage = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence={sequences[^1]}&limit=3");
+        Assert.Empty(emptyPage.GetProperty("events").EnumerateArray());
+        Assert.False(emptyPage.GetProperty("hasGap").GetBoolean());
+        Assert.Equal(20, emptyPage.GetProperty("nextAfterSequence").GetInt64());
     }
 
     [Fact]
@@ -270,6 +277,66 @@ public sealed class CommandRecoveryApiTests : IDisposable
         Assert.False(caughtUp.GetProperty("hasGap").GetBoolean());
         Assert.Empty(caughtUp.GetProperty("events").EnumerateArray());
         Assert.Equal(6, caughtUp.GetProperty("nextAfterSequence").GetInt64());
+    }
+
+    [Fact]
+    public async Task JournalPageFirstPageOfEmptySiteIsNotGap()
+    {
+        var root = Root();
+        using var factory = Factory(root, FastOptions());
+        using var client = Authorized(factory);
+        var (siteId, fabId) = await SiteAsync(client);
+        var epoch = await EpochAsync(client, siteId, fabId);
+        var basePath = $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal";
+
+        var page = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence=0&limit=100");
+        Assert.False(page.GetProperty("hasGap").GetBoolean());
+        Assert.Empty(page.GetProperty("events").EnumerateArray());
+        Assert.Equal(1, page.GetProperty("firstRetainedSequence").GetInt64());
+        Assert.Equal(0, page.GetProperty("latestSequence").GetInt64());
+        Assert.Equal(0, page.GetProperty("nextAfterSequence").GetInt64());
+        Assert.Equal(epoch, page.GetProperty("epoch").GetString());
+
+        // A cursor ahead of an empty Site is an explicit gap and must not fabricate a success page.
+        var ahead = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence=5&limit=100");
+        Assert.True(ahead.GetProperty("hasGap").GetBoolean());
+        Assert.Empty(ahead.GetProperty("events").EnumerateArray());
+        Assert.Equal(5, ahead.GetProperty("nextAfterSequence").GetInt64());
+    }
+
+    [Fact]
+    public async Task JournalPageReportsGapWhenRetainedWindowIsCompletelyEmpty()
+    {
+        var root = Root();
+        using var factory = Factory(root, FastOptions(new EquipmentCommandOptions { TerminalTtl = TimeSpan.FromSeconds(1) }));
+        using var client = Authorized(factory);
+        var (siteId, fabId) = await SiteAsync(client);
+        var commandId = await SubmitAsync(client, siteId, fabId, "equipment-0", "empty-window-1");
+        await PollTerminalAsync(client, commandId);
+        var epoch = await EpochAsync(client, siteId, fabId);
+        // The GET below applies TTL retention, which removes the terminal command together with its
+        // three journal events: latest > 0 but the retained window is empty (first = latest + 1).
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        var basePath = $"/api/v1/sites/{siteId}/fabs/{fabId}/command-journal";
+
+        var page = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence=0&limit=100");
+        var latest = page.GetProperty("latestSequence").GetInt64();
+        Assert.Equal(3, latest);
+        var firstRetained = page.GetProperty("firstRetainedSequence").GetInt64();
+        Assert.Equal(latest + 1, firstRetained);
+        Assert.True(page.GetProperty("hasGap").GetBoolean());
+        Assert.Empty(page.GetProperty("events").EnumerateArray());
+        // The scan cursor advances to the scanned Site watermark even for the empty page.
+        Assert.Equal(latest, page.GetProperty("nextAfterSequence").GetInt64());
+
+        // The exact boundary before the (now empty) retained window is still not a gap.
+        var boundary = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence={firstRetained - 1}&limit=100");
+        Assert.False(boundary.GetProperty("hasGap").GetBoolean());
+        Assert.Empty(boundary.GetProperty("events").EnumerateArray());
+        Assert.Equal(latest, boundary.GetProperty("nextAfterSequence").GetInt64());
+        var caughtUp = await GetJsonAsync(client, basePath + $"?epoch={epoch}&afterSequence={latest}&limit=100");
+        Assert.False(caughtUp.GetProperty("hasGap").GetBoolean());
+        Assert.Equal(latest, caughtUp.GetProperty("nextAfterSequence").GetInt64());
     }
 
     [Fact]
@@ -453,14 +520,15 @@ public sealed class CommandRecoveryApiTests : IDisposable
     };
 
     private WebApplicationFactory<Program> Factory(string dataDirectory, EquipmentCommandOptions? commandOptions = null,
-        ICommandStoreFaultInjector? injector = null, int fabCount = 1, ICommandStore? commandStore = null) =>
+        ICommandStoreFaultInjector? injector = null, int? fabCount = null, ICommandStore? commandStore = null) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(host =>
         {
             host.UseEnvironment("Development");
             host.UseSetting("Fab:DevelopmentKey", Key);
             host.UseSetting("Fab:DataDirectory", dataDirectory);
             host.UseSetting("Fab:EmbeddedWorker", "false");
-            if (fabCount != 1) host.UseSetting("Fab:FabCount", fabCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (fabCount is { } explicitFabCount)
+                host.UseSetting("Fab:FabCount", explicitFabCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
             if (commandOptions is not null || injector is not null || commandStore is not null)
             {
                 host.ConfigureTestServices(services =>
@@ -509,6 +577,8 @@ public sealed class CommandRecoveryApiTests : IDisposable
     {
         var sites = await client.GetFromJsonAsync<SiteDto[]>("/api/v1/sites");
         var site = Assert.Single(sites!);
+        // Current deployment default is one FAB (FAB-01); every recovery endpoint is FAB-scoped,
+        // and the multi-FAB path is covered by the explicit Fab:FabCount=3 sparse-journal test.
         return (site.SiteId, Assert.Single(site.Fabs).FabId);
     }
 

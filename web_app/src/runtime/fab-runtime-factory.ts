@@ -19,7 +19,14 @@ export interface FabRuntimeFactoryOptions {
   readonly projectionRegistry: AtomRegistry.AtomRegistry;
   /** Per-FAB typed source provider; receives the FAB's CommandTransportScope. */
   readonly sourceFor: (fabId: string, scope: Scope.Scope) => CommandEventSource;
-  readonly gateway?: CommandGateway;
+  /**
+   * R3-07: REQUIRED explicit recovery authority (same contract as
+   * FabRuntimeOptions.gateway). Pass the authoritative CommandGateway, or
+   * `undefined` to declare an explicitly display-only runtime; forgetting the
+   * property is a compile-time error at the composition root. A display-only
+   * runtime is observable as Unavailable and can never report Healthy.
+   */
+  readonly gateway: CommandGateway | undefined;
   readonly createWorkflow?: CommandWorkflowFactory;
   /** Test seam for retention bounds/clock; production keeps the runtime defaults. */
   readonly retention?: FabRuntimeRetentionOptions;

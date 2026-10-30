@@ -7,9 +7,9 @@
  *   pnpm e2e  (from web_app; scripts/e2e.ps1 starts the stack when needed)
  *
  * Scenarios, console errors, network summaries, screenshots and pass/fail are
- * written to docs/perf/effect4-e2e.json. Scenarios that need a second FAB record a
- * documented limitation against the single-FAB dev fixture instead of claiming a
- * pass; the FAB-isolation unit/integration suites cover that matrix.
+ * written to docs/perf/effect4-e2e.json. The dev fixture currently seeds one FAB while the
+ * architecture supports multiple; any cross-FAB limitation is recorded explicitly and the
+ * FAB-isolation suites cover the multi-FAB matrix.
  */
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -443,7 +443,7 @@ try {
     await send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
     await waitFor('document.querySelector(".twin-feed").innerText.includes("LIVE")', 30000, 'recovered LIVE feed').catch(() => undefined);
     step('reconnect returns to LIVE', 'LIVE', await textOf('.twin-feed'));
-    record.limitations.push('The dev fixture exposes one FAB; cross-FAB isolation is covered by equipment-status-scope-cycle/twin-fab-scope unit suites. Offline emulation is the transport-interruption simulation (no real network cut).');
+    record.limitations.push('The dev fixture seeds three FABs; this scenario drives the first FAB and cross-FAB isolation is covered by equipment-status-scope-cycle/twin-fab-scope unit suites. Offline emulation is the transport-interruption simulation (no real network cut).');
   });
 
   // S8: Unknown FAB route error.

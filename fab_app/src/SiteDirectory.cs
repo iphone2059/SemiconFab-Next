@@ -6,13 +6,15 @@ using Fab.Contracts;
 namespace Fab.Site;
 
 /// <summary>
-/// Read-only synthetic development catalog for one demo Site. The catalog supports
-/// 1..32 FABs; the current development catalog defaults to FAB-01. Additional independent
-/// FABs remain configurable through the catalog count.
+/// Read-only synthetic development catalog for one demo Site. The current deployment defaults to
+/// one FAB (FAB-01), while the architecture must support 1..32 independent FABs (each with its own
+/// runtime, telemetry, equipment status and authorization scope). The explicit <c>Fab:FabCount</c>
+/// setting selects the catalog size and must not be replaced by a single-FAB assumption.
 ///
 /// FAB ids are derived deterministically from <c>{SiteCode}/{FabCode}</c>. FAB-01 keeps
 /// the Guid it always had, so existing URLs and stored data remain stable when the FAB
-/// count changes; FAB-02..FAB-32 are derived the same way.
+/// count changes; FAB-02..FAB-32 are derived the same way and never collide (covered by
+/// explicit Fab:FabCount=3+ tests).
 /// </summary>
 public sealed class SiteDirectory
 {
@@ -80,9 +82,6 @@ public sealed class SiteDirectory
         fab = null!;
         return false;
     }
-
-    /// <summary>Returns the primary/legacy FAB (FAB-01) of the configured Site.</summary>
-    public FabUnit PrimaryFab => _site.Fabs[0];
 
     /// <summary>
     /// A scenario must target the configured Site with a non-empty, duplicate-free subset
