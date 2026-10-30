@@ -3,6 +3,7 @@ import type { FabRuntime } from '@/runtime/fab-runtime';
 import { XStateCommandWorkflowAdapter } from '@/runtime/xstate-command-workflow-adapter';
 import { FabLifecycleCoordinator } from '@/runtime/fab-lifecycle-coordinator';
 import { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
+import { createPendingCommandEventSource } from '@/runtime/command-sources';
 import type { CommandJournalPage, CommandJournalQuery } from '@/contracts/command-gateway.contract';
 import {
   FakeCommandEventSource,
@@ -438,6 +439,19 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     await expect.poll(() => runtime.getProjection(commandId)?.revision, { timeout: 1_000 }).toBe(5);
     await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
     expect(listAttempts).toBeGreaterThanOrEqual(2);
+  });
+
+  it('reports Degraded when HTTP recovery exists but realtime transport is unavailable', async () => {
+    const source = createPendingCommandEventSource();
+    const gateway = fakeCommandGateway();
+    const { runtime } = createFab({ source, gateway });
+    runtime.start();
+
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Degraded');
+    expect(runtime.recoveryState.availability).toBe('available');
+    expect(runtime.recoveryState.realtimeAvailability).toBe('unavailable');
+    expect(runtime.realtimeAvailability).toBe('unavailable');
+    expect(runtime.lastRecoveryList).toBeDefined();
   });
 
   it('R3-07: never reports Healthy without an authoritative gateway (display-only runtime)', async () => {
