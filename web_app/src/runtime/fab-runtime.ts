@@ -40,6 +40,12 @@ import {
 import type { RuntimeHost } from '@/runtime/fab-runtime-host';
 import { runCommandStream, stopCommandStream } from '@/runtime/command-stream';
 import { XStateCommandWorkflowAdapter } from '@/runtime/xstate-command-workflow-adapter';
+import {
+  requireNonNegativeFiniteNumber,
+  requireNonNegativeSafeInteger,
+  requireNonEmptyNonNegativeFiniteSequence,
+  requirePositiveSafeInteger,
+} from '@/runtime/numeric-configuration';
 
 export type CommandWorkflowFactory = (fabId: string, commandId: string) => CommandWorkflow;
 
@@ -193,10 +199,10 @@ const DEFAULT_RETENTION: ResolvedRetention = {
 
 function resolveRetention(options: FabRuntimeRetentionOptions | undefined): ResolvedRetention {
   return {
-    terminalTtlMs: Math.max(0, options?.terminalTtlMs ?? DEFAULT_RETENTION.terminalTtlMs),
-    maxTerminalWorkflows: Math.max(1, options?.maxTerminalWorkflows ?? DEFAULT_RETENTION.maxTerminalWorkflows),
-    maxRetainedProjections: Math.max(0, options?.maxRetainedProjections ?? DEFAULT_RETENTION.maxRetainedProjections),
-    sweepIntervalMs: Math.max(1, options?.sweepIntervalMs ?? DEFAULT_RETENTION.sweepIntervalMs),
+    terminalTtlMs: requireNonNegativeFiniteNumber('terminalTtlMs', options?.terminalTtlMs ?? DEFAULT_RETENTION.terminalTtlMs),
+    maxTerminalWorkflows: requirePositiveSafeInteger('maxTerminalWorkflows', options?.maxTerminalWorkflows ?? DEFAULT_RETENTION.maxTerminalWorkflows),
+    maxRetainedProjections: requireNonNegativeSafeInteger('maxRetainedProjections', options?.maxRetainedProjections ?? DEFAULT_RETENTION.maxRetainedProjections),
+    sweepIntervalMs: requirePositiveSafeInteger('sweepIntervalMs', options?.sweepIntervalMs ?? DEFAULT_RETENTION.sweepIntervalMs),
     now: options?.now ?? DEFAULT_RETENTION.now,
   };
 }
@@ -212,16 +218,17 @@ interface ResolvedRecovery {
 }
 
 function resolveRecovery(options: FabRuntimeRecoveryOptions | undefined): ResolvedRecovery {
-  const fallback = DEFAULT_RECOVERY_BACKOFF_MS;
-  const configured = options?.backoffMs?.filter((delay) => Number.isFinite(delay) && delay >= 0);
+  const backoffMs = requireNonEmptyNonNegativeFiniteSequence('backoffMs', options?.backoffMs ?? DEFAULT_RECOVERY_BACKOFF_MS);
+  const journalPageLimit = requirePositiveSafeInteger('journalPageLimit', options?.journalPageLimit ?? DEFAULT_RECOVERY_JOURNAL_PAGE_LIMIT);
+  if (journalPageLimit > 1000) throw new RangeError('journalPageLimit must not exceed 1000');
   return {
-    backoffMs: configured && configured.length > 0 ? configured : fallback,
-    maxAttempts: Math.max(1, options?.maxAttempts ?? DEFAULT_RECOVERY_MAX_ATTEMPTS),
-    journalPageLimit: Math.min(1000, Math.max(1, options?.journalPageLimit ?? DEFAULT_RECOVERY_JOURNAL_PAGE_LIMIT)),
-    maxJournalPages: Math.max(1, options?.maxJournalPages ?? DEFAULT_MAX_JOURNAL_PAGES),
+    backoffMs,
+    maxAttempts: requirePositiveSafeInteger('maxAttempts', options?.maxAttempts ?? DEFAULT_RECOVERY_MAX_ATTEMPTS),
+    journalPageLimit,
+    maxJournalPages: requirePositiveSafeInteger('maxJournalPages', options?.maxJournalPages ?? DEFAULT_MAX_JOURNAL_PAGES),
     listFilter: options?.listFilter ?? 'active',
-    requestTimeoutMs: Math.max(1, options?.requestTimeoutMs ?? DEFAULT_RECOVERY_REQUEST_TIMEOUT_MS),
-    maxCompensationPasses: Math.max(0, options?.maxCompensationPasses ?? DEFAULT_MAX_COMPENSATION_PASSES),
+    requestTimeoutMs: requirePositiveSafeInteger('requestTimeoutMs', options?.requestTimeoutMs ?? DEFAULT_RECOVERY_REQUEST_TIMEOUT_MS),
+    maxCompensationPasses: requireNonNegativeSafeInteger('maxCompensationPasses', options?.maxCompensationPasses ?? DEFAULT_MAX_COMPENSATION_PASSES),
   };
 }
 
@@ -469,7 +476,7 @@ export class FabRuntime {
     this.lazyCommandSubscription = options.lazyCommandSubscription === true;
     this.retention = resolveRetention(options.retention);
     this.recoveryOptions = resolveRecovery(options.recovery);
-    this.maxQueuedReconciliations = Math.max(1, options.maxQueuedReconciliations ?? DEFAULT_MAX_QUEUED_RECONCILIATIONS);
+    this.maxQueuedReconciliations = requirePositiveSafeInteger('maxQueuedReconciliations', options.maxQueuedReconciliations ?? DEFAULT_MAX_QUEUED_RECONCILIATIONS);
 
     // FabScope is the only Scope this class closes; its children are created from it.
     this.fabScope = Scope.forkUnsafe(options.parentScope);
