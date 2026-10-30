@@ -7,6 +7,7 @@ import type {
   CommandResultEvent,
   CommandStreamDirty,
   CommandStreamDirtyReason,
+  CommandSourceAvailability,
   CommandTransportFailure,
 } from '@/contracts/command-events.contract';
 import type {
@@ -63,6 +64,7 @@ export interface FabRuntimeRetentionOptions {
  */
 export type CommandRecoveryPhase =
   | 'Healthy'
+  | 'Degraded'
   | 'Dirty'
   | 'Recovering'
   | 'WaitingRetry'
@@ -277,6 +279,7 @@ export interface CommandRecoveryState {
   readonly phase: CommandRecoveryPhase;
   /** R3-07: explicit authority; `unavailable` runtimes never report Healthy. */
   readonly availability: CommandRecoveryAvailability;
+  readonly realtimeAvailability: CommandSourceAvailability;
   /** Attempts made in the current dirty episode (reset after recovery). */
   readonly attempts: number;
   readonly maxAttempts: number;
@@ -524,6 +527,7 @@ export class FabRuntime {
     this.createWorkflow = options.createWorkflow ??
       ((fabId, commandId) => new XStateCommandWorkflowAdapter(fabId, commandId));
     this.source = options.sourceFor(options.fabId, this.transportScope);
+    if (this.recoveryAvailable && this.source.availability === 'unavailable') this.phase = 'Degraded';
     const registry: CommandWorkflowRegistry = {
       get: (fabId, commandId) => (fabId === this.fabId ? this.workflows.get(commandId) : undefined),
     };
@@ -703,6 +707,7 @@ export class FabRuntime {
     return {
       phase: this.phase,
       availability: this.recoveryAvailable ? 'available' : 'unavailable',
+      realtimeAvailability: this.source.availability,
       attempts: this.attempts,
       maxAttempts: this.recoveryOptions.maxAttempts,
       recoveryGeneration: this.recoveryGeneration,
@@ -892,6 +897,14 @@ export class FabRuntime {
     if (this.source.connectionStatus) {
       subscribe(this.source.connectionStatus, (status) => {
         this.connectionStatus = status;
+        if ((status === 'reconnecting' || status === 'failed') && this.phase === 'Healthy') {
+          this.setPhase('Degraded');
+        }
+        if (status === 'open' && this.phase === 'Degraded' && this.recoveryAvailable &&
+          this.source.availability === 'ready' && this.lastSnapshotState !== undefined &&
+          !this.passRunning && this.pendingRecovery === undefined) {
+          this.setPhase('Healthy');
+        }
       });
     }
     if (this.source.dirty) {
@@ -1185,7 +1198,7 @@ export class FabRuntime {
   }
 
   private setPhase(phase: CommandRecoveryPhase): void {
-    this.phase = phase;
+    this.phase = phase === 'Healthy' && this.source.availability === 'unavailable' ? 'Degraded' : phase;
   }
 
   private recordDiagnostic(cause: CommandRecoveryDiagnostic['cause'], message?: string): void {
