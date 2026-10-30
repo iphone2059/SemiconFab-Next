@@ -2,6 +2,8 @@
 **/obj/
 **/node_modules/
 **/dist/
+# Compiler ON/OFF production-build outputs (regenerated evidence, never source)
+docs/architecture/evidence/compiler/dist-*/
 **/TestResults/
 **/__pycache__/
 .local/
