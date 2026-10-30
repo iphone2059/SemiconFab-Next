@@ -93,7 +93,7 @@ export interface TransportHarness {
   /** Conservative cursor snapshot of the real transport. */
   cursors(): CommandSourceCursors;
   /** Authoritative recovery safe watermark (ADR-010 §6.2). */
-  cover(cursor: CommandCursor): void;
+  cover(cursor: CommandCursor): boolean;
   /** Manually acknowledge one delivered event (ordered-ledger tests). */
   acknowledge(event: CommandResultEvent): void;
   closeTransportScope(): void;
@@ -163,7 +163,7 @@ export function createTransportHarness(options: TransportHarnessOptions = {}): T
     gaps,
     diagnostics: () => source.protocolDiagnostics,
     cursors: () => source.cursors,
-    cover: (cursor) => source.cover(cursor),
+    cover: (cursor) => source.cover(cursor, source.recoveryVersion, 'list'),
     acknowledge: (event) => {
       source.acknowledge(event);
       acked.push(event);
