@@ -1,4 +1,5 @@
 import type { CommandOutcome, CommandResultEvent } from '@/contracts/command-events.contract';
+import { requireNonNegativeFiniteNumber, requirePositiveSafeInteger } from '@/runtime/numeric-configuration';
 
 export type CorrelationDecision = 'new' | 'duplicate' | 'stale';
 
@@ -57,9 +58,9 @@ export class CommandCorrelationRegistry {
   private readonly now: () => number;
 
   constructor(options: CorrelationRetentionOptions = {}) {
-    this.maxTerminalEntries = Math.max(1, options.maxTerminalEntries ?? 256);
-    this.terminalTtlMs = Math.max(0, options.terminalTtlMs ?? 300_000);
-    this.maxEntries = Math.max(1, options.maxEntries ?? 4_096);
+    this.maxTerminalEntries = requirePositiveSafeInteger('maxTerminalEntries', options.maxTerminalEntries ?? 256);
+    this.terminalTtlMs = requireNonNegativeFiniteNumber('terminalTtlMs', options.terminalTtlMs ?? 300_000);
+    this.maxEntries = requirePositiveSafeInteger('maxEntries', options.maxEntries ?? 4_096);
     this.now = options.now ?? Date.now;
   }
 
