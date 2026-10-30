@@ -119,6 +119,7 @@ export class FakeCommandEventSource implements CommandEventSource {
   private observedCursor?: CommandCursor;
   private deliveredCursor?: CommandCursor;
   private acknowledgedCursorValue?: CommandCursor;
+  private recoveryVersionValue = 0;
 
   private countStream<A>(bus: PubSub.PubSub<A>, counters: { increment: () => void; decrement: () => void }): Stream.Stream<A> {
     return Stream.fromPubSub(bus).pipe(
@@ -163,9 +164,15 @@ export class FakeCommandEventSource implements CommandEventSource {
   }
 
   /** ADR-010 §6.2: authoritative recovery safe watermark from FabRuntime. */
-  cover(cursor: CommandCursor): void {
+  get recoveryVersion(): number {
+    return this.recoveryVersionValue;
+  }
+
+  cover(cursor: CommandCursor, recoveryVersion: number): boolean {
+    if (recoveryVersion !== this.recoveryVersionValue) return false;
     this.acknowledgedCursorValue = advanceFakeCursor(this.acknowledgedCursorValue, cursor);
     this.deliveredCursor = advanceFakeCursor(this.deliveredCursor, cursor);
+    return true;
   }
 
   readonly availability: CommandSourceAvailability = 'ready';
@@ -190,10 +197,14 @@ export class FakeCommandEventSource implements CommandEventSource {
   reconnect(): void { PubSub.publishUnsafe(this.reconnectBus, undefined); }
 
   /** Signal that backend replay could not cover a disconnect. */
-  emitGap(gap: CommandStreamGap = { epoch: 'epoch-1', sequence: 7 }): void { PubSub.publishUnsafe(this.gapBus, gap); }
+  emitGap(gap: CommandStreamGap = { epoch: 'epoch-1', sequence: 7 }): void {
+    this.recoveryVersionValue += 1;
+    PubSub.publishUnsafe(this.gapBus, gap);
+  }
 
   /** Simulate an EventSource transport interruption (never a command outcome). */
   failTransport(failure: CommandTransportFailure = { message: 'transport failure' }): void {
+    this.recoveryVersionValue += 1;
     PubSub.publishUnsafe(this.statusBus, 'reconnecting');
     PubSub.publishUnsafe(this.failureBus, failure);
   }
@@ -202,6 +213,7 @@ export class FakeCommandEventSource implements CommandEventSource {
 
   /** Bounded-bus overflow / stale-generation / closed-connection signal. */
   emitDirty(dirty: CommandStreamDirty = { reason: 'overflow', droppedCount: 1 }): void {
+    this.recoveryVersionValue += 1;
     PubSub.publishUnsafe(this.dirtyBus, dirty);
   }
 
