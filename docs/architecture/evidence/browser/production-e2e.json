@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-30T08:06:03.136Z",
-  "commit": "a7ef24b37086d938db4e1198ed3d0c2a9590eb1e",
+  "generatedAt": "2026-10-30T12:24:39.869Z",
+  "commit": "1dcebb4832f051e1765841f20263fc715d1a9938",
   "mode": "on",
   "webUrl": "http://127.0.0.1:4180",
   "apiUrl": "http://127.0.0.1:5180",
@@ -9,6 +9,7 @@
     "sites": 1,
     "fabs": 1,
     "catalogItems": 253,
+    "siteId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     "fabId": "37793fb6-5679-b7a3-3fef-d970433697c1"
   },
   "scenarios": [
@@ -55,11 +56,11 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/cc3cfb9a-f689-4360-857a-1f1cdcfa365c",
+            "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/cc3cfb9a-f689-4360-857a-1f1cdcfa365c/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980/results",
             "count": 1
           }
         ]
@@ -186,19 +187,19 @@
             "count": 5
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/cc3cfb9a-f689-4360-857a-1f1cdcfa365c",
-            "count": 1
-          },
-          {
-            "url": "http://127.0.0.1:4180/api/v1/runs/cc3cfb9a-f689-4360-857a-1f1cdcfa365c/results",
-            "count": 1
-          },
-          {
             "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980",
-            "count": 2
+            "count": 1
           },
           {
             "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980/results",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4180/api/v1/runs/20ea6f35-bff3-47cb-a13b-2ac4dc98f73f",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:4180/api/v1/runs/20ea6f35-bff3-47cb-a13b-2ac4dc98f73f/results",
             "count": 1
           }
         ]
@@ -302,7 +303,7 @@
       "actual": "all assertions passed",
       "consoleErrors": [],
       "network": {
-        "total": 14,
+        "total": 15,
         "eventSources": 2,
         "keyRequests": [
           {
@@ -350,7 +351,7 @@
       "pass": true,
       "actual": "all assertions passed",
       "consoleErrors": [
-        "console: Error: FAB 不存在：unknown-fab\n    at $p (http://127.0.0.1:4180/assets/index-BDdu-IJq.js:3:302991)\n    at async loader (http://127.0.0.1:4180/assets/index-BDdu-IJq.js:3:303490)\n    at async fn (http://127.0.0.1:4180/assets/react-DUhVkHCG.js:11:24506)"
+        "console: Error: FAB 不存在：unknown-fab\n    at rm (http://127.0.0.1:4180/assets/index-DyCcYFIz.js:3:305457)\n    at async loader (http://127.0.0.1:4180/assets/index-DyCcYFIz.js:3:305988)\n    at async fn (http://127.0.0.1:4180/assets/react-Bd8vXKlA.js:11:24506)"
       ],
       "network": {
         "total": 8,
@@ -422,11 +423,11 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980",
+            "url": "http://127.0.0.1:4180/api/v1/runs/20ea6f35-bff3-47cb-a13b-2ac4dc98f73f",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/20ea6f35-bff3-47cb-a13b-2ac4dc98f73f/results",
             "count": 1
           }
         ]
@@ -457,9 +458,13 @@
       "actual": "all assertions passed",
       "consoleErrors": [],
       "network": {
-        "total": 16,
+        "total": 17,
         "eventSources": 1,
         "keyRequests": [
+          {
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status",
+            "count": 1
+          },
           {
             "url": "http://127.0.0.1:4180/api/v1/sites",
             "count": 1
@@ -473,11 +478,11 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980",
+            "url": "http://127.0.0.1:4180/api/v1/runs/20ea6f35-bff3-47cb-a13b-2ac4dc98f73f",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/20ea6f35-bff3-47cb-a13b-2ac4dc98f73f/results",
             "count": 1
           },
           {
@@ -489,7 +494,7 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/commands/cb746064-8992-4307-adc9-50d5dd16b488",
+            "url": "http://127.0.0.1:4180/api/v1/commands/8b0e25cf-3688-4816-b7a6-f70e970d44e8",
             "count": 2
           }
         ]

@@ -1,10 +1,10 @@
 {
-  "commit": "a7ef24b37086d938db4e1198ed3d0c2a9590eb1e",
-  "verifiedAt": "2026-10-30T08:08:48.4073961Z",
+  "commit": "1dcebb4832f051e1765841f20263fc715d1a9938",
+  "verifiedAt": "2026-10-30T12:27:51.1452845Z",
   "node": "v26.12.1",
   "pnpm": "12.15.0",
   "dotnet": "11.0.100-rc.3.26522.148",
-  "gpuGate": false,
+  "gpuGate": true,
   "checks": [
     "contracts",
     "generated-artifacts",

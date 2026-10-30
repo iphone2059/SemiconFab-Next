@@ -1,0 +1,660 @@
+Contracts: C# / TypeScript match JSON Schema.
+Twin translations stable: 281 entries, 9 collisions, 308 source pairs
+static-structure-packed.generated.ts is up to date (1721390 bytes).
+PASS: 3 generated artifact(s) registered in tools/generated-artifacts.json; generator commands, source inputs and output sha256 all match the committed tree.
+Frozen asset contracts PASS
+Frozen asset contracts PASS
+✔ frozen reference data and elevation assets pass their build contracts (2.6653ms)
+✔ invalid equipment geometry and duplicate identities fail (2.3163ms)
+✔ unmatched localization and invalid OEM identity fail (2.3545ms)
+✔ unsafe SVG event attributes and script tags fail (1.454ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 88.8694
+PASS: Task 1 final-state checks (flat src layout, generated-artifact region, deprecated dependencies, ARCH-11 high-frequency boundaries).
+PASS: 3 independent .NET projects (fab_shared + fab_app + fab_tests) / 1 self-contained frontend project; flat layout, reference rules, DAG and module records.
+PASS: development key generation and reuse
+PASS: supported and unsupported Node requirements
+Preparing pnpm 12.15.0 in C:\Users\han_qingyu\AppData\Local\Temp\fab startup tests 05c4d72665414d65a7c6fb7bfcef7892\local tooling ...
+Preparing pnpm 12.15.0 in C:\Users\han_qingyu\AppData\Local\Temp\fab startup tests 05c4d72665414d65a7c6fb7bfcef7892\failed tooling ...
+PASS: matching pnpm, mismatched/missing pnpm bootstrap and local reuse
+Checking and installing frontend dependencies from pnpm-lock.yaml ...
+Checking and installing frontend dependencies from pnpm-lock.yaml ...
+Checking and installing frontend dependencies from pnpm-lock.yaml ...
+PASS: first-clone dependency install, development tools and failed install handling
+PASS: occupied ports are rejected without stopping their listener
+PASS: paths, quotes, trailing backslashes and empty process arguments
+PASS: owned process tree cleanup releases child processes and ports
+PASS: isolated startup flow (ready); no application/browser started
+PASS: isolated startup flow (api-only); no application/browser started
+PASS: isolated startup flow (sdk-mismatch); no application/browser started
+PASS: isolated startup flow (node-mismatch); no application/browser started
+PASS: isolated startup flow (install-failure); no application/browser started
+PASS: isolated startup flow (proxy-failure); no application/browser started
+PASS: caller environment is restored exactly (no blank variables)
+........
+----------------------------------------------------------------------
+Ran 8 tests in 1.344s
+
+OK
+✔ a canvas and RAF callbacks cannot substitute for an initialized renderer (0.8443ms)
+✔ requires actual engine frames, draw calls, readiness and clean GPU diagnostics (0.4906ms)
+✔ default dev gate keeps the historical p95 behavior and messages (0.2237ms)
+✔ 60hz profile enforces p95 and p99 frame budgets (0.128ms)
+✔ 60hz requires a finite p99 sample (0.1444ms)
+✔ heap growth fails only under a configured heap budget (0.1105ms)
+✔ configured heap budgets fail closed without a finite heap metric (0.1326ms)
+✔ profile failure ordering keeps p99, heap, boot, then GPU errors (0.1186ms)
+✔ custom profile honors explicit p95/p99 thresholds (0.2221ms)
+✔ readiness and first-frame thresholds are opt-in (0.186ms)
+✔ maxFrames caps the required frame count (0.109ms)
+✔ profile thresholds resolve to documented defaults (0.3465ms)
+✔ render_perf CLI rejects unknown profiles and bad thresholds before launching Chrome (85.4251ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 152.205
+{"transformVersion": "semiconfab-legacy-import-v1", "importId": "c76486dc1c8049c9e5cb6d43b16c383e1d79dada1b5071c07ba35c12469f51cf", "inputCount": 253, "acceptedCount": 253, "rejectedCount": 0, "counts": {"catalog": 253, "oem": 116, "osat": 86, "prices": 167, "bom": 103, "layout": 121}, "issues": [], "snapshotSha256": "90c16a18c5143672bf74b7849083e16ef821a6e5e5860b22ca327cd03d0bae5c", "files": [{"path": "catalog.json", "bytes": 691042, "sha256": "b21829a25baed932a96b373478d764dd80a84fab6ce4ce53c978a985230af4e7"}, {"path": "data/semiconductor_equipment_database.json", "bytes": 69137, "sha256": "a650d187876e4579764cd22ae80653b99280b9e24407bf0b7f437f7e14d01b61"}, {"path": "data/osat-86-ground-truth.json", "bytes": 86651, "sha256": "7dc2da0e4055317cff19dd39dc9fa4ec0a4947e0ce49d62fd0c83c41c327c418"}, {"path": "data/price_estimates.json", "bytes": 54234, "sha256": "b8ed3e89918eef0ee80d863b8f4cd01e9d8fa5891f4b0b99b9064156e63ac8ed"}, {"path": "data/twin_bom_costs.json", "bytes": 58813, "sha256": "d89d59da3a371f4efaee7f2f16ce2572c2e595deadaef28e9454f33bb2093fd0"}, {"path": "twin/layout-default.json", "bytes": 30972, "sha256": "5b1d03f741ec6733fd33bc058b88132dcf3d8caa9657cbebe3dcdf5ef3d3334e"}, {"path": "schema.json", "bytes": 11515, "sha256": "dd108062a103a775bff8eeeb5a629c719b6ecc0598f59678594c715ed1dd43e5"}, {"path": "LICENSE", "bytes": 4637, "sha256": "8e6982187c93b0a47cb126cc83f697e17f34f62bfa1006000bc94d45bae43225"}]}
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+C:\Program Files\dotnet\sdk\11.0.100-rc.3.26522.148\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(385,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [C:\Users\han_qingyu\SemiconFab-Next\fab_app\fab_app.csproj]
+  fab_shared -> C:\Users\han_qingyu\SemiconFab-Next\fab_shared\bin\Release\net11.0\fab_shared.dll
+  fab_app -> C:\Users\han_qingyu\SemiconFab-Next\fab_app\bin\Release\net11.0\fab_app.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:03.75
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+C:\Program Files\dotnet\sdk\11.0.100-rc.3.26522.148\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(385,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [C:\Users\han_qingyu\SemiconFab-Next\fab_shared\fab_shared.csproj]
+  fab_shared -> C:\Users\han_qingyu\SemiconFab-Next\fab_shared\bin\Release\net11.0\fab_shared.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:00.48
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+C:\Program Files\dotnet\sdk\11.0.100-rc.3.26522.148\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(385,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [C:\Users\han_qingyu\SemiconFab-Next\fab_tests\fab_tests.csproj]
+C:\Program Files\dotnet\sdk\11.0.100-rc.3.26522.148\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.RuntimeIdentifierInference.targets(385,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [C:\Users\han_qingyu\SemiconFab-Next\fab_shared\fab_shared.csproj]
+  fab_shared -> C:\Users\han_qingyu\SemiconFab-Next\fab_shared\bin\Release\net11.0\fab_shared.dll
+  fab_app -> C:\Users\han_qingyu\SemiconFab-Next\fab_app\bin\Release\net11.0\fab_app.dll
+  fab_tests -> C:\Users\han_qingyu\SemiconFab-Next\fab_tests\bin\Release\net11.0\fab_tests.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:03.97
+Test run for C:\Users\han_qingyu\SemiconFab-Next\fab_tests\bin\Release\net11.0\fab_tests.dll (.NETCoreApp,Version=v11.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   226, Skipped:     0, Total:   226, Duration: 9 s - fab_tests.dll (net11.0)
+Agent skills awaiting approval: @tanstack/react-router.
+Run "pnpm approve" to review them.
+✓ Lockfile passes supply-chain policies (verified 20h ago)
+Lockfile is up to date, resolution step is skipped
+Done in 29ms using pnpm v12.15.0
+$ tsc --noEmit
+Found 0 warnings and 0 errors.
+Finished in 107ms on 212 files with 88 rules using 20 threads.
+$ node ../tools/check_frozen_assets.mjs
+Frozen asset contracts PASS
+$ vitest run
+
+ RUN  v5.0.5 C:/Users/han_qingyu/SemiconFab-Next/web_app
+
+stderr | tests/rendering/lite-backend-recovery.test.ts > CR-08: fails closed with a full release after the device-loss rebuild budget is exhausted
+[lite] device-loss recovery budget exhausted; failing closed GPU 设备在单次视图生命周期内反复丢失，已超过受控重建预算（2 次）。已停止重建并释放全部 GPU 资源；请重新加载视图。
+
+stderr | tests/rendering/lite-backend-recovery.test.ts > CR-08: the ?perf acceptance seam can lower the recovery budget for real-WebGPU probes
+[lite] device-loss recovery budget exhausted; failing closed GPU 设备在单次视图生命周期内反复丢失，已超过受控重建预算（2 次）。已停止重建并释放全部 GPU 资源；请重新加载视图。
+
+ ✓ tests/domain/amhs-timeline-production.test.ts (5 tests) 977ms
+   ✓ keeps cumulative completed counts without unbounded history, matching the frozen totals 517ms
+ ✓ tests/rendering/lite-backend-recovery.test.ts (17 tests) 1204ms
+ ✓ tests/rendering/lite-runtime.test.ts (31 tests) 1452ms
+stderr | tests/integration/fab-runtime.test.ts > FabRuntime reconciliation and lifecycle (CE-06/CE-08) > automatically reconciles active commands when the source reconnects
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+
+stderr | tests/integration/fab-runtime.test.ts > FabRuntime reconciliation and lifecycle (CE-06/CE-08) > contains failed background recovery and retries when the connection returns
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+
+stderr | tests/integration/fab-runtime.test.ts > FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08) > R3-03: rejects a foreign-FAB journal event and falls back to the authoritative list
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+ ✓ tests/domain/personnel-timeline.test.ts (12 tests) 1969ms
+   ✓ bounds production history by default while keeping cumulative counters (1h run) 647ms
+   ✓ records the full trace only when explicitly enabled, with one arrival edge per waypoint visit 647ms
+stderr | tests/integration/fab-runtime.test.ts > FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08) > R3-05: stop() pauses and interrupts recovery; start() re-arms one authoritative pass
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+stderr | tests/integration/fab-runtime.test.ts > FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08) > R3-08: a post-snapshot drop never returns to Healthy (bounded compensation = Unrecoverable)
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+stderr | tests/integration/fab-runtime.test.ts > FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08) > R3-08: bounded compensation converges to Healthy when the next snapshot covers the drop
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+stderr | tests/integration/fab-runtime.test.ts > treats a 404 as unresolved until a later complete list proves the command absent
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+stderr | tests/integration/fab-runtime.test.ts > Round 5.1 / P1-01 final Healthy barriers > does not become healthy when an uncorrelated event arrives during post-snapshot reconciliation
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+stderr | tests/integration/fab-runtime.test.ts > Round 5.1 / P2-01 connection lifecycle closed/failed/open > treats closed as idle (not failed, no retry loop) and only open re-earns Healthy
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+
+ ✓ tests/correctness/sse/matrix-1-ordered-ack-ledger.test.ts (16 tests) 1339ms
+ ✓ tests/architecture/static-structure-pack.test.ts (12 tests) 2858ms
+   ✓ reports the committed generated tree as up to date and fails a stale registry checksum 1031ms
+   ✓ every node-based registered generator reports its committed artifact as fresh 505ms
+ ✓ tests/realtime/realtime-transport.test.ts (23 tests) 1443ms
+ ✓ tests/integration/proxy.test.ts (1 test) 3026ms
+   ✓ injects only the server key and replaces a browser-supplied key in a real proxy request 3019ms
+stderr | tests/integration/fab-runtime.test.ts > Round 5.1 / P2-02 on-demand command stream > opens exactly one command stream per FAB, only while the FAB has command demand
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "succeeded" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "succeeded" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "succeeded" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "succeeded" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "succeeded" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "succeeded" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "succeeded" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "succeeded" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "succeeded" with no matching transition
+
+stderr | tests/integration/fab-runtime-batch23.test.ts > FabRuntime replay-gap reconciliation (batch 2/3) > coalesces a replay-gap/reconnect burst into one authoritative pass over active commands
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+stderr | tests/integration/fab-runtime.test.ts > Round 5.1 / P2-02 on-demand command stream > opens exactly one command stream per FAB, only while the FAB has command demand
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+
+stderr | tests/integration/fab-runtime-batch23.test.ts > FabRuntime replay-gap reconciliation (batch 2/3) > ignores gap signals from a disposed generation of the same FAB
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+stderr | tests/integration/fab-runtime-batch23.test.ts > FabRuntime replay-gap reconciliation (batch 2/3) > ignores gap signals from a disposed generation of the same FAB
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+stderr | tests/integration/fab-runtime-batch23.test.ts > FabRuntime replay-gap reconciliation (batch 2/3) > reconciles only tracked active commands; terminal and unknown ids are ignored
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "succeeded" with no matching transition
+
+stderr | tests/integration/fab-runtime-batch23.test.ts > FabRuntime replay-gap reconciliation (batch 2/3) > reconciles a command tracked after a replay gap when no local evidence exists
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+
+ ✓ tests/integration/fab-runtime.test.ts (32 tests) 2101ms
+stderr | tests/integration/fab-runtime-batch23.test.ts > Round 5.1 post-snapshot recovery races (batch 2/3) > never reports Healthy when a new recovery request arrives during the post-snapshot batch
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+ ✓ tests/architecture/architecture-import-graph.test.ts (8 tests) 3697ms
+ ✓ tests/contract/command-recovery-phase.test.ts (13 tests) 2246ms
+   ✓ R5.4-01: terminal Unrecoverable while the realtime source is unavailable (4)
+     ✓ T03: stop()/start() remount of a terminal runtime keeps Unrecoverable and the attempt budget 371ms
+     ✓ T03b: a pending-source finite connectionStatus stream exit cannot clear Unrecoverable 423ms
+stderr | tests/integration/fab-runtime-batch23.test.ts > Round 5.1 post-snapshot recovery races (batch 2/3) > compensates a drop observed during the post-snapshot batch before reporting Healthy
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+ ✓ tests/integration/fab-runtime-batch23.test.ts (14 tests) 833ms
+ ✓ tests/rendering/lite-static-structure.test.ts (8 tests) 1681ms
+   ✓ retains every frozen static mesh and its actual world matrix and rendered bounds 833ms
+   ✓ preserves frozen triangle vertices, normals, UVs and indices rather than replacing pipes or detailed facilities with boxes 347ms
+ ✓ tests/integration/route-code-splitting.test.ts (3 tests) 4335ms
+   ✓ A15: the production build emits a separate Twin page chunk for the 3D route 4328ms
+ ✓ tests/domain/amhs-timeline.test.ts (2 tests) 721ms
+   ✓ reproduces the frozen-source AMHS traffic vectors for a declared scenario 396ms
+   ✓ keeps the hard no-overtake spacing and idle-state LED contract 322ms
+ ✓ tests/architecture/architecture-contract-rules.test.ts (9 tests) 4360ms
+   ✓ R7: generic base modules never import features/** (assembly roots exempt) 898ms
+   ✓ R11: an unregistered generated file and a deleted registered file both fail the checker 357ms
+stderr | tests/correctness/sse/matrix-6-recovery-state.test.ts > matrix 6: recovery state machine (ADR-010 4) > uses the authoritative list on epoch mismatch and clears Dirty only after the snapshot applies
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+ ✓ tests/architecture/oxc-react-compiler.test.ts (5 tests) 582ms
+   ✓ compiles every real production TSX source through the locked Oxc compiler 563ms
+ ✓ tests/correctness/sse/matrix-6-recovery-state.test.ts (6 tests) 795ms
+ ✓ tests/domain/research-replay.test.ts (6 tests) 473ms
+   ✓ ResearchReplay.parse boundaries (4)
+     ✓ parses a 200k-event stream without argument-count RangeError and reports the max timestamp 461ms
+ ✓ tests/domain/cleanroom-pressure.test.ts (8 tests) 446ms
+   ✓ matches the field over a seeded random grid 339ms
+ ✓ tests/components/modal.test.tsx (9 tests) 864ms
+   ✓ names the native dialog and restores the focused opener after Escape 396ms
+ ✓ tests/rendering/lite-environment.test.ts (10 tests) 3307ms
+   ✓ retains the exact seeded 1500-particle generator and pressure update, including hidden-layer clocks 1396ms
+   ✓ keeps the original post-move pressure-band colour semantics on every airflow frame 1631ms
+stderr | tests/correctness/sse/matrix-1-three-cursor.test.ts > matrix 1: recovery starts from the safe acknowledged prefix, never observed (CR-01) > replays the dropped range through the journal and converges the actor
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+
+ ✓ tests/correctness/sse/matrix-1-three-cursor.test.ts (5 tests) 388ms
+ ✓ tests/integration/command-gateway-http.test.ts (4 tests) 430ms
+ ✓ tests/integration/equipment-status-scope-cycle.test.tsx (1 test) 1051ms
+   ✓ keeps Query cache and ordering across same-FAB remounts while detaching old SSE generations 1047ms
+stderr | tests/correctness/sse/matrix-2-journal-pagination.test.ts > matrix 2: journal pagination with epoch (ADR-010 3) > falls back to the authoritative list when the journal epoch is replaced (409)
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+stderr | tests/correctness/sse/matrix-2-journal-pagination.test.ts > matrix 2: journal pagination with epoch (ADR-010 3) > treats the server hasGap flag as authoritative and recovers from the list
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+ ✓ tests/correctness/sse/matrix-2-journal-pagination.test.ts (5 tests) 386ms
+ ✓ tests/integration/router-page-state.test.tsx (8 tests) 1066ms
+   ✓ preserves Twin research and locale deep links during initial hydration 446ms
+stderr | tests/rendering/scene-port-lifecycle.test.ts > reports a failed mount once, releases resources and suppresses every late callback
+[lite] runtime failed Error: 模型资产加载失败
+    at C:/Users/han_qingyu/SemiconFab-Next/web_app/tests/rendering/scene-port-lifecycle.test.ts:202:19
+    at file:///C:/Users/han_qingyu/SemiconFab-Next/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35
+    at file:///C:/Users/han_qingyu/SemiconFab-Next/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26
+    at file:///C:/Users/han_qingyu/SemiconFab-Next/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///C:/Users/han_qingyu/SemiconFab-Next/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)
+    at file:///C:/Users/han_qingyu/SemiconFab-Next/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/han_qingyu/SemiconFab-Next/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)
+    at file:///C:/Users/han_qingyu/SemiconFab-Next/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3904:64 
+
+ ✓ tests/integration/runtime-bootstrap.test.tsx (18 tests) 1374ms
+stderr | tests/rendering/scene-port-lifecycle.test.ts > a failed recoverable rebuild reports a terminal failure after the recovering event
+[lite] runtime failed Error: 重建静态场景失败
+    at Object.mocks.worldFactory (C:/Users/han_qingyu/SemiconFab-Next/web_app/tests/rendering/scene-port-lifecycle.test.ts:325:11)
+    at C:/Users/han_qingyu/SemiconFab-Next/web_app/tests/rendering/scene-port-lifecycle.test.ts:66:31
+    at Mock (file:///C:/Users/han_qingyu/SemiconFab-Next/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/spy.DDMXghXv.js:353:40)
+    at Object.compose (C:/Users/han_qingyu/SemiconFab-Next/web_app/src/rendering/lite-backend.ts:335:30)
+    at C:/Users/han_qingyu/SemiconFab-Next/web_app/tests/rendering/scene-port-lifecycle.test.ts:47:40
+    at C:/Users/han_qingyu/SemiconFab-Next/web_app/tests/rendering/scene-port-lifecycle.test.ts:58:5
+    at Mock (file:///C:/Users/han_qingyu/SemiconFab-Next/web_app/node_modules/.pnpm/vitest@5.0.5_@types+node@26_70f2f5a42510fb135f36431756583680/node_modules/vitest/dist/chunks/spy.DDMXghXv.js:353:40)
+    at createInstance (C:/Users/han_qingyu/SemiconFab-Next/web_app/src/rendering/lite-backend.ts:331:18)
+    at restart (C:/Users/han_qingyu/SemiconFab-Next/web_app/src/rendering/lite-backend.ts:369:15) 
+
+ ✓ tests/rendering/scene-port-lifecycle.test.ts (9 tests) 294ms
+ ✓ tests/integration/telemetry-render.test.tsx (3 tests) 852ms
+   ✓ does not reapply a preset on GPU recovery but applies it on viewport reload and view change 506ms
+   ✓ keeps paused DEMO states isolated while consuming telemetry in live mode 323ms
+ ✓ tests/integration/equipment-status-pipeline.test.tsx (1 test) 729ms
+   ✓ A02: SSE frames publish through one throttled projection instead of rendering per frame 725ms
+ ✓ tests/integration/twin-fab-scope.test.tsx (4 tests) 2454ms
+   ✓ scopes status REST + SSE to the single configured canonical route FAB 726ms
+   ✓ A01: provider replacement starts a fresh runtime baseline; the old generation can never write into it 1049ms
+   ✓ A02: an SSE frame rejected by the ordered consumer never reaches the FAB-scoped resource Atom 395ms
+stderr | tests/core/core-007-command-scheduler.test.ts > CORE-007 bounds mixed-entry reconciliation to 4 in flight and 1 per command
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+
+ ✓ tests/rendering/lite-facility.test.ts (1 test) 361ms
+   ✓ restores every frozen source airlock/mat/FFU geometric part at its exact source bounds 358ms
+stderr | tests/correctness/gateway/physical-budget.test.ts > 8+ mixed-entry reconciliations share the budget with recovery requests: physical peak <= 4
+[F4 counters] sharedBudget -> physicalPeak=4 physicalStarts=10 recoveryOverlap=true completed=10 budgetInFlight=0
+
+stderr | tests/correctness/gateway/physical-budget.test.ts > queue capacity drops are reported through onDrop with no hidden retry buffer (CR-08)
+[F4 counters] overflowDrop -> dropped=4 physicalStarts=1 queued=1
+
+ ✓ tests/integration/twin-spc-strip.test.tsx (1 test) 641ms
+   ✓ renders split control/spec SPC judgements in the layout inspector strip 637ms
+ ✓ tests/integration/twin-research-parse-error.test.tsx (1 test) 596ms
+   ✓ A16: shows a distinct visible research parse error when ResearchReplay.parse throws 593ms
+ ✓ tests/core/core-007-command-scheduler.test.ts (5 tests) 300ms
+ ✓ tests/correctness/gateway/physical-budget.test.ts (3 tests) 288ms
+ ✓ tests/api/resource.test.tsx (7 tests) 501ms
+ ✓ tests/core/core-command-model.property.test.ts (1 test) 226ms
+stderr | tests/correctness/gateway/scheduler-timeout.test.ts > timeout aborts the physical fetch, clears physical pending and releases the shared permit
+[F4 counters] timeout -> signalAborts=1 physicalPending=0 budgetInFlight=0 timedOut=1
+
+ ✓ tests/features/catalog/catalog-export.test.tsx (7 tests) 516ms
+   ✓ catalog page export integration (2)
+     ✓ downloads the catalog through the revocable lifecycle and releases the URL 427ms
+stderr | tests/correctness/gateway/scheduler-timeout.test.ts > a late authoritative result resolving after the timeout never writes the actor
+[F4 counters] lateResolve -> receivedAfterTimeout=0 signalAborts=1 budgetInFlight=0
+
+stderr | tests/correctness/gateway/scheduler-timeout.test.ts > dispose aborts every in-flight physical request, leaks no permit and produces no unhandled rejection
+[F4 counters] dispose -> aborted=3 physicalPending=0 cancelled=3 budgetInFlight=0
+
+ ✓ tests/correctness/gateway/scheduler-timeout.test.ts (7 tests) 243ms
+ ✓ tests/state/atom-preferences.test.tsx (5 tests) 465ms
+ ✓ tests/features/workbench/workbench-selection.test.ts (6 tests) 370ms
+ ✓ tests/features/twin/twin-keyboard.test.tsx (7 tests) 441ms
+ ✓ tests/features/workbench/workbench-command-scope.test.tsx (6 tests) 426ms
+ ✓ tests/correctness/resource/cr-09-capacity.test.ts (4 tests) 246ms
+stderr | tests/integration/command-transport-failure.test.ts > surfaces transport failures and reconnects without pretending they are command outcomes
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+ ✓ tests/rendering/source-orbit-input.test.ts (9 tests) 145ms
+ ✓ tests/architecture/command-projection-ownership.test.ts (4 tests) 146ms
+ ✓ tests/rendering/lite-xray-batches.test.ts (2 tests) 283ms
+ ✓ tests/integration/command-transport-failure.test.ts (2 tests) 259ms
+ ✓ tests/rendering/lite-selection.test.ts (12 tests) 213ms
+ ✓ tests/architecture/effect-runtime-boundary.test.ts (3 tests) 191ms
+ ✓ tests/rendering/lite-tool-states.test.ts (9 tests) 200ms
+ ✓ tests/correctness/gateway/stale-result.test.ts (4 tests) 160ms
+ ✓ tests/architecture/feature-ui-ownership.test.ts (3 tests) 158ms
+ ✓ tests/core/core-010-command-overflow-recovery.test.ts (3 tests) 159ms
+ ✓ tests/architecture/resource-ownership.test.ts (6 tests) 139ms
+ ✓ tests/rendering/lite-motion.test.ts (16 tests) 8193ms
+   ✓ maps the seeded source traffic clock onto every vehicle without a second simulation clock 2935ms
+   ✓ matches all frozen personnel keyframes and shares their air shower clock 1462ms
+   ✓ projects source hoist/cable/FOUP/LED states and preserves AMHS hidden state during updates 1004ms
+   ✓ keeps the frozen vehicle projection vectors at every sampled source tick 1461ms
+   ✓ keeps the hidden AMHS simulation identical while skipping instance projection and restores it on re-show 529ms
+stderr | tests/integration/command-concurrency.test.ts > bounds per-FAB authoritative reconciliation to four simultaneous queries
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+ ✓ tests/integration/command-concurrency.test.ts (1 test) 131ms
+ ✓ tests/features/twin/fab-viewer-callbacks.test.tsx (6 tests) 366ms
+ ✓ tests/integration/fab-runtime-registry-handoff.test.ts (13 tests) 191ms
+ ✓ tests/integration/twin-subscription-isolation.test.tsx (8 tests) 5273ms
+   ✓ updates the AMHS readout from its own subscription without rerendering TwinContent/FabViewport 807ms
+   ✓ keeps YMS hover, die-map inputs and the header yield pill out of TwinContent/FabViewport 562ms
+   ✓ keeps ~60 Hz tour HUD frames inside the tour card 3404ms
+ ✓ tests/correctness/gateway/scheduler-cancellation.test.ts (4 tests) 120ms
+ ✓ tests/architecture/react19-modern-syntax.test.ts (2 tests) 137ms
+ ✓ tests/api/api-command-schema.test.ts (20 tests) 145ms
+ ✓ tests/rendering/lite-equipment.test.ts (4 tests) 167ms
+ ✓ tests/architecture/architecture-boundaries.test.ts (6 tests) 118ms
+ ✓ tests/correctness/gateway/gateway-effect.test.ts (16 tests) 137ms
+ ✓ tests/integration/command-projection-identity.test.tsx (3 tests) 343ms
+stderr | tests/integration/command-recovery-contract.test.ts > R3-01: rejects an empty journal page older than the retained window and recovers from the list
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+stderr | tests/integration/command-recovery-contract.test.ts > R3-03: accepts a FAB-filtered sparse Site page (FAB-A 1,3,5,7) as authoritative
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+ ✓ tests/integration/app-runtime.test.tsx (5 tests) 230ms
+ ✓ tests/integration/command-recovery-contract.test.ts (5 tests) 148ms
+ ✓ tests/core/core-009-command-runtime-replacement.test.ts (1 test) 109ms
+ ✓ tests/features/workbench/twin-entry.test.tsx (2 tests) 223ms
+ ✓ tests/features/workbench/workbench-submission.test.tsx (4 tests) 266ms
+ ✓ tests/contract/command-pending-source-lifecycle.test.ts (2 tests) 93ms
+ ✓ tests/integration/command-event-bridge.test.ts (31 tests) 108ms
+ ✓ tests/features/twin/inspector-process.test.tsx (4 tests) 217ms
+ ✓ tests/core/core-008-command-scope-finalizer.test.ts (2 tests) 121ms
+stdout | tests/performance/telemetry-load.test.ts > sustains 500/2000/5000-entity frames at 60Hz within a generous CPU/heap budget
+┌─────────┬─────────┬───────────┬────────────────────┬────────────────────┐
+│ (index) │ samples │ frameSize │ elapsedMs          │ heapDeltaMb        │
+├─────────┼─────────┼───────────┼────────────────────┼────────────────────┤
+│ 0       │ 500     │ 1000      │ 11.998999999999967 │ 1.23626708984375   │
+│ 1       │ 2000    │ 4000      │ 14.374700000000018 │ 1.5719833374023438 │
+│ 2       │ 5000    │ 10000     │ 24.558899999999994 │ 1.5012969970703125 │
+└─────────┴─────────┴───────────┴────────────────────┴────────────────────┘
+
+ ✓ tests/performance/telemetry-load.test.ts (1 test) 67ms
+ ✓ tests/api/api-transport.test.ts (13 tests) 90ms
+ ✓ tests/api/command-http.test.ts (7 tests) 134ms
+ ✓ tests/correctness/resource/cr-05-generic-commit.test.ts (5 tests) 88ms
+ ✓ tests/core/core-006-boundedness.test.tsx (2 tests) 284ms
+ ✓ tests/domain/wafer-timeline.test.ts (11 tests) 98ms
+ ✓ tests/core/core-014-command-teardown.test.ts (2 tests) 82ms
+ ✓ tests/correctness/resource/cr-10-poll-generation.test.tsx (4 tests) 141ms
+ ✓ tests/state/atom-notification-surface.test.ts (5 tests) 48ms
+ ✓ tests/api/api-queries.test.ts (7 tests) 92ms
+ ✓ tests/api/effect-http.test.ts (10 tests) 100ms
+ ✓ tests/contract/command-correlation.test.ts (28 tests) 93ms
+ ✓ tests/architecture/source-layout.test.ts (2 tests) 115ms
+ ✓ tests/architecture/legacy-dependency-gate.test.ts (2 tests) 82ms
+ ✓ tests/domain/tour-timeline.test.ts (5 tests) 80ms
+ ✓ tests/core/core-004-equipment-failure.test.ts (2 tests) 79ms
+ ✓ tests/api/response-contracts.test.ts (6 tests) 90ms
+ ✓ tests/core/core-003-equipment-commit.test.ts (3 tests) 88ms
+ ✓ tests/api/equipment-status-bridge.test.ts (5 tests) 90ms
+ ✓ tests/components/original-icons.test.ts (3 tests) 56ms
+stderr | tests/contract/command-workflow.test.ts > authoritative channel on active projections > no-ops a same-revision duplicate and applies a same-revision correction
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "executing" with no matching transition
+
+stderr | tests/contract/command-workflow.test.ts > authoritative correction of a terminal projection (not XState final) > corrects a wrong terminal outcome at the same revision and accepts a later authoritative revision
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "succeeded" with no matching transition
+
+stderr | tests/contract/command-workflow.test.ts > protocol validation in the machine guards > rejects foreign identity, non-integer revisions and invalid outcomes on the authoritative channel
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "accepted" with no matching transition
+
+stderr | tests/contract/command-workflow.test.ts > protocol validation in the machine guards > rejects a negative authoritative revision even for an untouched command (revision must be >= 0)
+Actor equipmentCommand received event "RESULT_AUTHORITATIVE" in state "idle" with no matching transition
+
+stderr | tests/contract/command-workflow.test.ts > protocol validation in the machine guards > rejects foreign identity and invalid outcomes on the realtime channel too
+Actor equipmentCommand received event "RESULT_REALTIME" in state "accepted" with no matching transition
+
+ ✓ tests/contract/command-workflow.test.ts (19 tests) 76ms
+ ✓ tests/integration/router-resource.test.tsx (5 tests) 133ms
+ ✓ tests/architecture/atom-ownership.test.ts (3 tests) 19ms
+ ✓ tests/components/class-names.test.ts (5 tests) 37ms
+ ✓ tests/domain/twin-equipment.test.ts (7 tests) 27ms
+ ✓ tests/core/core-005-fab-scope.test.ts (2 tests) 72ms
+ ✓ tests/core/core-011-compiler-equivalence.test.ts (6 tests) 38ms
+ ✓ tests/api/sites-queries.test.ts (7 tests) 85ms
+ ✓ tests/realtime/telemetry-runtime.test.ts (32 tests) 74ms
+ ✓ tests/rendering/lite-effects.test.ts (13 tests) 57ms
+ ✓ tests/domain/process-control.test.ts (20 tests) 23ms
+ ✓ tests/api/command-recovery-schema.test.ts (8 tests) 42ms
+ ✓ tests/features/twin/tour-controller.test.tsx (6 tests) 133ms
+ ✓ tests/integration/runtime-replacement.test.tsx (1 test) 267ms
+(node:25784) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/features/catalog/catalog-page.test.tsx (4 tests) 47ms
+ ✓ tests/core/core-002-single-flight-single-poller.test.tsx (2 tests) 105ms
+ ✓ tests/realtime/realtime-frame-buffer.test.ts (12 tests) 21ms
+ ✓ tests/realtime/equipment-status-protocol.test.ts (9 tests) 24ms
+ ✓ tests/domain/tool-state-projection.test.ts (12 tests) 19ms
+ ✓ tests/correctness/resource/cr-07-identity.test.ts (5 tests) 29ms
+ ✓ tests/integration/resource-cache.test.tsx (4 tests) 30ms
+ ✓ tests/rendering/lite-lighting.test.ts (9 tests) 43ms
+ ✓ tests/domain/wafer-route.test.ts (5 tests) 16ms
+ ✓ tests/architecture/remaining-state.test.ts (6 tests) 26ms
+ ✓ tests/realtime/equipment-status.test.ts (4 tests) 17ms
+ ✓ tests/realtime/fab-telemetry-registry.test.ts (9 tests) 19ms
+ ✓ tests/contract/command-recovery.test.ts (18 tests) 30ms
+ ✓ tests/features/twin/twin-state.test.ts (7 tests) 16ms
+ ✓ tests/core/core-001-runtime-isolation.test.ts (2 tests) 27ms
+ ✓ tests/domain/wafer-scenario.test.ts (3 tests) 17ms
+stdout | tests/performance/telemetry-frame-buffer.test.ts > sustains 100k typed-array frame writes within a generous CPU budget
+telemetry-frame-buffer: 100000 writes x 8 floats in 5.33 ms (18752930 frames/s)
+
+ ✓ tests/domain/wafer-map.test.ts (3 tests) 15ms
+ ✓ tests/performance/telemetry-frame-buffer.test.ts (1 test) 16ms
+ ✓ tests/features/twin/tool-state-merge.test.ts (9 tests) 13ms
+ ✓ tests/application/coalesced-dispatcher.test.ts (2 tests) 15ms
+ ✓ tests/support/png-support.test.ts (3 tests) 13ms
+ ✓ tests/realtime/realtime-protocol.test.ts (3 tests) 18ms
+ ✓ tests/core/core-012-production-gpu.test.ts (4 tests) 12ms
+ ✓ tests/domain/fab-yield.test.ts (4 tests) 13ms
+ ✓ tests/domain/tour-scenario.test.ts (2 tests) 13ms
+ ✓ tests/realtime/equipment-status-epoch.test.ts (5 tests) 10ms
+ ✓ tests/domain/twin-spatial.test.ts (4 tests) 14ms
+ ✓ tests/state/preferences.test.ts (3 tests) 9ms
+ ✓ tests/integration/router-search.test.ts (5 tests) 16ms
+ ✓ tests/architecture/ui-atoms.test.ts (3 tests) 20ms
+ ✓ tests/features/catalog/catalog-data.test.ts (6 tests) 19ms
+ ✓ tests/contract/command-identity-contract.test.ts (1 test) 17ms
+ ✓ tests/application/state-sync.test.ts (1 test) 7ms
+ ✓ tests/domain/scenario.test.ts (3 tests) 9ms
+ ✓ tests/rendering/lite-shadow.test.ts (2 tests) 22ms
+ ✓ tests/support/perf-metrics.test.ts (2 tests) 8ms
+ ✓ tests/integration/url-mapping.test.ts (3 tests) 8ms
+ ✓ tests/rendering/amhs-stats.test.ts (5 tests) 8ms
+ ✓ tests/architecture/feature-atoms.test.ts (2 tests) 8ms
+ ✓ tests/features/twin/wafer-playback-registry.test.tsx (3 tests) 71ms
+ ✓ tests/features/workbench/workbench-runs-received.test.ts (1 test) 8ms
+ ✓ tests/features/twin/twin-i18n.test.ts (4 tests) 9ms
+ ✓ tests/features/workbench/use-command-console.test.tsx (6 tests) 68ms
+ ✓ tests/features/twin/twin-page-store-scope.test.ts (4 tests) 10ms
+ ✓ tests/integration/command-actor-scope.test.tsx (3 tests) 75ms
+ ✓ tests/rendering/lite-cut-plane.test.ts (4 tests) 11ms
+ ✓ tests/rendering/lite-camera.test.ts (4 tests) 7ms
+ ✓ tests/architecture/route-tree-generation.test.ts (3 tests) 5ms
+
+ Test Files  160 passed (160)
+      Tests  1057 passed (1057)
+   Start at  20:23:32
+   Duration  16.97s (import 42%, tests 32%, environment 24%, transform 2%, worker 1%)
+
+    Isolate  160 workers spawned · ~682ms startup each (spawn + environment, per file)
+             at least ~5.06s faster with isolate: false — reuses workers across files instead of one per file
+
+$ node ../tools/check_frozen_assets.mjs
+Frozen asset contracts PASS
+$ vite build
+vite v8.3.5 building client environment for production...
+transforming...
+[plugin vite:react-compiler] (BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause
+
+  > react-compiler(Todo): (BuildHIR::lowerStatement) Handle TryStatement with
+  | a finalizer ('finally') clause
+    ,-[C:/Users/han_qingyu/SemiconFab-Next/web_app/src/workbench/use-run-submission.ts:92:6]
+ 91 |       if (accepts(token)) workbenchActions.submitErrorSet(registry, errorMessage(error));
+ 92 |     } finally {
+    :      ^^^^^^^^^
+ 93 |       if (accepts(token)) setSubmitting(false);
+    `----
+  help: Rewrite the highlighted code using syntax supported by React
+        Compiler
+  note: React Compiler skipped optimizing this component or hook
+
+[plugin vite:react-compiler] (BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause
+
+  > react-compiler(Todo): (BuildHIR::lowerStatement) Handle TryStatement with
+  | a finalizer ('finally') clause
+     ,-[C:/Users/han_qingyu/SemiconFab-Next/web_app/src/workbench/use-command-console.ts:176:6]
+ 175 |       update((previous) => ({ ...previous, error: cause instanceof Error ? cause.message : '命令提交失败', ...(rejected ? { pendingKey: null } : {}) }));
+ 176 |     } finally {
+     :      ^^^^^^^^^
+ 177 |       if (isCurrentScope()) update((previous) => ({ ...previous, busy: false }));
+     `----
+  help: Rewrite the highlighted code using syntax supported by React
+        Compiler
+  note: React Compiler skipped optimizing this component or hook
+
+[plugin vite:react-compiler] React rule suppression prevents optimization
+
+  x react-compiler(Suppression): React rule suppression prevents optimization
+     ,-[C:/Users/han_qingyu/SemiconFab-Next/web_app/src/twin/use-tour-controller.ts:244:5]
+ 243 |     // stop() only reads refs; the scopeKey transition is the actual trigger.
+ 244 |     // eslint-disable-next-line react-hooks/exhaustive-deps
+     :     ^^^^^^^^^^^^^^^^^^^^^^^^^^^|^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     :                                `-- Found React rule suppression
+ 245 |   }, [scopeKey, registry]);
+     `----
+  help: Remove the suppression and address the reported React rule violation
+  note: React Compiler has skipped optimizing this component because one or
+           more React ESLint rules were disabled. React Compiler only works
+           when your components follow all the rules of React, disabling
+           them may result in unexpected or incorrect behavior. Found
+           suppression `eslint-disable-next-line react-hooks/exhaustive-
+           deps`
+
+[plugin vite:react-compiler] (BuildHIR::lowerExpression) Handle Import expressions
+
+  > react-compiler(Todo): (BuildHIR::lowerExpression) Handle Import
+  | expressions
+     ,-[C:/Users/han_qingyu/SemiconFab-Next/web_app/src/twin/twin-viewer.tsx:110:10]
+ 109 |     });
+ 110 |     void import('@/rendering/lite-backend')
+     :          ^^^^^^
+ 111 |       .then(async ({ createLiteBackend }) => {
+     `----
+  help: Rewrite the highlighted code using syntax supported by React
+        Compiler
+  note: React Compiler skipped optimizing this component or hook
+
+✓ 1746 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                               0.65 kB │ gzip:   0.38 kB
+dist/assets/telemetry.worker-BXuP41hJ.js      2.60 kB
+dist/assets/legacy-LICENSE-CSEy9_Bq.txt       4.63 kB │ gzip:   1.74 kB
+dist/assets/index-DMLM5948.css              121.09 kB │ gzip:  20.95 kB
+dist/assets/rolldown-runtime-XKyaHtl9.js      0.74 kB │ gzip:   0.45 kB
+dist/assets/index-DyCcYFIz.js               310.05 kB │ gzip:  97.07 kB
+dist/assets/gpu-B6EZQgwV.js                 392.67 kB │ gzip: 128.39 kB
+dist/assets/react-Bd8vXKlA.js               433.58 kB │ gzip: 140.07 kB
+dist/assets/twin-page-BltOKNhr.js           452.10 kB │ gzip: 127.29 kB
+dist/assets/lite-backend-0-EKhsWC.js      1,796.55 kB │ gzip: 179.64 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 726ms
+PASS locks one exact oxc-transform-react version: 0.156.0
+PASS has no peerDependencyRules.allowedVersions bypass: no bypass rule
+PASS keeps the maintained plugin-react compatibility patch in effect: patched >=0.152.0 <0.157.0 (upstream ^0.152.0)
+PASS plugin-react consumes only the locked Oxc API surface: transform/reactCompiler/result.fatal
+PASS installed dependency tree has no Babel compiler fallback: oxc only
+PASS vite build can produce compiler ON and OFF controls: FAB_REACT_COMPILER=off
+PASS installed oxc-transform-react exports transform/transformSync: transform + transformSync
+PASS compiler ON transform succeeds through the plugin option shape: fatal=false, compiler-runtime emitted
+PASS @vitejs/plugin-react compiler path transforms through the locked Oxc: vite:react-compiler transform OK
+PASS async transform() works (the plugin awaits it): async path OK
+PASS compiler OFF transform emits no compiler runtime (equivalence control): no compiler-runtime
+report: C:\Users\han_qingyu\SemiconFab-Next\docs\architecture\evidence\compiler\compiler-compat.json
+COMPILER COMPAT PASS
+Production stack ready: http://127.0.0.1:4180 (API http://127.0.0.1:5180)
+PASS P1 Workbench production shell renders from the built bundle
+PASS P2 Equipment catalog search/filter in production
+PASS P3 Deep-linked language/theme survive production refresh
+PASS P4 Run form validation + accepted submit through the production bundle
+PASS P5 Twin WebGPU scene, no WebGL fallback, tool selection and DEMO clock
+PASS P6 Twin realtime REST + SSE feed is LIVE
+PASS P7 Unknown FAB route fails closed in production
+PASS P8 Page exit/re-enter leaves no duplicate event streams
+PASS P9 External-Atom-only hook updates its projection (compiler workaround)
+report: C:\Users\han_qingyu\SemiconFab-Next\docs\architecture\evidence\browser\production-e2e.json (9 passed, 0 failed)
+Production e2e passed; evidence: C:\Users\han_qingyu\SemiconFab-Next\docs\architecture\evidence\browser\production-e2e.json
+Production stack ready for GPU gate: http://127.0.0.1:4181 (API http://127.0.0.1:5181)
+GPU GATE PASS cycles=3 recovered=3/3 method=perf.forceDeviceLoss liveDevices=2 auxCrashRecovered=true circuitBreaker={"failClosed":true,"pass":true}
+report: C:\Users\han_qingyu\SemiconFab-Next\docs\architecture\evidence\gpu\gpu-gate.json
+GPU gate passed; evidence: C:\Users\han_qingyu\SemiconFab-Next\docs\architecture\evidence\gpu\gpu-gate.json
+Starting isolated compiler-equivalence backends: ON http://127.0.0.1:5191, OFF http://127.0.0.1:5192
+Running CORE-011 compiler ON/OFF production equivalence ...
+CORE-011 compiler equivalence: building ON/OFF production bundles
+CORE-011: driving compiler ON build
+  on serving http://127.0.0.1:58134
+  on empty-list: 1 steps
+  on run-submit: 2 steps
+  on bigint: 1 steps
+  on closure-capture: 2 steps
+  on dynamic-import-gpu: 3 steps
+  on atom-subscriptions: 2 steps
+  on fab-switch: 2 steps
+  on external-mutable-registry: 2 steps
+  on external-atom-hook: 2 steps
+  on workbench-root: 1 steps
+CORE-011: collecting ON authoritative side effects
+CORE-011: driving compiler OFF control build
+  off serving http://127.0.0.1:30980
+  off empty-list: 1 steps
+  off run-submit: 2 steps
+  off bigint: 1 steps
+  off closure-capture: 2 steps
+  off dynamic-import-gpu: 3 steps
+  off atom-subscriptions: 2 steps
+  off fab-switch: 2 steps
+  off external-mutable-registry: 2 steps
+  off external-atom-hook: 2 steps
+  off workbench-root: 1 steps
+CORE-011: collecting OFF authoritative side effects
+CORE-011 differences: 0, scenario failures: 0, side effects equal: true, quiescence timeouts: 0
+report: C:\Users\han_qingyu\SemiconFab-Next\docs\architecture\evidence\compiler\equivalence-trace.json
+CORE-011 COMPILER ON/OFF EQUIVALENCE PASS
+Compiler equivalence passed; evidence: C:\Users\han_qingyu\SemiconFab-Next\docs\architecture\evidence\compiler
