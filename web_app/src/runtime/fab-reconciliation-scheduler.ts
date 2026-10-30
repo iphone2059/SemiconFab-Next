@@ -7,6 +7,7 @@ import {
   type ReconciliationRequestIdentity,
 } from '@/runtime/command-reconciler';
 import type { RuntimeHost } from '@/runtime/fab-runtime-host';
+import { requirePositiveSafeInteger } from '@/runtime/numeric-configuration';
 
 export const DEFAULT_MAX_CONCURRENT_RECONCILIATIONS = 4;
 export const DEFAULT_MAX_QUEUED_RECONCILIATIONS = 128;
@@ -30,7 +31,7 @@ export interface PhysicalRequestBudget {
 
 /** Creates the single shared physical budget of one FAB (default 4, ADR-011 §2.2). */
 export function createPhysicalRequestBudget(capacity: number = DEFAULT_PHYSICAL_REQUEST_BUDGET): PhysicalRequestBudget {
-  const slots = Math.max(1, Math.trunc(capacity));
+  const slots = requirePositiveSafeInteger('physical request capacity', capacity);
   const semaphore = Semaphore.makeUnsafe(slots);
   let inFlight = 0;
   const withPermit = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
@@ -201,13 +202,13 @@ export class FabReconciliationScheduler {
     this.runtime = options.runtime;
     this.physicalBudget = options.physicalBudget;
     this.schedulerScope = Scope.forkUnsafe(options.parentScope);
-    this.semaphore = Semaphore.makeUnsafe(Math.max(1, options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT_RECONCILIATIONS));
+    this.maxConcurrent = requirePositiveSafeInteger('maxConcurrent', options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT_RECONCILIATIONS);
+    this.semaphore = Semaphore.makeUnsafe(this.maxConcurrent);
     this.reconciler = options.gateway ? new CommandReconciler(options.gateway) : undefined;
     this.resolveTarget = options.resolve;
     this.isTerminal = options.isTerminal;
-    this.maxConcurrent = Math.max(1, options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT_RECONCILIATIONS);
-    this.maxQueued = Math.max(1, options.maxQueued ?? DEFAULT_MAX_QUEUED_RECONCILIATIONS);
-    this.timeoutMs = Math.max(1, options.timeoutMs ?? DEFAULT_RECONCILIATION_TIMEOUT_MS);
+    this.maxQueued = requirePositiveSafeInteger('maxQueued', options.maxQueued ?? DEFAULT_MAX_QUEUED_RECONCILIATIONS);
+    this.timeoutMs = requirePositiveSafeInteger('timeoutMs', options.timeoutMs ?? DEFAULT_RECONCILIATION_TIMEOUT_MS);
     this.onDrop = options.onDrop;
     this.onReconciled = options.onReconciled;
   }
