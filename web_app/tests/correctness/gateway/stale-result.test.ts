@@ -92,7 +92,9 @@ it('scheduler drops a result when the workflow target turned stale before it res
   const reconciled = harness.scheduler.schedule('cmd-1');
   await sleep(5);
   current = false;
-  await expect(reconciled).resolves.toBe(false);
+  // The late result is dropped by the stale generation guard: an explicit converged
+  // result, never a silent boolean.
+  await expect(reconciled).resolves.toEqual({ commandId: 'cmd-1', status: 'not-found' });
   expect(workflow.received).toEqual([]);
   expect(harness.scheduler.stats.failed).toBe(1);
 });
@@ -108,6 +110,6 @@ it('a timed-out entry is settled before its late result resolves (no second writ
   await waitFor(() => harness.scheduler.stats.timedOut === 1 && harness.scheduler.stats.inFlight === 0);
   releaseLate(resultEvent({ revision: 9 }));
   await sleep(30);
-  await expect(reconciled).resolves.toBe(false);
+  await expect(reconciled).resolves.toMatchObject({ commandId: 'cmd-1', status: 'timed-out' });
   expect(workflow.received).toEqual([]);
 });

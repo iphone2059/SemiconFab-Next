@@ -121,7 +121,7 @@ it('CORE-010b dirty overflow triggers authoritative reconciliation without losin
   expect(runtime.lastDirtySignal).toMatchObject({ reason: 'overflow', droppedCount: 5 });
 });
 
-it('CORE-010c a journal page without gap replays events instead of listing', async () => {
+it('CORE-010c a safe delivered cursor without a gap replays journal events instead of listing', async () => {
   const source = new FakeCommandEventSource();
   const gateway = fakeCommandGateway({
     getCommandJournalPage: async () => ({
@@ -141,7 +141,16 @@ it('CORE-010c a journal page without gap replays events instead of listing', asy
   runtime.start();
   runtime.trackCommand('cmd-1');
   await flush();
-  source.emitGap({ epoch: 'epoch-1', sequence: 1 });
+  // R4-04: a replay-gap control frame is always List recovery; the journal path is
+  // entered only from a safe delivered/acknowledged cursor (e.g. dirty overflow
+  // with an exact gapStart), which is what this fixture models.
+  source.emitDirty({
+    reason: 'overflow',
+    droppedCount: 1,
+    delivered: { epoch: 'epoch-1', sequence: 1 },
+    gapStart: 2,
+    gapEnd: 2,
+  });
   await expect.poll(() => runtime.getProjection('cmd-1')?.outcome, { timeout: 1_000 }).toBe('succeeded');
   expect(gateway.journalCalls.length).toBeGreaterThan(0);
   const listCalls = gateway.listCalls.length;

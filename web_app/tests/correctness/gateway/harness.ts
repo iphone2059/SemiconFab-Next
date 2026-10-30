@@ -158,6 +158,8 @@ export interface SchedulerHarnessOptions {
   readonly onReconciled?: (commandId: string) => void;
   /** Workflow identity guard; defaults to "always current". */
   readonly isCurrent?: (commandId: string) => boolean;
+  /** Terminal predicate; defaults to "never terminal". */
+  readonly isTerminal?: (commandId: string) => boolean;
 }
 
 export interface SchedulerHarness {
@@ -184,7 +186,7 @@ export function createSchedulerHarness(rt: GatewayTestRuntime, options: Schedule
       }
       return { workflow, isCurrent: () => options.isCurrent ? options.isCurrent(commandId) : true };
     },
-    isTerminal: () => false,
+    isTerminal: (commandId) => options.isTerminal?.(commandId) ?? false,
     ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
     ...(options.maxConcurrent !== undefined ? { maxConcurrent: options.maxConcurrent } : {}),
     ...(options.maxQueued !== undefined ? { maxQueued: options.maxQueued } : {}),

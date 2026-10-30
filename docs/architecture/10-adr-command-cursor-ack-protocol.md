@@ -136,3 +136,41 @@ Recovering --不可恢复(epoch 无法替换? 持续 N 次失败/存储故障/sc
 ### 6.7 验证推迟
 
 以上修订在静态阶段只做源码/契约/文档同步；Round 3 验证阶段需覆盖：全空 Journal 保留窗口、ACK 前缀交错、稀疏跨 FAB 分页、坏帧 Dirty、RecoveryScope 取消/超时、gateway 缺失、drop 覆盖、终态语义 E2E。
+
+## 7. Round 4 修订（2026-10-30，R4-01…R4-06）
+
+状态：源码整改完成；Round 4 源码记录见 `17-round4-remediation-record.md`；浏览器/GPU/真实 HTTP 验证边界见该文档 §5。
+
+### 7.1 统一 untrusted-gap ACK 安全锁（R4-01）
+
+- 所有丢失/不可证明路径（consumer queue overflow、无 id 帧、解码/未知 topic、epoch 不一致、非单调序号、server dirty、replay-gap、onerror、connect timeout、factory throw、stale generation）统一调用 `markUntrustedGap`，设置粘性 `ackBlockedUntilCover`。
+- 记录 `untrackedHighWater: {epoch,sequence}`（id 行可证明）与 `untrustedUnknownGap`（无法证明/跨 epoch）；latch 期间到达的帧不进入 ledger，但持续抬高高水位（防止 cover(200) 释放后 ACK 越过 201）。
+- `cover(cursor, authority)`：已知位置要求同 epoch 且 `cursor.sequence >= highWater.sequence`；未知/跨 epoch 位置要求 `authority === 'list'`。cover 不足时保留 latch、发布 `uncovered-gap`（无 gapStart）并触发下一轮权威 List；cover 足够时清除 latch 并排空可证明的 applied|covered 前缀。pending 条目永不驱逐。
+- 契约新增：`CommandCoverAuthority = 'journal' | 'list'`；`cover(cursor, authority?)`；dirty reason `uncovered-gap` / `transport-unavailable`。
+
+### 7.2 Scheduler 逐命令结果与恢复时序（R4-02）
+
+- `schedule()/scheduleMany()` 返回 `ReconciliationResult`（succeeded/already-terminal/not-found/failed/timed-out/cancelled/dropped + payload-free error），不再只返回成功数量。
+- Recovery pass 在 snapshot 应用后仍保持 Dirty/attempts，只有在 post-snapshot batch 全部收敛后才 `source.cover(watermark, kind)`、重置 attempts/active request、进入 Healthy（transport 不可用时 Degraded）。batch 失败（failed/timed-out/cancelled、无 drop intent 的 dropped）使 pass 失败并进入有界退避；`trackCommand` 的 fire-and-forget 调度失败同样进入 Dirty。
+- `appliedRecords` 只统计 bridge 权威应用结果（Applied/Covered）。
+
+### 7.3 observed / applied / covered 分离（R4-03）
+
+- Correlation 同时维护 observed 与 applied revision；`markApplied` 仅在 actor projection 证明前进后调用。
+- `receiveAuthoritative(event, coveredRevision?)` 跳过 SSE observed-revision 去重门槛重新投递 actor；不可验证 workflow 仅在 coveredRevision 覆盖时视为 applied。
+- `flushRecovery() → {applied,held,rejected}`：只移除 Applied/Covered；rejected 重新入队并转为 Dirty。
+
+### 7.4 Replay-Gap 不可信游标（R4-04）
+
+- replay-gap 控制帧没有 `id:` 行，`event.lastEventId` 会继承上一数据帧（可能旧 epoch）。解析器只接受 payload epoch，`requestedLastEventId` 仅作诊断，**永不产生 sequence**；malformed 帧产生空 gap + 有界诊断。
+- FabRuntime 对每个 replay-gap 强制 `listOnly: true`，不得用继承 id 或 payload epoch+观测 sequence 组合做 Journal 恢复。
+
+### 7.5 Stream Fiber 监督（R4-05）
+
+- `runCommandStream` 提供 `{label,onDefect,onExit}` observer；handler 异常转为有界诊断，fiber 终止可被 owner 观察。
+- Bridge 意外退出先重置 started/owner 再回调；FabRuntime 对 bridge 与全部 signal fiber 执行 ≤3 次有界重启并触发权威恢复，超限进入 Unrecoverable；禁止“fiber 已死但 running=true”。
+
+### 7.6 Recovery authority 与 Realtime availability 分离（R4-06）
+
+- `recoveryAvailable = gateway !== undefined && source.availability === 'ready'`；新增 phase `Degraded` 与 `recoveryState.realtimeAvailability`。无实时 transport 时 HTTP 状态可收敛，但总体状态不得 Healthy。
+- 无 EventSource 的 composition root 只装配 display-only runtime；PROD 缺失 transport fail-fast。transport `availability` 为 getter：factory 缺失永久 unavailable；factory throw/connect timeout 有界重试耗尽后永久 unavailable，不再无限重连。

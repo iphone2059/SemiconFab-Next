@@ -90,19 +90,21 @@ it('recovers a refreshed page unconfirmed command from the durable FAB listing a
   }
 });
 
-it('falls back from a journal page with hasGap to the FAB listing and reconciles the cursor break', async () => {
+it('R4-04: a replay-gap forces authoritative List recovery and never fabricates a journal cursor', async () => {
   const harness = createCommandTestRuntime();
   try {
     const { requests, fetchImpl } = createBackendFetch((request) => {
       const url = request.url;
       if (url.includes('/command-journal')) {
+        // A journal request here would mean the transport-derived {payload epoch,
+        // inherited lastEventId sequence} pair was used as a recovery cursor.
         return json({ epoch: 'epoch-2', hasGap: true, firstRetainedSequence: 20, latestSequence: 25, events: [], nextAfterSequence: 0 });
       }
       if (url.includes('/commands?status=active')) {
         return json({
           epoch: 'epoch-2',
           latestSequence: 25,
-          commands: [recoveryRecord({ revision: 2, outcome: 'executing' })],
+          commands: [recoveryRecord({ revision: 1, outcome: 'executing' })],
         });
       }
       if (url.includes('/api/v1/commands/cmd-7')) return json(statusBody());
@@ -115,18 +117,17 @@ it('falls back from a journal page with hasGap to the FAB listing and reconciles
     runtime.trackCommand('cmd-7');
     // Let the startup refresh list settle before injecting the cursor break.
     await new Promise((resolve) => setTimeout(resolve, 25));
+    const journalBefore = requests.filter((request) => request.url.includes('/command-journal')).length;
     source.emitGap({ epoch: 'epoch-2', sequence: 19 });
 
-    // The active record is applied first (executing) and the post-recovery unified
-    // scheduler pass then converges on the authoritative status (succeeded).
+    // The list record is applied first (executing) and the post-recovery unified
+    // scheduler pass converges on the authoritative status (succeeded, revision 2).
     await expect.poll(() => runtime.getProjection('cmd-7')?.outcome, { timeout: 2_000 }).toBe('succeeded');
     expect(runtime.getProjection('cmd-7')?.revision).toBe(2);
-    expect(runtime.lastJournalPage).toMatchObject({ hasGap: true, epoch: 'epoch-2' });
-    const journalRequest = requests.find((request) => request.url.includes('/command-journal'));
-    expect(journalRequest?.url).toBe(
-      '/api/v1/sites/site-1/fabs/fab-a/command-journal?epoch=epoch-2&afterSequence=19&limit=256',
-    );
-    expect(requests.some((request) => request.url.includes('/commands?status=active'))).toBe(true);
+    // R4-04: the replay-gap control frame has no id: line, so no journal cursor may
+    // be manufactured from the inherited lastEventId; only the List is authoritative.
+    expect(requests.filter((request) => request.url.includes('/command-journal'))).toHaveLength(journalBefore);
+    expect(requests.filter((request) => request.url.includes('/commands?status=active')).length).toBeGreaterThanOrEqual(2);
     runtime.dispose();
   } finally {
     await harness.dispose();

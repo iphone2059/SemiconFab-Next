@@ -67,11 +67,13 @@ describe('ordered ACK ledger (R3-02)', () => {
 
     // The later event is applied and acked first: the acknowledged cursor must stay
     // at its previous safe prefix because seq 10 is still pending, and the stalled
-    // prefix becomes an observable Dirty (authoritative recovery covers it).
+    // prefix becomes an observable Dirty (authoritative recovery covers it). The
+    // applied entry stays tracked until the contiguous prefix drains: pending
+    // entries are never evicted to move the cursor.
     harness.acknowledge(eventFor(harness, 11));
     await flush(5);
     expect(harness.cursors().acknowledged).toBeUndefined();
-    expect(harness.cursors().pendingAcknowledgements).toBe(1);
+    expect(harness.cursors().pendingAcknowledgements).toBe(2);
     expect(lastDirty(harness).reason).toBe('slow-consumer');
     expect(harness.diagnostics().some((entry) => entry.kind === 'ack-ledger')).toBe(true);
 
@@ -94,11 +96,12 @@ describe('ordered ACK ledger (R3-02)', () => {
     expect(harness.cursors().acknowledged).toBeUndefined();
     expect(lastDirty(harness).delivered).toBeUndefined();
 
-    // Even when the tracked prefix is applied, the untracked frame 3 forbids a jump.
+    // The tracked prefix is provable, so it drains; the untracked frame 3 caps the
+    // acknowledged cursor (R4-01: never drain the safe prefix past the latch).
     harness.acknowledge(eventFor(harness, 1));
     harness.acknowledge(eventFor(harness, 2));
-    expect(harness.cursors().acknowledged).toBeUndefined();
-    expect(harness.cursors().pendingAcknowledgements).toBe(2);
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 2 });
+    expect(harness.cursors().pendingAcknowledgements).toBe(0);
 
     // Only the authoritative safe watermark releases the latch and drops the backlog.
     harness.cover({ epoch: 'epoch-1', sequence: 3 });
@@ -146,8 +149,10 @@ describe('ordered ACK ledger (R3-02)', () => {
     harness.source.acknowledge(eventFor(harness, 6));
     expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 5 });
 
-    // Authoritative cover switches the epoch; the stale epoch-1 frame cannot move it.
-    harness.cover({ epoch: 'epoch-2', sequence: 6 });
+    // Authoritative List cover switches the epoch; the stale epoch-1 frame cannot
+    // move it. A journal cover cannot release an untracked cross-epoch position
+    // (R4-01: the authority must be 'list').
+    harness.cover({ epoch: 'epoch-2', sequence: 6 }, 'list');
     expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-2', sequence: 6 });
     source.emit(commandEnvelope({ revision: 7 }), cursorId('epoch-1', 7));
     await flush(10);
@@ -225,6 +230,130 @@ describe('protocol-error Dirty (R3-04)', () => {
     expect(diagnostics.length).toBe(16);
     expect(diagnostics.at(-1)?.kind).toBe('decode');
     expect(harness.cursors().acknowledged).toBeUndefined();
+  });
+});
+
+describe('R4-01 unified untrusted-gap ACK latch', () => {
+  it('records a frame delivered while latched and refuses a cover below the untracked high water', async () => {
+    const harness = transport({ capacity: 16, autoAck: false, ackLedgerCapacity: 1 });
+    const source = await open(harness);
+    // Journal positions 200 (tracked, pending) and 201 (delivered but not tracked:
+    // the ledger is at capacity). The authoritative snapshot watermark 200 is
+    // produced before the cover response reaches the transport, so 201 arrives
+    // while the ACK latch is already engaged.
+    source.emit(commandEnvelope({ revision: 200, commandId: 'cmd-a' }), cursorId('epoch-1', 200));
+    source.emit(commandEnvelope({ revision: 201, commandId: 'cmd-a' }), cursorId('epoch-1', 201));
+    await flush(10);
+    expect(harness.receivedRevisions).toEqual([200, 201]);
+    expect(lastDirty(harness).reason).toBe('ack-ledger-overflow');
+    expect(harness.cursors().pendingAcknowledgements).toBe(1);
+
+    // A cover at the pre-arrival watermark (200) is safe for the tracked prefix but
+    // cannot release the latch: 201 was delivered but never appended to the ledger.
+    harness.cover({ epoch: 'epoch-1', sequence: 200 });
+    await flush(5);
+    expect(lastDirty(harness).reason).toBe('uncovered-gap');
+    expect(lastDirty(harness).gapStart).toBeUndefined();
+    expect(lastDirty(harness).delivered).toEqual({ epoch: 'epoch-1', sequence: 200 });
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 200 });
+    expect(harness.cursors().pendingAcknowledgements).toBe(0);
+
+    // While latched, every further accepted frame extends the untracked high water.
+    // Even the authoritative List authority cannot release a watermark below that
+    // position (a snapshot taken before frame 202 arrived): 202 must never be skipped.
+    source.emit(commandEnvelope({ revision: 202, commandId: 'cmd-a' }), cursorId('epoch-1', 202));
+    await flush(5);
+    expect(harness.receivedRevisions).toEqual([200, 201, 202]);
+    harness.cover({ epoch: 'epoch-1', sequence: 201 }, 'list');
+    await flush(5);
+    expect(lastDirty(harness).reason).toBe('uncovered-gap');
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 201 });
+
+    // Only a cover at/above the highest untracked position releases the latch, and a
+    // release is not itself a Dirty signal.
+    const dirtyBeforeRelease = harness.dirty.length;
+    harness.cover({ epoch: 'epoch-1', sequence: 202 });
+    await flush(5);
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 202 });
+    expect(harness.dirty.length).toBe(dirtyBeforeRelease);
+
+    // ACK tracking resumes after the release.
+    source.emit(commandEnvelope({ revision: 203, commandId: 'cmd-a' }), cursorId('epoch-1', 203));
+    await flush(5);
+    expect(harness.cursors().pendingAcknowledgements).toBe(1);
+    harness.acknowledge(eventFor(harness, 203));
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 203 });
+    expect(harness.cursors().pendingAcknowledgements).toBe(0);
+  });
+
+  it('requires the authoritative List authority to release an unknown untracked position', async () => {
+    const harness = transport({ capacity: 16, autoAck: false });
+    const source = await open(harness);
+    source.emit(commandEnvelope({ revision: 10 }), cursorId('epoch-1', 10));
+    await flush(5);
+    expect(harness.cursors().pendingAcknowledgements).toBe(1);
+
+    // A server dirty control frame proves that events may be missing but cannot
+    // prove any client position: the untracked position is unknown.
+    source.emitNamed(
+      'dirty',
+      JSON.stringify({ reason: 'store-fault', droppedCount: 1, epoch: 'epoch-1', sequence: 10, occurredAt: '2026-10-30T00:00:00Z' }),
+      cursorId('epoch-1', 10),
+    );
+    await flush(5);
+    expect(lastDirty(harness).reason).toBe('store-fault');
+
+    // A journal cover is authoritative for its scanned range but cannot prove the
+    // unknown position: the latch stays and the consumer must retry with a List.
+    harness.cover({ epoch: 'epoch-1', sequence: 10 }, 'journal');
+    await flush(5);
+    expect(lastDirty(harness).reason).toBe('uncovered-gap');
+    expect(lastDirty(harness).gapStart).toBeUndefined();
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 10 });
+
+    // The full authoritative List authority releases the latch.
+    const dirtyBeforeList = harness.dirty.length;
+    harness.cover({ epoch: 'epoch-1', sequence: 10 }, 'list');
+    await flush(5);
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 10 });
+    expect(harness.dirty.length).toBe(dirtyBeforeList);
+
+    // ...and only then does a plain journal cover stop signalling uncovered-gap.
+    harness.cover({ epoch: 'epoch-1', sequence: 10 }, 'journal');
+    await flush(5);
+    expect(harness.dirty.length).toBe(dirtyBeforeList);
+  });
+
+  it('consumer-queue overflow latches the ACK state until a cover covers the dropped range', async () => {
+    const harness = transport({ capacity: 4 });
+    const source = await open(harness);
+    // Synchronous burst: the consumer fiber cannot drain, so only 0..3 are delivered
+    // and 4..9 are lost for the bounded consumer queue.
+    for (let sequence = 0; sequence < 10; sequence += 1) {
+      source.emit(commandEnvelope({ revision: sequence }), cursorId('epoch-1', sequence));
+    }
+    await flush(10);
+    expect(harness.receivedRevisions).toEqual([0, 1, 2, 3]);
+    expect(lastDirty(harness).reason).toBe('overflow');
+    expect(lastDirty(harness).gapStart).toBe(4);
+    expect(lastDirty(harness).gapEnd).toBe(9);
+
+    // The tracked applied prefix drains below the lost range; the latch itself is a
+    // separate sticky state (no cover has proven the dropped frames yet).
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 3 });
+
+    // A cover below the untracked high water (9) advances the conservative safe
+    // watermark to 7 but keeps the latch and forces another List pass.
+    harness.cover({ epoch: 'epoch-1', sequence: 7 }, 'journal');
+    await flush(5);
+    expect(lastDirty(harness).reason).toBe('uncovered-gap');
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 7 });
+
+    // A cover at/above the high water releases it (List authority supersedes the
+    // journal-generated loss).
+    harness.cover({ epoch: 'epoch-1', sequence: 9 }, 'list');
+    await flush(5);
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 9 });
   });
 });
 

@@ -84,3 +84,14 @@ Babylon Lite 1.36   WebGPU-only 渲染（rendering/lite-backend.ts）
 - SharedArrayBuffer/COOP-COEP 未启用（OPEN-V21-14），Worker 走 postMessage。
 - GPU 门禁为单机 headless Chrome 基线；生产设备矩阵/显存/长时压测待补。
 - 当前产品默认 1 FAB，测试与验收同样只使用 1 FAB；前端 Runtime/遥测/状态/UI 继续按 FAB 数据驱动。
+## Round 4 源码整改与验证（2026-10-30）
+
+- 输入：Round 4 复审报告（基线 `main@d04ee8b2bbcdf1ad5816c28515c697f8a57b44f3`；对照 `20101b43`），R4-01…R4-09。
+- 源码整改：统一 ACK untrusted-gap latch + cover authority；scheduler 逐命令结果 + cover 延后；observed/applied/covered 分离与 receiveAuthoritative；replay-gap 强制 List；stream fiber 有界监督；recovery authority 与 realtime availability 分离（Degraded/display-only）；严格配置校验；后端 MaxActiveCommandsPerFab 事务内 admission + 429；SSE 空 FAB 页推进 Site cursor。
+- 详细设计与逐项状态：`docs/architecture/17-round4-remediation-record.md`；ADR 修订见 ADR-010 §7、ADR-013 §6。
+- 本轮验证事实（实际执行）：
+  - 前端 `pnpm run typecheck` 0；`pnpm run lint` 0 warnings/0 errors；`pnpm test` **155 文件 / 908 测试 PASS**；`pnpm run build` PASS。
+  - 后端 3 个项目 Release build 0 warnings/0 errors；`dotnet test fab_tests -c Release` **226 passed / 0 failed**。
+  - 契约/生成物/架构/frozen-assets/Python tools/migrate-legacy/`git diff --check` 源码门禁全部 PASS。
+- 仍未执行：浏览器 E2E、GPU 600s device-loss、Oxc Compiler ON/OFF 生产等价、完整 `scripts/verify.ps1`、真实 HTTP 400/409/429 端到端、真实多 FAB SSE 负载、真实 transport+FabRuntime unknown-gap 端到端。不得据此宣称最终验收 PASS。
+- 当前产品语义不变：默认 1 FAB、架构支持 1–32；命令刷新恢复仍为 active-only（ADR-010 §6.6）。

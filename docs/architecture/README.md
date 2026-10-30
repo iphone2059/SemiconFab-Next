@@ -1,6 +1,6 @@
 # SemiconFab Next：Effect 4 与单层源码目录重构（已实施）
 
-**状态：** 2026-10-30 完成第三轮“静态整改”（Round 3）：`15-round3-static-remediation-spec.md` 冻结 R3-01…R3-11 的代码整改要求，生产代码/协议/ADR/测试 fixture 源码已按规范修改，逐文件静态审查见 `16-round3-static-review.md`。**本阶段未运行任何测试/typecheck/lint/verify**；Round 3 验证（typecheck/lint/Vitest/dotnet/真实 HTTP/浏览器/GPU/verify.ps1）待独立阶段执行，Round 2 的 F7 同样待执行。
+**状态：** 2026-10-30 完成 Round 4 源码整改（R4-01…R4-09，输入为 Round 4 复审报告）：生产代码/契约/ADR/测试 fixture 已修改，整改与验证记录见 `17-round4-remediation-record.md`。本轮实际运行了 typecheck/lint/Vitest/vite build、3 个 .NET 项目 Release build + dotnet test（226 passed）及契约/生成物/架构/frozen-assets/Python tools 源码门禁；**未运行**浏览器 E2E、GPU 600s soak、Oxc ON/OFF 生产等价与完整 `scripts/verify.ps1`。Round 3 的静态整改记录见 `15/16`；Round 3 阶段本身未运行测试。
 **基线：** 远端 `main` 的 `4fc8a94a3f10d185c8bef7929349ac6ccb2b8792`（独立 worktree `.local/worktrees/effect4-baseline` 仅用于 A/B）。
 **范围：** 仅 `web_app` 前端；后端不变，Babylon Lite + WebGPU-only 产品约束不变。
 **验收证据：** `docs/architecture/evidence/`；浏览器 e2e：`docs/perf/effect4-e2e.json`；性能/GPU：`docs/architecture/evidence/perf/`。
@@ -32,6 +32,7 @@
 | `14-round2-remediation-matrix.md` | Round 2 缺陷→阶段→验收矩阵与执行记录 |
 | `15-round3-static-remediation-spec.md` | Round 3 静态整改规范（R3-01…R3-11，代码先行/暂不测试） |
 | `16-round3-static-review.md` | Round 3 逐文件静态审查记录、状态机/所有权表与推迟验证项 |
+| `17-round4-remediation-record.md` | Round 4（R4-01…R4-09）源码整改设计、契约变化、验证结果与未完成边界 |
 
 ## 已实施的核心决定
 
@@ -86,4 +87,5 @@ web_app/src/
 - GPU 设备丢失未做真实硬件注入端到端验证；由渲染生命周期测试覆盖。
 - 长时 heap 仅记录 600 帧窗口；非分钟级稳定性测试。
 - 生产构建产物已测量（raw/gzip），浏览器功能与性能基线使用 Vite dev server。
+- Round 4 源码整改后的验证事实：前端 155 文件 / 908 测试 PASS、typecheck 0、oxlint 0、vite build PASS；后端 226 测试 PASS；契约/生成物/架构/frozen-assets/Python tools 源码门禁 PASS。浏览器 E2E、GPU soak、Compiler ON/OFF 等价与完整 verify.ps1 仍未执行，见 `17-round4-remediation-record.md` §5。
 - 不 push、不 merge；任务按提交逐项记录在 `evidence/effect4-progress.md`。

@@ -1,6 +1,7 @@
 import type { Effect } from 'effect';
 import type { CommandGateway, CommandGatewayError } from '@/contracts/command-gateway.contract';
 import type { CommandResultEvent } from '@/contracts/command-events.contract';
+import { resolveIntegerOption } from '@/contracts/command-config';
 
 export interface CommandRecoveryOptions {
   /** Max held revisions per (fabId, commandId). */
@@ -43,6 +44,9 @@ interface HeldEvent {
  * Capacity policy (Task 4 stage B): eviction removes a non-terminal event before a
  * terminal one, so a terminal result is the last thing to be dropped. Every eviction
  * is reported through onEvict and retained in bounded diagnostics for tests/UI.
+ *
+ * R4-03: a retry pass (snapshot/release) reads the queue without draining it, so a
+ * failed/rejected re-application stays held instead of being lost on the floor.
  */
 export class CommandEventRecovery {
   private readonly pending = new Map<string, HeldEvent[]>();
@@ -58,8 +62,8 @@ export class CommandEventRecovery {
   private static readonly MAX_DIAGNOSTICS = 16;
 
   constructor(options: CommandRecoveryOptions = {}) {
-    this.maxPerCommand = Math.max(1, options.maxPerCommand ?? 32);
-    this.maxTotal = Math.max(1, options.maxTotal ?? 256);
+    this.maxPerCommand = resolveIntegerOption('recovery.maxPerCommand', options.maxPerCommand, 32, { min: 1 });
+    this.maxTotal = resolveIntegerOption('recovery.maxTotal', options.maxTotal, 256, { min: 1 });
     this.onEvict = options.onEvict;
   }
 
@@ -91,6 +95,29 @@ export class CommandEventRecovery {
   pendingFor(fabId: string, commandId: string): readonly CommandResultEvent[] {
     const queue = this.pending.get(`${fabId}\u0000${commandId}`);
     return queue ? queue.map((held) => held.event) : [];
+  }
+
+  /** Snapshot every held event in true global arrival order without removing it (retry pass). */
+  snapshot(): readonly CommandResultEvent[] {
+    return this.arrivals.map((held) => held.event);
+  }
+
+  /**
+   * Remove exactly one held event after it was applied/covered. Identity-based:
+   * a newer event that replaced the same revision during the pass is never lost,
+   * and an event that is no longer held is a harmless no-op.
+   */
+  release(event: CommandResultEvent): boolean {
+    const key = keyOf(event);
+    const queue = this.pending.get(key);
+    if (!queue) return false;
+    const index = queue.findIndex((held) => held.event === event);
+    if (index < 0) return false;
+    const [removed] = queue.splice(index, 1);
+    if (queue.length === 0) this.pending.delete(key);
+    this.removeArrival(removed.seq);
+    this.total -= 1;
+    return true;
   }
 
   /** Drain all pending events in true global arrival order for a retry pass. */

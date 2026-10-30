@@ -516,7 +516,11 @@ public sealed class CommandRecoveryApiTests : IDisposable
     private static EquipmentCommandOptions LongOptions() => new()
     {
         ExecutingDelay = TimeSpan.FromHours(1),
-        SucceededDelay = TimeSpan.FromHours(2)
+        SucceededDelay = TimeSpan.FromHours(2),
+        // The pagination fixtures deliberately create hundreds of simultaneously active commands,
+        // so they raise the R4-08 per-FAB admission bound; admission itself is covered by
+        // CommandAdmissionTests.
+        MaxActiveCommandsPerFab = EquipmentCommandOptions.MaxActiveCommandsPerFabLimit
     };
 
     private WebApplicationFactory<Program> Factory(string dataDirectory, EquipmentCommandOptions? commandOptions = null,
@@ -683,7 +687,7 @@ public sealed class CommandRecoveryApiTests : IDisposable
         public CommandStoreRecovery Recover(Guid siteId) => inner.Recover(siteId);
 
         public CommandStoreSubmitResult CommitSubmit(Guid siteId, CommandPersistedRecord command,
-            CommandIdempotencyRecord idempotency) =>
+            CommandIdempotencyRecord idempotency, int maxActiveCommandsPerFab) =>
             throw new CommandStoreException("Simulated durable store failure.");
 
         public CommandJournalEvent? CommitAdvance(Guid siteId, string commandId, int expectedRevision, int revision,

@@ -142,3 +142,15 @@ dispose():
 | 认证/权限变化 | 越权数据 | 订阅时按权限过滤；登出 disposeAll |
 
 开放问题见 [架构基线](architecture.md) 第 14 节：OPEN-V21-11（实例化时机/页面卸载语义）、OPEN-V21-07（权威查询）、OPEN-V21-06（实时协议）。
+
+## 11. Round 4 修订（当前事实优先）
+
+本节记录 2026-10-30 Round 4 源码整改后的 FabRuntime 行为；与本文前文历史描述冲突处，以本节与源码/ADR-010 §7 为准。
+
+- 恢复状态机：`Healthy | Dirty | Recovering | WaitingRetry | Unrecoverable | Unavailable | Degraded`。`Unavailable` = 无恢复权威（gateway 缺失或 source 不可用）的 display-only；`Degraded` = 恢复权威可用但实时 transport 不可用，HTTP 可收敛但不得 Healthy。
+- `CommandRecoveryState` 新增 `realtimeAvailability: 'ready' | 'unavailable'`，与 `availability`（恢复权威）分离。
+- Recovery pass 顺序：apply authoritative records（`receiveAuthoritative`）→ post-snapshot scheduler batch（逐命令结果）→ 全部收敛后才 `source.cover(watermark, kind)` → 重置 attempts/active request → Healthy/Degraded。任何 batch 失败使 pass 进入有界退避；不允许“失败后 Healthy”。
+- `trackCommand` 增加 active admission：超过 `maxActiveCommands`（默认 64，镜像后端）抛 `ActiveCommandCapacityError`，不创建 workflow/Scope/actor；authoritative 恢复可镜像后端已有状态。
+- 所有 stream consumer（commandResults + gaps/reconnected/transportFailures/connectionStatus/dirty）都有 owner Scope 内的 exit/defect observer；意外终止有界重启并触发权威恢复，超限 Unrecoverable。
+- replay-gap 一律 List 恢复（R4-04）；reconnect/transport-failure 从 acknowledged cursor 恢复，无安全 cursor 时 List。
+- Round 4 验证事实：前端全量 155 文件 / 908 tests PASS、typecheck/lint/build PASS；后端 226 tests PASS。浏览器 E2E/GPU/Compiler 等价未运行，见 `architecture/17-round4-remediation-record.md` §5。

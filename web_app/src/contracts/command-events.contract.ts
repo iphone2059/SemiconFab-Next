@@ -61,6 +61,12 @@ export type CommandConnectionStatus = 'connecting' | 'open' | 'reconnecting' | '
  *   event is still pending, e.g. its actor never materialised) is reported as
  *   slow-consumer with a payload-free diagnostic detail: the safe prefix stays
  *   put and authoritative recovery must cover the blocked range.
+ * - uncovered-gap: an authoritative cover arrived but did not cover every known
+ *   untracked position (or an untracked position is unknown); the transport keeps
+ *   its ACK-blocked latch and requires another authoritative recovery pass (R4-01).
+ * - transport-unavailable: the realtime transport can never be established in this
+ *   environment (e.g. no EventSource factory); the source is permanently
+ *   unavailable and the runtime must not report Healthy (R4-06).
  */
 export type CommandStreamDirtyReason =
   | 'overflow'
@@ -72,7 +78,17 @@ export type CommandStreamDirtyReason =
   | 'decode-error'
   | 'invalid-control-frame'
   | 'protocol-error'
-  | 'ack-ledger-overflow';
+  | 'ack-ledger-overflow'
+  | 'uncovered-gap'
+  | 'transport-unavailable';
+
+/**
+ * Authoritative cover authority (R4-01). A journal loop only proves the range it
+ * scanned from the safe cursor; an authoritative List snapshot is required to
+ * release an ACK-blocked latch whose untracked position is unknown or belongs to
+ * another epoch.
+ */
+export type CommandCoverAuthority = 'journal' | 'list';
 
 /**
  * The transport lost progress. The monotonic droppedCount preserves the loss
@@ -178,8 +194,13 @@ export interface CommandEventSource {
    * accepted here (never through data frames), and late/stale ledger entries must
    * not roll the acknowledged cursor back. Transport implementations must also
    * never regress the same-epoch acknowledged sequence.
+   *
+   * R4-01: a transport with an ACK-blocked untracked gap keeps the latch (and
+   * signals uncovered-gap) until the cover provably covers it. The authority says
+   * whether the watermark comes from a journal loop or a full authoritative List;
+   * an unknown untracked position or a cross-epoch replacement requires list.
    */
-  cover(cursor: CommandCursor): void;
+  cover(cursor: CommandCursor, authority?: CommandCoverAuthority): void;
   /**
    * Bounded protocol diagnostics (payload-free). Implementations keep the last N
    * causes/timestamps so malformed frames are observable without leaking payload

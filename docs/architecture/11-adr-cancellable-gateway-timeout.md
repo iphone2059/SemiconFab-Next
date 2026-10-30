@@ -47,3 +47,9 @@ export interface CommandGateway {
 - **权威来源声明（R3-07）**：`FabRuntimeOptions.gateway`/`FabRuntimeFactoryOptions.gateway` 改为必填属性，类型 `CommandGateway | undefined`（显式声明权威来源）。缺少 gateway 时进入可观察 `Unavailable` 状态并保留 no-authority 诊断，永不进入 Healthy；组合根在缺少 fetch 的生产环境 fail-fast，显示用 runtime 必须显式标记 display-only。
 - **drop 覆盖闭环（R3-08）**：恢复 pass 记录 recoveryGeneration、权威快照水位与 dropGeneration/per-pass barrier。已被权威快照完整覆盖的 drop 记录为 covered、不重试；权威快照水位之后发生的新 drop 设置 `needsNextAuthoritativePass`/recoveryPending，不得直接 return 后宣告 Healthy。补偿 pass 有界 attempts/退避/进展证明，超限进入 Unrecoverable；恢复后的对账 batch 按剩余 scheduler 队列容量分块并优先处理 drop，禁止自造 128 队列溢出循环。
 - 被拒绝的旧设计：恢复成功后的 fire-and-forget `void scheduler.scheduleMany(active)`；无 owner 的裸 Promise 恢复；只关 retry timer 不中断 fetch 的取消；无 gateway -> Healthy 的静默路径。
+
+## 4. Round 4 修订（2026-10-30，R4-02）
+
+- Scheduler 的 `schedule()/scheduleMany()` 现返回逐命令 `ReconciliationResult`（`succeeded | already-terminal | not-found | failed | timed-out | cancelled | dropped`，payload-free error），不再只返回成功数量；超时/5xx/取消/语义性 dropped 的逐命令结果必须由恢复批次显式判定。
+- Recovery pass 只有在 authoritative snapshot 应用 + post-snapshot batch 全部收敛后才调用 `source.cover(watermark, kind)`、重置 attempts/activeRecoveryRequest 并进入 Healthy；batch 失败使 pass 进入有界退避，禁止“批次 fulfilled 即成功”。
+- `trackCommand` 的 fire-and-forget 调度同样消费结果：失败/超时/取消（且命令仍需收敛）进入 Dirty 并由权威 pass 重试。

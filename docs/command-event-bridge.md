@@ -285,3 +285,13 @@ const source: CommandEventSource = { commandResult$: subject.asObservable() };
 ## 13. 开放问题
 
 见 [架构基线](architecture.md) 第 14 节：OPEN-V21-06（流协议）、OPEN-V21-07（权威查询）、OPEN-V21-08（XState 版本/actor 粒度）、OPEN-V21-09（恢复记录生命周期）、OPEN-V21-10（CommandGateway 契约）、OPEN-V21-13（工作流状态只读暴露）。
+
+## 14. Round 4 修订（observed/applied 分离与 consumer 监督）
+
+本节记录 2026-10-30 Round 4 源码整改后的当前事实；与本文前文冲突处，以本节为准。
+
+- `CommandEventBridge.receive(event)` 返回显式结果：`applied | held | duplicate-applied | stale-covered | rejected | ignored`。observed revision（correlation 去重）与 actor applied revision 分离；`markApplied` 只在 actor projection 证明前进后调用。
+- 新增 `receiveAuthoritative(event, coveredRevision?)`：权威 List/Journal 的应用路径必须绕过 SSE observed-revision 去重门槛，重新投递 actor 并按 projection 分类（`applied/stale-covered/rejected`）。普通 SSE 的 duplicate/stale 去重不得阻止权威快照修复未应用事件。
+- `flushRecovery()` 返回 `{ applied, held, rejected }`：只有 Applied/Covered 的事件被移除；rejected 重新入队并通过 `onRejected` 让 FabRuntime 进入 Dirty；仍无 workflow 的事件保留。不得再 drain-and-drop。
+- consumer fiber 通过 `runCommandStream` observer 监督：handler 异常转为有界 `onDefect` 诊断（消费继续）；意外终止先重置 `started/commandFiber` 再回调 `onConsumerExit`；`stop()/dispose()` 的预期退出不回调。FabRuntime 负责 ≤3 次有界重启，超限进入 Unrecoverable。
+- 当前权威应用路径（List/Journal）由 FabRuntime 调用 `receiveAuthoritative`；`CommandEventRecovery` 增加非破坏性 `snapshot()/release()` 供 retry pass 使用，容量/参数严格校验。

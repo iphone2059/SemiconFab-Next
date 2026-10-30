@@ -33,7 +33,11 @@ internal static class ApiHost
         {
             TerminalTtl = TimeSpan.FromSeconds(builder.Configuration.GetValue("Fab:Commands:TerminalTtlSeconds", 300)),
             MaxTerminalCommands = builder.Configuration.GetValue("Fab:Commands:MaxTerminalCommands", 512),
-            MaxJournalEventsPerSite = builder.Configuration.GetValue("Fab:Commands:MaxJournalEvents", 4096)
+            MaxJournalEventsPerSite = builder.Configuration.GetValue("Fab:Commands:MaxJournalEvents", 4096),
+            // R4-08 per-FAB active-command admission bound; the service constructor fails startup on
+            // an out-of-range value instead of degrading to an unbounded command surface.
+            MaxActiveCommandsPerFab = builder.Configuration.GetValue("Fab:Commands:MaxActiveCommandsPerFab",
+                EquipmentCommandOptions.DefaultMaxActiveCommandsPerFab)
         };
         builder.Services.AddSingleton(new SiteDirectory(fabCount));
         builder.Services.AddSingleton(TimeProvider.System);
@@ -175,6 +179,23 @@ internal static class ApiHost
                 EquipmentCommandSubmitStatus.InvalidCommand => Results.Problem(statusCode: 400,
                     title: result.Validation!.Title, detail: result.Validation.Detail,
                     extensions: new Dictionary<string, object?> { ["errorCode"] = "INVALID_COMMAND" }),
+                // R4-08: capacity is a request-rate/admission condition, not a resource conflict:
+                // answer 429 explicitly so clients stop creating work until an active command
+                // terminalizes. "errorCode" follows the submission-route convention; "code" mirrors
+                // the kebab-case problem code used by the journal/control-frame endpoints.
+                EquipmentCommandSubmitStatus.ActiveCapacityExceeded => Results.Problem(
+                    statusCode: StatusCodes.Status429TooManyRequests,
+                    title: "Active command capacity exceeded",
+                    detail: $"FAB {fab.Code} has {result.ActiveCommands} active command(s) (revision < 2); " +
+                            $"the configured per-FAB admission bound of {commands.Options.MaxActiveCommandsPerFab} " +
+                            "is reached. Wait for an active command to reach a terminal revision before submitting another.",
+                    extensions: new Dictionary<string, object?>
+                    {
+                        ["errorCode"] = "ACTIVE_COMMAND_CAPACITY",
+                        ["code"] = "active-command-capacity",
+                        ["limit"] = commands.Options.MaxActiveCommandsPerFab,
+                        ["activeCommands"] = result.ActiveCommands
+                    }),
                 EquipmentCommandSubmitStatus.StoreUnavailable => Results.Problem(statusCode: 503,
                     title: "Command store unavailable",
                     extensions: new Dictionary<string, object?> { ["errorCode"] = "COMMAND_STORE_UNAVAILABLE" }),
@@ -324,11 +345,18 @@ internal static class ApiHost
                     {
                         foreach (var envelope in pending.Events)
                             await WriteCommandEventAsync(context.Response, epoch, envelope, cancellationToken);
+                        // R4-09: the scan cursor is a Site-level journal sequence while this stream is
+                        // FAB-filtered, so an empty pending.Events page does not mean the cursor did
+                        // not move: other FABs may have advanced the Site watermark. Advance to
+                        // pending.LatestSequence regardless of this FAB's event count, otherwise the
+                        // cursor stalls behind foreign traffic and a later retention trim turns into a
+                        // spurious replay-gap/dirty that forces an unnecessary authoritative recovery.
+                        // HasGap == false proves the whole retained Site window is contiguous, so no
+                        // event for this FAB in (cursor, latest] was skipped. Flush only when a frame
+                        // was actually written; a cursor-only advance has nothing to send.
+                        cursor = pending.LatestSequence;
                         if (pending.Events.Length > 0)
-                        {
-                            cursor = pending.LatestSequence;
                             await context.Response.Body.FlushAsync(cancellationToken);
-                        }
                     }
                     await Task.Delay(TimeSpan.FromMilliseconds(EquipmentCommandService.StreamPollMilliseconds), cancellationToken);
                 }

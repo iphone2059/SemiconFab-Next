@@ -144,10 +144,13 @@ it('CORE-007 times out a hung reconciliation and releases the concurrency slot',
   runtime.trackCommand('ok');
   await expect.poll(() => runtime.reconciliationStats.timedOut, { timeout: 2_000 }).toBeGreaterThanOrEqual(1);
   // The single slot was released: the queued command runs without waiting for
-  // the hung promise (a leaked slot would deadlock the whole FAB queue).
+  // the hung promise (a leaked slot would deadlock the whole FAB queue). R4-02
+  // then treats the timeout as a failed pass and may schedule a bounded retry, so
+  // quiescence (zero in-flight/queued) is only asserted after dispose.
   await expect.poll(() => runtime.getProjection('ok')?.outcome, { timeout: 2_000 }).toBe('executing');
-  expect(runtime.reconciliationStats.inFlight).toBe(0);
   runtime.dispose();
+  expect(runtime.reconciliationStats.inFlight).toBe(0);
+  expect(runtime.reconciliationStats.queued).toBe(0);
 });
 
 it('CORE-007 dispose cancels an in-flight reconciliation and settles its caller', async () => {

@@ -33,14 +33,26 @@ public enum EquipmentCommandSubmitStatus
     UnknownFab,
     IdempotencyConflict,
     InvalidCommand,
+    /// <summary>
+    /// The target FAB already holds the configured number of active commands (revision &lt; 2). The
+    /// command was not accepted, nothing was persisted and no simulation actor was created; the
+    /// client must wait for an active command to reach a terminal revision (HTTP 429).
+    /// </summary>
+    ActiveCapacityExceeded,
     /// <summary>The durable store failed; the command was not persisted and must not be treated as accepted.</summary>
     StoreUnavailable
 }
 
+/// <summary>
+/// Outcome of one submit attempt. <see cref="ActiveCommands"/> is the durable active-command count
+/// observed by the admission check when <see cref="Status"/> is
+/// <see cref="EquipmentCommandSubmitStatus.ActiveCapacityExceeded"/> (zero otherwise).
+/// </summary>
 public sealed record EquipmentCommandSubmitResult(
     EquipmentCommandSubmitStatus Status,
     EquipmentCommandStatus? Command,
-    EquipmentCommandValidationResult? Validation = null);
+    EquipmentCommandValidationResult? Validation = null,
+    int ActiveCommands = 0);
 
 /// <summary>
 /// Result of reading the command journal for one SSE connection. <see cref="HasGap"/> is true
@@ -83,6 +95,12 @@ public sealed record JournalEpochMismatch(Guid CurrentEpoch, long FirstRetainedS
 /// <summary>Deterministic knobs for the development command simulation and its durable retention.</summary>
 public sealed class EquipmentCommandOptions
 {
+    /// <summary>Default per-FAB admission bound for active commands (revision &lt; 2).</summary>
+    public const int DefaultMaxActiveCommandsPerFab = 64;
+
+    /// <summary>Accepted upper bound for <see cref="MaxActiveCommandsPerFab"/>; larger values fail startup.</summary>
+    public const int MaxActiveCommandsPerFabLimit = 4096;
+
     public TimeSpan ExecutingDelay { get; init; } = TimeSpan.FromMilliseconds(150);
 
     public TimeSpan SucceededDelay { get; init; } = TimeSpan.FromMilliseconds(600);
@@ -92,6 +110,16 @@ public sealed class EquipmentCommandOptions
     public int MaxTerminalCommands { get; init; } = 512;
 
     public int MaxJournalEventsPerSite { get; init; } = 4096;
+
+    /// <summary>
+    /// Per-FAB admission bound for active commands (revision &lt; 2): a brand-new command for a FAB
+    /// that already holds this many active commands is rejected with
+    /// <see cref="EquipmentCommandSubmitStatus.ActiveCapacityExceeded"/> before any durable write.
+    /// The count is taken inside the durable submit transaction, terminal commands (revision 2) free
+    /// capacity as soon as their revision commits, and an idempotent replay of an already-accepted
+    /// command never consumes capacity because it creates nothing new.
+    /// </summary>
+    public int MaxActiveCommandsPerFab { get; init; } = DefaultMaxActiveCommandsPerFab;
 }
 
 /// <summary>
@@ -107,6 +135,13 @@ public sealed class EquipmentCommandOptions
 /// Terminal commands are pruned after the configured TTL and/or beyond the terminal capacity;
 /// their records, idempotency rows and journal events leave the retained window in the same
 /// transaction, so their cursors report an explicit gap instead of a silent hole.
+///
+/// Admission (R4-08): every brand-new command is admitted only while the target FAB's durable
+/// active-command count (revision &lt; 2) is below <see cref="EquipmentCommandOptions.MaxActiveCommandsPerFab"/>.
+/// The count runs inside the same store transaction that inserts the command, so two concurrent
+/// submissions can never both pass the check. The service deliberately keeps no separate admission
+/// counter: the durable store is the authority (loaded at startup and after every prune), which is
+/// what makes the bound survive restart instead of merely limiting one in-memory process.
 /// </summary>
 public sealed class EquipmentCommandService
 {
@@ -153,6 +188,10 @@ public sealed class EquipmentCommandService
         if (this.options.TerminalTtl <= TimeSpan.Zero || this.options.MaxTerminalCommands < 1 ||
             this.options.MaxJournalEventsPerSite < 1)
             throw new ArgumentOutOfRangeException(nameof(options), "Retention options must be positive.");
+        // Fail fast on an unusable admission bound instead of silently treating it as unlimited.
+        if (this.options.MaxActiveCommandsPerFab is < 1 or > EquipmentCommandOptions.MaxActiveCommandsPerFabLimit)
+            throw new ArgumentOutOfRangeException(nameof(options),
+                $"MaxActiveCommandsPerFab must be between 1 and {EquipmentCommandOptions.MaxActiveCommandsPerFabLimit}.");
         // Fail fast: every configured Site is recovered before the API can serve a request, so an
         // unwritable/inconsistent store stops the process instead of silently degrading to memory.
         foreach (var site in directory.GetSites())
@@ -278,11 +317,14 @@ public sealed class EquipmentCommandService
     /// <summary>
     /// Single atomic submission path. After Site/FAB membership is validated the per-Site lock
     /// decides, in order: (1) idempotency replay for the same key+payload (returns the original
-    /// stored accepted snapshot without consulting current capability/state), (2) idempotency
-    /// conflict for a different payload, (3) capability/state validation for a brand-new command,
-    /// (4) one durable store transaction (command + idempotency/outbox + journal + cursor) before
-    /// 202. Concurrent retries of one key therefore create exactly one durable command and cannot
-    /// fail on state that changed after the original submission.
+    /// stored accepted snapshot without consulting current capability/state/active capacity),
+    /// (2) idempotency conflict for a different payload, (3) capability/state validation for a
+    /// brand-new command, (4) one durable store transaction (command + idempotency/outbox + journal
+    /// + cursor + per-FAB active-command admission) before 202. Concurrent retries of one key
+    /// therefore create exactly one durable command and cannot fail on state that changed after the
+    /// original submission, while a brand-new command is admitted only when the target FAB's durable
+    /// active-command count is below <see cref="EquipmentCommandOptions.MaxActiveCommandsPerFab"/>
+    /// (R4-08; the count is taken in the commit transaction itself, not from a pre-read).
     /// </summary>
     public EquipmentCommandSubmitResult Submit(Guid siteId, EquipmentCommandRequest request, string principal, string idempotencyKey)
     {
@@ -332,7 +374,10 @@ public sealed class EquipmentCommandService
             CommandStoreSubmitResult result;
             try
             {
-                result = store.CommitSubmit(siteId, command, idempotency);
+                // Admission is enforced by the store transaction: the durable active-command count
+                // and the insert are atomic, so no pre-check window exists. The service's in-memory
+                // mirror is only a cache of committed state and is deliberately not consulted here.
+                result = store.CommitSubmit(siteId, command, idempotency, options.MaxActiveCommandsPerFab);
             }
             catch (CommandStoreException error)
             {
@@ -343,6 +388,12 @@ public sealed class EquipmentCommandService
             {
                 case CommandStoreSubmitStatus.PayloadMismatch:
                     return new(EquipmentCommandSubmitStatus.IdempotencyConflict, null);
+                case CommandStoreSubmitStatus.CapacityExceeded:
+                    // The transaction rejected the insert atomically: no command, journal event,
+                    // idempotency row or in-memory state was created, and the store-reported count
+                    // is the authoritative durable active-command count for this FAB.
+                    return new(EquipmentCommandSubmitStatus.ActiveCapacityExceeded, null,
+                        ActiveCommands: result.ActiveCommands);
                 case CommandStoreSubmitStatus.Replayed:
                     var replayed = DeserializeResponse(result.Idempotency ?? throw new CommandStoreException("Replayed submit has no idempotency entry."));
                     site.Idempotency[scope] = new IdempotencyEntry(replayed.EquipmentId, replayed.Action, replayed);

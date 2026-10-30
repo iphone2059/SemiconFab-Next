@@ -156,3 +156,9 @@ reconcile(commandId):
 | 用旧事件覆盖权威 | 状态回退 | 权威优先；旧流身份过滤；CE-03/CE-06 |
 
 开放问题：OPEN-V21-07（权威查询）、OPEN-V21-09（恢复记录生命周期）、OPEN-V21-13（工作流状态只读暴露），见 [架构基线](architecture.md) 第 14 节。
+
+## 12. Round 4 修订（2026-10-30）
+
+- `FabReconciliationScheduler.schedule/scheduleMany` 返回逐命令 `ReconciliationResult`（succeeded/already-terminal/not-found/failed/timed-out/cancelled/dropped + payload-free error）；恢复批次必须校验每个结果，失败/超时/取消（仍活跃命令）使 RecoveryPass 失败并进入有界退避。
+- Recovery pass 的 cover 与时序：authoritative records 应用 → post-snapshot batch 收敛 → `source.cover(watermark, kind)` → 重置 attempts/active request → Healthy/Degraded。禁止先 cover 后 batch、批次失败仍 Healthy、批次前清零 attempts。
+- 权威 List/Journal 应用走 `receiveAuthoritative`（绕过 SSE observed 去重）；`flushRecovery` 只释放 Applied/Covered，rejected 重新入队并触发 Dirty。

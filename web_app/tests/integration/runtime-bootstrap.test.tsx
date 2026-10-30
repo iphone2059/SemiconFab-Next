@@ -7,6 +7,8 @@ import { useFabTelemetry } from '@/app/telemetry-provider';
 import { createRuntimeWithSites, type AppRuntime } from '../support/resource-test-runtime.tsx';
 import WorkbenchApp from '@/workbench/workbench';
 import type { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
+import { resolveCommandComposition } from '@/app/runtime-bootstrap';
+import { createPendingCommandEventSource } from '@/runtime/command-sources';
 
 const sites = [{
   siteId: 'site-1',
@@ -37,6 +39,7 @@ afterEach(async () => {
   for (const runtime of runtimes.splice(0)) await runtime.dispose();
   captured = null;
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 it('assembles the configured FAB XState runtime from the sites document', async () => {
@@ -242,4 +245,108 @@ it('shows the configured FAB in the workbench without a redundant FAB selector',
   expect(selector).toBeNull();
   expect(screen.getByText('FAB-A')).toBeTruthy();
   expect(document.querySelectorAll('.fab-card')).toHaveLength(1);
+});
+
+// --- R4-06: explicit command composition health -----------------------------
+
+it('R4-06 derives command authority only when BOTH realtime and HTTP transports exist', () => {
+  // Authoritative composition: realtime transport + fetch => HTTP CommandGateway.
+  const authoritative = resolveCommandComposition({ realtimeTransport: true, httpTransport: true, production: false });
+  expect(authoritative.realtimeTransport).toBe(true);
+  expect(authoritative.gateway).toBeDefined();
+
+  // No realtime transport: nothing can be observed, so there is no authority to
+  // declare even though fetch exists. This is the old bug the composition root
+  // must never reintroduce (HTTP-authority runtime around a pending source).
+  const noRealtime = resolveCommandComposition({ realtimeTransport: false, httpTransport: true, production: false });
+  expect(noRealtime.realtimeTransport).toBe(false);
+  expect(noRealtime.gateway).toBeUndefined();
+
+  // Realtime without fetch: live events only, still explicitly display-only.
+  const noHttp = resolveCommandComposition({ realtimeTransport: true, httpTransport: false, production: false });
+  expect(noHttp.realtimeTransport).toBe(true);
+  expect(noHttp.gateway).toBeUndefined();
+});
+
+it('R4-06 fails fast in production instead of assembling a display-only command runtime', () => {
+  expect(() => resolveCommandComposition({ realtimeTransport: false, httpTransport: true, production: true }))
+    .toThrow(/production build requires the realtime command transport/);
+  expect(() => resolveCommandComposition({ realtimeTransport: true, httpTransport: false, production: true }))
+    .toThrow(/must provide a CommandGateway/);
+  // The valid production composition keeps the authoritative gateway.
+  const production = resolveCommandComposition({ realtimeTransport: true, httpTransport: true, production: true });
+  expect(production.gateway).toBeDefined();
+});
+
+it('R4-06 assembles a display-only runtime without EventSource: observable Unavailable, no HTTP authority', async () => {
+  const fetchSpy = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => new Promise<Response>(() => {}));
+  vi.stubGlobal('EventSource', undefined);
+  vi.stubGlobal('fetch', fetchSpy);
+
+  render(<AppProviders runtime={runtimeWithSites()}><RegistryProbe /></AppProviders>);
+  await waitFor(() => expect(captured?.size).toBe(1));
+  const runtime = captured?.get('fab-a');
+  // Registry mutations do not re-render the probe; poll the captured runtime.
+  await waitFor(() => expect(runtime?.recoveryState.phase).toBe('Unavailable'));
+
+  const state = runtime!.recoveryState;
+  expect(state.availability).toBe('unavailable');
+  expect(state.realtimeAvailability).toBe('unavailable');
+  expect(state.phase).toBe('Unavailable');
+  // A display-only runtime still exposes live-only tracking (pending source seam)
+  // but never an authoritative recovery call: the HTTP gateway must not exist.
+  expect(() => runtime!.trackCommand('cmd-display-only')).not.toThrow();
+  const authoritativeCalls = fetchSpy.mock.calls.filter(([input]) => {
+    const url = String(input);
+    return url.includes('/commands') || url.includes('/command-journal');
+  });
+  expect(authoritativeCalls).toEqual([]);
+});
+
+it('R4-06 keeps the authoritative gateway when the realtime transport exists', async () => {
+  class FakeEventSource {
+    onopen: (() => void) | null = null;
+    onmessage: ((event: { data: string }) => void) | null = null;
+    onerror: ((event: unknown) => void) | null = null;
+    constructor(readonly url: string) {}
+    addEventListener() {}
+    removeEventListener() {}
+    close() {}
+  }
+  vi.stubGlobal('EventSource', FakeEventSource);
+  // The startup refresh runs an authoritative List; keep it pending so the test
+  // never depends on a real HTTP response.
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+
+  render(<AppProviders runtime={runtimeWithSites()}><RegistryProbe /></AppProviders>);
+  await waitFor(() => expect(captured?.size).toBe(1));
+  const runtime = captured?.get('fab-a');
+  // availability 'available' requires BOTH a gateway and a ready source: this is
+  // the positive half of the composition decision.
+  await waitFor(() => expect(runtime?.recoveryState.availability).toBe('available'));
+  expect(runtime!.recoveryState.realtimeAvailability).toBe('ready');
+  expect(runtime!.recoveryState.phase).not.toBe('Unavailable');
+});
+
+it('R4-06 fails fast when the composition root runs in production without EventSource', () => {
+  vi.stubEnv('PROD', true);
+  vi.stubGlobal('EventSource', undefined);
+  let thrown: unknown;
+  try {
+    render(<AppProviders runtime={runtimeWithSites()}><RegistryProbe /></AppProviders>);
+  } catch (cause) {
+    thrown = cause;
+  }
+  expect(thrown).toBeInstanceOf(Error);
+  expect((thrown as Error).message).toMatch(/production build requires the realtime command transport/);
+});
+
+it('R4-06 keeps the pending command source explicitly display-only', () => {
+  const source = createPendingCommandEventSource();
+  expect(source.availability).toBe('unavailable');
+  expect(source.cursors).toEqual({});
+  expect(source.protocolDiagnostics).toEqual([]);
+  // acknowledge/cover are deliberate no-ops: nothing was delivered or covered.
+  expect(() => source.acknowledge({ fabId: 'fab-a', commandId: 'cmd-1', revision: 1, outcome: 'accepted', occurredAt: '2026-10-27T00:00:00Z' })).not.toThrow();
+  expect(() => source.cover({ epoch: 'epoch-1', sequence: 1 })).not.toThrow();
 });

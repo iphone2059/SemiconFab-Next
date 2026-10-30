@@ -11,6 +11,8 @@ namespace Fab.Contracts;
 /// (submit, advance, retention) is exactly one database transaction, so a crash can only expose a
 /// fully committed prefix: no command without its idempotency row, no journal event out of sync
 /// with the command revision, and no site-state cursor ahead of the committed journal.
+/// <see cref="CommitSubmit"/> additionally enforces the per-FAB active-command admission bound
+/// (R4-08) with a count in that same submit transaction, so admission cannot race the commit.
 ///
 /// Only local single-process/single-writer use is supported (Development scope); multi-process
 /// writers are not supported and are documented as such.
@@ -62,6 +64,7 @@ CREATE TABLE IF NOT EXISTS idempotency (
     FOREIGN KEY (command_id) REFERENCES commands (command_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS journal_sequence_idx ON journal (sequence);
+CREATE INDEX IF NOT EXISTS commands_site_fab_revision_idx ON commands (site_id, fab_id, revision);
 ";
 
     private readonly string databasePath;
@@ -125,8 +128,14 @@ CREATE INDEX IF NOT EXISTS journal_sequence_idx ON journal (sequence);
         }
     });
 
-    public CommandStoreSubmitResult CommitSubmit(Guid siteId, CommandPersistedRecord command, CommandIdempotencyRecord idempotency) => Guard(() =>
+    public CommandStoreSubmitResult CommitSubmit(Guid siteId, CommandPersistedRecord command,
+        CommandIdempotencyRecord idempotency, int maxActiveCommandsPerFab) => Guard(() =>
     {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(idempotency);
+        if (maxActiveCommandsPerFab < 1)
+            throw new ArgumentOutOfRangeException(nameof(maxActiveCommandsPerFab),
+                "The per-FAB active-command admission bound must be positive.");
         var gate = RequireSite(siteId);
         gate.Semaphore.Wait();
         try
@@ -135,6 +144,8 @@ CREATE INDEX IF NOT EXISTS journal_sequence_idx ON journal (sequence);
             using var transaction = connection.BeginTransaction(deferred: false);
             try
             {
+                // Replay/conflict is decided before admission: replaying an already-accepted command
+                // creates nothing new and must keep succeeding while the FAB is at capacity.
                 var existing = FindIdempotency(connection, transaction, idempotency);
                 if (existing is not null)
                 {
@@ -144,6 +155,22 @@ CREATE INDEX IF NOT EXISTS journal_sequence_idx ON journal (sequence);
                                  ?? throw new CommandStoreException("Idempotency row references a missing command.");
                     return new CommandStoreSubmitResult(CommandStoreSubmitStatus.Replayed, Command: stored, Idempotency: existing);
                 }
+
+                // R4-08 admission: count the durable active commands of the target FAB in this same
+                // write transaction. BeginTransaction(deferred: false) takes the SQLite write lock up
+                // front, so no concurrent submit can interleave between this count and the insert
+                // below; the bound therefore holds for the committed state and survives restart.
+                // Rejected alternatives: (a) a pre-count in EquipmentCommandService over its in-memory
+                // mirror - check-then-act against the durable authority, stale after a restart or a
+                // second writer; (b) a SELECT outside the write transaction - two submissions could
+                // both read below the bound and both commit; (c) a unique constraint on the active
+                // rows of one equipment - the development domain permits START/STOP/PAUSE sequences
+                // on the same equipment (the validator only checks catalog capability/preconditions),
+                // so the FAB-wide bound is the admission policy, not per-equipment uniqueness.
+                var activeCommands = CountActiveCommandsForFab(connection, transaction, siteId, command.FabId);
+                if (activeCommands >= maxActiveCommandsPerFab)
+                    return new CommandStoreSubmitResult(CommandStoreSubmitStatus.CapacityExceeded,
+                        ActiveCommands: activeCommands);
 
                 var state = ReadSiteState(connection, siteId, transaction)
                             ?? throw new CommandStoreException("The durable command store has no Site state.");
@@ -251,6 +278,23 @@ CREATE INDEX IF NOT EXISTS journal_sequence_idx ON journal (sequence);
             gate.Semaphore.Release();
         }
     });
+
+    /// <summary>
+    /// Durable active-command count for one (Site, FAB) - the R4-08 admission input. "Active" is
+    /// <c>revision &lt; 2</c> (the same definition the API exposes); counting by revision instead of
+    /// the derived <c>terminal</c> flag means an inconsistent row can only make admission more
+    /// conservative, never less. Called only from inside the submit write transaction; the
+    /// (site_id, fab_id, revision) index keeps it a bounded range scan.
+    /// </summary>
+    private static int CountActiveCommandsForFab(SqliteConnection connection, SqliteTransaction transaction,
+        Guid siteId, string fabId)
+    {
+        using var command = Command(connection, transaction, @"
+SELECT COUNT(*) FROM commands WHERE site_id = $site AND fab_id = $fab AND revision < 2;");
+        command.Parameters.AddWithValue("$site", siteId.ToString("D"));
+        command.Parameters.AddWithValue("$fab", fabId);
+        return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+    }
 
     /// <summary>Effective first retained sequence used by cursors; an empty retained window starts at latest+1.</summary>
     private static long EffectiveFirstRetained(SiteStateRow state, CommandJournalEvent[] events) =>

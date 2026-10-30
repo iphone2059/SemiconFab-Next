@@ -1,13 +1,32 @@
 import type * as Fiber from 'effect/Fiber';
-import type { Scope } from 'effect';
+import type { Effect, Exit, Scope } from 'effect';
 import { runCommandStream, stopCommandStream } from '@/runtime/command-stream';
 import type { RuntimeHost } from '@/runtime/fab-runtime-host';
 import type { CommandEventSource, CommandResultEvent } from '@/contracts/command-events.contract';
-import type { Effect } from 'effect';
 import type { CommandGateway, CommandGatewayError } from '@/contracts/command-gateway.contract';
 import type { CommandWorkflow, CommandWorkflowRegistry } from '@/contracts/command-workflow.contract';
 import { CommandCorrelationRegistry } from '@/runtime/command-correlation-registry';
 import { CommandEventRecovery } from '@/runtime/command-event-recovery';
+
+/**
+ * Explicit outcome of offering one result to the workflow layer (R4-03). The old
+ * void return made "already applied", "held for a missing workflow" and "rejected
+ * by the actor projection" indistinguishable to the runtime.
+ */
+export type CommandDeliveryOutcome =
+  | 'applied'
+  | 'held'
+  | 'duplicate-applied'
+  | 'stale-covered'
+  | 'rejected'
+  | 'ignored';
+
+/** Counts of one retry pass over the bounded recovery queue. */
+export interface CommandFlushResult {
+  readonly applied: number;
+  readonly held: number;
+  readonly rejected: number;
+}
 
 export interface CommandEventBridgeOptions {
   /** When set, only events for this FAB are considered (per-FAB runtime); the key remains (fabId, commandId). */
@@ -18,11 +37,30 @@ export interface CommandEventBridgeOptions {
   readonly onUncorrelated?: (event: CommandResultEvent) => void;
   /** Called after a result is delivered to a workflow (used by Runtime projections). */
   readonly onResultDelivered?: (event: CommandResultEvent) => void;
+  /**
+   * R4-03: a retried event was rejected by the actor projection. It stays held
+   * (bounded by the existing queue) and is reported so FabRuntime can enter Dirty
+   * and converge authoritatively instead of silently dropping the revision.
+   */
+  readonly onRejected?: (event: CommandResultEvent) => void;
+  /** R4-05b: bounded consumer defect callback (a handler threw); never swallowed. */
+  readonly onDefect?: (cause: unknown) => void;
+  /**
+   * R4-05: the command-result consumer fiber terminated unexpectedly. The bridge
+   * has already reset started/commandFiber before this callback runs, so the owner
+   * can restart the consumer without ever observing a dead-but-started bridge.
+   * stop()/dispose() are expected exits and never invoke it.
+   */
+  readonly onConsumerExit?: (exit: Exit.Exit<void, never>) => void;
   /** Approved Effect execution boundary (AppRuntime satisfies it structurally). */
   readonly runtime: RuntimeHost;
   /** CommandTransportScope: the only owner of the command-result consumer fiber. */
   readonly scope: Scope.Scope;
 }
+
+type DeliveryMode = 'realtime' | 'authoritative' | 'recovery';
+
+const CONSUMER_LABEL = 'command-event-bridge';
 
 /**
  * Application-layer coordinator: subscribes to the realtime typed stream, filters
@@ -30,6 +68,16 @@ export interface CommandEventBridgeOptions {
  * knows neither WebSocket nor XState; the Runtime assembles all three (ADR-0010,
  * ARCH-07/09). Missing workflows are not dropped: the result is held for a retry
  * pass or backend reconciliation.
+ *
+ * R4-03: observed and applied state are separate. The realtime path dedupes on the
+ * observed watermark, while receiveAuthoritative() bypasses that gate for an
+ * authoritative List/Journal snapshot and re-delivers to the actor. Only a
+ * projection that provably advanced calls correlation.markApplied().
+ *
+ * R4-05: the consumer fiber is forked into the supplied CommandTransportScope and
+ * observed through runCommandStream's observer: handler defects are reported
+ * (bounded onDefect), and an unexpected fiber exit resets started/commandFiber
+ * before onConsumerExit so the owner can restart it.
  *
  * The consumer fiber is forked into the supplied CommandTransportScope, not the
  * global Effect runtime (ADR-007 §2).
@@ -39,6 +87,9 @@ export class CommandEventBridge {
   private readonly correlation: CommandCorrelationRegistry;
   private readonly recovery: CommandEventRecovery;
   private started = false;
+  /** Expected exit flag: set only by stop()/dispose() around the controlled interrupt. */
+  private expectedExit = false;
+  private disposedState = false;
 
   constructor(
     private readonly source: CommandEventSource,
@@ -50,8 +101,9 @@ export class CommandEventBridge {
   }
 
   start(): void {
-    if (this.started) return;
+    if (this.started || this.disposedState) return;
     this.started = true;
+    this.expectedExit = false;
     this.commandFiber = runCommandStream(
       this.options.runtime,
       this.options.scope,
@@ -59,39 +111,126 @@ export class CommandEventBridge {
       (event) => {
         if (this.started) this.receive(event);
       },
+      {
+        label: CONSUMER_LABEL,
+        onDefect: (_label, cause) => {
+          this.options.onDefect?.(cause);
+        },
+        onExit: (_label, exit) => {
+          this.handleConsumerExit(exit);
+        },
+      },
     );
+  }
+
+  /** Re-arm the consumer after an unexpected exit; a no-op while already running. */
+  restart(): void {
+    this.start();
   }
 
   stop(): void {
     this.started = false;
     const fiber = this.commandFiber;
     this.commandFiber = undefined;
-    if (fiber) stopCommandStream(this.options.runtime, fiber);
+    if (!fiber) return;
+    this.expectedExit = true;
+    try {
+      stopCommandStream(this.options.runtime, fiber);
+    } finally {
+      // onExit runs synchronously inside stopCommandStream; clear defensively so a
+      // late exit can never be mistaken for an expected one.
+      this.expectedExit = false;
+    }
   }
 
-  /** Visible for tests and Runtime-driven injection of a single decoded frame. */
-  receive(event: CommandResultEvent): void {
-    if (this.options.fabId && event.fabId !== this.options.fabId) return;
-    if (this.correlation.observe(event) !== 'new') return;
-    this.deliver(event);
+  /**
+   * The owned consumer fiber terminated. Expected exits (stop/dispose) are silent;
+   * an unexpected exit resets started/commandFiber first, then reports so the
+   * runtime can schedule a bounded restart (R4-05).
+   */
+  private handleConsumerExit(exit: Exit.Exit<void, never>): void {
+    this.commandFiber = undefined;
+    if (this.expectedExit) {
+      this.expectedExit = false;
+      return;
+    }
+    this.started = false;
+    if (!this.disposedState) this.options.onConsumerExit?.(exit);
+  }
+
+  /**
+   * Realtime delivery path. De-dupes on the observed revision and returns an
+   * explicit outcome: delivered to the actor => applied/rejected, missing workflow
+   * => held, duplicate => duplicate-applied/rejected, older => stale-covered.
+   */
+  receive(event: CommandResultEvent): CommandDeliveryOutcome {
+    if (this.isForeign(event)) return 'ignored';
+    const decision = this.correlation.observe(event);
+    if (decision === 'duplicate') {
+      const applied = this.correlation.lastAppliedRevision(event.fabId, event.commandId);
+      return applied !== undefined && applied >= event.revision ? 'duplicate-applied' : 'rejected';
+    }
+    if (decision === 'stale') return 'stale-covered';
+    const workflow = this.workflows.get(event.fabId, event.commandId);
+    if (!workflow) {
+      this.holdUncorrelated(event);
+      return 'held';
+    }
+    return this.applyToWorkflow(workflow, event, 'realtime');
+  }
+
+  /**
+   * Authoritative delivery path (R4-03): a List/Journal snapshot is fresh authority,
+   * so the observed-revision duplicate gate must never block it. The event is
+   * re-delivered to the actor; the outcome is classified from the actor projection
+   * (afterRevision >= revision => applied/stale-covered, otherwise rejected). A
+   * workflow that exposes no projection is only trusted when coveredRevision proves
+   * the snapshot covered that revision.
+   */
+  receiveAuthoritative(event: CommandResultEvent, coveredRevision?: number): CommandDeliveryOutcome {
+    if (this.isForeign(event)) return 'ignored';
+    // Record the observation without ever regressing the observed watermark, but
+    // ignore the duplicate/stale decision: authoritative re-application is allowed.
+    this.correlation.observe(event);
+    const workflow = this.workflows.get(event.fabId, event.commandId);
+    if (!workflow) {
+      this.holdUncorrelated(event);
+      return 'held';
+    }
+    return this.applyToWorkflow(workflow, event, 'authoritative', coveredRevision);
   }
 
   /**
    * Retry pending results after a workflow is registered (for example when the
-   * HTTP submit response finally creates the actor). Returns the number of
-   * results delivered in this pass; still-uncorrelated events stay queued.
+   * HTTP submit response finally creates the actor) or after an authoritative
+   * snapshot. R4-03: this is a snapshot + selective release, never a drain-and-drop:
+   * events leave the queue only when applied/covered; rejected events are re-held
+   * and reported through onRejected; still-uncorrelated events stay held.
    */
-  flushRecovery(): number {
-    let delivered = 0;
-    for (const event of this.recovery.drain()) {
-      const workflow = this.workflows.get(event.fabId, event.commandId);
-      if (!workflow) {
-        this.recovery.hold(event);
+  flushRecovery(): CommandFlushResult {
+    let applied = 0;
+    let held = 0;
+    let rejected = 0;
+    for (const event of this.recovery.snapshot()) {
+      if (this.isForeign(event)) {
+        this.recovery.release(event);
         continue;
       }
-      if (this.applyToWorkflow(workflow, event)) delivered += 1;
+      const workflow = this.workflows.get(event.fabId, event.commandId);
+      if (!workflow) {
+        held += 1;
+        continue;
+      }
+      const outcome = this.applyToWorkflow(workflow, event, 'recovery');
+      if (outcome === 'applied' || outcome === 'stale-covered') {
+        this.recovery.release(event);
+        applied += 1;
+        continue;
+      }
+      rejected += 1;
+      this.options.onRejected?.(event);
     }
-    return delivered;
+    return { applied, held, rejected };
   }
 
   /**
@@ -106,10 +245,11 @@ export class CommandEventBridge {
     run: (effect: Effect.Effect<CommandResultEvent | null, CommandGatewayError>) => Promise<CommandResultEvent | null>,
   ): Promise<number> {
     await this.recovery.reconcile(gateway, fabId, commandId, run);
-    return this.flushRecovery();
+    return this.flushRecovery().applied;
   }
 
   dispose(): void {
+    this.disposedState = true;
     this.stop();
     this.recovery.dispose();
     this.correlation.clear();
@@ -131,40 +271,52 @@ export class CommandEventBridge {
     return this.started;
   }
 
+  private isForeign(event: CommandResultEvent): boolean {
+    return this.options.fabId !== undefined && event.fabId !== this.options.fabId;
+  }
+
+  private holdUncorrelated(event: CommandResultEvent): void {
+    this.recovery.hold(event);
+    this.options.onUncorrelated?.(event);
+  }
+
   /**
    * Apply one event to its workflow, then acknowledge it ONLY after the actor
    * provably advanced to that revision (ADR-010 §6.2). Three states stay separate:
    *  - observed: correlation registry saw the revision (dedupe/ordering only);
-   *  - applied: the actor projection advanced to the revision;
+   *  - applied: the actor projection advanced to the revision and markApplied ran;
    *  - acknowledged: transport ordered-ledger entry marked applied, which may still
    *    be blocked behind an earlier pending entry until its own prefix is safe.
-   * Stale/terminal/duplicate revisions are observed but never acknowledged; a
-   * workflow that exposes no projection cannot prove application, so it is
-   * delivered (tests/custom adapters) but never acknowledged.
-   * Returns whether the event was delivered to the actor.
+   * A verifiable workflow that does not advance rejects the event (terminal/stale):
+   * observed but never applied/acked. A workflow that exposes no projection cannot
+   * prove application; an authoritative receive may fall back to coveredRevision.
    */
-  private applyToWorkflow(workflow: CommandWorkflow, event: CommandResultEvent): boolean {
+  private applyToWorkflow(
+    workflow: CommandWorkflow,
+    event: CommandResultEvent,
+    mode: DeliveryMode,
+    coveredRevision?: number,
+  ): CommandDeliveryOutcome {
     const before = workflow.projection?.revision;
     workflow.receive(event);
     const after = workflow.projection?.revision;
     const verifiable = before !== undefined || after !== undefined;
-    const applied = verifiable && (after ?? -1) >= event.revision;
-    if (verifiable && !applied) {
-      // Observed by correlation but rejected by the actor (terminal/stale): no ack.
-      return false;
+    if (verifiable) {
+      if ((after ?? -1) < event.revision) return 'rejected';
+      // R4-03: the applied watermark may only advance after the projection proved
+      // it advanced; markApplied itself is forward-only.
+      this.correlation.markApplied(event);
+      this.options.onResultDelivered?.(event);
+      this.source.acknowledge(event);
+      return (before ?? -1) >= event.revision ? 'stale-covered' : 'applied';
+    }
+    // No projection: application cannot be proven, so the realtime/retry paths
+    // deliver optimistically (tests/custom adapters) but never mark applied; an
+    // authoritative receive is trusted only when the snapshot coverage proves it.
+    if (mode === 'authoritative' && !(coveredRevision !== undefined && coveredRevision >= event.revision)) {
+      return 'rejected';
     }
     this.options.onResultDelivered?.(event);
-    if (applied) this.source.acknowledge(event);
-    return true;
-  }
-
-  private deliver(event: CommandResultEvent): void {
-    const workflow = this.workflows.get(event.fabId, event.commandId);
-    if (workflow) {
-      this.applyToWorkflow(workflow, event);
-      return;
-    }
-    this.recovery.hold(event);
-    this.options.onUncorrelated?.(event);
+    return 'applied';
   }
 }

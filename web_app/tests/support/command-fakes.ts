@@ -404,6 +404,8 @@ export interface TestFabOptions {
   readonly maxConcurrentReconciliations?: number;
   readonly maxQueuedReconciliations?: number;
   readonly reconcileTimeoutMs?: number;
+  /** R4-08: active command admission bound for tests that intentionally exceed the default. */
+  readonly maxActiveCommands?: number;
 }
 
 /** Build one FabRuntime on an isolated test runtime; call dispose() in afterEach. */
@@ -422,6 +424,7 @@ export function createFabRuntime(harness: CommandTestRuntime, options: TestFabOp
     maxConcurrentReconciliations: options.maxConcurrentReconciliations,
     maxQueuedReconciliations: options.maxQueuedReconciliations,
     reconcileTimeoutMs: options.reconcileTimeoutMs,
+    maxActiveCommands: options.maxActiveCommands,
   });
   return factory.create(options.fabId ?? 'fab-a', options.siteId ?? 'site-1');
 }

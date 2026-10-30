@@ -37,6 +37,8 @@ export interface FabRuntimeFactoryOptions {
   readonly maxConcurrentReconciliations?: number;
   readonly maxQueuedReconciliations?: number;
   readonly reconcileTimeoutMs?: number;
+  /** R4-08: hard active-command admission bound (mirrors backend MaxActiveCommandsPerFab). */
+  readonly maxActiveCommands?: number;
 }
 
 /** Creates one runtime per (siteId, fabId) from the same scopes/source provider/gateway. */
@@ -59,6 +61,7 @@ export class FabRuntimeFactory {
       maxConcurrentReconciliations: this.options.maxConcurrentReconciliations,
       maxQueuedReconciliations: this.options.maxQueuedReconciliations,
       reconcileTimeoutMs: this.options.reconcileTimeoutMs,
+      maxActiveCommands: this.options.maxActiveCommands,
     });
   }
 }

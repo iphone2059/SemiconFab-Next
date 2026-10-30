@@ -1,13 +1,19 @@
 import { Effect, Exit, Scope } from 'effect';
 import { afterEach, expect, it, vi } from 'vitest';
+import { CommandConfigurationError } from '@/contracts/command-config';
 import { COMMAND_RESULT_TOPIC, TELEMETRY_TOPIC } from '@/realtime/message-decoder';
-import { createSseCommandEventSource, parseCommandCursor, parseCommandReplayGap } from '@/realtime/command-event-source.transport';
+import {
+  createSseCommandEventSource,
+  parseCommandCursor,
+  parseCommandReplayGap,
+  type SseCommandEventSourceOptions,
+} from '@/realtime/command-event-source.transport';
 import { TelemetryRuntime, flattenTelemetryFrame, toolStatesFromValues } from '@/realtime/telemetry-runtime';
 import { runCommandStream } from '@/runtime/command-stream';
 import { type CommandTestRuntime, createCommandTestRuntime } from '../support/command-fakes.ts';
 
 /** Stream consumers run on an Effect fiber; yield once so queued frames are delivered. */
-const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+const flush = (ms = 0): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 class FakeEventSource {
   onopen: (() => void) | null = null;
@@ -51,9 +57,21 @@ interface TransportHarness {
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) await cleanup();
+  vi.unstubAllGlobals();
 });
 
-function commandTransport(options: { capacity?: number; connectTimeoutMs?: number } = {}): TransportHarness {
+interface CommandTransportOptions {
+  readonly capacity?: number;
+  readonly connectTimeoutMs?: number;
+  readonly reconnectDelayMs?: number;
+  readonly maxConnectAttempts?: number;
+  /** Test seam; omit for the environment default (browser EventSource factory). */
+  readonly eventSourceFactory?: (url: string) => FakeEventSource;
+  /** Model an environment without EventSource (R4-06a): no factory at all. */
+  readonly withoutEventSource?: boolean;
+}
+
+function commandTransport(options: CommandTransportOptions = {}): TransportHarness {
   const harness = createCommandTestRuntime();
   const scope = Scope.makeUnsafe();
   const sources: FakeEventSource[] = [];
@@ -63,13 +81,19 @@ function commandTransport(options: { capacity?: number; connectTimeoutMs?: numbe
         harness.host.runSync(Scope.addFinalizer(scope, Effect.sync(finalizer)));
       },
     },
-    eventSourceFactory: (url) => {
-      const created = new FakeEventSource(url);
-      sources.push(created);
-      return created;
-    },
+    ...(options.withoutEventSource
+      ? {}
+      : {
+          eventSourceFactory: options.eventSourceFactory ?? ((url: string) => {
+            const created = new FakeEventSource(url);
+            sources.push(created);
+            return created;
+          }),
+        }),
     ...(options.capacity !== undefined ? { capacity: options.capacity } : {}),
     ...(options.connectTimeoutMs !== undefined ? { connectTimeoutMs: options.connectTimeoutMs } : {}),
+    ...(options.reconnectDelayMs !== undefined ? { reconnectDelayMs: options.reconnectDelayMs } : {}),
+    ...(options.maxConnectAttempts !== undefined ? { maxConnectAttempts: options.maxConnectAttempts } : {}),
   });
   cleanups.push(async () => {
     harness.host.runSync(Scope.close(scope, Exit.void));
@@ -125,10 +149,15 @@ it('parses the journal cursor and surfaces replay-gap as an explicit signal', ()
   const gap = parseCommandReplayGap(JSON.stringify({
     topic: 'command.result', replayGap: true, epoch: 'epoch-2',
     requestedLastEventId: 'epoch-1:9', firstRetainedSequence: 10, latestSequence: 12,
-  }), { epoch: 'epoch-1', sequence: 9 });
-  expect(gap).toEqual({ epoch: 'epoch-2', sequence: 9, cursor: 'epoch-1:9' });
-  // Malformed control frames still mean "reconcile"; they never throw.
-  expect(parseCommandReplayGap('<html>', { sequence: 3 })).toEqual({ sequence: 3 });
+  }));
+  // R4-04: the payload epoch is NEVER combined with the previous data frame's
+  // sequence (an SSE control frame has no id line); requestedLastEventId is a
+  // diagnostics-only cursor string and the parser manufactures no continuation.
+  expect(gap).toEqual({ epoch: 'epoch-2', cursor: 'epoch-1:9' });
+  // Malformed control frames still mean "reconcile"; they never throw and never
+  // produce a usable position (=> List-only recovery).
+  expect(parseCommandReplayGap('<html>')).toEqual({});
+  expect(parseCommandReplayGap('{"replayGap":true}')).toEqual({});
 });
 
 it('keeps reconnected and emits gaps once per backend replay-gap control frame', async () => {
@@ -149,7 +178,7 @@ it('keeps reconnected and emits gaps once per backend replay-gap control frame',
   }), 'epoch-1:8');
   await flush();
   expect(reconnects).toBe(1);
-  expect(gaps).toEqual([{ epoch: 'epoch-2', sequence: 8, cursor: 'epoch-1:8' }]);
+  expect(gaps).toEqual([{ epoch: 'epoch-2', cursor: 'epoch-1:8' }]);
   harness.host.runSync(Scope.close(scope, Exit.void));
   await flush();
   expect(sources[0].closed).toBe(true);
@@ -196,7 +225,7 @@ it('maps backend dirty control frames onto the bounded transport dirty contract'
 
 it('bounds the command bus and reports overflow instead of silently dropping frames', async () => {
   const { harness, scope, sources, source } = commandTransport({ capacity: 4 });
-  const dirty: Array<{ reason: string; droppedCount: number }> = [];
+  const dirty: Array<{ reason: string; droppedCount: number; delivered?: unknown; gapStart?: number; gapEnd?: number }> = [];
   runCommandStream(harness.host, scope, source.dirty!, (signal) => dirty.push(signal));
   runCommandStream(harness.host, scope, source.commandResults, () => {});
   await flush();
@@ -238,6 +267,144 @@ it('surfaces command-frame decode errors and keeps bounded payload-free diagnost
   harness.host.runSync(Scope.close(scope, Exit.void));
   await flush();
   expect(sources[0].closed).toBe(true);
+});
+
+it('latches the ACK state on replay-gap without manufacturing a cursor (R4-01/R4-04)', async () => {
+  const { harness, scope, sources, source } = commandTransport();
+  const gaps: Array<{ epoch?: string; sequence?: number; cursor?: string }> = [];
+  const dirty: Array<{ reason: string }> = [];
+  runCommandStream(harness.host, scope, source.gaps!, (gap) => gaps.push(gap));
+  runCommandStream(harness.host, scope, source.dirty!, (signal) => dirty.push(signal));
+  await flush();
+  runCommandStream(harness.host, scope, source.commandResults, () => {});
+  await flush();
+  sources[0].onopen?.();
+  sources[0].emit(commandEnvelope(0), 'old-epoch:7');
+  sources[0].emit(commandEnvelope(1), 'old-epoch:8');
+  await flush(5);
+  // The control frame carries no id: line; the inherited lastEventId is the
+  // PREVIOUS data frame (old epoch). Combining it with the payload's new epoch
+  // would manufacture a cursor that skips events (R4-04).
+  sources[0].emitNamed('replay-gap', JSON.stringify({
+    topic: 'command.result', replayGap: true, epoch: 'new-epoch', requestedLastEventId: 'old-epoch:8',
+    firstRetainedSequence: 20, latestSequence: 22, occurredAt: '2026-10-30T00:00:00Z',
+  }), 'old-epoch:8');
+  await flush(5);
+  expect(gaps).toEqual([{ epoch: 'new-epoch', cursor: 'old-epoch:8' }]);
+  expect(gaps[0].sequence).toBeUndefined();
+
+  // The gap latches the ACK state with an unknown position: a journal cover cannot
+  // release it and must surface uncovered-gap so the runtime retries with a List.
+  source.cover({ epoch: 'new-epoch', sequence: 22 }, 'journal');
+  await flush(5);
+  expect(dirty.at(-1)?.reason).toBe('uncovered-gap');
+  source.cover({ epoch: 'new-epoch', sequence: 22 }, 'list');
+  expect(source.cursors.acknowledged).toEqual({ epoch: 'new-epoch', sequence: 22 });
+  harness.host.runSync(Scope.close(scope, Exit.void));
+  await flush();
+});
+
+it('reports unavailable and never opens when the environment has no EventSource factory (R4-06a)', async () => {
+  vi.stubGlobal('EventSource', undefined);
+  const { harness, scope, source } = commandTransport({ withoutEventSource: true });
+  const dirty: Array<{ reason: string }> = [];
+  const statuses: string[] = [];
+  const failures: Array<{ message: string }> = [];
+  runCommandStream(harness.host, scope, source.dirty!, (signal) => dirty.push(signal));
+  runCommandStream(harness.host, scope, source.connectionStatus!, (status) => statuses.push(status));
+  runCommandStream(harness.host, scope, source.transportFailures!, (failure) => failures.push(failure as { message: string }));
+  await flush();
+  // Availability is knowable before the lazy connection opens.
+  expect(source.availability).toBe('unavailable');
+  // The first consumer still receives the permanent-unavailability signals.
+  runCommandStream(harness.host, scope, source.commandResults, () => {});
+  await flush(5);
+  expect(source.availability).toBe('unavailable');
+  expect(dirty.some((signal) => signal.reason === 'transport-unavailable')).toBe(true);
+  expect(statuses).toContain('failed');
+  expect(failures.some((failure) => /unavailable/.test(failure.message))).toBe(true);
+  expect(source.protocolDiagnostics.some((entry) => /unavailable/.test(entry.reason))).toBe(true);
+  expect(source.cursors.acknowledged).toBeUndefined();
+  harness.host.runSync(Scope.close(scope, Exit.void));
+  await flush();
+});
+
+it('becomes permanently unavailable after bounded failed open attempts and stops retrying (R4-06a)', async () => {
+  let attempts = 0;
+  const { harness, scope, source } = commandTransport({
+    eventSourceFactory: () => {
+      attempts += 1;
+      throw new Error('factory boom');
+    },
+    reconnectDelayMs: 0,
+    maxConnectAttempts: 3,
+  });
+  const dirty: Array<{ reason: string }> = [];
+  const statuses: string[] = [];
+  const failures: Array<{ message: string }> = [];
+  runCommandStream(harness.host, scope, source.dirty!, (signal) => dirty.push(signal));
+  runCommandStream(harness.host, scope, source.connectionStatus!, (status) => statuses.push(status));
+  runCommandStream(harness.host, scope, source.transportFailures!, (failure) => failures.push(failure as { message: string }));
+  runCommandStream(harness.host, scope, source.commandResults, () => {});
+  await expect.poll(() => attempts, { timeout: 2_000 }).toBe(3);
+  await expect.poll(() => source.availability, { timeout: 2_000 }).toBe('unavailable');
+  expect(dirty.some((signal) => signal.reason === 'transport-unavailable')).toBe(true);
+  expect(statuses).toContain('failed');
+  expect(failures.some((failure) => /could not be opened/.test(failure.message))).toBe(true);
+  // Once permanently unavailable, no further open attempt is made (no loop).
+  const attemptsAtUnavailable = attempts;
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(attempts).toBe(attemptsAtUnavailable);
+  harness.host.runSync(Scope.close(scope, Exit.void));
+  await flush();
+});
+
+it('retries a connect timeout through the bounded reconnect path, then reports unavailable (R4-06a)', async () => {
+  const { harness, scope, sources, source } = commandTransport({
+    connectTimeoutMs: 5,
+    reconnectDelayMs: 0,
+    maxConnectAttempts: 2,
+  });
+  const dirty: Array<{ reason: string }> = [];
+  runCommandStream(harness.host, scope, source.dirty!, (signal) => dirty.push(signal));
+  runCommandStream(harness.host, scope, source.commandResults, () => {});
+  await flush();
+  expect(sources).toHaveLength(1);
+  // The first attempt times out and is retried (not silently dropped).
+  await expect.poll(() => source.availability, { timeout: 2_000 }).toBe('unavailable');
+  expect(sources).toHaveLength(2);
+  expect(dirty.some((signal) => signal.reason === 'transport-unavailable')).toBe(true);
+  const createdAtUnavailable = sources.length;
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(sources).toHaveLength(createdAtUnavailable);
+  harness.host.runSync(Scope.close(scope, Exit.void));
+  await flush();
+});
+
+it('strictly validates transport capacity/timeout options at construction (R4-07)', () => {
+  const construct = (overrides: Partial<SseCommandEventSourceOptions>) => (): ReturnType<typeof createSseCommandEventSource> =>
+    createSseCommandEventSource('/api/v1/sites/site-1/commands/stream?fabId=fab-a', {
+      host: { addFinalizer: () => {} },
+      eventSourceFactory: (target) => new FakeEventSource(target),
+      ...overrides,
+    });
+  expect(construct({ capacity: 0 })).toThrow(CommandConfigurationError);
+  expect(construct({ capacity: Number.NaN })).toThrow(CommandConfigurationError);
+  expect(construct({ capacity: 2.5 })).toThrow(CommandConfigurationError);
+  expect(construct({ capacity: Number.POSITIVE_INFINITY })).toThrow(CommandConfigurationError);
+  expect(construct({ ackLedgerCapacity: 1.5 })).toThrow(CommandConfigurationError);
+  expect(construct({ connectTimeoutMs: 0 })).toThrow(CommandConfigurationError);
+  expect(construct({ connectTimeoutMs: Number.POSITIVE_INFINITY })).toThrow(CommandConfigurationError);
+  expect(construct({ reconnectDelayMs: -1 })).toThrow(CommandConfigurationError);
+  expect(construct({ maxConnectAttempts: 0 })).toThrow(CommandConfigurationError);
+  expect(construct({ maxConnectAttempts: 65 })).toThrow(CommandConfigurationError);
+  expect(construct({
+    capacity: 4,
+    connectTimeoutMs: 1,
+    reconnectDelayMs: 0,
+    ackLedgerCapacity: 1,
+    maxConnectAttempts: 1,
+  })).not.toThrow();
 });
 
 it('feeds telemetry frames through the Worker and exposes renderer tool states', () => {

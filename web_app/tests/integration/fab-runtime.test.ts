@@ -6,6 +6,7 @@ import { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
 import type { CommandJournalPage, CommandJournalQuery } from '@/contracts/command-gateway.contract';
 import {
   FakeCommandEventSource,
+  FakeCommandWorkflow,
   type TestFab,
   type TestFabOptions,
   commandRecord,
@@ -448,7 +449,7 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     expect(runtime.getProjection(commandId)?.outcome).toBe('accepted');
   });
 
-  it('R3-08: records queue-capacity drops as covered by the authoritative snapshot (no retry loop)', async () => {
+  it('R4-02: queue-capacity drops are recorded, covered by authority, then bounded (never a silent loop)', async () => {
     const source = new FakeCommandEventSource();
     const gateway = fakeCommandGateway();
     const { runtime } = createFab({
@@ -456,14 +457,18 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
       gateway,
       maxConcurrentReconciliations: 1,
       maxQueuedReconciliations: 1,
+      // A projection-less workflow keeps every command non-terminal and forces the
+      // scheduler-side admission path (no local projection can suppress the
+      // per-command reconciliation).
+      createWorkflow: () => new FakeCommandWorkflow(),
     });
     runtime.start();
     await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
-    for (let index = 0; index < 4; index += 1) {
-      const id = 'cmd-' + index;
-      source.emit(commandResult({ fabId: 'fab-a', commandId: id, revision: 1, outcome: 'executing' }));
-      runtime.trackCommand(id);
-    }
+    for (let index = 0; index < 4; index += 1) runtime.trackCommand('cmd-' + index);
+
+    // The admission-time drops are recorded as generation-stamped intents and
+    // proven covered by the next authoritative snapshot (the bounded post-snapshot
+    // batch is sized to the remaining queue capacity, so it does not re-drop).
     await expect.poll(() => runtime.recoveryState.phase, { timeout: 2_000 }).toBe('Healthy');
     expect(runtime.coveredDropCount).toBeGreaterThanOrEqual(1);
     expect(runtime.pendingDropCount).toBe(0);

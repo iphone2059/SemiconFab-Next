@@ -3,6 +3,7 @@ import type { CommandGatewayError } from '@/contracts/command-gateway.contract';
 import type { CommandResultEvent } from '@/contracts/command-events.contract';
 import { expect, it } from 'vitest';
 import { CommandEventRecovery } from '@/runtime/command-event-recovery';
+import { CommandConfigurationError } from '@/contracts/command-config';
 import { commandResult, fakeCommandGateway } from '../support/command-fakes.ts';
 
 /** Approved execution boundary for this contract test (no application singleton). */
@@ -90,6 +91,27 @@ it('drains in true global arrival order across commands, not grouped by command'
   for (const held of placed) recovery.hold(held);
   expect(recovery.drain()).toEqual(placed);
   expect(recovery.size).toBe(0);
+});
+
+it('snapshot/release read the queue without draining it, so a retry pass never loses events (R4-03)', () => {
+  const recovery = new CommandEventRecovery();
+  const first = event('fab', 'cmd', 1);
+  const second = event('fab', 'cmd', 2);
+  recovery.hold(first);
+  recovery.hold(second);
+  // A retry pass snapshots first; pending events stay held until they are applied.
+  expect(recovery.snapshot()).toEqual([first, second]);
+  expect(recovery.size).toBe(2);
+  expect(recovery.release(first)).toBe(true);
+  expect(recovery.release(first)).toBe(false);
+  expect(recovery.pendingFor('fab', 'cmd')).toEqual([second]);
+  expect(recovery.droppedCount).toBe(0);
+});
+
+it('R4-07: invalid recovery bounds fail fast at construction', () => {
+  expect(() => new CommandEventRecovery({ maxPerCommand: 0 })).toThrow(CommandConfigurationError);
+  expect(() => new CommandEventRecovery({ maxTotal: Number.NaN })).toThrow(CommandConfigurationError);
+  expect(() => new CommandEventRecovery({ maxTotal: 2.5 })).toThrow(CommandConfigurationError);
 });
 
 it('clears on dispose so a stopped runtime leaks no pending events', () => {

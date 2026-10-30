@@ -1,5 +1,6 @@
 import { Effect, Exit, Scope } from 'effect';
 import type {
+  CommandCoverAuthority,
   CommandCursor,
   CommandEventSource,
   CommandProtocolDiagnostic,
@@ -13,7 +14,7 @@ import { runCommandStream } from '@/runtime/command-stream';
 import { type CommandTestRuntime, createCommandTestRuntime } from '../../../support/command-fakes.ts';
 
 /**
- * Round 3 (ADR-010 §6.2/§6.4) SSE test fixtures.
+ * Round 3/4 (ADR-010 §6.2/§6.4) SSE test fixtures.
  *
  * The harness uses the real SSE transport with an injectable EventSource and lets
  * each test choose whether deliveries are immediately acknowledged (simulating an
@@ -92,8 +93,12 @@ export interface TransportHarness {
   diagnostics(): readonly CommandProtocolDiagnostic[];
   /** Conservative cursor snapshot of the real transport. */
   cursors(): CommandSourceCursors;
-  /** Authoritative recovery safe watermark (ADR-010 §6.2). */
-  cover(cursor: CommandCursor): void;
+  /**
+   * Authoritative recovery safe watermark (ADR-010 §6.2 / R4-01). The authority
+   * decides whether an ACK-blocked untracked position can be released: an unknown
+   * or cross-epoch position requires 'list'.
+   */
+  cover(cursor: CommandCursor, authority?: CommandCoverAuthority): void;
   /** Manually acknowledge one delivered event (ordered-ledger tests). */
   acknowledge(event: CommandResultEvent): void;
   closeTransportScope(): void;
@@ -102,9 +107,13 @@ export interface TransportHarness {
 export interface TransportHarnessOptions {
   readonly capacity?: number;
   readonly connectTimeoutMs?: number;
+  readonly reconnectDelayMs?: number;
+  readonly maxConnectAttempts?: number;
   readonly ackLedgerCapacity?: number;
   /** Default true: acknowledge every delivered event immediately (applied actor). */
   readonly autoAck?: boolean;
+  /** Model an environment without EventSource: omit the injectable factory (R4-06). */
+  readonly withoutEventSource?: boolean;
 }
 
 /** Real SSE transport with an injectable EventSource and a bounded capacity. */
@@ -118,13 +127,19 @@ export function createTransportHarness(options: TransportHarnessOptions = {}): T
         harness.host.runSync(Scope.addFinalizer(scope, Effect.sync(finalizer)));
       },
     },
-    eventSourceFactory: (url) => {
-      const created = new FakeEventSource(url);
-      sources.push(created);
-      return created;
-    },
+    ...(options.withoutEventSource
+      ? {}
+      : {
+          eventSourceFactory: (url: string) => {
+            const created = new FakeEventSource(url);
+            sources.push(created);
+            return created;
+          },
+        }),
     ...(options.capacity !== undefined ? { capacity: options.capacity } : {}),
     ...(options.connectTimeoutMs !== undefined ? { connectTimeoutMs: options.connectTimeoutMs } : {}),
+    ...(options.reconnectDelayMs !== undefined ? { reconnectDelayMs: options.reconnectDelayMs } : {}),
+    ...(options.maxConnectAttempts !== undefined ? { maxConnectAttempts: options.maxConnectAttempts } : {}),
     ...(options.ackLedgerCapacity !== undefined ? { ackLedgerCapacity: options.ackLedgerCapacity } : {}),
   });
   const autoAck = options.autoAck !== false;
@@ -135,6 +150,13 @@ export function createTransportHarness(options: TransportHarnessOptions = {}): T
   const statuses: string[] = [];
   const failures: unknown[] = [];
   const gaps: unknown[] = [];
+  // Observe every signal channel before the commandResults consumer opens the lazy
+  // connection, so even synchronous open-time signals (e.g. transport-unavailable)
+  // are observable (R4-06).
+  runCommandStream(harness.host, scope, source.dirty!, (signal) => dirty.push(signal));
+  runCommandStream(harness.host, scope, source.connectionStatus!, (status) => statuses.push(status));
+  runCommandStream(harness.host, scope, source.transportFailures!, (failure) => failures.push(failure));
+  runCommandStream(harness.host, scope, source.gaps!, (gap) => gaps.push(gap));
   runCommandStream(harness.host, scope, source.commandResults, (event) => {
     received.push(event);
     receivedRevisions.push(event.revision);
@@ -145,10 +167,6 @@ export function createTransportHarness(options: TransportHarnessOptions = {}): T
       acked.push(event);
     }
   });
-  runCommandStream(harness.host, scope, source.dirty!, (signal) => dirty.push(signal));
-  runCommandStream(harness.host, scope, source.connectionStatus!, (status) => statuses.push(status));
-  runCommandStream(harness.host, scope, source.transportFailures!, (failure) => failures.push(failure));
-  runCommandStream(harness.host, scope, source.gaps!, (gap) => gaps.push(gap));
   return {
     harness,
     scope,
@@ -163,7 +181,7 @@ export function createTransportHarness(options: TransportHarnessOptions = {}): T
     gaps,
     diagnostics: () => source.protocolDiagnostics,
     cursors: () => source.cursors,
-    cover: (cursor) => source.cover(cursor),
+    cover: (cursor, authority) => source.cover(cursor, authority),
     acknowledge: (event) => {
       source.acknowledge(event);
       acked.push(event);

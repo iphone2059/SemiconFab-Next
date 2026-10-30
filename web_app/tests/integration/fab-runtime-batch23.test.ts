@@ -190,6 +190,9 @@ describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => 
     const workflows: CountingWorkflow[] = [];
     const fab = createFab({
       source: new FakeCommandEventSource(),
+      // R4-08: the default admission bound is 64; this test intentionally tracks
+      // 100 active commands for the projection-visit proof.
+      maxActiveCommands: 256,
       createWorkflow: () => {
         const workflow = new CountingWorkflow();
         workflows.push(workflow);

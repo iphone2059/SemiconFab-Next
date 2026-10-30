@@ -178,12 +178,14 @@ describe('matrix 1: recovery starts from the safe acknowledged prefix, never obs
       await expect.poll(() => runtime.getProjection('cmd-1')?.revision, { timeout: 2_000 }).toBe(99);
       expect(runtime.getProjection('cmd-1')?.outcome).toBe('succeeded');
       await expect.poll(() => runtime.recoveryState.phase, { timeout: 2_000 }).toBe('Healthy');
-      // No ACK/cover has been issued for the authoritative replay in the transport
-      // yet (R3-C wires cover); the safe prefix never jumps to observed.
-      const acknowledged = transportSource?.cursors.acknowledged;
-      expect(acknowledged?.epoch).toBe('epoch-1');
-      expect(acknowledged?.sequence).toBeGreaterThanOrEqual(3);
-      expect(acknowledged?.sequence).toBeLessThanOrEqual(7);
+      // R4-01: recovery signs its authoritative watermark via cover(). The journal
+      // loop started at the safe ACK prefix (3) and scanned the whole dropped range
+      // (4..99), so it provably covers the untracked high water 99 and the
+      // acknowledged cursor may jump to the authoritative watermark — never to the
+      // observed cursor as a shortcut.
+      await expect.poll(() => transportSource?.cursors.acknowledged?.sequence, { timeout: 2_000 }).toBe(99);
+      expect(transportSource?.cursors.acknowledged?.epoch).toBe('epoch-1');
+      expect(transportSource?.cursors.pendingAcknowledgements).toBe(0);
       runtime.dispose();
     } finally {
       await harness.dispose();

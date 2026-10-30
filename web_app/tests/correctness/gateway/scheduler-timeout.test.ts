@@ -8,7 +8,8 @@
  * no longer write the actor.
  */
 import type { CommandResultEvent } from '@/contracts/command-events.contract';
-import type { FabReconciliationScheduler } from '@/runtime/fab-reconciliation-scheduler';
+import { createPhysicalRequestBudget, type FabReconciliationScheduler } from '@/runtime/fab-reconciliation-scheduler';
+import { CommandConfigurationError } from '@/contracts/command-config';
 import { afterEach, expect, it } from 'vitest';
 import {
   createGatewayTestRuntime,
@@ -66,10 +67,10 @@ it('timeout aborts the physical fetch, clears physical pending and releases the 
   expect(harness.scheduler.stats.timedOut).toBe(1);
   expect(harness.scheduler.stats.failed).toBe(0);
   expect(workflow.received, 'a timed-out query must not deliver a result').toEqual([]);
-  await expect(reconciles).resolves.toBe(false);
+  await expect(reconciles).resolves.toMatchObject({ commandId: 'cmd-hung', status: 'timed-out' });
 
   // The permit is truly restored: a second command reconciles immediately.
-  await expect(harness.scheduler.schedule('cmd-ok')).resolves.toBe(true);
+  await expect(harness.scheduler.schedule('cmd-ok')).resolves.toMatchObject({ commandId: 'cmd-ok', status: 'succeeded' });
   expect(harness.scheduler.stats.completed).toBe(1);
   expect(counters.pending).toBe(0);
   expect(harness.budget.inFlight).toBe(0);
@@ -129,7 +130,11 @@ it('dispose aborts every in-flight physical request, leaks no permit and produce
     expect(harness.budget.inFlight).toBe(3);
 
     harness.scheduler.dispose();
-    await expect(Promise.all(pending)).resolves.toEqual([false, false, false]);
+    await expect(Promise.all(pending)).resolves.toEqual([
+      { commandId: 'cmd-1', status: 'cancelled' },
+      { commandId: 'cmd-2', status: 'cancelled' },
+      { commandId: 'cmd-3', status: 'cancelled' },
+    ]);
     console.error('[F4 counters] dispose -> aborted=%d physicalPending=%d cancelled=%d budgetInFlight=%d',
       counters.aborts, counters.pending, harness.scheduler.stats.cancelled, harness.budget.inFlight);
     expect(counters.aborts).toBe(3);
@@ -144,4 +149,72 @@ it('dispose aborts every in-flight physical request, leaks no permit and produce
   } finally {
     process.off('unhandledRejection', onUnhandled);
   }
+});
+
+it('R4-02: scheduleMany settles failed and timed-out commands with explicit per-command results', async () => {
+  const rt = trackRuntime();
+  const counters = physicalCounters();
+  const gateway = effectGateway((fabId, commandId, signal) => {
+    if (commandId === 'cmd-failed') return Promise.reject(new Error('backend exploded'));
+    if (commandId === 'cmd-hung') return hungFetch(counters)(fabId, commandId, signal);
+    return Promise.resolve(resultEvent({ commandId, revision: 1 }));
+  });
+  const harness = createSchedulerHarness(rt, { gateway, timeoutMs: 25 });
+  schedulers.push(harness.scheduler);
+
+  // Duplicate ids are single-flight and collapse into one result.
+  const results = await harness.scheduler.scheduleMany(['cmd-failed', 'cmd-hung', 'cmd-ok', 'cmd-ok']);
+  expect(results.map((entry) => [entry.commandId, entry.status])).toEqual([
+    ['cmd-failed', 'failed'],
+    ['cmd-hung', 'timed-out'],
+    ['cmd-ok', 'succeeded'],
+  ]);
+  // Payload-free gateway identity: the error carries the closed error-algebra tag,
+  // never the raw backend payload/exception body.
+  expect(results[0]?.error).toContain('CommandGatewayRetryableFailure');
+  expect(results[0]?.error).not.toContain('backend exploded');
+  expect(harness.scheduler.stats.failed).toBe(1);
+  expect(harness.scheduler.stats.timedOut).toBe(1);
+  expect(harness.scheduler.stats.completed).toBe(1);
+});
+
+it('R4-02: already-terminal and not-found are explicit converged results', async () => {
+  const rt = trackRuntime();
+  const harness = createSchedulerHarness(rt, {
+    gateway: effectGateway(() => Promise.resolve(null)),
+    isTerminal: (commandId) => commandId === 'cmd-done',
+  });
+  schedulers.push(harness.scheduler);
+
+  await expect(harness.scheduler.schedule('cmd-done')).resolves.toEqual({
+    commandId: 'cmd-done',
+    status: 'already-terminal',
+  });
+  // The gateway returns no record inside the retention window (404/absent).
+  await expect(harness.scheduler.schedule('cmd-missing')).resolves.toEqual({
+    commandId: 'cmd-missing',
+    status: 'not-found',
+  });
+  expect(harness.scheduler.stats.scheduled).toBe(2);
+  expect(harness.scheduler.stats.failed).toBe(1);
+});
+
+it('R4-02: a scheduler without a gateway reports an explicit failure, never a silent boolean', async () => {
+  const rt = trackRuntime();
+  const harness = createSchedulerHarness(rt);
+  schedulers.push(harness.scheduler);
+  await expect(harness.scheduler.schedule('cmd-1')).resolves.toEqual({
+    commandId: 'cmd-1',
+    status: 'failed',
+    error: 'authoritative-gateway-unavailable',
+  });
+});
+
+it('R4-07: invalid scheduler bounds fail fast at construction', () => {
+  const rt = trackRuntime();
+  expect(() => createSchedulerHarness(rt, { maxConcurrent: 0 })).toThrow(CommandConfigurationError);
+  expect(() => createSchedulerHarness(rt, { maxQueued: Number.NaN })).toThrow(CommandConfigurationError);
+  expect(() => createSchedulerHarness(rt, { timeoutMs: Number.POSITIVE_INFINITY })).toThrow(CommandConfigurationError);
+  expect(() => createPhysicalRequestBudget(0)).toThrow(CommandConfigurationError);
+  expect(() => createPhysicalRequestBudget(2.5)).toThrow(CommandConfigurationError);
 });

@@ -52,15 +52,26 @@ public enum CommandStoreSubmitStatus
     /// <summary>The same idempotency key + payload already committed; the stored response must be replayed.</summary>
     Replayed,
     /// <summary>The same idempotency key was used with a different payload (HTTP 409).</summary>
-    PayloadMismatch
+    PayloadMismatch,
+    /// <summary>
+    /// The target FAB already holds the configured maximum number of durable active commands
+    /// (<c>revision &lt; 2</c>); nothing was inserted (HTTP 429). Idempotency replay of an
+    /// already-committed command is decided before this check and therefore still succeeds.
+    /// </summary>
+    CapacityExceeded
 }
 
-/// <summary>Result of a transactional submit: <see cref="Event"/> is set when a new command committed.</summary>
+/// <summary>
+/// Result of a transactional submit: <see cref="Event"/> is set when a new command committed.
+/// <see cref="ActiveCommands"/> is the durable active-command count observed by the admission
+/// check (set on <see cref="CommandStoreSubmitStatus.CapacityExceeded"/>, zero otherwise).
+/// </summary>
 public sealed record CommandStoreSubmitResult(
     CommandStoreSubmitStatus Status,
     CommandJournalEvent? Event = null,
     CommandPersistedRecord? Command = null,
-    CommandIdempotencyRecord? Idempotency = null);
+    CommandIdempotencyRecord? Idempotency = null,
+    int ActiveCommands = 0);
 
 /// <summary>
 /// Retention transaction input (ADR-012 2.2): delete the pruned commands together with their
@@ -96,8 +107,18 @@ public interface ICommandStore
     /// <summary>
     /// Atomically commits one accepted command: unique idempotency insert (or replay/conflict
     /// lookup) + command row + accepted journal event + site-state epoch/latest advance.
+    ///
+    /// Admission (R4-08): <paramref name="maxActiveCommandsPerFab"/> bounds the number of durable
+    /// active commands (<c>revision &lt; 2</c>) for the target (Site, FAB). The count runs inside
+    /// the same write transaction as the insert, immediately before it, so two concurrent
+    /// submissions cannot both observe a below-bound count and commit: a service-level pre-count
+    /// outside the transaction would be a check-then-act race and is therefore rejected as the
+    /// enforcement point. Replay/conflict is decided first, so retrying an already-accepted
+    /// command never fails on capacity (it creates nothing new). A non-positive bound is a
+    /// programming error and throws <see cref="ArgumentOutOfRangeException"/> before any write.
     /// </summary>
-    CommandStoreSubmitResult CommitSubmit(Guid siteId, CommandPersistedRecord command, CommandIdempotencyRecord idempotency);
+    CommandStoreSubmitResult CommitSubmit(Guid siteId, CommandPersistedRecord command,
+        CommandIdempotencyRecord idempotency, int maxActiveCommandsPerFab);
 
     /// <summary>
     /// Atomically advances a command revision: revision guard + command update + journal event +

@@ -196,3 +196,14 @@ WebSocket -> transport/MessageDecoder -> Worker -> TypedArray 缓冲区 -> Scene
 | OPEN-V21-14 | 是否使用 SharedArrayBuffer（COOP/COEP 部署） | M5 决策；不用也可先走 transferable ArrayBuffer |
 | OPEN-V21-15 | 告警/遥测 topic 命名与订阅范围（per FAB/run/LOD） | M3 与后端共同定义 |
 | OPEN-V21-16 | 解码 schema 的单一来源（Zod 手写 vs 由契约生成） | M3 决策；避免双份 schema |
+
+## 13. Round 4 修订（控制帧、ACK 安全锁与实时可用性）
+
+本节记录 2026-10-30 Round 4 源码整改后的当前事实；与本文前文（2026-10-27/28 历史描述）冲突处，以本节为准。
+
+- **replay-gap 控制帧没有 `id:` 行。** SSE 规范会让浏览器 `MessageEvent.lastEventId` 继承上一数据帧的 ID（可能属于旧 epoch）。客户端解析器只接受 payload 中的 epoch，`requestedLastEventId` 仅作为诊断字符串；不得把继承的 lastEventId 与 payload epoch 组合成恢复游标，也不得从该帧推导 sequence。
+- **replay-gap 一律触发权威 List 恢复。** 该控制帧表示后端无法从客户端 cursor 连续回放；FabRuntime 对每个 gap 使用 `listOnly: true`，不执行 Journal continuation。
+- **Dirty reason 当前集合**：`overflow | slow-consumer | stale-generation | closed | server-overflow | store-fault | decode-error | invalid-control-frame | protocol-error | ack-ledger-overflow | uncovered-gap | transport-unavailable`。其中 `uncovered-gap` 表示权威 cover 未覆盖已知未登记位置（继续 List 恢复），`transport-unavailable` 表示实时 transport 永久不可用。
+- **SSE ACK 安全锁**：transport 对所有无法证明已登记/已应用的位置（队列溢出、坏帧、无 ID 帧、epoch 跳变、非单调序号、server dirty、replay-gap、连接错误/超时、factory 异常、stale generation）设置粘性 latch 并记录 `untrackedHighWater` 或 unknown gap。`cover(cursor, authority)` 只有在权威 watermark 覆盖全部未登记位置时才释放；未知/跨 epoch 位置必须 List authority。cover 不足时保留 latch 并发布 `uncovered-gap`，不得推进 ACK 越过未登记位置。
+- **实时可用性**：`CommandEventSource.availability` 当前为 getter。无 EventSource factory 或失败打开次数超过 `maxConnectAttempts`（默认 4）后为 `unavailable`，transport 不再无限重连。FabRuntime 将 recovery authority（gateway + source ready）与 realtime availability 分开：实时 transport 不可用时 HTTP 可收敛但总体 phase 为 `Degraded`，不得 Healthy；无 EventSource 的 composition root 只装配 display-only runtime（`Unavailable`）。
+- **服务端 SSE 扫描游标（R4-09）**：命令 journal 的 sequence 是 Site 级，而事件按 FAB 过滤。live loop 在无 gap 的成功扫描中即使目标 FAB 没有事件也推进 `cursor = latestSequence`，仅在写出帧时 flush；避免空闲 FAB 重复 O(n) 扫描 Site journal。

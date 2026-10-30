@@ -47,3 +47,14 @@ export interface ResourceDefinition<A, E> {
 
 - **R3-06 轮询失败分支 generation 守卫**：`startPolling` 的 fork promise `.catch` 与 `.then` 一样必须校验 `!entry.removed && entry.polling && entry.scopeGeneration === startedGeneration && entry.scope === startedScope` 后才能处置 `polling/pollFiber`；旧 generation 的拒绝只允许释放旧 owner，不得写新 entry。当前 generation 的 fiber 终止必须有明确策略（清除 owner 并按资源策略安全重试或置失败），不得出现 polling=true 但无活跃 fiber。
 - **R3-09 GPU 预算参数 fail-fast**：程序级 `recoveryBudget` 必须是 `Number.isSafeInteger` 且 1..96（硬上限 96），否则 `createLiteBackend` 立即抛配置异常；`?perf&recoveryBudget=N` 仅验收模式接受严格十进制安全整数，非法值保留默认并产生明确诊断，禁止 NaN/Infinity/非整数进入熔断器。
+
+## 6. Round 4 修订：active command 硬 admission（2026-10-30，R4-08）
+
+状态：源码整改完成；验证边界见 `17-round4-remediation-record.md`。
+
+- 后端新增 `EquipmentCommandOptions.MaxActiveCommandsPerFab`（默认 64，构造期必须 safe integer 1..4096）。`active` 定义为 `revision < 2`（与现有 status=active 语义一致）。
+- admission 必须与持久化写入处于**同一个 SQLite 写事务**：`BEGIN IMMEDIATE` 后先判幂等 replay / payload conflict，再在同一事务内 `COUNT revision<2 WHERE site_id=? AND fab_id=?`，超过上限返回 `CapacityExceeded`（命令/幂等/journal 均不落库）。禁止 check-then-act 的进程内预计数、事务外 SELECT；幂等 replay 在容量满时仍返回原 202。
+- API 显式映射 HTTP 429 problem：`code=active-command-capacity`、`errorCode=ACTIVE_COMMAND_CAPACITY`、limit/activeCommands；不得静默丢弃或无限创建 actor。
+- 前端 `FabRuntimeOptions.maxActiveCommands`（默认 64，镜像后端默认）在 `trackCommand` 处抛 `ActiveCommandCapacityError`；authoritative 恢复可镜像后端已有状态并产生 `active-capacity` 诊断。Correlation `maxEntries` 为硬上限（terminal 优先，其次 oldest active），runtime 以 `maxActiveCommands + maxTerminalWorkflows` 传参。
+- 领域策略：校验器只验证 capability/action/可选状态前置条件，未建立每设备唯一 active 约束；本轮采用 FAB 级 admission（与现有 START/STOP/PAUSE 序列语义一致），如未来要求每设备唯一 active，需增加 `(siteId,fabId,equipmentId)` 活动唯一约束并在领域层显式定义。
+- R4-09（SSE 扫描游标）：`ApiHost` live loop 在 `pending.HasGap == false` 时始终推进 Site 级 `cursor = pending.LatestSequence`，即使目标 FAB 过滤后无事件；仅实际写出帧时 flush。

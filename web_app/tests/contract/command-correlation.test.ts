@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { CommandCorrelationRegistry } from '@/runtime/command-correlation-registry';
+import { CommandConfigurationError } from '@/contracts/command-config';
 import { commandResult } from '../support/command-fakes.ts';
 
 const fabId = 'fab-a';
@@ -39,17 +40,58 @@ it('keeps the most recently completed terminals when several are evicted', () =>
   expect(registry.terminalCount).toBe(2);
 });
 
-it('never evicts active commands for the absolute maxEntries cap', () => {
+it('enforces maxEntries as a hard cap even when every entry is active (R4-08)', () => {
   const registry = new CommandCorrelationRegistry({ maxEntries: 2, maxTerminalEntries: 8, terminalTtlMs: 0 });
   for (let index = 0; index < 5; index += 1) registry.observe(result('active-' + index, 1, 'executing'));
-  expect(registry.size).toBe(5);
+  // Bounded memory beats an unbounded registry: with only active entries the
+  // oldest active watermarks are evicted instead of silently breaking the cap.
+  expect(registry.size).toBe(2);
   expect(registry.terminalCount).toBe(0);
-  for (let index = 0; index < 5; index += 1) expect(registry.lastRevision(fabId, 'active-' + index)).toBe(1);
-  // A terminal entry beyond maxEntries is evicted, the active commands stay.
+  expect(registry.lastRevision(fabId, 'active-0')).toBeUndefined();
+  expect(registry.lastRevision(fabId, 'active-1')).toBeUndefined();
+  expect(registry.lastRevision(fabId, 'active-2')).toBeUndefined();
+  expect(registry.lastRevision(fabId, 'active-3')).toBe(1);
+  expect(registry.lastRevision(fabId, 'active-4')).toBe(1);
+  // Terminal entries are sacrificed before active ones under the hard cap.
   registry.observe(result('done', 2, 'succeeded'));
   expect(registry.isTerminal(fabId, 'done')).toBeUndefined();
-  expect(registry.size).toBe(5);
-  expect(registry.isTerminal(fabId, 'active-0')).toBe(false);
+  expect(registry.size).toBe(2);
+  expect(registry.isTerminal(fabId, 'active-3')).toBe(false);
+  expect(registry.isTerminal(fabId, 'active-4')).toBe(false);
+});
+
+it('tracks observed and applied revisions separately and only advances applied forward (R4-03)', () => {
+  const registry = new CommandCorrelationRegistry();
+  expect(registry.lastAppliedRevision(fabId, 'cmd')).toBeUndefined();
+  registry.observe(result('cmd', 3, 'executing'));
+  expect(registry.lastRevision(fabId, 'cmd')).toBe(3);
+  // Observed is not applied: only an actor-proven advance sets the applied watermark.
+  expect(registry.lastAppliedRevision(fabId, 'cmd')).toBeUndefined();
+  registry.markApplied(result('cmd', 2, 'executing'));
+  expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(2);
+  // Forward-only: an older authoritative re-application cannot regress it.
+  registry.markApplied(result('cmd', 1, 'accepted'));
+  expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(2);
+  registry.markApplied(result('cmd', 3, 'succeeded'));
+  expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(3);
+  // A newer observation keeps coverage while the observed watermark advances.
+  registry.observe(result('cmd', 4, 'executing'));
+  expect(registry.lastRevision(fabId, 'cmd')).toBe(4);
+  expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(3);
+  expect(registry.appliedRevision(fabId, 'cmd')).toBe(3);
+  registry.clear();
+  expect(registry.lastRevision(fabId, 'cmd')).toBeUndefined();
+  expect(registry.lastAppliedRevision(fabId, 'cmd')).toBeUndefined();
+});
+
+it('R4-07: invalid correlation retention options fail fast at construction', () => {
+  expect(() => new CommandCorrelationRegistry({ maxEntries: 0 })).toThrow(CommandConfigurationError);
+  expect(() => new CommandCorrelationRegistry({ maxEntries: Number.NaN })).toThrow(CommandConfigurationError);
+  expect(() => new CommandCorrelationRegistry({ maxTerminalEntries: Number.POSITIVE_INFINITY })).toThrow(
+    CommandConfigurationError,
+  );
+  expect(() => new CommandCorrelationRegistry({ terminalTtlMs: -1 })).toThrow(CommandConfigurationError);
+  expect(() => new CommandCorrelationRegistry({ now: 42 as unknown as () => number })).toThrow(CommandConfigurationError);
 });
 
 it('retains duplicate/stale decisions and TTL sweeps without touching active commands', () => {
@@ -85,7 +127,7 @@ it('stays O(1) per observe while thousands of active commands accumulate', () =>
   expect(elapsed).toBeLessThan(250);
   expect(registry.size).toBe(4_000);
   expect(registry.terminalCount).toBe(0);
-  // A terminal added afterwards evicts only itself (per-event bound enforcement).
+  // The default hard cap (4096) is not reached by 4001 entries: no eviction.
   registry.observe(result('done', 2, 'succeeded'));
   expect(registry.isTerminal(fabId, 'done')).toBe(true);
   expect(registry.size).toBe(4_001);

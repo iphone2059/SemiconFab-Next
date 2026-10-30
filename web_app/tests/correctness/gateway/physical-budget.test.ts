@@ -108,7 +108,7 @@ it('8+ mixed-entry reconciliations share the budget with recovery requests: phys
   expect(layer.peak, 'physical requests across reconciliation + recovery must never exceed the shared budget').toBeLessThanOrEqual(4);
   expect(layer.peak).toBe(4);
   expect(layer.overlapped, 'recovery and reconciliation must actually share the same slots').toBe(true);
-  expect(results).toEqual(Array.from({ length: 10 }, () => true));
+  expect(results.map((entry) => entry.status)).toEqual(Array.from({ length: 10 }, () => 'succeeded'));
   expect(layer.commandStarts).toHaveLength(10);
   expect(harness.scheduler.stats.completed).toBe(10);
   expect(harness.scheduler.stats.physicallyInFlight).toBe(0);
@@ -160,7 +160,16 @@ it('queue capacity drops are reported through onDrop with no hidden retry buffer
   expect(harness.scheduler.stats.physicallyInFlight).toBe(1);
 
   harness.scheduler.dispose();
-  await expect(Promise.all(pending)).resolves.toEqual([false, false, false, false, false, false]);
+  // The four overflow victims settle 'dropped' at schedule time; the in-flight and
+  // still-queued commands settle 'cancelled' when dispose interrupts them.
+  await expect(Promise.all(pending)).resolves.toEqual([
+    { commandId: 'cmd-0', status: 'dropped' },
+    { commandId: 'cmd-1', status: 'dropped' },
+    { commandId: 'cmd-2', status: 'dropped' },
+    { commandId: 'cmd-3', status: 'dropped' },
+    { commandId: 'cmd-4', status: 'cancelled' },
+    { commandId: 'cmd-5', status: 'cancelled' },
+  ]);
   expect(counters.pending).toBe(0);
   expect(budget.inFlight).toBe(0);
 });
@@ -180,7 +189,13 @@ it('duplicate schedules for one command are single-flight (one physical request)
   const first = harness.scheduler.schedule('cmd-1');
   const second = harness.scheduler.schedule('cmd-1');
   const third = harness.scheduler.reconcileCommand('cmd-1');
-  await expect(Promise.all([first, second, third])).resolves.toEqual([false, false, false]);
+  // Duplicate schedules share the single-flight promise (the gateway answers null,
+  // so the one authoritative result is a converged 'not-found').
+  await expect(Promise.all([first, second, third])).resolves.toEqual([
+    { commandId: 'cmd-1', status: 'not-found' },
+    { commandId: 'cmd-1', status: 'not-found' },
+    { commandId: 'cmd-1', status: 'not-found' },
+  ]);
   expect(counters.started).toBe(1);
   expect(harness.scheduler.stats.scheduled).toBe(3);
 });
