@@ -47,13 +47,11 @@ export class CommandReconciler {
     return this.gateway.getCommandStatus(fabId, commandId).pipe(
       Effect.flatMap((event) =>
         Effect.sync(() => {
-          if (!event) return false;
-          // ADR-011 §2.2: validate workflow identity AND the scheduler entry
-          // generation before mutating the actor; a timed-out/superseded request
-          // must never publish its late authoritative result.
+          if (!event || event.fabId !== fabId || event.commandId !== commandId) return false;
           if (!request.isCurrent(identity)) return false;
           workflow.receive(event);
-          return true;
+          const appliedRevision = workflow.projection?.revision;
+          return appliedRevision !== undefined && appliedRevision >= event.revision;
         })),
     );
   }
