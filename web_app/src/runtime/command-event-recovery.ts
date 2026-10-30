@@ -93,6 +93,19 @@ export class CommandEventRecovery {
     return queue ? queue.map((held) => held.event) : [];
   }
 
+  remove(event: CommandResultEvent): boolean {
+    const key = keyOf(event);
+    const queue = this.pending.get(key);
+    if (!queue) return false;
+    const index = queue.findIndex((held) => held.event.revision === event.revision);
+    if (index < 0) return false;
+    const [removed] = queue.splice(index, 1);
+    this.removeArrival(removed.seq);
+    this.total -= 1;
+    if (queue.length === 0) this.pending.delete(key);
+    return true;
+  }
+
   /** Drain all pending events in true global arrival order for a retry pass. */
   drain(): readonly CommandResultEvent[] {
     const events = this.arrivals.map((held) => held.event);
