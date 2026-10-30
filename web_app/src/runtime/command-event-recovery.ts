@@ -1,6 +1,7 @@
 import type { Effect } from 'effect';
 import type { CommandGateway, CommandGatewayError } from '@/contracts/command-gateway.contract';
 import type { CommandResultEvent } from '@/contracts/command-events.contract';
+import { requirePositiveSafeInteger } from '@/runtime/numeric-configuration';
 
 export interface CommandRecoveryOptions {
   /** Max held revisions per (fabId, commandId). */
@@ -58,8 +59,8 @@ export class CommandEventRecovery {
   private static readonly MAX_DIAGNOSTICS = 16;
 
   constructor(options: CommandRecoveryOptions = {}) {
-    this.maxPerCommand = Math.max(1, options.maxPerCommand ?? 32);
-    this.maxTotal = Math.max(1, options.maxTotal ?? 256);
+    this.maxPerCommand = requirePositiveSafeInteger('maxPerCommand', options.maxPerCommand ?? 32);
+    this.maxTotal = requirePositiveSafeInteger('maxTotal', options.maxTotal ?? 256);
     this.onEvict = options.onEvict;
   }
 
