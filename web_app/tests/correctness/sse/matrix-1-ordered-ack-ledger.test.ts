@@ -112,6 +112,38 @@ describe('ordered ACK ledger (R3-02)', () => {
     expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 4 });
   });
 
+  it('consumer queue overflow blocks the safe prefix until its dropped sequence is covered', async () => {
+    const harness = transport({ capacity: 1, autoAck: false });
+    const source = await open(harness);
+    source.emit(commandEnvelope({ revision: 1 }), cursorId('epoch-1', 1));
+    source.emit(commandEnvelope({ revision: 2 }), cursorId('epoch-1', 2));
+    await flush(10);
+    expect(harness.receivedRevisions).toEqual([1]);
+    expect(lastDirty(harness).reason).toBe('overflow');
+    harness.acknowledge(eventFor(harness, 1));
+    expect(harness.cursors().acknowledged).toBeUndefined();
+
+    const version = harness.source.recoveryVersion;
+    expect(harness.source.cover({ epoch: 'epoch-1', sequence: 1 }, version, 'journal')).toBe(false);
+    expect(harness.source.cover({ epoch: 'epoch-1', sequence: 2 }, version, 'journal')).toBe(true);
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 2 });
+    expect(harness.cursors().pendingAcknowledgements).toBe(0);
+  });
+
+  it('requires a post-loss version and List coverage for an unlocated transport gap', async () => {
+    const harness = transport({ capacity: 16, autoAck: false });
+    const source = await open(harness);
+    const versionBeforeLoss = harness.source.recoveryVersion;
+    source.onerror?.(new Error('connection lost'));
+    await flush(5);
+
+    expect(harness.source.recoveryVersion).toBeGreaterThan(versionBeforeLoss);
+    expect(harness.source.cover({ epoch: 'epoch-1', sequence: 0 }, versionBeforeLoss, 'list')).toBe(false);
+    const currentVersion = harness.source.recoveryVersion;
+    expect(harness.source.cover({ epoch: 'epoch-1', sequence: 0 }, currentVersion, 'journal')).toBe(false);
+    expect(harness.source.cover({ epoch: 'epoch-1', sequence: 0 }, currentVersion, 'list')).toBe(true);
+  });
+
   it('cover marks pending entries covered and stale acks/covers never roll the cursor back', async () => {
     const harness = transport({ capacity: 16, autoAck: false });
     const source = await open(harness);
