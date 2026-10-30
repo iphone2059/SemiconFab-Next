@@ -13,6 +13,14 @@
 > stays untouched as history; where this document and Round 5 differ, this document
 > and the source of truth in `web_app/src` win. Round 4 residual risks remain
 > tracked in `docs/architecture/17-round4-remediation-record.md`.
+>
+> **Round 5.2 correction note (2026-10-30):** the independent re-review of this round
+> found three remaining P1 gaps (old-revision outcome conflicts, applied proof without
+> outcome, transport ACK identity) and two P2 issues (CORE-011 shared mutable backend,
+> over-strong three-cursor inequality). Those items are corrected by
+> `20-round5.2-remediation-specification.md`; this document's §2.4 three-cursor
+> inequality and its ACK/applied-proof descriptions are superseded there, while the
+> rest of Round 5.1 remains valid.
 
 ## 0. Reading guide and source of truth
 

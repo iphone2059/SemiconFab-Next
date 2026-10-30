@@ -680,6 +680,9 @@ export class FabRuntime {
       // never report Healthy while it is unresolved.
       onUncorrelated: (event) => this.onBridgeUncorrelated(event),
       onConflict: (event) => this.onBridgeConflict(event),
+      // Round 5.2 / review P1-01: an older revision with unprovable outcome is
+      // never ACKed and must converge through authoritative recovery.
+      onUnverified: (event) => this.onBridgeUnverified(event),
       // R4-03/R4-05: rejected actor application and consumer-fiber termination are
       // owner-visible; the bridge never silently drops either.
       onRejected: (event) => this.onBridgeRejected(event),
@@ -1416,6 +1419,32 @@ export class FabRuntime {
       'protocol-error',
       'command result conflict held for command ' + event.commandId + ' revision ' + event.revision +
         ' (outcome disagrees with the recorded revision)',
+    );
+    this.needsNextAuthoritativePass = true;
+    this.mergeRecoveryRequest({ listOnly: true, cause: 'protocol-error' });
+    this.syncCommandSubscription();
+    if (!this.started || !this.recoveryAvailable) return;
+    if (this.passRunning || this.recoveryScheduled || this.recoveryBatchRunning) return;
+    this.clearRetryTimer();
+    this.nextRetryAt = undefined;
+    if (this.phase === 'Unrecoverable') this.attempts = 0;
+    if (this.phase !== 'Unavailable') this.setPhase('Dirty');
+    this.scheduleRecoveryPass();
+  }
+
+  /**
+   * Round 5.2 / review P1-01: an older revision whose outcome can no longer be
+   * proven arrived on the realtime stream. It is NOT acknowledged and NOT treated
+   * as a duplicate; like a conflict it forces one coalesced authoritative LIST
+   * pass, so the transport can cover the position with proven authority instead of
+   * advancing the ACK ledger on an unverified identity.
+   */
+  private onBridgeUnverified(event: CommandResultEvent): void {
+    if (this.disposed) return;
+    this.recordDiagnostic(
+      'protocol-error',
+      'unverified stale command result for command ' + event.commandId + ' revision ' + event.revision +
+        ' (outcome history no longer proves this identity); authoritative recovery required',
     );
     this.needsNextAuthoritativePass = true;
     this.mergeRecoveryRequest({ listOnly: true, cause: 'protocol-error' });

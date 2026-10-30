@@ -209,8 +209,25 @@ export interface CommandEventSource {
    * ledger (pending/applied/covered) and advances `acknowledged` only over a
    * contiguous applied|covered prefix: acknowledging a later sequence can never
    * skip an earlier pending event. Unknown/duplicate/stale acks are ignored.
+   *
+   * Round 5.2 / review P1-03: the acknowledgement identity is the complete
+   * business identity `(fabId, commandId, revision, outcome)`. A frame delivered
+   * as `rev3/accepted` can never be marked `applied` by an acknowledgement for
+   * `rev3/failed`: an authoritative outcome correction is a cover/supersession,
+   * not an SSE application.
    */
   acknowledge(event: CommandResultEvent): void;
+  /**
+   * Authoritative supersession (Round 5.2 / review P1-03): authoritative recovery
+   * proved the command's current truth (List/Journal record or an authoritative
+   * status query) and that truth supersedes a delivered-but-unapplied SSE frame
+   * for the same `(fabId, commandId, revision)`. The transport marks matching
+   * pending ledger positions `covered` - never `applied` - and may drain a
+   * contiguous safe prefix. This is the explicit authoritative-cover path for an
+   * event whose payload was not applied; it must never be emulated by
+   * `acknowledge()`. Unknown positions are a no-op.
+   */
+  supersede(event: CommandResultEvent): void;
   /**
    * Authoritative recovery safe watermark (ADR-010 §6.2). Only the *current*
    * recovery generation may call this after a Journal loop reached
@@ -230,8 +247,15 @@ export interface CommandEventSource {
    * advance `delivered`. `delivered` means "actually published to a bounded
    * consumer" and only a real SSE delivery can move it. In particular a
    * cross-epoch List cover leaves `delivered` in the old epoch until an actual
-   * frame of the new epoch is delivered. Same-epoch invariant:
-   * acknowledged <= delivered <= observed.
+   * frame of the new epoch is delivered.
+   *
+   * Round 5.2 / review P2-02 cursor math (the Round 5.1 wording was too strong):
+   * same epoch always has `delivered <= observed`, and without an authoritative
+   * cover `acknowledged <= delivered`. An authoritative cover MAY advance
+   * `acknowledged` beyond `delivered` (the covered journal range was proven safe
+   * although its frames were never published to a bounded consumer). Each cursor
+   * is monotonic inside an epoch; sequence values from different epochs are never
+   * comparable.
    */
   cover(cursor: CommandCursor, authority?: CommandCoverAuthority, lossBarrier?: number): CommandCoverResult;
   /** Capture before starting the authority request; changes when an untracked loss occurs. */

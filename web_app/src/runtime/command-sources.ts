@@ -28,6 +28,9 @@ export function createPendingCommandEventSource(): CommandEventSource {
     transportFailures: Stream.empty,
     dirty: Stream.empty,
     acknowledge: () => undefined,
+    // Round 5.2 / review P1-03: no ledger exists here, so there is no delivered
+    // frame to supersede; the deliberate no-op keeps the pending source honest.
+    supersede: () => undefined,
     cover: (cursor, authority = 'journal') => ({ status: 'insufficient', cursor, authority, latchReleased: false, reason: 'transport unavailable', recovery: 'list' }),
     lossGeneration: 0,
     availability: 'unavailable',

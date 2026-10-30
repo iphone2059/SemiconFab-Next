@@ -5,6 +5,7 @@
 - 取代：ADR-007 §5 的单一 `observed` 游标与“一页 journal 即恢复”的实现描述
 - 关联验收：矩阵 1/2/6；CR-01、CR-02、CR-06
 - Round 5.1 修订（2026-10-30）：新增 §9「三游标与 Cover 语义」（P1-04：cover 永不修改 delivered）；规范与验收见 `19-round5.1-remediation-specification.md`。
+- Round 5.2 修订（2026-10-30，独立复审 P1-01/P1-02/P1-03/P2-02）：修正 §9.2 的同 epoch 数学不变量（acknowledged 可在权威 Cover 下超过 delivered）；新增 §9.5「ACK 完整身份与权威 Supersede」；规范见 `20-round5.2-remediation-specification.md`。
 
 ## 1. 已证缺陷（本轮复现依据）
 
@@ -197,13 +198,14 @@ Round 5 源码整改已提交 `4c8f0c1`：cover 在修改游标或 ledger 前检
 
 **禁止**：`cover` 修改 `delivered`。`delivered` 的唯一含义是“已成功 publish 到有界消费者”，只能由真实 SSE 帧的成功投递推进；权威水位不能证明任何帧被投递过。P1-04 之前 transport 中“cover 时用 cover 游标推进 delivered”的实现已被删除，不得以任何形式恢复。
 
-### 9.2 同 epoch 不变量
+### 9.2 同 epoch 不变量（Round 5.2 修正，review P2-02）
 
-同一 epoch 内任意时刻必须满足：
+Round 5.1 写下的 `acknowledged <= delivered <= observed` **不是完整协议的不变量**：权威 List/Journal Cover 可以把 `acknowledged`（安全确认位置）推进到从未实际投递给消费者的位置，因此合法出现 `observed=9 / delivered=3 / acknowledged=9`。正确的条件化表达：
 
-```text
-acknowledged.sequence <= delivered.sequence <= observed.sequence
-```
+- 始终成立：`delivered.sequence <= observed.sequence`；每个游标在同一 epoch 内单调不减。
+- **没有权威 Cover 超前推进时**：`acknowledged.sequence <= delivered.sequence <= observed.sequence`。
+- **存在经过证明的权威 Cover 时**：`acknowledged` 可以由“连续 applied|covered ledger 前缀”或“权威 Cover”推进；不要求 `acknowledged <= delivered`（超过 delivered 合法），但 `delivered` 仍只能由真实 SSE 投递推进。
+- 不同 epoch 的 sequence 不可直接比较（见 §9.3）。
 
 - `observed`：解析到有效 SSE `id:` 后更新（只用于诊断/去重）。
 - `delivered`：`commandResults.publish` 成功（帧进入有界消费者队列）后更新。
@@ -224,4 +226,17 @@ acknowledged.sequence <= delivered.sequence <= observed.sequence
   - observed 25 / delivered 10 / acknowledged 8，List cover `epoch-1:20` → delivered 仍为 10、acknowledged 20；
   - delivered `epoch-A:10`，List cover `epoch-B:20` → delivered 仍为 `epoch-A:10`，acknowledged `epoch-B:20`；
   - cover 成功但 watermark 之后仍有 delivered-pending 条目 → 该条目保持 pending，acknowledged 不越过它；
-  - insufficient cover 不改变任何游标/ledger。
+  - insufficient cover 不改变任何游标/ledger；
+  - Cover 使 `acknowledged > delivered`（同 epoch 与跨 epoch）是合法且必须被测试覆盖的路径（Round 5.2 修正后，不再作为不变量破坏）。
+
+### 9.5 Round 5.2 修订：ACK 完整身份与权威 Supersede（review P1-03）
+
+有序 ACK ledger 的事件身份是完整业务身份：
+
+```text
+(fabId, commandId, revision, outcome)
+```
+
+- `acknowledge(event)` 只有在 ledger 中存在同 (fabId, commandId, revision, outcome) 的 pending 条目时才标记 `applied`；仅 revision 相同的不同 outcome 事件不得互相确认。
+- 权威结果（List/Journal 记录或权威状态查询）纠正/确认某 command revision 后，调用 `source.supersede(event)`：同 `(fabId, commandId, revision)` 的 delivered-pending 条目标记为 `covered`（**绝不 applied**），随后按连续前缀推进 `acknowledged`。这是权威纠正的显式覆盖语义，不能用 `acknowledge` 冒充 SSE 应用。
+- 旧 revision 的重放只有在 correlation 的有界 outcome 历史能证明“该 revision 确实对应此 outcome”时才可标记 `stale`（可 ACK）；证明不了必须为 `stale-unverified`：不 ACK、不当作重复事件忽略，转入权威恢复。

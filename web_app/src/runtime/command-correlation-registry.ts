@@ -12,14 +12,28 @@ import {
  *   revision than the recorded watermark; the record now tracks it.
  * - `duplicate`: same (highest) revision and the same outcome as the recorded
  *   observation; no record mutation.
- * - `stale`: older revision than the recorded watermark; no record mutation.
- * - `conflict`: same (highest) revision but a *different* outcome than the one
- *   recorded. The revision invariant "one revision has exactly one outcome" was
- *   violated on the wire. The ordinary realtime path never mutates the record:
- *   only an authoritative source may resolve/correct the recorded outcome
- *   (`observeAuthoritative`).
+ * - `stale`: an older revision whose recorded outcome *matches* this event
+ *   (Round 5.2 / review P1-01). It is a verifiable duplicate; only an explicit
+ *   applied-outcome proof may ACK it.
+ * - `stale-unverified`: an older revision for which this registry no longer has a
+ *   recorded outcome (bounded history pruned) or never had one. The event must
+ *   NOT be ACKed and must NOT be treated as a harmless duplicate: it enters
+ *   authoritative recovery like a conflict (Round 5.2 / review P1-01).
+ * - `conflict`: same revision as the recorded one but a *different* outcome, on
+ *   the current revision or on a retained older revision. The revision invariant
+ *   "one revision has exactly one outcome" was violated on the wire. The ordinary
+ *   realtime path never mutates the record: only an authoritative source may
+ *   resolve/correct the recorded outcome (`observeAuthoritative`).
  */
-export type CorrelationDecision = 'new' | 'duplicate' | 'stale' | 'conflict';
+export type CorrelationDecision = 'new' | 'duplicate' | 'stale' | 'stale-unverified' | 'conflict';
+
+/**
+ * Round 5.2 / review P1-01: bound on the retained per-revision outcome history of
+ * one command. The current observed revision and the applied revision are always
+ * retained; older outcomes are pruned smallest-first, which can only turn a stale
+ * ACK into `stale-unverified` (never into a false applied proof).
+ */
+const MAX_RETAINED_REVISION_OUTCOMES = 32;
 
 export interface CorrelationRetentionOptions {
   /** Max retained terminal correlation entries; the oldest *completed* terminals go first. */
@@ -55,8 +69,21 @@ interface CorrelationEntry {
    * only forward and only through markApplied(); it is deliberately a different
    * watermark from the observed revision so an authoritative re-application can
    * bypass the SSE duplicate gate without lying about application.
+   *
+   * Round 5.2 / review P1-02: the applied proof is the *identity*
+   * `(appliedRevision, appliedOutcome)`. A revision watermark alone is not proof
+   * that the currently recorded outcome was the one the actor applied.
    */
   appliedRevision?: number;
+  /** Outcome the actor projection provably applied at `appliedRevision` (Round 5.2 / review P1-02). */
+  appliedOutcome?: CommandOutcome;
+  /**
+   * Bounded per-revision outcome history (Round 5.2 / review P1-01). It lets the
+   * stale path verify "this old revision really had this outcome" instead of
+   * blindly trusting `appliedRevision >= revision`. Smallest revisions are pruned
+   * first; a missing entry degrades to `stale-unverified`, never to a false ACK.
+   */
+  readonly outcomes: Map<number, CommandOutcome>;
   /** Derived from `outcome`; maintained so terminal retention stays O(1). */
   readonly terminal: boolean;
   updatedAt: number;
@@ -141,7 +168,15 @@ export class CommandCorrelationRegistry {
       this.recordNew(key, event, last);
       return 'new';
     }
-    if (event.revision < last.revision) return 'stale';
+    if (event.revision < last.revision) {
+      // Round 5.2 / review P1-01: an older revision is only a *verifiable* stale
+      // duplicate when the retained outcome history proves this exact outcome. A
+      // different retained outcome is a protocol conflict; an unknown one is
+      // unverified and must force authoritative recovery instead of an ACK.
+      const recorded = last.outcomes.get(event.revision);
+      if (recorded === undefined) return 'stale-unverified';
+      return recorded === event.outcome ? 'stale' : 'conflict';
+    }
     // Same revision: only an identical outcome may be treated as a duplicate.
     return event.outcome === last.outcome ? 'duplicate' : 'conflict';
   }
@@ -168,7 +203,16 @@ export class CommandCorrelationRegistry {
       this.recordNew(key, event, last);
       return 'new';
     }
-    if (event.revision < last.revision) return 'stale';
+    if (event.revision < last.revision) {
+      // Authority may settle the outcome of an older revision without rolling the
+      // observed/applied watermarks back. This is bookkeeping only (the caller still
+      // classifies the delivery via the actor projection), and it never invents an
+      // applied proof.
+      if (last.outcomes.has(event.revision) && last.outcomes.get(event.revision) !== event.outcome) {
+        last.outcomes.set(event.revision, event.outcome);
+      }
+      return 'stale';
+    }
     if (event.outcome === last.outcome) return 'duplicate';
     this.correctOutcome(key, last, event.outcome);
     return 'new';
@@ -187,11 +231,24 @@ export class CommandCorrelationRegistry {
   ): void {
     const terminal = TERMINAL_OUTCOMES.has(event.outcome);
     if (previous?.terminal) this.terminalEntries -= 1;
+    const outcomes = new Map<number, CommandOutcome>(previous?.outcomes ?? []);
+    outcomes.set(event.revision, event.outcome);
+    // Bound the history: smallest revisions go first. The current revision is never
+    // pruned, and a pruned older revision degrades to stale-unverified (never to a
+    // false applied proof).
+    while (outcomes.size > MAX_RETAINED_REVISION_OUTCOMES) {
+      let smallest = Number.POSITIVE_INFINITY;
+      for (const revision of outcomes.keys()) if (revision < smallest) smallest = revision;
+      if (!Number.isFinite(smallest) || smallest === event.revision) break;
+      outcomes.delete(smallest);
+    }
     const entry: CorrelationEntry = {
       revision: event.revision,
       outcome: event.outcome,
       // Coverage of already-applied revisions survives a newer observation.
       ...(previous?.appliedRevision !== undefined ? { appliedRevision: previous.appliedRevision } : {}),
+      ...(previous?.appliedOutcome !== undefined ? { appliedOutcome: previous.appliedOutcome } : {}),
+      outcomes,
       terminal,
       updatedAt: this.now(),
       terminalSeq: terminal ? ++this.terminalSeq : 0,
@@ -221,10 +278,25 @@ export class CommandCorrelationRegistry {
     const terminalSeq = terminal
       ? previous.terminal ? previous.terminalSeq : ++this.terminalSeq
       : 0;
+    const outcomes = new Map<number, CommandOutcome>(previous.outcomes);
+    outcomes.set(previous.revision, outcome);
+    // Round 5.2 / review P1-02: the old applied proof belonged to the OLD outcome.
+    // A same-revision authoritative correction invalidates it; back the watermark
+    // off conservatively to revision-1 (the actor was at least past that point) and
+    // clear the applied outcome. The actor must re-prove the corrected identity via
+    // receiveAuthoritative/markApplied before any duplicate may be ACKed.
+    const invalidatesAppliedProof = previous.appliedRevision === previous.revision &&
+      previous.appliedOutcome !== outcome;
+    const appliedRevision = invalidatesAppliedProof
+      ? (previous.revision > 0 ? previous.revision - 1 : undefined)
+      : previous.appliedRevision;
+    const appliedOutcome = invalidatesAppliedProof ? undefined : previous.appliedOutcome;
     const entry: CorrelationEntry = {
       revision: previous.revision,
       outcome,
-      ...(previous.appliedRevision !== undefined ? { appliedRevision: previous.appliedRevision } : {}),
+      outcomes,
+      ...(appliedRevision !== undefined ? { appliedRevision } : {}),
+      ...(appliedOutcome !== undefined ? { appliedOutcome } : {}),
       terminal,
       updatedAt: this.now(),
       terminalSeq,
@@ -250,18 +322,62 @@ export class CommandCorrelationRegistry {
    * applied watermark. The entry is normally created by observe(); a defensive
    * observation is made if the caller skipped it.
    */
-  markApplied(event: CommandResultEvent): void {
+  markApplied(event: CommandResultEvent): boolean {
     const key = CommandCorrelationRegistry.key(event.fabId, event.commandId);
     let entry = this.revisions.get(key);
     if (entry === undefined) {
       this.observe(event);
       entry = this.revisions.get(key);
-      if (entry === undefined) return;
+      if (entry === undefined) return false;
     }
-    if (entry.outcome !== event.outcome) return;
-    if (entry.appliedRevision === undefined || event.revision > entry.appliedRevision) {
+    // An ordinary conflicting event never proves application of a different outcome.
+    if (entry.outcome !== event.outcome) return false;
+    const appliedRevision = entry.appliedRevision;
+    if (appliedRevision === undefined) {
       entry.appliedRevision = event.revision;
+      entry.appliedOutcome = event.outcome;
+      return true;
     }
+    if (event.revision > appliedRevision) {
+      entry.appliedRevision = event.revision;
+      entry.appliedOutcome = event.outcome;
+      return true;
+    }
+    if (event.revision === appliedRevision) {
+      // Same-revision re-application (usually after an authoritative correction).
+      // The actor projection proved the (corrected) outcome, so the identity is
+      // valid again even when an older proof was invalidated.
+      entry.appliedOutcome = event.outcome;
+      return true;
+    }
+    // Older revision: it cannot advance the applied watermark; the caller must use
+    // provesApplied() (bounded outcome history) before treating it as already applied.
+    return false;
+  }
+
+  /**
+   * Round 5.2 / review P1-01/02: does this exact event identity have an applied
+   * proof? The proof is either the applied identity itself (same revision and
+   * outcome) or, for an older revision, a matching retained outcome history plus an
+   * applied watermark at or beyond that revision. No proof -> no ACK.
+   */
+  provesApplied(event: CommandResultEvent): boolean {
+    const entry = this.revisions.get(CommandCorrelationRegistry.key(event.fabId, event.commandId));
+    if (entry === undefined) return false;
+    const appliedRevision = entry.appliedRevision;
+    if (appliedRevision === undefined || appliedRevision < event.revision) return false;
+    if (event.revision === appliedRevision) return entry.appliedOutcome === event.outcome;
+    return entry.outcomes.get(event.revision) === event.outcome;
+  }
+
+  /** Bounded recorded outcome for one revision (Round 5.2 / review P1-01 verification proof). */
+  recordedOutcome(fabId: string, commandId: string, revision: number): CommandOutcome | undefined {
+    return this.revisions.get(CommandCorrelationRegistry.key(fabId, commandId))?.outcomes.get(revision);
+  }
+
+  /** Outcome the actor projection provably applied at the applied watermark, if any. */
+  lastAppliedOutcome(fabId: string, commandId: string): CommandOutcome | undefined {
+    return this.revisions.get(CommandCorrelationRegistry.key(fabId, commandId))?.appliedOutcome;
   }
 
   lastObservedRevision(fabId: string, commandId: string): number | undefined {
@@ -273,9 +389,19 @@ export class CommandCorrelationRegistry {
     return this.revisions.get(CommandCorrelationRegistry.key(fabId, commandId))?.outcome;
   }
 
+  /**
+   * Round 5.2 / review P1-02: compare the current observed *identity*
+   * (revision, outcome) with the applied identity. A watermark alone would report
+   * "applied" after an authoritative outcome correction even though the actor has
+   * only proven the old outcome.
+   */
   hasUnappliedObservation(fabId: string, commandId: string): boolean {
     const entry = this.revisions.get(CommandCorrelationRegistry.key(fabId, commandId));
-    return entry !== undefined && (entry.appliedRevision === undefined || entry.revision > entry.appliedRevision);
+    if (entry === undefined) return false;
+    if (entry.appliedRevision === undefined) return true;
+    if (entry.revision > entry.appliedRevision) return true;
+    if (entry.revision === entry.appliedRevision) return entry.appliedOutcome !== entry.outcome;
+    return false;
   }
 
   /** Highest revision the actor projection provably applied, if any (R4-03). */

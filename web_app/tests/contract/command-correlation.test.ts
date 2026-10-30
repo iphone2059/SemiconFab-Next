@@ -106,7 +106,9 @@ it('retains duplicate/stale decisions and TTL sweeps without touching active com
   const registry = new CommandCorrelationRegistry({ maxTerminalEntries: 8, terminalTtlMs: 100, now: () => now });
   expect(registry.observe(result('active', 1, 'executing'))).toBe('new');
   expect(registry.observe(result('active', 1, 'executing'))).toBe('duplicate');
-  expect(registry.observe(result('active', 0, 'accepted'))).toBe('stale');
+  // Round 5.2 / review P1-01: rev0 was never observed, so its outcome cannot be
+  // proven. An old revision is not a harmless duplicate without that proof.
+  expect(registry.observe(result('active', 0, 'accepted'))).toBe('stale-unverified');
   expect(registry.observe(result('done', 2, 'succeeded'))).toBe('new');
   // Same revision with a different outcome is a conflict; the recorded outcome
   // is not mutated by an ordinary observation.
@@ -328,3 +330,96 @@ describe('Round 5.1 / P1-02 authoritative resolution and correction', () => {
     expect(registry.lastObservedOutcome(fabId, 'missing')).toBeUndefined();
   });
 });
+
+describe('Round 5.2 / review P1-01: bounded revision outcome history', () => {
+  it('flags an old revision with a conflicting outcome as a conflict instead of a stale duplicate', () => {
+    const registry = new CommandCorrelationRegistry();
+    expect(registry.observe(result('cmd', 1, 'accepted'))).toBe('new');
+    expect(registry.markApplied(result('cmd', 1, 'accepted'))).toBe(true);
+    expect(registry.observe(result('cmd', 2, 'executing'))).toBe('new');
+    expect(registry.markApplied(result('cmd', 2, 'executing'))).toBe(true);
+
+    // rev1 was recorded and applied as 'accepted'. A replay of rev1 with a different
+    // outcome violates the revision invariant; it must be a conflict, never stale.
+    expect(registry.observe(result('cmd', 1, 'failed'))).toBe('conflict');
+    expect(registry.recordedOutcome(fabId, 'cmd', 1)).toBe('accepted');
+    expect(registry.provesApplied(result('cmd', 1, 'accepted'))).toBe(true);
+    expect(registry.provesApplied(result('cmd', 1, 'failed'))).toBe(false);
+    expect(registry.hasUnappliedObservation(fabId, 'cmd')).toBe(false);
+  });
+
+  it('treats an old revision with no retained outcome as stale-unverified, never as a duplicate', () => {
+    const registry = new CommandCorrelationRegistry();
+    registry.observe(result('cmd', 3, 'executing'));
+    // rev2 was never observed: no proof exists for its outcome.
+    expect(registry.observe(result('cmd', 2, 'executing'))).toBe('stale-unverified');
+    expect(registry.recordedOutcome(fabId, 'cmd', 2)).toBeUndefined();
+    expect(registry.provesApplied(result('cmd', 2, 'executing'))).toBe(false);
+    // The record is untouched and the current revision stays verifiable.
+    expect(registry.lastObservedRevision(fabId, 'cmd')).toBe(3);
+    expect(registry.observe(result('cmd', 3, 'executing'))).toBe('duplicate');
+  });
+
+  it('verifies a stale duplicate only when the retained outcome matches', () => {
+    const registry = new CommandCorrelationRegistry();
+    registry.observe(result('cmd', 1, 'accepted'));
+    expect(registry.markApplied(result('cmd', 1, 'accepted'))).toBe(true);
+    registry.observe(result('cmd', 2, 'executing'));
+    expect(registry.markApplied(result('cmd', 2, 'executing'))).toBe(true);
+
+    expect(registry.observe(result('cmd', 1, 'accepted'))).toBe('stale');
+    expect(registry.provesApplied(result('cmd', 1, 'accepted'))).toBe(true);
+  });
+
+  it('bounds the history smallest-first and degrades pruned revisions to stale-unverified', () => {
+    const registry = new CommandCorrelationRegistry();
+    for (let revision = 1; revision <= 40; revision += 1) {
+      expect(registry.observe(result('cmd', revision, 'executing'))).toBe('new');
+    }
+    expect(registry.recordedOutcome(fabId, 'cmd', 1)).toBeUndefined();
+    expect(registry.recordedOutcome(fabId, 'cmd', 40)).toBe('executing');
+    expect(registry.observe(result('cmd', 1, 'executing'))).toBe('stale-unverified');
+    expect(registry.observe(result('cmd', 40, 'executing'))).toBe('duplicate');
+  });
+});
+
+describe('Round 5.2 / review P1-02: applied identity = (revision, outcome)', () => {
+  it('an authoritative outcome correction invalidates the old applied proof until the actor re-proves it', () => {
+    const registry = new CommandCorrelationRegistry();
+    expect(registry.observe(result('cmd', 3, 'accepted'))).toBe('new');
+    expect(registry.markApplied(result('cmd', 3, 'accepted'))).toBe(true);
+    expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(3);
+    expect(registry.lastAppliedOutcome(fabId, 'cmd')).toBe('accepted');
+    expect(registry.hasUnappliedObservation(fabId, 'cmd')).toBe(false);
+
+    // Authority corrects revision 3 to failed. The actor has only ever proven the
+    // OLD outcome, so the applied identity must no longer claim the new one.
+    expect(registry.observeAuthoritative(result('cmd', 3, 'failed'))).toBe('new');
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('failed');
+    expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(2);
+    expect(registry.lastAppliedOutcome(fabId, 'cmd')).toBeUndefined();
+    expect(registry.hasUnappliedObservation(fabId, 'cmd')).toBe(true);
+    expect(registry.provesApplied(result('cmd', 3, 'failed'))).toBe(false);
+    // A duplicate of the corrected outcome is still not proven.
+    expect(registry.observe(result('cmd', 3, 'failed'))).toBe('duplicate');
+    expect(registry.provesApplied(result('cmd', 3, 'failed'))).toBe(false);
+    // The authoritative re-application proves the corrected identity.
+    expect(registry.markApplied(result('cmd', 3, 'failed'))).toBe(true);
+    expect(registry.provesApplied(result('cmd', 3, 'failed'))).toBe(true);
+    expect(registry.hasUnappliedObservation(fabId, 'cmd')).toBe(false);
+    expect(registry.lastAppliedOutcome(fabId, 'cmd')).toBe('failed');
+  });
+
+  it('markApplied reports whether the identity is proven and never advances on an old or mismatched event', () => {
+    const registry = new CommandCorrelationRegistry();
+    registry.observe(result('cmd', 1, 'accepted'));
+    expect(registry.markApplied(result('cmd', 1, 'accepted'))).toBe(true);
+    registry.observe(result('cmd', 2, 'executing'));
+    expect(registry.markApplied(result('cmd', 2, 'executing'))).toBe(true);
+    expect(registry.markApplied(result('cmd', 1, 'accepted'))).toBe(false);
+    expect(registry.markApplied(result('cmd', 2, 'failed'))).toBe(false);
+    expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(2);
+    expect(registry.lastAppliedOutcome(fabId, 'cmd')).toBe('executing');
+  });
+});
+

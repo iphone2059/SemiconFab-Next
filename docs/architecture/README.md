@@ -1,6 +1,6 @@
 # SemiconFab Next：Effect 4 与单层源码目录重构（已实施）
 
-**状态：** 2026-10-30 完成 Round 4 源码整改（R4-01…R4-09，输入为 Round 4 复审报告）：生产代码/契约/ADR/测试 fixture 已修改，整改与验证记录见 `17-round4-remediation-record.md`。本轮实际运行了 typecheck/lint/Vitest/vite build、3 个 .NET 项目 Release build + dotnet test（226 passed）及契约/生成物/架构/frozen-assets/Python tools 源码门禁；**未运行**浏览器 E2E、GPU 600s soak、Oxc ON/OFF 生产等价与完整 `scripts/verify.ps1`。Round 3 的静态整改记录见 `15/16`；Round 3 阶段本身未运行测试。Round 5 源码整改已提交 `4c8f0c1`；Round 5.1 的剩余 P1/P2 不变量整改规范/记录见 `19-round5.1-remediation-specification.md`（2026-10-30）。
+**状态：** 2026-10-30 完成 Round 4 源码整改（R4-01…R4-09，输入为 Round 4 复审报告）：生产代码/契约/ADR/测试 fixture 已修改，整改与验证记录见 `17-round4-remediation-record.md`。本轮实际运行了 typecheck/lint/Vitest/vite build、3 个 .NET 项目 Release build + dotnet test（226 passed）及契约/生成物/架构/frozen-assets/Python tools 源码门禁；**未运行**浏览器 E2E、GPU 600s soak、Oxc ON/OFF 生产等价与完整 `scripts/verify.ps1`。Round 3 的静态整改记录见 `15/16`；Round 3 阶段本身未运行测试。Round 5 源码整改已提交 `4c8f0c1`；Round 5.1 的剩余 P1/P2 不变量整改规范/记录见 `19-round5.1-remediation-specification.md`（2026-10-30）。Round 5.1 独立复审为「暂不通过」（3×P1 + 2×P2），Round 5.2 定向修复 Correlation applied 身份、Transport ACK 完整身份/权威 Supersede、CORE-011 独立双后端实验与三游标数学契约，规范见 `20-round5.2-remediation-specification.md`。
 **基线：** 远端 `main` 的 `4fc8a94a3f10d185c8bef7929349ac6ccb2b8792`（独立 worktree `.local/worktrees/effect4-baseline` 仅用于 A/B）。
 **范围：** 仅 `web_app` 前端；后端不变，Babylon Lite + WebGPU-only 产品约束不变。
 **验收证据：** `docs/architecture/evidence/`；浏览器 e2e：`docs/perf/effect4-e2e.json`；性能/GPU：`docs/architecture/evidence/perf/`。
@@ -35,6 +35,7 @@
 | `17-round4-remediation-record.md` | Round 4（R4-01…R4-09）源码整改设计、契约变化、验证结果与未完成边界 |
 | `18-round5-remediation-specification.md` | Round 5 整改规范与验收要求（已实施 4c8f0c1；历史记录，剩余义务由 19 号规范取代） |
 | `19-round5.1-remediation-specification.md` | Round 5.1 剩余 P1/P2 不变量整改规范与记录（P1-01…P2-04、四协议流程、Phase A/B/C 验收；2026-10-30） |
+| `20-round5.2-remediation-specification.md` | Round 5.2 定向整改（独立复审 P1-01…P1-03 / P2-01 / P2-02）：outcome 证明链、ACK 完整身份 + supersede、CORE-011 双后端隔离、三游标数学修正（2026-10-30） |
 
 ## 已实施的核心决定
 

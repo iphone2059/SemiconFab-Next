@@ -28,6 +28,7 @@ interface SetupOptions {
   readonly workflows?: CommandWorkflowRegistry;
   readonly onRejected?: (event: CommandResultEvent) => void;
   readonly onConflict?: (event: CommandResultEvent) => void;
+  readonly onUnverified?: (event: CommandResultEvent) => void;
   readonly onUncorrelated?: (event: CommandResultEvent) => void;
   readonly onDefect?: (cause: unknown) => void;
   readonly onConsumerExit?: (exit: Exit.Exit<void, never>) => void;
@@ -59,6 +60,7 @@ function setup(options: SetupOptions = {}): Setup {
     ...(options.fabId !== undefined ? { fabId: options.fabId } : {}),
     ...(options.onRejected !== undefined ? { onRejected: options.onRejected } : {}),
     ...(options.onConflict !== undefined ? { onConflict: options.onConflict } : {}),
+    ...(options.onUnverified !== undefined ? { onUnverified: options.onUnverified } : {}),
     ...(options.onUncorrelated !== undefined ? { onUncorrelated: options.onUncorrelated } : {}),
     ...(options.onDefect !== undefined ? { onDefect: options.onDefect } : {}),
     ...(options.onConsumerExit !== undefined ? { onConsumerExit: options.onConsumerExit } : {}),
@@ -282,8 +284,9 @@ describe('R4-03 observed/applied split and authoritative receive', () => {
     // Duplicate of an applied revision: already covered by the actor projection.
     expect(bridge.receive(event)).toBe('duplicate-applied');
     expect(projected.events).toHaveLength(1);
-    // Older revision: covered by the observed watermark.
-    expect(bridge.receive(result(0, 'accepted'))).toBe('stale-covered');
+    // Older revision with no recorded outcome history: unverified, never ACKed
+    // (Round 5.2 / review P1-01). It must enter authoritative recovery.
+    expect(bridge.receive(result(0, 'accepted'))).toBe('stale-unverified');
     // Foreign FAB identity is ignored before any watermark bookkeeping.
     expect(bridge.receive(commandResult({ fabId: 'fab-b', commandId, revision: 1, outcome: 'accepted' }))).toBe('ignored');
   });
@@ -616,3 +619,148 @@ it('holds an actor rejection and does not ACK a duplicate observed revision', ()
   expect(bridge.correlationRegistry.lastAppliedRevision(fabId, commandId)).toBeUndefined();
   expect(source.cursors.acknowledged).toBeUndefined();
 });
+
+/**
+ * Round 5.2 verification helper: a workflow whose actor only accepts authoritative
+ * corrections (realtime delivery never proves application).
+ */
+class AuthoritativeOnlyWorkflow implements CommandWorkflow {
+  readonly realtimeEvents: CommandResultEvent[] = [];
+  readonly authoritativeEvents: CommandResultEvent[] = [];
+  private revisionValue = -1;
+  private outcomeValue: CommandOutcome | 'pending' = 'pending';
+
+  receiveRealtime(event: CommandResultEvent): void {
+    this.realtimeEvents.push(event);
+  }
+
+  receiveAuthoritative(event: CommandResultEvent): void {
+    this.authoritativeEvents.push(event);
+    if (event.revision < this.revisionValue) return;
+    this.revisionValue = event.revision;
+    this.outcomeValue = event.outcome;
+  }
+
+  markExpiredUnresolved(): void {}
+
+  async reconcile(): Promise<void> {}
+
+  dispose(): void {}
+
+  get projection(): CommandWorkflowProjection {
+    return {
+      state: this.outcomeValue === 'pending' ? 'idle' : this.outcomeValue,
+      revision: this.revisionValue,
+      outcome: this.outcomeValue,
+      recoveryDisposition: 'tracked',
+    };
+  }
+}
+
+describe('Round 5.2 / review P1-01/P1-02/P1-03 complete identity proofs', () => {
+  it('does not ACK an older revision whose outcome conflicts with the recorded revision', () => {
+    const conflicts: CommandResultEvent[] = [];
+    const { source, workflows, bridge, workflow } = setup({ fabId, onConflict: (event) => conflicts.push(event) });
+    workflows.register(fabId, commandId, workflow);
+    const accepted = result(1, 'accepted');
+    source.emit(accepted);
+    expect(bridge.receive(accepted)).toBe('applied');
+    const executing = result(2, 'executing');
+    source.emit(executing);
+    expect(bridge.receive(executing)).toBe('applied');
+    const acknowledgedBefore = source.cursors.acknowledged;
+    const pendingBefore = source.pendingAcknowledgementCount;
+
+    const badReplay = result(1, 'failed');
+    source.emit(badReplay);
+    expect(bridge.receive(badReplay)).toBe('conflict');
+    expect(conflicts).toEqual([badReplay]);
+    expect(bridge.conflictCount).toBe(1);
+    expect(bridge.pendingCount).toBe(1);
+    // The old-revision conflict is never ACKed, even though appliedRevision >= 1.
+    expect(source.cursors.acknowledged).toEqual(acknowledgedBefore);
+    expect(source.pendingAcknowledgementCount).toBe(pendingBefore + 1);
+    // The already applied projection is untouched.
+    expect(workflow.projection.revision).toBe(2);
+    expect(workflow.projection.outcome).toBe('executing');
+    expect(workflow.events.map((event) => event.revision)).toEqual([1, 2]);
+    // A verified stale duplicate (same recorded outcome) is still ACKed normally.
+    expect(bridge.receive(accepted)).toBe('stale-covered');
+    expect(source.pendingAcknowledgementCount).toBe(1);
+  });
+
+  it('does not ACK an older revision whose outcome history cannot be proven', () => {
+    const unverified: CommandResultEvent[] = [];
+    const { source, workflows, bridge, workflow } = setup({
+      fabId,
+      onUnverified: (event) => unverified.push(event),
+    });
+    workflows.register(fabId, commandId, workflow);
+    const current = result(5, 'executing');
+    source.emit(current);
+    expect(bridge.receive(current)).toBe('applied');
+    const acknowledgedBefore = source.cursors.acknowledged;
+
+    const stale = result(2, 'executing');
+    source.deliverUnprocessed(stale, commandCursor('epoch-1', 2));
+    expect(bridge.receive(stale)).toBe('stale-unverified');
+    expect(unverified).toEqual([stale]);
+    // No ACK: the delivered frame stays pending for an authoritative cover.
+    expect(source.cursors.acknowledged).toEqual(acknowledgedBefore);
+    expect(source.pendingAcknowledgementCount).toBe(1);
+    // Not a held event either: authoritative recovery (not a retry) owns it.
+    expect(bridge.pendingCount).toBe(0);
+    expect(workflow.events.map((event) => event.revision)).toEqual([5]);
+  });
+
+  it('covers a delivered SSE position via authoritative supersession instead of ACKing it as applied', () => {
+    const { source, workflows, bridge } = setup({ fabId });
+    const workflow = new AuthoritativeOnlyWorkflow();
+    workflows.register(fabId, commandId, workflow);
+    const accepted = result(3, 'accepted');
+    const cursor = commandCursor('epoch-1', 3);
+    source.deliverUnprocessed(accepted, cursor);
+    // Realtime delivery cannot prove application for this actor.
+    expect(bridge.receive(accepted)).toBe('rejected');
+    expect(source.pendingAcknowledgementCount).toBe(1);
+    expect(source.cursors.acknowledged).toBeUndefined();
+
+    // The authoritative record proves the command's truth and supersedes the SSE
+    // payload: the position is covered, never counted as an SSE application.
+    expect(bridge.receiveAuthoritative(result(3, 'failed'))).toBe('applied');
+    expect(workflow.projection.revision).toBe(3);
+    expect(workflow.projection.outcome).toBe('failed');
+    expect(source.pendingAcknowledgementCount).toBe(0);
+    expect(source.cursors.acknowledged).toEqual(cursor);
+    expect(bridge.correlationRegistry.provesApplied(result(3, 'failed'))).toBe(true);
+  });
+
+  it('does not ACK a duplicate of a corrected outcome until the actor proves the corrected identity', () => {
+    const { source, workflows, bridge, workflow } = setup({ fabId });
+    workflows.register(fabId, commandId, workflow);
+    const accepted = result(3, 'accepted');
+    source.emit(accepted);
+    expect(bridge.receive(accepted)).toBe('applied');
+    const acknowledgedBefore = source.cursors.acknowledged;
+
+    // Authority corrects the recorded outcome, but the actor has not re-applied it
+    // yet (registry-only simulation of a pending authoritative correction).
+    expect(bridge.correlationRegistry.observeAuthoritative(result(3, 'failed'))).toBe('new');
+    expect(bridge.correlationRegistry.provesApplied(result(3, 'failed'))).toBe(false);
+    expect(bridge.correlationRegistry.hasUnappliedObservation(fabId, commandId)).toBe(true);
+
+    const failed = result(3, 'failed');
+    source.emit(failed);
+    // Duplicate decision, but there is no applied proof: the event must not be ACKed.
+    expect(bridge.receive(failed)).toBe('rejected');
+    expect(source.cursors.acknowledged).toEqual(acknowledgedBefore);
+    expect(source.pendingAcknowledgementCount).toBe(1);
+
+    // The authoritative correction re-proves the identity and supersedes the frame.
+    expect(bridge.receiveAuthoritative(failed)).toBe('stale-covered');
+    expect(workflow.projection.outcome).toBe('failed');
+    expect(bridge.correlationRegistry.provesApplied(failed)).toBe(true);
+    expect(source.pendingAcknowledgementCount).toBe(0);
+  });
+});
+

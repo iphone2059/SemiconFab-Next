@@ -60,8 +60,38 @@ it('compiler-equivalence harness builds both modes and fails on semantic differe
   for (const scenario of REQUIRED_SCENARIOS) {
     expect(harness, scenario).toContain("id: '" + scenario + "'");
   }
-  expect(harness).toContain('Execution *counts* may differ');
   expect(harness).toContain('React update-depth loop on the workbench root');
+  // Round 5.2 / review P2-01: the harness must keep the isolated-backend experiment,
+  // the deterministic quiescence barrier, request counts and authoritative side-effect
+  // comparison as executable contract, not just comments.
+  expect(harness).toContain('fixtures are not identical');
+  expect(harness).toContain('countedSurface');
+  expect(harness).toContain('const quiesce = async (');
+  expect(harness).toContain('QUIESCENCE_LOG');
+  expect(harness).toContain('compareSideEffects');
+  expect(harness).toContain('sideEffects');
+  expect(harness).toContain('--api-url-on');
+  expect(harness).toContain('--api-url-off');
+  expect(harness).toContain('execution counts and timings may differ');
+});
+
+it('Round 5.2 / review P2-01: the wrapper starts two isolated backends with the same seeded fixture', () => {
+  const wrapper = readRepo('scripts/compiler-equivalence.ps1');
+  // Two independent ports and data directories: ON and OFF must never share a mutable
+  // backend/database (the Round 5.1 evidence had apiUrl.on === apiUrl.off).
+  expect(wrapper).toContain('-ApiPortOn');
+  expect(wrapper).toContain('-ApiPortOff');
+  expect(wrapper).toContain('Reset-FabEquivalenceModeDirectory');
+  expect(wrapper).toContain('$fabOnLocal');
+  expect(wrapper).toContain('$fabOffLocal');
+  // Both APIs receive the same development key, and each start-dev.ps1 gets its own
+  // LocalDirectory (hence its own Fab__DataDirectory database).
+  expect(wrapper).toContain('development-key');
+  expect(wrapper).toContain('--api-url-on $fabApiUrlOn');
+  expect(wrapper).toContain('--api-url-off $fabApiUrlOff');
+  // Process/port hygiene: both owned APIs are stopped and the ports verified released.
+  expect(wrapper).toContain('Stop-FabEquivalenceApi');
+  expect(wrapper).toContain('Wait-FabPortReleased');
 });
 
 it('compiler compatibility gate proves the locked Oxc API is the one the plugin consumes', () => {

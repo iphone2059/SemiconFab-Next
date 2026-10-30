@@ -100,6 +100,12 @@ interface AckLedgerEntry {
   readonly fabId: string;
   readonly commandId: string;
   readonly revision: number;
+  /**
+   * Round 5.2 / review P1-03: the ledger identity includes the event outcome, so
+   * an authoritative outcome correction can never be mistaken for the applied
+   * original SSE frame. Supersession is the only path that may cover it.
+   */
+  readonly outcome: string;
   status: AckLedgerStatus;
 }
 
@@ -428,10 +434,15 @@ export function createSseCommandEventSource(
 
   const protocolDiagnosticLog: CommandProtocolDiagnostic[] = [];
 
-  const eventIdentity = (event: Pick<CommandResultEvent, 'fabId' | 'commandId' | 'revision'>): string =>
-    event.fabId + '\u0000' + event.commandId + '\u0000' + event.revision;
+  const eventIdentity = (event: Pick<CommandResultEvent, 'fabId' | 'commandId' | 'revision' | 'outcome'>): string =>
+    event.fabId + '\u0000' + event.commandId + '\u0000' + event.revision + '\u0000' + event.outcome;
   const entryIdentity = (entry: AckLedgerEntry): string =>
-    eventIdentity({ fabId: entry.fabId, commandId: entry.commandId, revision: entry.revision });
+    eventIdentity({
+      fabId: entry.fabId,
+      commandId: entry.commandId,
+      revision: entry.revision,
+      outcome: entry.outcome as CommandResultEvent['outcome'],
+    });
 
   /** Bounded, payload-free protocol diagnostics (ADR-010 §6.4). */
   const recordDiagnostic = (
@@ -613,10 +624,28 @@ export function createSseCommandEventSource(
       fabId: event.fabId,
       commandId: event.commandId,
       revision: event.revision,
+      outcome: event.outcome,
       status: 'pending',
     };
     ledger.push(entry);
     ledgerByEventIdentity.set(eventIdentity(event), entry);
+  };
+
+  const supersede = (event: CommandResultEvent): void => {
+    let covered = 0;
+    for (const entry of ledger) {
+      if (entry.status !== 'pending') continue;
+      if (entry.fabId !== event.fabId || entry.commandId !== event.commandId || entry.revision !== event.revision) continue;
+      // Round 5.2 / review P1-03: authoritative truth supersedes the delivered SSE
+      // payload for this command revision. The position becomes 'covered', never
+      // 'applied' - the SSE content was not applied by the actor.
+      entry.status = 'covered';
+      ledgerByEventIdentity.delete(entryIdentity(entry));
+      covered += 1;
+    }
+    if (covered === 0) return;
+    recordDiagnostic('ack-ledger', 'authoritative outcome superseded a delivered SSE frame (covered, not applied)');
+    drainAcknowledgedPrefix();
   };
 
   const acknowledge = (event: CommandResultEvent): void => {
@@ -1125,6 +1154,7 @@ export function createSseCommandEventSource(
     transportFailures: failures.stream,
     dirty: dirty.stream,
     acknowledge,
+    supersede,
     cover,
     get lossGeneration(): number {
       return lossGeneration;

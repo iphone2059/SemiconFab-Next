@@ -276,16 +276,37 @@ export class FakeCommandEventSource implements CommandEventSource {
     decrement: () => { this.dirtyCount = Math.max(0, this.dirtyCount - 1); },
   });
 
-  /** Record that the actor applied one delivered event; drains the safe prefix. */
+  /**
+   * Record that the actor applied one delivered event; drains the safe prefix.
+   * Round 5.2 / review P1-03: identity is (fabId, commandId, revision, outcome);
+   * an acknowledgement for a different outcome can never mark the original frame
+   * applied (that is an authoritative supersession, see supersede()).
+   */
   acknowledge(event: CommandResultEvent): void {
     const entry = this.ledger.find((candidate) =>
       candidate.status === 'pending' &&
       candidate.event.fabId === event.fabId &&
       candidate.event.commandId === event.commandId &&
-      candidate.event.revision === event.revision);
+      candidate.event.revision === event.revision &&
+      candidate.event.outcome === event.outcome);
     if (!entry) return;
     entry.status = 'applied';
     this.drainAcknowledgedPrefix();
+  }
+
+  /**
+   * Round 5.2 / review P1-03: authoritative truth supersedes a delivered frame for
+   * the same command revision. Positions become covered (never applied).
+   */
+  supersede(event: CommandResultEvent): void {
+    let covered = 0;
+    for (const entry of this.ledger) {
+      if (entry.status !== 'pending') continue;
+      if (entry.event.fabId !== event.fabId || entry.event.commandId !== event.commandId || entry.event.revision !== event.revision) continue;
+      entry.status = 'covered';
+      covered += 1;
+    }
+    if (covered > 0) this.drainAcknowledgedPrefix();
   }
 
   /**

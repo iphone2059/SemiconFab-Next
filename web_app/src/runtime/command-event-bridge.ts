@@ -17,12 +17,17 @@ import { CommandEventRecovery } from '@/runtime/command-event-recovery';
  * whose outcome disagrees with the recorded outcome for that revision. A conflict
  * is never acknowledged and never applied; only an authoritative observation may
  * resolve/correct it.
+ *
+ * Round 5.2 / review P1-01 adds `stale-unverified`: an older revision whose
+ * outcome is no longer provable. It is NOT a harmless duplicate: it is never
+ * acknowledged and forces authoritative recovery.
  */
 export type CommandDeliveryOutcome =
   | 'applied'
   | 'held'
   | 'duplicate-applied'
   | 'stale-covered'
+  | 'stale-unverified'
   | 'rejected'
   | 'conflict'
   | 'ignored';
@@ -53,6 +58,12 @@ export interface CommandEventBridgeOptions {
    * authoritatively. FabRuntime maps this to Dirty + list-only recovery.
    */
   readonly onConflict?: (event: CommandResultEvent) => void;
+  /**
+   * Round 5.2 / review P1-01: an older revision arrived whose outcome cannot be
+   * proven from the bounded correlation history. It is never ACKed and must enter
+   * authoritative recovery instead of being ignored as a duplicate.
+   */
+  readonly onUnverified?: (event: CommandResultEvent) => void;
   /**
    * R4-03: a retried event was rejected by the actor projection. It stays held
    * (bounded by the existing queue) and is reported so FabRuntime can enter Dirty
@@ -198,15 +209,22 @@ export class CommandEventBridge {
       this.options.onConflict?.(event);
       return 'conflict';
     }
-    if (decision === 'duplicate' || decision === 'stale') {
-      const applied = this.correlation.lastAppliedRevision(event.fabId, event.commandId);
-      if (applied !== undefined && applied >= event.revision) {
-        this.source.acknowledge(event);
-        if (this.correlation.hasUnappliedObservation(event.fabId, event.commandId)) {
-          this.options.onRejected?.(event);
-        }
-        return decision === 'duplicate' ? 'duplicate-applied' : 'stale-covered';
+    if (decision === 'stale-unverified') {
+      // Round 5.2 / review P1-01: no applied/outcome proof exists for this older
+      // revision. Never ACK, never treat it as a duplicate: force authority.
+      this.options.onUnverified?.(event);
+      return 'stale-unverified';
+    }
+    if ((decision === 'duplicate' || decision === 'stale') && this.correlation.provesApplied(event)) {
+      // Round 5.2 / review P1-01/03: only a complete applied identity
+      // (revision + outcome, or a retained matching outcome behind the applied
+      // watermark) may be acknowledged. `appliedRevision >= revision` alone is not
+      // proof after an authoritative outcome correction.
+      this.source.acknowledge(event);
+      if (this.correlation.hasUnappliedObservation(event.fabId, event.commandId)) {
+        this.options.onRejected?.(event);
       }
+      return decision === 'duplicate' ? 'duplicate-applied' : 'stale-covered';
     }
     const workflow = this.workflows.get(event.fabId, event.commandId);
     if (!workflow) {
@@ -249,6 +267,11 @@ export class CommandEventBridge {
       // Round 5.1 / P1-02: the authoritative revision is applied/covered, so every
       // recorded conflict at or below it is resolved.
       this.recovery.resolveAuthoritative(event);
+      // Round 5.2 / review P1-03: an authoritative record proves the command's
+      // current truth. Any delivered-but-unapplied SSE frame for the same command
+      // revision is superseded as *covered* by the transport - it must never be
+      // recorded as an SSE application (different payload/outcome).
+      this.source.supersede(event);
     }
     if (outcome === 'rejected') {
       this.recovery.hold(event);
@@ -379,11 +402,22 @@ export class CommandEventBridge {
     if (verifiable) {
       if ((after ?? -1) < event.revision) return 'rejected';
       if (after === event.revision && projection?.outcome !== event.outcome) return 'rejected';
-      // R4-03: the applied watermark may only advance after the projection proved
-      // it advanced; markApplied itself refuses an outcome-disagreeing event.
-      this.correlation.markApplied(event);
-      this.options.onResultDelivered?.(event);
-      this.source.acknowledge(event);
+      // Round 5.2 / review P1-02/P1-03: the applied proof is the complete identity
+      // (revision + outcome). markApplied returns whether that identity is proven;
+      // delivery notification and any ACK are gated on it. An event whose outcome
+      // disagrees with the recorded/applied identity proves nothing.
+      const applied = this.correlation.markApplied(event);
+      if (applied) this.options.onResultDelivered?.(event);
+      if (channel === 'realtime') {
+        // The transport may only mark a delivered frame applied when this exact
+        // identity was applied, or when a strictly newer applied identity plus the
+        // retained outcome history proves the older revision (review P1-01).
+        if (applied || ((after ?? -1) > event.revision && this.correlation.provesApplied(event))) {
+          this.source.acknowledge(event);
+        }
+      }
+      // Authoritative records are never acknowledged as SSE applications: their
+      // delivered position is covered through cover()/supersede() (review P1-03).
       return (before ?? -1) >= event.revision ? 'stale-covered' : 'applied';
     }
     // No projection means application cannot be proven.

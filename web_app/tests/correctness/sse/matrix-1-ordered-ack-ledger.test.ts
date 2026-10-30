@@ -542,3 +542,41 @@ describe('Round 5.1 / P1-04 cover never forges the delivered cursor', () => {
   });
 });
 
+describe('Round 5.2 / review P1-03 ACK identity includes the outcome', () => {
+  it('does not mark the original SSE frame applied for a different-outcome acknowledgement', async () => {
+    const harness = transport({ capacity: 8, autoAck: false });
+    const source = await open(harness);
+    source.emit(commandEnvelope({ revision: 3, outcome: 'accepted' }), cursorId('epoch-1', 3));
+    await flush(10);
+    expect(harness.cursors().pendingAcknowledgements).toBe(1);
+    const delivered = harness.received[0];
+    expect(delivered.outcome).toBe('accepted');
+
+    // An authoritative correction arrives as a different outcome for the same
+    // revision. It must NOT resolve the delivered 'accepted' frame as applied.
+    harness.source.acknowledge({ ...delivered, outcome: 'failed' });
+    await flush(5);
+    expect(harness.cursors().pendingAcknowledgements).toBe(1);
+    expect(harness.cursors().acknowledged).toBeUndefined();
+
+    // The authoritative truth covers the position explicitly (covered, not applied).
+    harness.source.supersede({ ...delivered, outcome: 'failed' });
+    await flush(5);
+    expect(harness.cursors().pendingAcknowledgements).toBe(0);
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 3 });
+  });
+
+  it('still applies the exact delivered outcome and ignores later conflicting acknowledgements', async () => {
+    const harness = transport({ capacity: 8, autoAck: false });
+    const source = await open(harness);
+    source.emit(commandEnvelope({ revision: 7, outcome: 'executing' }), cursorId('epoch-1', 7));
+    await flush(10);
+    const delivered = harness.received[0];
+    harness.source.acknowledge(delivered);
+    await flush(5);
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 7 });
+    expect(harness.cursors().pendingAcknowledgements).toBe(0);
+  });
+});
+
+
