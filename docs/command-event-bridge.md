@@ -295,3 +295,8 @@ const source: CommandEventSource = { commandResult$: subject.asObservable() };
 - `flushRecovery()` 返回 `{ applied, held, rejected }`：只有 Applied/Covered 的事件被移除；rejected 重新入队并通过 `onRejected` 让 FabRuntime 进入 Dirty；仍无 workflow 的事件保留。不得再 drain-and-drop。
 - consumer fiber 通过 `runCommandStream` observer 监督：handler 异常转为有界 `onDefect` 诊断（消费继续）；意外终止先重置 `started/commandFiber` 再回调 `onConsumerExit`；`stop()/dispose()` 的预期退出不回调。FabRuntime 负责 ≤3 次有界重启，超限进入 Unrecoverable。
 - 当前权威应用路径（List/Journal）由 FabRuntime 调用 `receiveAuthoritative`；`CommandEventRecovery` 增加非破坏性 `snapshot()/release()` 供 retry pass 使用，容量/参数严格校验。
+
+
+## Round 5（进行中）
+
+Round 5 正在整改：仅在 Actor 投影证明应用或此前已应用时 ACK；拒绝的事件保留以供恢复。

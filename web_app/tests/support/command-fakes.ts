@@ -2,6 +2,7 @@ import { Effect, Exit, Layer, ManagedRuntime, PubSub, Scope, Stream } from 'effe
 import * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import type {
   CommandConnectionStatus,
+  CommandCoverAuthority,
   CommandCursor,
   CommandEventSource,
   CommandOutcome,
@@ -37,9 +38,24 @@ export class FakeCommandWorkflow implements CommandWorkflow {
   readonly events: CommandResultEvent[] = [];
   readonly reconciled: string[] = [];
   disposed = false;
+  private expired = false;
 
   receive(event: CommandResultEvent): void {
     this.events.push(event);
+    this.expired = false;
+  }
+
+  markExpiredUnresolved(): void { this.expired = true; }
+
+  get projection() {
+    const event = this.events.reduce<CommandResultEvent | undefined>((latest, candidate) =>
+      latest === undefined || candidate.revision > latest.revision ? candidate : latest, undefined);
+    return {
+      state: this.expired ? 'expired' : event?.outcome ?? 'idle',
+      revision: event?.revision ?? -1,
+      outcome: event?.outcome ?? 'pending' as const,
+      recoveryDisposition: this.expired ? 'expired-unresolved' as const : 'tracked' as const,
+    };
   }
 
   async reconcile(commandId: string): Promise<void> {
@@ -56,6 +72,7 @@ export class CountingCommandWorkflow implements CommandWorkflow {
   readonly events: CommandResultEvent[] = [];
   private revision = -1;
   private outcome: CommandOutcome | 'pending' = 'pending';
+  private expired = false;
   disposeCalls = 0;
 
   constructor(readonly fabId: string, readonly commandId: string) {}
@@ -64,7 +81,10 @@ export class CountingCommandWorkflow implements CommandWorkflow {
     if (event.revision <= this.revision) return;
     this.revision = event.revision;
     this.outcome = event.outcome;
+    this.expired = false;
   }
+
+  markExpiredUnresolved(): void { this.expired = true; }
 
   async reconcile(): Promise<void> {}
 
@@ -72,11 +92,12 @@ export class CountingCommandWorkflow implements CommandWorkflow {
     this.disposeCalls += 1;
   }
 
-  get projection(): { state: string; revision: number; outcome: CommandOutcome | 'pending' } {
+  get projection() {
     return {
-      state: this.outcome === 'pending' ? 'idle' : this.outcome,
+      state: this.expired ? 'expired' : this.outcome === 'pending' ? 'idle' : this.outcome,
       revision: this.revision,
       outcome: this.outcome,
+      recoveryDisposition: this.expired ? 'expired-unresolved' as const : 'tracked' as const,
     };
   }
 }
@@ -143,10 +164,10 @@ export class FakeCommandEventSource implements CommandEventSource {
     increment: () => { this.failureCount += 1; },
     decrement: () => { this.failureCount = Math.max(0, this.failureCount - 1); },
   });
-  readonly connectionStatus = this.countStream(this.statusBus, {
+  readonly connectionStatus = Stream.concat(Stream.succeed<CommandConnectionStatus>('open'), this.countStream(this.statusBus, {
     increment: () => { this.statusCount += 1; },
     decrement: () => { this.statusCount = Math.max(0, this.statusCount - 1); },
-  });
+  }));
   readonly dirty = this.countStream(this.dirtyBus, {
     increment: () => { this.dirtyCount += 1; },
     decrement: () => { this.dirtyCount = Math.max(0, this.dirtyCount - 1); },
@@ -163,10 +184,13 @@ export class FakeCommandEventSource implements CommandEventSource {
   }
 
   /** ADR-010 §6.2: authoritative recovery safe watermark from FabRuntime. */
-  cover(cursor: CommandCursor): void {
+  cover(cursor: CommandCursor, authority: CommandCoverAuthority = 'journal') {
     this.acknowledgedCursorValue = advanceFakeCursor(this.acknowledgedCursorValue, cursor);
     this.deliveredCursor = advanceFakeCursor(this.deliveredCursor, cursor);
+    return { status: 'covered' as const, cursor, authority, latchReleased: false };
   }
+
+  readonly lossGeneration = 0;
 
   readonly availability: CommandSourceAvailability = 'ready';
 

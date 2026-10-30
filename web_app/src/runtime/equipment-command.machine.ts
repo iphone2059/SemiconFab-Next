@@ -18,6 +18,7 @@ const commandSetup = setup({
     events: {
       // The event key is the event type; the schema describes the payload only.
       RESULT: types<{ event: CommandResultEvent }>(),
+      EXPIRE: types<{}>(),
     },
   },
 });
@@ -42,17 +43,28 @@ export const equipmentCommandMachine = commandSetup.createMachine({
     idle: {
       on: {
         RESULT: ({ context, event }) => transition(context, event.event),
+        EXPIRE: { target: 'expired' },
       },
     },
     accepted: {
       on: {
         RESULT: ({ context, event }) => transition(context, event.event),
+        EXPIRE: { target: 'expired' },
       },
     },
     executing: {
       on: {
         RESULT: ({ context, event }) => transition(context, event.event),
+        EXPIRE: { target: 'expired' },
       },
+    },
+    expired: {
+      on: { RESULT: ({ context, event }) => {
+        if (event.event.revision === context.revision && event.event.outcome === context.outcome) {
+          return { target: stateForOutcome(event.event.outcome), context: {} };
+        }
+        return transition(context, event.event);
+      } },
     },
     succeeded: { type: 'final' },
     failed: { type: 'final' },

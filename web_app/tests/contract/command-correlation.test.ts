@@ -19,9 +19,9 @@ it('evicts the oldest *completed* terminal, not the longest-running one that fin
   // retained and the earlier completion of B evicted. The old Map-insertion
   // implementation evicted A because its first revision arrived first.
   expect(registry.isTerminal(fabId, 'A')).toBe(true);
-  expect(registry.lastRevision(fabId, 'A')).toBe(2);
+  expect(registry.lastObservedRevision(fabId, 'A')).toBe(2);
   expect(registry.isTerminal(fabId, 'B')).toBeUndefined();
-  expect(registry.lastRevision(fabId, 'B')).toBeUndefined();
+  expect(registry.lastObservedRevision(fabId, 'B')).toBeUndefined();
   expect(registry.size).toBe(1);
   expect(registry.terminalCount).toBe(1);
 });
@@ -47,11 +47,11 @@ it('enforces maxEntries as a hard cap even when every entry is active (R4-08)', 
   // oldest active watermarks are evicted instead of silently breaking the cap.
   expect(registry.size).toBe(2);
   expect(registry.terminalCount).toBe(0);
-  expect(registry.lastRevision(fabId, 'active-0')).toBeUndefined();
-  expect(registry.lastRevision(fabId, 'active-1')).toBeUndefined();
-  expect(registry.lastRevision(fabId, 'active-2')).toBeUndefined();
-  expect(registry.lastRevision(fabId, 'active-3')).toBe(1);
-  expect(registry.lastRevision(fabId, 'active-4')).toBe(1);
+  expect(registry.lastObservedRevision(fabId, 'active-0')).toBeUndefined();
+  expect(registry.lastObservedRevision(fabId, 'active-1')).toBeUndefined();
+  expect(registry.lastObservedRevision(fabId, 'active-2')).toBeUndefined();
+  expect(registry.lastObservedRevision(fabId, 'active-3')).toBe(1);
+  expect(registry.lastObservedRevision(fabId, 'active-4')).toBe(1);
   // Terminal entries are sacrificed before active ones under the hard cap.
   registry.observe(result('done', 2, 'succeeded'));
   expect(registry.isTerminal(fabId, 'done')).toBeUndefined();
@@ -64,7 +64,7 @@ it('tracks observed and applied revisions separately and only advances applied f
   const registry = new CommandCorrelationRegistry();
   expect(registry.lastAppliedRevision(fabId, 'cmd')).toBeUndefined();
   registry.observe(result('cmd', 3, 'executing'));
-  expect(registry.lastRevision(fabId, 'cmd')).toBe(3);
+  expect(registry.lastObservedRevision(fabId, 'cmd')).toBe(3);
   // Observed is not applied: only an actor-proven advance sets the applied watermark.
   expect(registry.lastAppliedRevision(fabId, 'cmd')).toBeUndefined();
   registry.markApplied(result('cmd', 2, 'executing'));
@@ -76,11 +76,11 @@ it('tracks observed and applied revisions separately and only advances applied f
   expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(3);
   // A newer observation keeps coverage while the observed watermark advances.
   registry.observe(result('cmd', 4, 'executing'));
-  expect(registry.lastRevision(fabId, 'cmd')).toBe(4);
+  expect(registry.lastObservedRevision(fabId, 'cmd')).toBe(4);
   expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(3);
   expect(registry.appliedRevision(fabId, 'cmd')).toBe(3);
   registry.clear();
-  expect(registry.lastRevision(fabId, 'cmd')).toBeUndefined();
+  expect(registry.lastObservedRevision(fabId, 'cmd')).toBeUndefined();
   expect(registry.lastAppliedRevision(fabId, 'cmd')).toBeUndefined();
 });
 
@@ -102,7 +102,7 @@ it('retains duplicate/stale decisions and TTL sweeps without touching active com
   expect(registry.observe(result('active', 0, 'accepted'))).toBe('stale');
   expect(registry.observe(result('done', 2, 'succeeded'))).toBe('new');
   expect(registry.observe(result('done', 2, 'failed'))).toBe('duplicate');
-  expect(registry.lastRevision(fabId, 'done')).toBe(2);
+  expect(registry.lastObservedRevision(fabId, 'done')).toBe(2);
   now = 50;
   expect(registry.sweep()).toBe(0);
   now = 100;

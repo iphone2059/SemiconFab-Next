@@ -54,7 +54,7 @@ async function replay(ops: readonly Op[]): Promise<string | undefined> {
   const runtime = fab.runtime;
   try {
     runtime.start();
-    for (const commandId of COMMAND_IDS) runtime.trackCommand(commandId);
+    for (const commandId of COMMAND_IDS) runtime.registerAcceptedCommand(commandId);
     const model = new Map<string, ModelState>(
       COMMAND_IDS.map((commandId) => [commandId, { revision: -1, outcome: 'pending' }]),
     );

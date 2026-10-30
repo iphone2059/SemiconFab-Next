@@ -12,12 +12,8 @@ import type { CommandEventSource } from '@/contracts/command-events.contract';
  * the bounded protocol diagnostics stay empty. There is no compat shim here: a
  * runtime that needs recovery must receive a real CommandEventSource.
  *
- * R4-06 composition contract: this source is only ever paired with an explicitly
- * display-only runtime — FabRuntimeFactory must receive `gateway: undefined`.
- * The composition root must never create an authoritative HTTP CommandGateway
- * around this source: recovery authority over a stream that can never deliver a
- * command result is a false health claim. A production composition root therefore
- * fails fast instead of assembling this source (see runtime-bootstrap.tsx).
+ * An HTTP gateway can still recover records while this source is unavailable;
+ * the runtime remains Degraded because no live stream can be covered.
  */
 export function createPendingCommandEventSource(): CommandEventSource {
   return {
@@ -28,7 +24,8 @@ export function createPendingCommandEventSource(): CommandEventSource {
     transportFailures: Stream.empty,
     dirty: Stream.empty,
     acknowledge: () => undefined,
-    cover: () => undefined,
+    cover: (cursor, authority = 'journal') => ({ status: 'insufficient', cursor, authority, latchReleased: false, reason: 'transport unavailable', recovery: 'list' }),
+    lossGeneration: 0,
     availability: 'unavailable',
     protocolDiagnostics: Object.freeze([]),
     cursors: {},

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-29T23:38:56.370Z",
-  "commit": "14aba4eab9c8fa3e0e81d9219402806eda06b752",
+  "generatedAt": "2026-10-30T04:46:49.388Z",
+  "commit": "f5dd8a8bfcf304ebf74bff0737dfc4589d8ddd9e",
   "mode": "on",
   "webUrl": "http://127.0.0.1:4180",
   "apiUrl": "http://127.0.0.1:5180",
@@ -39,15 +39,15 @@
       "actual": "all assertions passed",
       "consoleErrors": [],
       "network": {
-        "total": 12,
-        "eventSources": 0,
+        "total": 13,
+        "eventSources": 1,
         "keyRequests": [
           {
             "url": "http://127.0.0.1:4180/api/v1/sites",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=all",
             "count": 1
           },
           {
@@ -55,11 +55,15 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/f354ed7a-85ea-43d4-843e-f2701704f21e",
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/commands/stream?fabId=37793fb6-5679-b7a3-3fef-d970433697c1",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/f354ed7a-85ea-43d4-843e-f2701704f21e/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/34532997-4577-4e07-b3c3-80954499f1a5",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4180/api/v1/runs/34532997-4577-4e07-b3c3-80954499f1a5/results",
             "count": 1
           }
         ]
@@ -88,8 +92,8 @@
       "actual": "all assertions passed",
       "consoleErrors": [],
       "network": {
-        "total": 9,
-        "eventSources": 0,
+        "total": 10,
+        "eventSources": 1,
         "keyRequests": [
           {
             "url": "http://127.0.0.1:4180/api/v1/sites",
@@ -100,7 +104,11 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=all",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/commands/stream?fabId=37793fb6-5679-b7a3-3fef-d970433697c1",
             "count": 1
           }
         ]
@@ -129,8 +137,8 @@
       "actual": "all assertions passed",
       "consoleErrors": [],
       "network": {
-        "total": 19,
-        "eventSources": 0,
+        "total": 21,
+        "eventSources": 2,
         "keyRequests": [
           {
             "url": "http://127.0.0.1:4180/api/v1/sites",
@@ -141,7 +149,11 @@
             "count": 2
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=all",
+            "count": 2
+          },
+          {
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/commands/stream?fabId=37793fb6-5679-b7a3-3fef-d970433697c1",
             "count": 2
           }
         ]
@@ -170,15 +182,15 @@
       "actual": "all assertions passed",
       "consoleErrors": [],
       "network": {
-        "total": 18,
-        "eventSources": 0,
+        "total": 19,
+        "eventSources": 1,
         "keyRequests": [
           {
             "url": "http://127.0.0.1:4180/api/v1/sites",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=all",
             "count": 1
           },
           {
@@ -186,19 +198,23 @@
             "count": 5
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/f354ed7a-85ea-43d4-843e-f2701704f21e",
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/commands/stream?fabId=37793fb6-5679-b7a3-3fef-d970433697c1",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/f354ed7a-85ea-43d4-843e-f2701704f21e/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/34532997-4577-4e07-b3c3-80954499f1a5",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/96e160c7-63a6-4dd7-a101-0e78e1c7e032",
+            "url": "http://127.0.0.1:4180/api/v1/runs/34532997-4577-4e07-b3c3-80954499f1a5/results",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4180/api/v1/runs/051ea8dc-23cc-4449-80df-548e1da7bafc",
             "count": 2
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/96e160c7-63a6-4dd7-a101-0e78e1c7e032/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/051ea8dc-23cc-4449-80df-548e1da7bafc/results",
             "count": 1
           }
         ]
@@ -215,7 +231,7 @@
         {
           "description": "scene reports WebGPU lifecycle",
           "expected": "footer contains WebGPU",
-          "actual": "WebGPU\nFAB-01 · single FAB\nAMHS OHT 00/24\n121 RUN · 0 IDLE · 0 DOWN · 0 MAINT",
+          "actual": "WebGPU\nFAB-01 · independent FAB\nAMHS OHT 00/24\n121 RUN · 0 IDLE · 0 DOWN · 0 MAINT",
           "pass": true
         },
         {
@@ -241,15 +257,19 @@
       "actual": "all assertions passed",
       "consoleErrors": [],
       "network": {
-        "total": 16,
-        "eventSources": 2,
+        "total": 17,
+        "eventSources": 3,
         "keyRequests": [
           {
             "url": "http://127.0.0.1:4180/api/v1/sites",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=all",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/commands/stream?fabId=37793fb6-5679-b7a3-3fef-d970433697c1",
             "count": 1
           },
           {
@@ -294,7 +314,7 @@
         {
           "description": "SSE connection established",
           "expected": ">=1 EventSource",
-          "actual": "2",
+          "actual": "3",
           "pass": true
         }
       ],
@@ -302,15 +322,19 @@
       "actual": "all assertions passed",
       "consoleErrors": [],
       "network": {
-        "total": 14,
-        "eventSources": 2,
+        "total": 15,
+        "eventSources": 3,
         "keyRequests": [
           {
             "url": "http://127.0.0.1:4180/api/v1/sites",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=all",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/commands/stream?fabId=37793fb6-5679-b7a3-3fef-d970433697c1",
             "count": 1
           },
           {
@@ -350,18 +374,26 @@
       "pass": true,
       "actual": "all assertions passed",
       "consoleErrors": [
-        "console: Error: FAB 不存在：unknown-fab\n    at hp (http://127.0.0.1:4180/assets/index-B4ISpAnS.js:3:252426)\n    at async loader (http://127.0.0.1:4180/assets/index-B4ISpAnS.js:3:252925)\n    at async fn (http://127.0.0.1:4180/assets/react-I2ogZ3ri.js:11:24506)"
+        "console: Error: FAB 不存在：unknown-fab\n    at Gp (http://127.0.0.1:4180/assets/index-DEk8duIQ.js:3:291448)\n    at async loader (http://127.0.0.1:4180/assets/index-DEk8duIQ.js:3:291947)\n    at async fn (http://127.0.0.1:4180/assets/react-rhvK3tw_.js:11:24506)"
       ],
       "network": {
-        "total": 8,
-        "eventSources": 0,
+        "total": 12,
+        "eventSources": 1,
         "keyRequests": [
+          {
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=all",
+            "count": 2
+          },
           {
             "url": "http://127.0.0.1:4180/api/v1/sites",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/commands/stream?fabId=37793fb6-5679-b7a3-3fef-d970433697c1",
             "count": 1
           }
         ]
@@ -376,13 +408,13 @@
         {
           "description": "re-entry leaves at most one active stream per URL",
           "expected": "duplicates<=0",
-          "actual": "active=2 duplicates=0",
+          "actual": "active=3 duplicates=0",
           "pass": true
         },
         {
           "description": "first twin lifetime opened SSE streams",
           "expected": ">=1 EventSource",
-          "actual": "2",
+          "actual": "3",
           "pass": true
         }
       ],
@@ -390,15 +422,19 @@
       "actual": "all assertions passed",
       "consoleErrors": [],
       "network": {
-        "total": 42,
-        "eventSources": 4,
+        "total": 44,
+        "eventSources": 7,
         "keyRequests": [
+          {
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=all",
+            "count": 4
+          },
           {
             "url": "http://127.0.0.1:4180/api/v1/sites",
             "count": 3
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/commands/stream?fabId=37793fb6-5679-b7a3-3fef-d970433697c1",
             "count": 3
           },
           {
@@ -407,7 +443,7 @@
           },
           {
             "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status",
-            "count": 3
+            "count": 2
           },
           {
             "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status/stream",
@@ -422,11 +458,11 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/96e160c7-63a6-4dd7-a101-0e78e1c7e032",
+            "url": "http://127.0.0.1:4180/api/v1/runs/051ea8dc-23cc-4449-80df-548e1da7bafc",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/96e160c7-63a6-4dd7-a101-0e78e1c7e032/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/051ea8dc-23cc-4449-80df-548e1da7bafc/results",
             "count": 1
           }
         ]
@@ -457,15 +493,19 @@
       "actual": "all assertions passed",
       "consoleErrors": [],
       "network": {
-        "total": 14,
+        "total": 18,
         "eventSources": 1,
         "keyRequests": [
           {
-            "url": "http://127.0.0.1:4180/api/v1/sites",
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=active",
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/commands?status=all",
+            "count": 3
+          },
+          {
+            "url": "http://127.0.0.1:4180/api/v1/sites",
             "count": 1
           },
           {
@@ -473,11 +513,15 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/96e160c7-63a6-4dd7-a101-0e78e1c7e032",
+            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/commands/stream?fabId=37793fb6-5679-b7a3-3fef-d970433697c1",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/96e160c7-63a6-4dd7-a101-0e78e1c7e032/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/051ea8dc-23cc-4449-80df-548e1da7bafc",
+            "count": 1
+          },
+          {
+            "url": "http://127.0.0.1:4180/api/v1/runs/051ea8dc-23cc-4449-80df-548e1da7bafc/results",
             "count": 1
           },
           {
@@ -485,12 +529,8 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/commands/663cd649-faa2-4ec6-813f-314e0f249ac6",
-            "count": 1
-          },
-          {
-            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/commands/stream?fabId=37793fb6-5679-b7a3-3fef-d970433697c1",
-            "count": 1
+            "url": "http://127.0.0.1:4180/api/v1/commands/f9e6204c-3424-443d-a1a5-ca4c92dd7c2b",
+            "count": 2
           }
         ]
       },

@@ -60,7 +60,7 @@ it('recovers a refreshed page unconfirmed command from the durable FAB listing a
   try {
     const { requests, fetchImpl } = createBackendFetch((request) => {
       const url = request.url;
-      if (url.includes('/commands?status=active')) {
+      if (url.includes('/commands?status=all')) {
         return json({ epoch: 'epoch-1', latestSequence: 12, commands: [recoveryRecord()] });
       }
       if (url.includes('/api/v1/commands/cmd-7')) return json(statusBody());
@@ -81,7 +81,7 @@ it('recovers a refreshed page unconfirmed command from the durable FAB listing a
       latestSequence: 12,
       commands: [{ commandId: 'cmd-7', revision: 1, terminal: false }],
     });
-    expect(requests.some((request) => request.url === '/api/v1/sites/site-1/fabs/fab-a/commands?status=active')).toBe(true);
+    expect(requests.some((request) => request.url === '/api/v1/sites/site-1/fabs/fab-a/commands?status=all')).toBe(true);
     expect(requests.some((request) => request.url === '/api/v1/commands/cmd-7')).toBe(true);
     expect(runtime.getWorkflow('cmd-7')).toBeDefined();
     runtime.dispose();
@@ -100,7 +100,7 @@ it('R4-04: a replay-gap forces authoritative List recovery and never fabricates 
         // inherited lastEventId sequence} pair was used as a recovery cursor.
         return json({ epoch: 'epoch-2', hasGap: true, firstRetainedSequence: 20, latestSequence: 25, events: [], nextAfterSequence: 0 });
       }
-      if (url.includes('/commands?status=active')) {
+      if (url.includes('/commands?status=all')) {
         return json({
           epoch: 'epoch-2',
           latestSequence: 25,
@@ -114,7 +114,7 @@ it('R4-04: a replay-gap forces authoritative List recovery and never fabricates 
     const gateway = createHttpCommandGateway({ fetchImpl });
     const runtime = createFabRuntime(harness, { source, gateway });
     runtime.start();
-    runtime.trackCommand('cmd-7');
+    runtime.registerAcceptedCommand('cmd-7');
     // Let the startup refresh list settle before injecting the cursor break.
     await new Promise((resolve) => setTimeout(resolve, 25));
     const journalBefore = requests.filter((request) => request.url.includes('/command-journal')).length;
@@ -127,7 +127,7 @@ it('R4-04: a replay-gap forces authoritative List recovery and never fabricates 
     // R4-04: the replay-gap control frame has no id: line, so no journal cursor may
     // be manufactured from the inherited lastEventId; only the List is authoritative.
     expect(requests.filter((request) => request.url.includes('/command-journal'))).toHaveLength(journalBefore);
-    expect(requests.filter((request) => request.url.includes('/commands?status=active')).length).toBeGreaterThanOrEqual(2);
+    expect(requests.filter((request) => request.url.includes('/commands?status=all')).length).toBeGreaterThanOrEqual(2);
     runtime.dispose();
   } finally {
     await harness.dispose();
@@ -175,7 +175,7 @@ it('replays an overflow cursor through paginated journal requests and delivers a
     const gateway = createHttpCommandGateway({ fetchImpl });
     const runtime = createFabRuntime(harness, { source, gateway });
     runtime.start();
-    runtime.trackCommand('cmd-7');
+    runtime.registerAcceptedCommand('cmd-7');
     // Let the startup refresh list settle before injecting the overflow cursor.
     await new Promise((resolve) => setTimeout(resolve, 25));
     source.emitDirty({
@@ -203,7 +203,7 @@ it('contains a store-fault (503) recovery failure, keeps Dirty and eventually be
     let listAttempts = 0;
     const fetchImpl = async (input: RequestInfo | URL): Promise<Response> => {
       const url = String(input);
-      if (url.includes('/commands?status=active')) {
+      if (url.includes('/commands?status=all')) {
         listAttempts += 1;
         return new Response('COMMAND_STORE_UNAVAILABLE', { status: 503 });
       }

@@ -64,8 +64,8 @@ describe('matrix 1: three-cursor transport with ordered safe prefix (ADR-010 §6
     // Full three-cursor separation after the consumer applied/acknowledged 0..3.
     expect(harness.cursors().observed).toEqual({ epoch: 'epoch-1', sequence: 99 });
     expect(harness.cursors().delivered).toEqual({ epoch: 'epoch-1', sequence: 3 });
-    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 3 });
-    expect(harness.cursors().pendingAcknowledgements).toBe(0);
+    expect(harness.cursors().acknowledged).toBeUndefined();
+    expect(harness.cursors().pendingAcknowledgements).toBe(4);
   });
 
   it('acknowledged only advances for delivered events in ledger order and never regresses', async () => {
@@ -150,7 +150,7 @@ describe('matrix 1: recovery starts from the safe acknowledged prefix, never obs
         },
       });
       runtime.start();
-      runtime.trackCommand('cmd-1');
+      runtime.registerAcceptedCommand('cmd-1');
       await flush(20);
       expect(eventSources).toHaveLength(1);
       eventSources[0].onopen?.();

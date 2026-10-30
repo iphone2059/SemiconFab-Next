@@ -33,6 +33,7 @@
 | `15-round3-static-remediation-spec.md` | Round 3 静态整改规范（R3-01…R3-11，代码先行/暂不测试） |
 | `16-round3-static-review.md` | Round 3 逐文件静态审查记录、状态机/所有权表与推迟验证项 |
 | `17-round4-remediation-record.md` | Round 4（R4-01…R4-09）源码整改设计、契约变化、验证结果与未完成边界 |
+| `18-round5-remediation-specification.md` | Round 5 整改规范与验收要求（进行中） |
 
 ## 已实施的核心决定
 

@@ -144,8 +144,13 @@ export class CommandCorrelationRegistry {
     }
   }
 
-  lastRevision(fabId: string, commandId: string): number | undefined {
+  lastObservedRevision(fabId: string, commandId: string): number | undefined {
     return this.revisions.get(CommandCorrelationRegistry.key(fabId, commandId))?.revision;
+  }
+
+  hasUnappliedObservation(fabId: string, commandId: string): boolean {
+    const entry = this.revisions.get(CommandCorrelationRegistry.key(fabId, commandId));
+    return entry !== undefined && (entry.appliedRevision === undefined || entry.revision > entry.appliedRevision);
   }
 
   /** Highest revision the actor projection provably applied, if any (R4-03). */

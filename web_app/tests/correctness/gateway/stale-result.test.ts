@@ -54,6 +54,7 @@ it('CommandReconciler validates the scheduler entry generation before applying t
   let observedEntryId = -1;
   const pending = Effect.runPromise(reconciler.reconcile(workflow, 'fab-a', 'cmd-1', {
     entryId: 7,
+    apply: (event) => { workflow.receive(event); return true; },
     isCurrent: (identity) => {
       observedEntryId = identity.entryId;
       return current;
@@ -74,6 +75,7 @@ it('CommandReconciler applies the result while the workflow and generation are c
   const workflow = new RecordingWorkflow();
   const delivered = await Effect.runPromise(reconciler.reconcile(workflow, 'fab-a', 'cmd-1', {
     entryId: 1,
+    apply: (event) => { workflow.receive(event); return true; },
     isCurrent: () => true,
   }));
   expect(delivered).toBe(true);

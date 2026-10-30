@@ -49,8 +49,15 @@ export class XStateCommandWorkflowAdapter implements CommandWorkflow {
     this.start();
     const snapshot = this.actor.getSnapshot();
     if (isTerminalState(String(snapshot.value) as EquipmentCommandState)) return;
-    if (!Number.isInteger(event.revision) || event.revision <= snapshot.context.revision) return;
+    if (!Number.isInteger(event.revision) || event.revision < snapshot.context.revision) return;
+    if (event.revision === snapshot.context.revision &&
+      (this.state !== 'expired' || event.outcome !== snapshot.context.outcome)) return;
     this.actor.send({ type: 'RESULT', event });
+  }
+
+  markExpiredUnresolved(): void {
+    this.start();
+    this.actor.send({ type: 'EXPIRE' });
   }
 
   /**
@@ -87,6 +94,7 @@ export class XStateCommandWorkflowAdapter implements CommandWorkflow {
       state: this.state,
       revision: snapshot.context.revision,
       outcome: snapshot.context.outcome,
+      recoveryDisposition: this.state === 'expired' ? 'expired-unresolved' : 'tracked',
     };
   }
 }

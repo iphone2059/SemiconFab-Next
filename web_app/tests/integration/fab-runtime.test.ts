@@ -45,7 +45,7 @@ describe('FabRuntime single-FAB assembly (CE-07)', () => {
     expect(registry.size).toBe(1);
     expect(registry.fabIds).toEqual(['fab-a']);
     registry.startAll();
-    const oldWorkflow = first.runtime.trackCommand(commandId);
+    const oldWorkflow = first.runtime.registerAcceptedCommand(commandId);
     oldSource.emit(commandResult({ fabId: 'fab-a', commandId, revision: 5, outcome: 'executing' }));
     expect(adapter(first.runtime).state).toBe('executing');
 
@@ -54,7 +54,7 @@ describe('FabRuntime single-FAB assembly (CE-07)', () => {
     const current = createFab({ source: newSource });
     registry.register(current.runtime);
     registry.startAll();
-    expect(current.runtime.trackCommand(commandId)).not.toBe(oldWorkflow);
+    expect(current.runtime.registerAcceptedCommand(commandId)).not.toBe(oldWorkflow);
     expect(current.runtime.getProjection(commandId)).toMatchObject({ state: 'idle', revision: -1 });
     oldSource.emit(commandResult({ fabId: 'fab-a', commandId, revision: 6, outcome: 'succeeded' }));
     newSource.emit(commandResult({ fabId: 'unknown-fab', commandId, revision: 9, outcome: 'succeeded' }));
@@ -84,7 +84,7 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     for (let index = 0; index < 256; index++) {
       source.emit(commandResult({ fabId: 'fab-a', commandId: 'other-' + index, revision: 2, outcome: 'succeeded' }));
     }
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'succeeded' }));
     await expect.poll(() => runtime.getProjection(commandId)?.outcome, { timeout: 500 }).toBe('succeeded');
   });
@@ -93,12 +93,13 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     const source = new FakeCommandEventSource();
     let outcome: 'accepted' | 'succeeded' = 'accepted';
     const gateway = fakeCommandGateway({
+      listFabCommands: async () => emptyRecoveryList([commandRecord({ fabId: 'fab-a', commandId, revision: outcome === 'accepted' ? 0 : 2, outcome })]),
       getCommandStatus: async (fabId, targetCommandId) =>
         commandResult({ fabId, commandId: targetCommandId, revision: outcome === 'accepted' ? 0 : 2, outcome }),
     });
     const { runtime } = createFab({ source, gateway });
     runtime.start();
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     await runtime.reconcileCommand(commandId);
     outcome = 'succeeded';
     source.reconnect();
@@ -110,6 +111,7 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     let complete!: (event: ReturnType<typeof commandResult>) => void;
     let queries = 0;
     const gateway = fakeCommandGateway({
+      listFabCommands: async () => emptyRecoveryList([commandRecord({ fabId: 'fab-a', commandId, revision: 0, outcome: 'accepted' })]),
       getCommandStatus: () => {
         queries++;
         return new Promise((resolve) => {
@@ -119,7 +121,7 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     });
     const { runtime } = createFab({ source, gateway });
     runtime.start();
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     const pending = runtime.reconcileCommand(commandId);
     const concurrent = runtime.reconcileCommand(commandId);
     // The scheduler runs items on a scoped fiber; the duplicate calls merged into
@@ -138,6 +140,7 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     const source = new FakeCommandEventSource();
     let available = false;
     const gateway = fakeCommandGateway({
+      listFabCommands: async () => emptyRecoveryList([commandRecord({ fabId: 'fab-a', commandId, revision: 0, outcome: 'accepted' })]),
       getCommandStatus: async (fabId, targetCommandId) => {
         if (!available) throw new Error('offline');
         return commandResult({ fabId, commandId: targetCommandId, revision: 2, outcome: 'succeeded' });
@@ -145,7 +148,7 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     });
     const { runtime } = createFab({ source, gateway });
     runtime.start();
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     await expect(runtime.reconcileCommand(commandId)).resolves.toBe(false);
     available = true;
     source.reconnect();
@@ -159,7 +162,7 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     });
     const { runtime } = createFab({ source, gateway });
     runtime.start();
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'accepted' }));
     runtime.stop();
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'executing' }));
@@ -174,7 +177,7 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     runtime.start();
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'succeeded' }));
     expect(runtime.pendingCount).toBe(1);
-    expect(runtime.trackCommand(commandId)).toBeInstanceOf(XStateCommandWorkflowAdapter);
+    expect(runtime.registerAcceptedCommand(commandId)).toBeInstanceOf(XStateCommandWorkflowAdapter);
     expect(adapter(runtime).state).toBe('succeeded');
     expect(runtime.pendingCount).toBe(0);
   });
@@ -186,7 +189,7 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     registry.register(created.runtime);
     const lifecycle = new FabLifecycleCoordinator(registry);
     lifecycle.start();
-    registry.get('fab-a')!.trackCommand(commandId);
+    registry.get('fab-a')!.registerAcceptedCommand(commandId);
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'accepted' }));
     lifecycle.stop();
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'executing' }));
@@ -201,7 +204,7 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     const created = createFab({ source });
     const runtime = created.runtime;
     runtime.start();
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     const atom = runtime.projectionAtom(commandId);
     expect(created.harness.registry.get(atom)).toMatchObject({ state: 'idle', revision: -1, outcome: 'pending' });
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'accepted' }));
@@ -212,7 +215,7 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
   it('exposes reconcileCommand only when a gateway is assembled', async () => {
     const source = new FakeCommandEventSource();
     const { runtime } = createFab({ source });
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     await expect(runtime.reconcileCommand(commandId)).resolves.toBe(false);
   });
 });
@@ -237,6 +240,7 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     const source = new FakeCommandEventSource();
     let listAttempts = 0;
     const gateway = fakeCommandGateway({
+      getCommandStatus: async (fabId, commandId) => commandResult({ fabId, commandId, revision: 6, outcome: 'executing' }),
       getCommandJournalPage: async (): Promise<CommandJournalPage> => ({
         epoch: 'epoch-1',
         hasGap: false,
@@ -254,7 +258,7 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     });
     const { runtime } = createFab({ source, gateway });
     runtime.start();
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
     const listCallsBefore = gateway.listCalls.length;
 
@@ -293,7 +297,7 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     });
     const { runtime } = createFab({ source, gateway });
     runtime.start();
-    runtime.trackCommand('cmd-1');
+    runtime.registerAcceptedCommand('cmd-1');
     await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
     const listCallsBefore = gateway.listCalls.length;
 
@@ -326,7 +330,7 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     });
     const { runtime } = createFab({ source, gateway });
     runtime.start();
-    runtime.trackCommand('cmd-1');
+    runtime.registerAcceptedCommand('cmd-1');
     await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
     const listCallsBefore = gateway.listCalls.length;
 
@@ -351,7 +355,7 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
       recovery: { maxAttempts: 2, backoffMs: [1], requestTimeoutMs: 25 },
     });
     runtime.start();
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
     source.emitDirty(dirtyWithCursor());
 
@@ -376,7 +380,7 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
       recovery: { maxAttempts: 8, backoffMs: [1], requestTimeoutMs: 60_000 },
     });
     runtime.start();
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
     source.emitDirty(dirtyWithCursor());
     await expect.poll(() => journalCalls, { timeout: 1_000 }).toBeGreaterThanOrEqual(1);
@@ -396,6 +400,7 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     let journalCalls = 0;
     let listAttempts = 0;
     const gateway = fakeCommandGateway({
+      getCommandStatus: async (fabId, commandId) => commandResult({ fabId, commandId, revision: 5, outcome: 'executing' }),
       getCommandJournalPage: () => {
         journalCalls += 1;
         return new Promise<never>(() => {});
@@ -411,7 +416,7 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
       recovery: { maxAttempts: 8, backoffMs: [1], requestTimeoutMs: 60_000 },
     });
     runtime.start();
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
     source.emitDirty(dirtyWithCursor());
     await expect.poll(() => journalCalls, { timeout: 1_000 }).toBeGreaterThanOrEqual(1);
@@ -433,7 +438,7 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     // Explicit display-only composition: the gateway property is passed as undefined.
     const { runtime } = createFab({ source });
     runtime.start();
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     source.emitDirty({ reason: 'overflow', droppedCount: 2 });
     source.emitGap({ epoch: 'epoch-1', sequence: 2 });
     await flush(25);
@@ -464,7 +469,7 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     });
     runtime.start();
     await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
-    for (let index = 0; index < 4; index += 1) runtime.trackCommand('cmd-' + index);
+    for (let index = 0; index < 4; index += 1) runtime.registerAcceptedCommand('cmd-' + index);
 
     // The admission-time drops are recorded as generation-stamped intents and
     // proven covered by the next authoritative snapshot (the bounded post-snapshot
@@ -484,6 +489,7 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     let armed = false;
     let injected = false;
     const gateway = fakeCommandGateway({
+      listFabCommands: async () => emptyRecoveryList([commandRecord({ fabId: 'fab-a', commandId, revision: 0, outcome: 'accepted' })]),
       getCommandStatus: async (fabId, targetCommandId) => {
         if (armed && !injected) {
           injected = true;
@@ -491,8 +497,8 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
           // running: the drop happened AFTER the authoritative snapshot. A
           // microtask keeps the nested runtime call outside the Effect callback.
           queueMicrotask(() => {
-            runtimeRef?.trackCommand('late-1');
-            runtimeRef?.trackCommand('late-2');
+            runtimeRef?.registerAcceptedCommand('late-1');
+            runtimeRef?.registerAcceptedCommand('late-2');
           });
         }
         return commandResult({ fabId, commandId: targetCommandId, revision: 1, outcome: 'executing' });
@@ -507,15 +513,15 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     });
     runtimeRef = runtime;
     runtime.start();
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
 
     armed = true;
     source.emitDirty({ reason: 'overflow', droppedCount: 1 });
     await expect.poll(() => runtime.recoveryState.phase, { timeout: 2_000 }).toBe('Unrecoverable');
-    expect(runtime.recoveryState.needsNextAuthoritativePass).toBe(false);
+    expect(runtime.recoveryState.needsNextAuthoritativePass).toBe(true);
     expect(runtime.recoveryState.lastError).toMatch(/post-snapshot/);
-    expect(runtime.pendingDropCount).toBe(0);
+    expect(runtime.pendingDropCount).toBeGreaterThan(0);
     expect(runtime.recoveryHistory.some((entry) =>
       entry.cause === 'error' && /post-snapshot/.test(entry.message ?? ''))).toBe(true);
   });
@@ -526,12 +532,13 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     let armed = false;
     let injected = false;
     const gateway = fakeCommandGateway({
+      listFabCommands: async () => emptyRecoveryList([commandRecord({ fabId: 'fab-a', commandId, revision: 0, outcome: 'accepted' })]),
       getCommandStatus: async (fabId, targetCommandId) => {
         if (armed && !injected) {
           injected = true;
           queueMicrotask(() => {
-            runtimeRef?.trackCommand('late-1');
-            runtimeRef?.trackCommand('late-2');
+            runtimeRef?.registerAcceptedCommand('late-1');
+            runtimeRef?.registerAcceptedCommand('late-2');
           });
         }
         return commandResult({ fabId, commandId: targetCommandId, revision: 1, outcome: 'executing' });
@@ -546,7 +553,7 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     });
     runtimeRef = runtime;
     runtime.start();
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
 
     armed = true;
@@ -557,4 +564,52 @@ describe('FabRuntime Round 3 recovery contract (R3-01/R3-03/R3-05/R3-07/R3-08)',
     expect(runtime.recoveryState.needsNextAuthoritativePass).toBe(false);
     expect(gateway.listCalls.length).toBeGreaterThanOrEqual(3);
   });
+});
+
+
+it('reserves capacity once per idempotency key and registers accepted commands without readmission', () => {
+  const { runtime } = createFab({ maxActiveCommands: 1 });
+  const reservation = runtime.reserveCommandAdmission('key-1');
+  expect(runtime.reserveCommandAdmission('key-1')).toBe(reservation);
+  expect(() => runtime.reserveCommandAdmission('key-2')).toThrow();
+  runtime.registerAcceptedCommand('already-accepted');
+  expect(() => reservation.commit('server-accepted')).not.toThrow();
+  expect(reservation.state).toBe('committed');
+  expect(runtime.getWorkflow('server-accepted')).toBeDefined();
+});
+
+it('expires only commands present before an empty authoritative list snapshot', async () => {
+  let resolveList!: (value: ReturnType<typeof emptyRecoveryList>) => void;
+  const gateway = fakeCommandGateway({
+    listFabCommands: () => new Promise(resolve => { resolveList = resolve; }),
+    getCommandStatus: async (fabId, commandId) => commandResult({ fabId, commandId, revision: 1, outcome: 'executing' }),
+  });
+  const { runtime } = createFab({ gateway, source: new FakeCommandEventSource() });
+  runtime.registerAcceptedCommand('old');
+  runtime.start();
+  await expect.poll(() => typeof resolveList).toBe('function');
+  runtime.registerAcceptedCommand('new');
+  resolveList(emptyRecoveryList());
+  await expect.poll(() => runtime.getProjection('old')?.recoveryDisposition).toBe('expired-unresolved');
+  expect(runtime.getProjection('old')?.outcome).toBe('executing');
+  expect(runtime.getProjection('new')?.recoveryDisposition).toBe('tracked');
+});
+
+
+it('treats a 404 as unresolved until a later complete list proves the command absent', async () => {
+  let present = true;
+  const gateway = fakeCommandGateway({
+    listFabCommands: async () => emptyRecoveryList(present ? [commandRecord({ fabId: 'fab-a', commandId, revision: 1, outcome: 'executing' })] : []),
+    getCommandStatus: async () => null,
+  });
+  const { runtime } = createFab({ source: new FakeCommandEventSource(), gateway, recovery: { backoffMs: [10], maxAttempts: 20 } });
+  runtime.start();
+  await expect.poll(() => gateway.listCalls.length, { timeout: 1000 }).toBeGreaterThanOrEqual(2);
+  expect(runtime.recoveryState.phase).not.toBe('Healthy');
+  expect(runtime.getProjection(commandId)?.recoveryDisposition).toBe('tracked');
+  present = false;
+  await expect.poll(() => runtime.getProjection(commandId)?.recoveryDisposition, { timeout: 1000 }).toBe('expired-unresolved');
+  await expect.poll(() => runtime.recoveryState.phase, { timeout: 1000 }).toBe('Healthy');
+  expect(runtime.activeCommandCount).toBe(0);
+  expect(runtime.getProjection(commandId)?.outcome).toBe('executing');
 });

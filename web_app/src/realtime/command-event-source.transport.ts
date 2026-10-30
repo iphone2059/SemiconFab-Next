@@ -397,6 +397,7 @@ export function createSseCommandEventSource(
    */
   let untrackedHighWater: CommandCursor | undefined;
   let untrustedUnknownGap = false;
+  let lossGeneration = 0;
   /** One Dirty signal per stalled-prefix episode (later applied behind a pending head). */
   let prefixStallSignalled = false;
 
@@ -478,6 +479,7 @@ export function createSseCommandEventSource(
 
   /** Record one delivered-but-untracked position; cross-epoch positions cannot be ordered. */
   const recordUntrackedPosition = (cursor: CommandCursor): void => {
+    lossGeneration += 1;
     const highWater = untrackedHighWater;
     if (highWater === undefined) {
       untrackedHighWater = { epoch: cursor.epoch, sequence: cursor.sequence };
@@ -504,7 +506,10 @@ export function createSseCommandEventSource(
   const markUntrustedGap = (input: UntrustedGapInput): void => {
     ackBlockedUntilCover = true;
     if (input.untracked !== undefined) recordUntrackedPosition(input.untracked);
-    else untrustedUnknownGap = true;
+    else {
+      lossGeneration += 1;
+      untrustedUnknownGap = true;
+    }
     recordDiagnostic(input.kind, input.detail, input.cursor ?? input.untracked);
     if (input.publishDirtySignal === false) return;
     publishDirty(input.reason, input.droppedIncrement ?? 0, input.includeLossEpisode === true);
@@ -516,6 +521,7 @@ export function createSseCommandEventSource(
    * past) the untracked latch position; the latch itself only cover() can release.
    */
   const drainAcknowledgedPrefix = (): void => {
+    if (ackBlockedUntilCover || ledgerSaturated) return;
     while (ledger.length > 0) {
       const head = ledger[0];
       if (head.status === 'pending') break;
@@ -647,9 +653,18 @@ export function createSseCommandEventSource(
    * consumer retries the authoritative List. A same-epoch acknowledged sequence
    * never regresses.
    */
-  const cover = (cursor: CommandCursor, authority: CommandCoverAuthority = 'journal'): void => {
+  const cover = (cursor: CommandCursor, authority: CommandCoverAuthority = 'journal', lossBarrier?: number) => {
     const previousEpoch = state.acknowledged?.epoch ?? ledgerEpoch;
     const epochReplaced = previousEpoch !== undefined && previousEpoch !== cursor.epoch;
+    const blocked = ackBlockedUntilCover || ledgerSaturated;
+    if (typeof cursor.epoch !== 'string' || cursor.epoch.length === 0 || !Number.isSafeInteger(cursor.sequence) || cursor.sequence < 0 ||
+      (epochReplaced && authority !== 'list') ||
+      (blocked && (lossBarrier === undefined || lossBarrier !== lossGeneration || !coverCoversLatch(cursor, authority)))) {
+      const reason = 'authoritative cover does not cover the untrusted gap or epoch; authoritative List required';
+      recordDiagnostic('ack-ledger', reason, cursor);
+      publishDirty('uncovered-gap', 0, false);
+      return { status: 'insufficient' as const, cursor: { ...cursor }, authority, latchReleased: false as const, reason, recovery: 'list' as const };
+    }
     // 1) Apply authoritative coverage to the ordered ledger. Pending entries are
     //    never evicted, only proven covered; an epoch replacement supersedes the
     //    old ledger entirely (its positions are not comparable).
@@ -679,23 +694,15 @@ export function createSseCommandEventSource(
         : { ...cursor };
     // 3) Release the latch only when the authoritative watermark covers the
     //    untracked range; otherwise keep it sticky and force another List pass.
-    if (ackBlockedUntilCover || ledgerSaturated) {
-      if (coverCoversLatch(cursor, authority)) {
-        ackBlockedUntilCover = false;
-        ledgerSaturated = false;
-        untrackedHighWater = undefined;
-        untrustedUnknownGap = false;
-        prefixStallSignalled = false;
-      } else {
-        recordDiagnostic(
-          'ack-ledger',
-          'authoritative cover did not cover the ACK-blocked untracked position; authoritative List required',
-          cursor,
-        );
-        publishDirty('uncovered-gap', 0, false);
-      }
+    if (blocked) {
+      ackBlockedUntilCover = false;
+      ledgerSaturated = false;
+      untrackedHighWater = undefined;
+      untrustedUnknownGap = false;
+      prefixStallSignalled = false;
     }
     drainAcknowledgedPrefix();
+    return { status: 'covered' as const, cursor: { ...cursor }, authority, latchReleased: blocked };
   };
 
   const recordDeliveredFrame = (event: CommandResultEvent, cursor: CommandCursor | undefined): void => {
@@ -1065,6 +1072,9 @@ export function createSseCommandEventSource(
     dirty: dirty.stream,
     acknowledge,
     cover,
+    get lossGeneration(): number {
+      return lossGeneration;
+    },
     get availability(): CommandSourceAvailability {
       return sourceAvailability;
     },

@@ -70,6 +70,7 @@ function setup(options: SetupOptions = {}): Setup {
 
 /** Workflow that proves application through a projection (production XState shape). */
 class ProjectionWorkflow implements CommandWorkflow {
+  markExpiredUnresolved(): void {}
   readonly events: CommandResultEvent[] = [];
   receiveCalls = 0;
   private revisionValue = -1;
@@ -92,12 +93,14 @@ class ProjectionWorkflow implements CommandWorkflow {
       state: this.outcomeValue === 'pending' ? 'idle' : this.outcomeValue,
       revision: this.revisionValue,
       outcome: this.outcomeValue,
+      recoveryDisposition: 'tracked',
     };
   }
 }
 
 /** Projection that never advances: the actor rejects every revision (terminal/stale). */
 class RejectingWorkflow implements CommandWorkflow {
+  markExpiredUnresolved(): void {}
   readonly events: CommandResultEvent[] = [];
 
   receive(event: CommandResultEvent): void {
@@ -109,7 +112,7 @@ class RejectingWorkflow implements CommandWorkflow {
   dispose(): void {}
 
   get projection(): CommandWorkflowProjection {
-    return { state: 'terminal', revision: 0, outcome: 'succeeded' };
+    return { state: 'terminal', revision: 0, outcome: 'succeeded', recoveryDisposition: 'tracked' };
   }
 }
 
@@ -138,7 +141,7 @@ describe('CommandEventBridge (CE-01..CE-05)', () => {
     source.emit({ ...event, outcome: 'succeeded' });
     expect(workflow.events).toHaveLength(1);
     expect(workflow.events[0].outcome).toBe('accepted');
-    expect(bridge.correlationRegistry.lastRevision(fabId, commandId)).toBe(1);
+    expect(bridge.correlationRegistry.lastObservedRevision(fabId, commandId)).toBe(1);
   });
 
   it('CE-03 ignores an out-of-order revision and never regresses state', () => {
@@ -148,7 +151,7 @@ describe('CommandEventBridge (CE-01..CE-05)', () => {
     source.emit(commandResult({ fabId, commandId, revision: 2, outcome: 'executing' }));
     source.emit(commandResult({ fabId, commandId, revision: 1, outcome: 'accepted' }));
     expect(workflow.events.map((event) => event.revision)).toEqual([2]);
-    expect(bridge.correlationRegistry.lastRevision(fabId, commandId)).toBe(2);
+    expect(bridge.correlationRegistry.lastObservedRevision(fabId, commandId)).toBe(2);
   });
 
   it('CE-04 keeps a confirmation that arrives before the HTTP response and correlates it later', () => {
@@ -219,7 +222,7 @@ describe('R4-03 observed/applied split and authoritative receive', () => {
     // Missing workflow => held in the bounded recovery queue, never dropped.
     expect(bridge.receive(event)).toBe('held');
     expect(bridge.pendingCount).toBe(1);
-    expect(bridge.correlationRegistry.lastRevision(fabId, commandId)).toBe(1);
+    expect(bridge.correlationRegistry.lastObservedRevision(fabId, commandId)).toBe(1);
     // Observed is not applied.
     expect(bridge.correlationRegistry.lastAppliedRevision(fabId, commandId)).toBeUndefined();
 
@@ -241,7 +244,7 @@ describe('R4-03 observed/applied split and authoritative receive', () => {
     const event = commandResult({ fabId, commandId, revision: 2, outcome: 'executing' });
     expect(bridge.receive(event)).toBe('held');
     // No workflow => the revision was observed but never applied.
-    expect(bridge.receive(event)).toBe('rejected');
+    expect(bridge.receive(event)).toBe('held');
     const projected = new ProjectionWorkflow();
     workflows.register(fabId, commandId, projected);
     expect(bridge.flushRecovery()).toEqual({ applied: 1, held: 0, rejected: 0 });
@@ -254,15 +257,12 @@ describe('R4-03 observed/applied split and authoritative receive', () => {
     const event = commandResult({ fabId, commandId, revision: 3, outcome: 'executing' });
     // SSE observed the revision while no workflow existed: observed, not applied.
     expect(bridge.receive(event)).toBe('held');
-    expect(bridge.correlationRegistry.lastRevision(fabId, commandId)).toBe(3);
+    expect(bridge.correlationRegistry.lastObservedRevision(fabId, commandId)).toBe(3);
     expect(bridge.correlationRegistry.lastAppliedRevision(fabId, commandId)).toBeUndefined();
 
     const projected = new ProjectionWorkflow();
     workflows.register(fabId, commandId, projected);
-    // The realtime path still refuses the duplicate (actor has not applied it) ...
-    expect(bridge.receive(event)).toBe('rejected');
-    expect(projected.events).toHaveLength(0);
-    // ... but an authoritative snapshot must be able to re-apply the same revision.
+    // An authoritative snapshot must be able to apply the observed revision.
     expect(bridge.receiveAuthoritative(event, 3)).toBe('applied');
     expect(projected.events.map((result) => result.revision)).toEqual([3]);
     expect(bridge.correlationRegistry.lastAppliedRevision(fabId, commandId)).toBe(3);
@@ -273,18 +273,20 @@ describe('R4-03 observed/applied split and authoritative receive', () => {
     expect(projected.events).toHaveLength(1);
   });
 
-  it('an unverifiable workflow only trusts authoritative coverage', () => {
-    const { workflows, workflow, bridge } = setup({ fabId });
+  it('an unverifiable workflow cannot prove either realtime or authoritative application', () => {
+    const { workflows, bridge } = setup({ fabId });
+    const events: CommandResultEvent[] = [];
+    const workflow: CommandWorkflow = { receive: event => { events.push(event); }, markExpiredUnresolved() {}, async reconcile() {}, dispose() {} };
     workflows.register(fabId, commandId, workflow);
     const event = commandResult({ fabId, commandId, revision: 4, outcome: 'succeeded' });
     // No projection => delivery is optimistic for realtime but can never be proven.
-    expect(bridge.receive(event)).toBe('applied');
+    expect(bridge.receive(event)).toBe('rejected');
     expect(bridge.correlationRegistry.lastAppliedRevision(fabId, commandId)).toBeUndefined();
     // No cover supplied: the authoritative path refuses to claim application.
     expect(bridge.receiveAuthoritative(event)).toBe('rejected');
     // Covered by the authoritative snapshot revision: trusted.
-    expect(bridge.receiveAuthoritative(event, 4)).toBe('applied');
-    expect(workflow.events.map((result) => result.revision)).toEqual([4, 4, 4]);
+    expect(bridge.receiveAuthoritative(event, 4)).toBe('rejected');
+    expect(events.map((result) => result.revision)).toEqual([4, 4, 4]);
   });
 
   it('flushRecovery re-holds rejected events, reports them, and never drain-and-drops', () => {
@@ -355,4 +357,18 @@ describe('R4-05 consumer fiber observation', () => {
     // The consumer survives the defect: no silent fiber death, no Dirty restart storm.
     expect(bridge.running).toBe(true);
   });
+});
+
+
+it('holds an actor rejection and does not ACK a duplicate observed revision', () => {
+  const rejected: CommandResultEvent[] = [];
+  const { workflows, bridge, source } = setup({ fabId, onRejected: event => rejected.push(event) });
+  workflows.register(fabId, commandId, new RejectingWorkflow());
+  const event = commandResult({ fabId, commandId, revision: 5, outcome: 'executing' });
+  expect(bridge.receive(event)).toBe('rejected');
+  expect(bridge.receive(event)).toBe('rejected');
+  expect(bridge.pendingCount).toBe(1);
+  expect(rejected).toHaveLength(2);
+  expect(bridge.correlationRegistry.lastAppliedRevision(fabId, commandId)).toBeUndefined();
+  expect(source.cursors.acknowledged).toBeUndefined();
 });

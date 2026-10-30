@@ -26,7 +26,7 @@ it('publishes the first projection snapshot and every delivered revision to the 
   const runtime = fab.runtime;
   const atom = runtime.projectionAtom('cmd-1');
   runtime.start();
-  runtime.trackCommand('cmd-1');
+  runtime.registerAcceptedCommand('cmd-1');
   expect(fab.harness.registry.get(atom), 'the initial actor snapshot must not be lost').toMatchObject(idleProjection);
 
   source.emit(commandResult({ fabId: 'fab-a', commandId: 'cmd-1', revision: 1, outcome: 'executing' }));
@@ -43,13 +43,14 @@ it('owns one CommandScope per command and no global workflow scope or subscribe 
     source: new FakeCommandEventSource(),
     createWorkflow: (_fabId, commandId): CommandWorkflow => ({
       receive() {},
+      markExpiredUnresolved() {},
       async reconcile() {},
       dispose() {
         disposals.push(commandId);
       },
-      projection: { state: 'idle', revision: -1, outcome: 'pending' },
+      projection: { state: 'idle', revision: -1, outcome: 'pending', recoveryDisposition: 'tracked' },
     }),
-    retention: { maxTerminalWorkflows: 1, terminalTtlMs: 60_000, sweepIntervalMs: 1_000 },
+    retention: { maxResolvedWorkflows: 1, resolvedWorkflowTtlMs: 60_000, sweepIntervalMs: 1_000 },
   });
   fabs.push(fab);
   const runtime = fab.runtime;
@@ -58,8 +59,8 @@ it('owns one CommandScope per command and no global workflow scope or subscribe 
   runtime.start();
   const source = fab.runtime === runtime ? undefined : undefined;
   void source;
-  runtime.trackCommand('cmd-1');
-  runtime.trackCommand('cmd-2');
+  runtime.registerAcceptedCommand('cmd-1');
+  runtime.registerAcceptedCommand('cmd-2');
   expect(runtime.workflowCount).toBe(2);
   runtime.dispose();
   // One finalizer per command Scope, exactly once.
@@ -74,7 +75,7 @@ it('renders through the Atom projection via useCommandProjection', () => {
   fabs.push(fab);
   const runtime = fab.runtime;
   runtime.start();
-  runtime.trackCommand('cmd-1');
+  runtime.registerAcceptedCommand('cmd-1');
   const runtimes = new FabRuntimeRegistry();
   runtimes.register(runtime);
   const { result, rerender } = renderHook(

@@ -58,3 +58,8 @@ export interface ResourceDefinition<A, E> {
 - 前端 `FabRuntimeOptions.maxActiveCommands`（默认 64，镜像后端默认）在 `trackCommand` 处抛 `ActiveCommandCapacityError`；authoritative 恢复可镜像后端已有状态并产生 `active-capacity` 诊断。Correlation `maxEntries` 为硬上限（terminal 优先，其次 oldest active），runtime 以 `maxActiveCommands + maxTerminalWorkflows` 传参。
 - 领域策略：校验器只验证 capability/action/可选状态前置条件，未建立每设备唯一 active 约束；本轮采用 FAB 级 admission（与现有 START/STOP/PAUSE 序列语义一致），如未来要求每设备唯一 active，需增加 `(siteId,fabId,equipmentId)` 活动唯一约束并在领域层显式定义。
 - R4-09（SSE 扫描游标）：`ApiHost` live loop 在 `pending.HasGap == false` 时始终推进 Site 级 `cursor = pending.LatestSequence`，即使目标 FAB 过滤后无事件；仅实际写出帧时 flush。
+
+
+## Round 5（进行中）
+
+Round 5 正在整改：POST 前预留 admission；服务端接受后由 FAB registry 注册，接受后注册不再执行容量拒绝。

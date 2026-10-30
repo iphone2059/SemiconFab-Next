@@ -18,7 +18,8 @@ vi.mock('@/api/commands.mutation', () => ({ submitEquipmentCommand: mutation.sub
 const submit = mutation.submitEquipmentCommand;
 
 interface FakeRuntime {
-  trackCommand: ReturnType<typeof vi.fn>;
+  trackCommand: ReturnType<typeof vi.fn<(commandId: string) => void>>;
+  reserveCommandAdmission: ReturnType<typeof vi.fn>;
   /** The only projection read path of the new contract: a bounded per-runtime Atom. */
   projectionAtom: ReturnType<typeof vi.fn>;
 }
@@ -38,11 +39,22 @@ function createRegistry(): RegistryFixture {
     return atom;
   };
   const createRuntime = (): FakeRuntime => ({
-    trackCommand: vi.fn(),
+    trackCommand: vi.fn<(commandId: string) => void>(),
+    reserveCommandAdmission: vi.fn(() => {
+      let state: 'reserved' | 'released' = 'reserved';
+      return { get state() { return state; }, release() { state = 'released'; } };
+    }),
     projectionAtom: vi.fn((commandId: string) => atomFor(commandId)),
   });
   const runtime = createRuntime();
-  const registry = { get: (fabId: string) => fabId === 'fab-a' ? runtime : undefined } as unknown as FabRuntimeRegistry;
+  const registry = {
+    get: (fabId: string) => fabId === 'fab-a' ? runtime : undefined,
+    registerAcceptedCommand: (_siteId: string, _fabId: string, commandId: string, reservation: { release(): void }) => {
+      runtime.trackCommand(commandId);
+      reservation.release();
+    },
+    requestAuthoritativeRecovery: () => {},
+  } as unknown as FabRuntimeRegistry;
   return { registry, runtime };
 }
 
@@ -120,7 +132,7 @@ it('ignores a previous site-scope completion after rebinding the same FAB in pla
   });
 
   // Nothing from the previous scope may enter the new console lifetime.
-  expect(runtime.trackCommand).not.toHaveBeenCalled();
+  expect(runtime.trackCommand).toHaveBeenCalledWith('cmd-a-1');
   expect(console.text()).not.toContain('cmd-a-1'.slice(0, 8));
   expect(console.text()).not.toContain('等待 SSE 事件…');
   expect(console.alert()).toBeNull();
@@ -150,7 +162,7 @@ it('ignores a previous site-scope failure after rebinding the same FAB in place'
   expect(runtime.trackCommand).not.toHaveBeenCalled();
 });
 
-it('drops a completion whose console lifetime ended (keyed remount)', async () => {
+it('registers an accepted command after the console lifetime ended', async () => {
   const { registry, runtime } = createRegistry();
   const pending = deferred<SubmittedEquipmentCommand>();
   submit.mockReturnValueOnce(Effect.promise(() => pending.promise));
@@ -166,8 +178,7 @@ it('drops a completion whose console lifetime ended (keyed remount)', async () =
     await Promise.resolve();
   });
 
-  // An unmounted console must not mutate a runtime or observable state.
-  expect(runtime.trackCommand).not.toHaveBeenCalled();
+  expect(runtime.trackCommand).toHaveBeenCalledWith('cmd-a-1');
 });
 
 it('reuses the idempotency key only while retrying the same command identity', async () => {

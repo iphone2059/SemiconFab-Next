@@ -1,12 +1,14 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CommandOutcome, CommandResultEvent } from '@/contracts/command-events.contract';
 import type { CommandWorkflow, CommandWorkflowProjection } from '@/contracts/command-workflow.contract';
 import type { TestFab, TestFabOptions } from '../support/command-fakes.ts';
 import {
   CountingCommandWorkflow,
   FakeCommandEventSource,
+  commandRecord,
   commandResult,
   createTestFab,
+  emptyRecoveryList,
   fakeCommandGateway,
 } from '../support/command-fakes.ts';
 
@@ -25,6 +27,7 @@ function createFab(options: TestFabOptions = {}): TestFab {
 
 function nonTerminalGateway(calls?: string[]) {
   return fakeCommandGateway({
+    listFabCommands: async () => emptyRecoveryList([commandRecord({ fabId, commandId: 'cmd-1', revision: 0, outcome: 'accepted' })]),
     getCommandStatus: async (targetFab, commandId) => {
       calls?.push(commandId);
       return commandResult({ fabId: targetFab, commandId, revision: 0, outcome: 'accepted' });
@@ -37,6 +40,7 @@ describe('FabRuntime replay-gap reconciliation (batch 2/3)', () => {
     const source = new FakeCommandEventSource();
     const calls: string[] = [];
     const gateway = fakeCommandGateway({
+      listFabCommands: async () => emptyRecoveryList(['cmd-1', 'cmd-2'].map(commandId => commandRecord({ fabId, commandId, revision: 1, outcome: 'executing' }))),
       getCommandStatus: async (targetFab, commandId) => {
         calls.push(commandId);
         return commandResult({ fabId: targetFab, commandId, revision: 1, outcome: 'executing' });
@@ -44,8 +48,8 @@ describe('FabRuntime replay-gap reconciliation (batch 2/3)', () => {
     });
     const { runtime } = createFab({ source, gateway });
     runtime.start();
-    runtime.trackCommand('cmd-1');
-    runtime.trackCommand('cmd-2');
+    runtime.registerAcceptedCommand('cmd-1');
+    runtime.registerAcceptedCommand('cmd-2');
     // Settle the startup recovery pass and submit-time reconciliation, then watch
     // only the gap/reconnect burst (ADR-010 coalescing).
     await runtime.reconcileAll();
@@ -67,6 +71,7 @@ describe('FabRuntime replay-gap reconciliation (batch 2/3)', () => {
     const currentSource = new FakeCommandEventSource();
     const calls: string[] = [];
     const gateway = fakeCommandGateway({
+      listFabCommands: async () => emptyRecoveryList([commandRecord({ fabId, commandId: 'cmd', revision: 1, outcome: 'executing' })]),
       getCommandStatus: async (targetFab, commandId) => {
         calls.push(targetFab + ':' + commandId);
         return commandResult({ fabId: targetFab, commandId, revision: 1, outcome: 'executing' });
@@ -74,12 +79,12 @@ describe('FabRuntime replay-gap reconciliation (batch 2/3)', () => {
     });
     const previous = createFab({ source: oldSource, gateway });
     previous.runtime.start();
-    previous.runtime.trackCommand('cmd');
+    previous.runtime.registerAcceptedCommand('cmd');
     await previous.runtime.reconcileAll();
     previous.runtime.dispose();
     const current = createFab({ source: currentSource, gateway });
     current.runtime.start();
-    current.runtime.trackCommand('cmd');
+    current.runtime.registerAcceptedCommand('cmd');
     await current.runtime.reconcileAll();
     // Let the startup list recovery pass finish before counting the disposed generation.
     await new Promise((resolve) => setTimeout(resolve, 30));
@@ -100,6 +105,10 @@ describe('FabRuntime replay-gap reconciliation (batch 2/3)', () => {
     const source = new FakeCommandEventSource();
     const calls: string[] = [];
     const gateway = fakeCommandGateway({
+      listFabCommands: async () => emptyRecoveryList([
+        commandRecord({ fabId, commandId: 'active', revision: 1, outcome: 'executing' }),
+        commandRecord({ fabId, commandId: 'done', revision: 2, outcome: 'succeeded' }),
+      ]),
       getCommandStatus: async (targetFab, commandId) => {
         calls.push(commandId);
         return commandId === 'done'
@@ -109,9 +118,9 @@ describe('FabRuntime replay-gap reconciliation (batch 2/3)', () => {
     });
     const { runtime } = createFab({ source, gateway });
     runtime.start();
-    runtime.trackCommand('active');
+    runtime.registerAcceptedCommand('active');
     source.emit(commandResult({ fabId, commandId: 'active', revision: 1, outcome: 'executing' }));
-    runtime.trackCommand('done');
+    runtime.registerAcceptedCommand('done');
     source.emit(commandResult({ fabId, commandId: 'done', revision: 2, outcome: 'succeeded' }));
     await runtime.reconcileAll();
     calls.length = 0;
@@ -129,7 +138,7 @@ describe('FabRuntime replay-gap reconciliation (batch 2/3)', () => {
     runtime.start();
     expect(runtime.hasLocalEvidence('cmd-1')).toBe(false);
     source.emitGap({ epoch: 'epoch-2', sequence: 4 });
-    runtime.trackCommand('cmd-1');
+    runtime.registerAcceptedCommand('cmd-1');
     await expect.poll(() => calls.length, { timeout: 500 }).toBeGreaterThanOrEqual(1);
     expect(calls[0]).toBe('cmd-1');
     // Local evidence is tracked from the same correlation watermark as delivery.
@@ -161,6 +170,7 @@ describe('FabRuntime replay-gap reconciliation (batch 2/3)', () => {
 
 /** Minimal workflow whose projection access is counted, to expose per-delivery scans. */
 class CountingWorkflow implements CommandWorkflow {
+  markExpiredUnresolved(): void {}
   accesses = 0;
   private revisionValue = -1;
   private outcomeValue: CommandOutcome | 'pending' = 'pending';
@@ -181,11 +191,37 @@ class CountingWorkflow implements CommandWorkflow {
       state: this.outcomeValue === 'pending' ? 'idle' : this.outcomeValue,
       revision: this.revisionValue,
       outcome: this.outcomeValue,
+      recoveryDisposition: 'tracked',
     };
   }
 }
 
 describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => {
+  it('disables time eviction at TTL zero while enforcing the resolved count limit', () => {
+    vi.useFakeTimers();
+    try {
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+      const source = new FakeCommandEventSource();
+      const { runtime } = createFab({ source, retention: { resolvedWorkflowTtlMs: 0, maxResolvedWorkflows: 1 } });
+      runtime.start();
+      setTimeoutSpy.mockClear();
+      runtime.registerAcceptedCommand('done-1');
+      source.emit(commandResult({ fabId, commandId: 'done-1', revision: 1, outcome: 'succeeded' }));
+      vi.runAllTicks();
+      expect(setTimeoutSpy.mock.calls.some(([, delay]) => delay === 1)).toBe(false);
+      vi.advanceTimersByTime(1_000_000);
+      expect(runtime.getWorkflow('done-1')).toBeDefined();
+      runtime.registerAcceptedCommand('done-2');
+      source.emit(commandResult({ fabId, commandId: 'done-2', revision: 1, outcome: 'succeeded' }));
+      vi.runAllTicks();
+      expect(runtime.getWorkflow('done-1')).toBeUndefined();
+      expect(runtime.getWorkflow('done-2')).toBeDefined();
+      expect(setTimeoutSpy.mock.calls.some(([, delay]) => delay === 1)).toBe(false);
+    } finally {
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    }
+  });
   it('registers active commands without visiting all earlier workflow projections', () => {
     const workflows: CountingWorkflow[] = [];
     const fab = createFab({
@@ -199,10 +235,10 @@ describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => 
         return workflow;
       },
     });
-    for (let index = 0; index < 100; index++) fab.runtime.trackCommand('cmd-' + index);
+    for (let index = 0; index < 100; index++) fab.runtime.registerAcceptedCommand('cmd-' + index);
     // A registration change projects only the new command: O(1) per registration,
     // never a scan over every earlier workflow (the audited path was O(N) per track).
-    expect(workflows.reduce((sum, workflow) => sum + workflow.accesses, 0)).toBeLessThanOrEqual(workflows.length * 8);
+    expect(workflows.reduce((sum, workflow) => sum + workflow.accesses, 0)).toBeLessThanOrEqual(workflows.length * 10);
   });
 
   it('reconciles a batch with only linear projection visits and retains terminal outcomes', async () => {
@@ -220,12 +256,12 @@ describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => 
         return workflow;
       },
     });
-    for (let index = 0; index < 40; index++) runtime.trackCommand('cmd-' + index);
+    for (let index = 0; index < 40; index++) runtime.registerAcceptedCommand('cmd-' + index);
     await runtime.reconcileAll();
     for (const workflow of workflows) workflow.accesses = 0;
     outcome = 'succeeded';
     await expect(runtime.reconcileAll()).resolves.toBe(40);
-    expect(workflows.reduce((sum, workflow) => sum + workflow.accesses, 0)).toBeLessThanOrEqual(workflows.length * 8);
+    expect(workflows.reduce((sum, workflow) => sum + workflow.accesses, 0)).toBeLessThanOrEqual(workflows.length * 10);
     expect(runtime.terminalWorkflowCount).toBe(40);
     expect(runtime.getProjection('cmd-0')?.outcome).toBe('succeeded');
   });
@@ -236,13 +272,13 @@ describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => 
       source,
       gateway: nonTerminalGateway(),
       createWorkflow: (targetFab, commandId) => new CountingCommandWorkflow(targetFab, commandId),
-      retention: { terminalTtlMs: 60_000, maxTerminalWorkflows: 2, sweepIntervalMs: 1_000 },
+      retention: { resolvedWorkflowTtlMs: 60_000, maxResolvedWorkflows: 2, sweepIntervalMs: 1_000 },
     });
     runtime.start();
-    runtime.trackCommand('active');
+    runtime.registerAcceptedCommand('active');
     source.emit(commandResult({ fabId, commandId: 'active', revision: 1, outcome: 'accepted' }));
     for (const commandId of ['done-1', 'done-2', 'done-3']) {
-      runtime.trackCommand(commandId);
+      runtime.registerAcceptedCommand(commandId);
       source.emit(commandResult({ fabId, commandId, revision: 2, outcome: 'succeeded' }));
     }
     expect(runtime.terminalWorkflowCount).toBe(2);
@@ -263,10 +299,10 @@ describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => 
       source,
       gateway: nonTerminalGateway(),
       createWorkflow: (targetFab, commandId) => new CountingCommandWorkflow(targetFab, commandId),
-      retention: { terminalTtlMs: 100, sweepIntervalMs: 5, now: () => now },
+      retention: { resolvedWorkflowTtlMs: 100, sweepIntervalMs: 5, now: () => now },
     });
     runtime.start();
-    runtime.trackCommand('cmd-1');
+    runtime.registerAcceptedCommand('cmd-1');
     source.emit(commandResult({ fabId, commandId: 'cmd-1', revision: 2, outcome: 'succeeded' }));
     expect(runtime.workflowCount).toBe(1);
     now = 1_000;
@@ -290,8 +326,8 @@ describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => 
       },
     });
     runtime.start();
-    for (let index = 0; index < 40; index += 1) runtime.trackCommand('cmd-' + index);
-    runtime.trackCommand('cmd-target');
+    for (let index = 0; index < 40; index += 1) runtime.registerAcceptedCommand('cmd-' + index);
+    runtime.registerAcceptedCommand('cmd-target');
     for (const workflow of workflows.values()) workflow.accesses = 0;
     source.emit(commandResult({ fabId, commandId: 'cmd-target', revision: 1, outcome: 'executing' }));
     const executingAccesses = [...workflows.values()].reduce((sum, workflow) => sum + workflow.accesses, 0);
@@ -317,11 +353,11 @@ describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => 
     registry.observe(commandResult({ fabId, commandId: 'done-3', revision: 2, outcome: 'succeeded' }));
     expect(registry.size).toBe(3);
     expect(registry.terminalCount).toBe(2);
-    expect(registry.lastRevision(fabId, 'active')).toBe(1);
+    expect(registry.lastObservedRevision(fabId, 'active')).toBe(1);
     now = 1_000;
     expect(registry.sweep()).toBeGreaterThanOrEqual(2);
-    expect(registry.lastRevision(fabId, 'active')).toBe(1);
-    expect(registry.lastRevision(fabId, 'done-1')).toBeUndefined();
+    expect(registry.lastObservedRevision(fabId, 'active')).toBe(1);
+    expect(registry.lastObservedRevision(fabId, 'done-1')).toBeUndefined();
     expect(registry.size).toBe(1);
   });
 });

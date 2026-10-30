@@ -2,10 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { CommandResultEvent, CommandStreamDirty } from '@/contracts/command-events.contract';
 import type { CommandWorkflow, CommandWorkflowProjection } from '@/contracts/command-workflow.contract';
 import { CommandEventBridge } from '@/runtime/command-event-bridge';
-import {
-  FakeCommandWorkflow,
-  FakeWorkflowRegistry,
-} from '../../support/command-fakes.ts';
+import { FakeWorkflowRegistry } from '../../support/command-fakes.ts';
 import { COMMAND_RESULT_TOPIC } from '@/realtime/message-decoder';
 import {
   FakeEventSource,
@@ -100,8 +97,8 @@ describe('ordered ACK ledger (R3-02)', () => {
     // acknowledged cursor (R4-01: never drain the safe prefix past the latch).
     harness.acknowledge(eventFor(harness, 1));
     harness.acknowledge(eventFor(harness, 2));
-    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 2 });
-    expect(harness.cursors().pendingAcknowledgements).toBe(0);
+    expect(harness.cursors().acknowledged).toBeUndefined();
+    expect(harness.cursors().pendingAcknowledgements).toBe(2);
 
     // Only the authoritative safe watermark releases the latch and drops the backlog.
     harness.cover({ epoch: 'epoch-1', sequence: 3 });
@@ -254,9 +251,9 @@ describe('R4-01 unified untrusted-gap ACK latch', () => {
     await flush(5);
     expect(lastDirty(harness).reason).toBe('uncovered-gap');
     expect(lastDirty(harness).gapStart).toBeUndefined();
-    expect(lastDirty(harness).delivered).toEqual({ epoch: 'epoch-1', sequence: 200 });
-    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 200 });
-    expect(harness.cursors().pendingAcknowledgements).toBe(0);
+    expect(lastDirty(harness).delivered).toBeUndefined();
+    expect(harness.cursors().acknowledged).toBeUndefined();
+    expect(harness.cursors().pendingAcknowledgements).toBe(1);
 
     // While latched, every further accepted frame extends the untracked high water.
     // Even the authoritative List authority cannot release a watermark below that
@@ -267,7 +264,7 @@ describe('R4-01 unified untrusted-gap ACK latch', () => {
     harness.cover({ epoch: 'epoch-1', sequence: 201 }, 'list');
     await flush(5);
     expect(lastDirty(harness).reason).toBe('uncovered-gap');
-    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 201 });
+    expect(harness.cursors().acknowledged).toBeUndefined();
 
     // Only a cover at/above the highest untracked position releases the latch, and a
     // release is not itself a Dirty signal.
@@ -309,7 +306,7 @@ describe('R4-01 unified untrusted-gap ACK latch', () => {
     await flush(5);
     expect(lastDirty(harness).reason).toBe('uncovered-gap');
     expect(lastDirty(harness).gapStart).toBeUndefined();
-    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 10 });
+    expect(harness.cursors().acknowledged).toBeUndefined();
 
     // The full authoritative List authority releases the latch.
     const dirtyBeforeList = harness.dirty.length;
@@ -340,14 +337,14 @@ describe('R4-01 unified untrusted-gap ACK latch', () => {
 
     // The tracked applied prefix drains below the lost range; the latch itself is a
     // separate sticky state (no cover has proven the dropped frames yet).
-    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 3 });
+    expect(harness.cursors().acknowledged).toBeUndefined();
 
     // A cover below the untracked high water (9) advances the conservative safe
     // watermark to 7 but keeps the latch and forces another List pass.
     harness.cover({ epoch: 'epoch-1', sequence: 7 }, 'journal');
     await flush(5);
     expect(lastDirty(harness).reason).toBe('uncovered-gap');
-    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 7 });
+    expect(harness.cursors().acknowledged).toBeUndefined();
 
     // A cover at/above the high water releases it (List authority supersedes the
     // journal-generated loss).
@@ -362,7 +359,7 @@ describe('bridge acknowledges only after the actor applied (R3-02 three-state sp
     const sourceHarness = createTransportHarness({ capacity: 16, autoAck: false });
     const source = sourceHarness.source;
     const workflows = new FakeWorkflowRegistry();
-    const unverifiable = new FakeCommandWorkflow();
+    const unverifiable = { events: [] as CommandResultEvent[], receive(event: CommandResultEvent) { this.events.push(event); }, markExpiredUnresolved() {}, async reconcile() {}, dispose() {} };
     workflows.register('fab-a', 'cmd-a', unverifiable);
     const bridge = new CommandEventBridge(source, workflows, {
       fabId: 'fab-a',
@@ -403,6 +400,7 @@ describe('bridge acknowledges only after the actor applied (R3-02 three-state sp
 
 /** Test workflow that exposes a projection and advances it synchronously. */
 class ProjectionWorkflow implements CommandWorkflow {
+  markExpiredUnresolved(): void {}
   received = 0;
   private revisionValue = -1;
   private outcomeValue: CommandWorkflowProjection['outcome'] = 'pending';
@@ -419,6 +417,21 @@ class ProjectionWorkflow implements CommandWorkflow {
   dispose(): void {}
 
   get projection(): CommandWorkflowProjection {
-    return { state: this.outcomeValue === 'pending' ? 'idle' : this.outcomeValue, revision: this.revisionValue, outcome: this.outcomeValue };
+    return { state: this.outcomeValue === 'pending' ? 'idle' : this.outcomeValue, revision: this.revisionValue, outcome: this.outcomeValue, recoveryDisposition: 'tracked' };
   }
 }
+
+
+it('does not mutate cursors when a list snapshot predates a new unknown gap', async () => {
+  const harness = transport({ autoAck: false });
+  const eventSource = await open(harness);
+  eventSource.emit(commandEnvelope({ revision: 1 }), cursorId('epoch-1', 1));
+  await flush(5);
+  const barrier = harness.source.lossGeneration;
+  eventSource.emitNamed('dirty', JSON.stringify({ reason: 'store-fault', droppedCount: 1, epoch: 'epoch-1', sequence: 1, occurredAt: '2026-10-30T00:00:00Z' }), cursorId('epoch-1', 1));
+  await flush(5);
+  const before = harness.cursors();
+  expect(harness.source.cover({ epoch: 'epoch-1', sequence: 1 }, 'list', barrier).status).toBe('insufficient');
+  expect(harness.cursors()).toEqual(before);
+  expect(harness.source.cover({ epoch: 'epoch-1', sequence: 1 }, 'list', harness.source.lossGeneration).status).toBe('covered');
+});

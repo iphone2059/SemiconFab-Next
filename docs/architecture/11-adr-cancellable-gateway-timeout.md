@@ -53,3 +53,8 @@ export interface CommandGateway {
 - Scheduler 的 `schedule()/scheduleMany()` 现返回逐命令 `ReconciliationResult`（`succeeded | already-terminal | not-found | failed | timed-out | cancelled | dropped`，payload-free error），不再只返回成功数量；超时/5xx/取消/语义性 dropped 的逐命令结果必须由恢复批次显式判定。
 - Recovery pass 只有在 authoritative snapshot 应用 + post-snapshot batch 全部收敛后才调用 `source.cover(watermark, kind)`、重置 attempts/activeRecoveryRequest 并进入 Healthy；batch 失败使 pass 进入有界退避，禁止“批次 fulfilled 即成功”。
 - `trackCommand` 的 fire-and-forget 调度同样消费结果：失败/超时/取消（且命令仍需收敛）进入 Dirty 并由权威 pass 重试。
+
+
+## Round 5（进行中）
+
+Round 5 正在整改：每个 Scheduler 调用者拥有独立 waiter；最后一个 waiter 取消时中断对应请求，其他 waiter 不受影响。

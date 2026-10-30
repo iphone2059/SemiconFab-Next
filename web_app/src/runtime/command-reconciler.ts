@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import type { CommandGateway, CommandGatewayError } from '@/contracts/command-gateway.contract';
 import type { CommandWorkflow } from '@/contracts/command-workflow.contract';
+import type { CommandResultEvent } from '@/contracts/command-events.contract';
 
 /**
  * Identity of one authoritative reconciliation request (ADR-011 §2.2). The
@@ -22,6 +23,7 @@ export interface ReconciliationRequest {
   readonly entryId: number;
   /** True only while the workflow + scheduler entry generation are still current. */
   readonly isCurrent: ReconciliationCurrentGuard;
+  readonly apply: (event: CommandResultEvent) => boolean;
 }
 
 /**
@@ -38,7 +40,7 @@ export class CommandReconciler {
   constructor(private readonly gateway: CommandGateway) {}
 
   reconcile(
-    workflow: CommandWorkflow,
+    _workflow: CommandWorkflow,
     fabId: string,
     commandId: string,
     request: ReconciliationRequest,
@@ -52,8 +54,8 @@ export class CommandReconciler {
           // generation before mutating the actor; a timed-out/superseded request
           // must never publish its late authoritative result.
           if (!request.isCurrent(identity)) return false;
-          workflow.receive(event);
-          return true;
+          if (event.fabId !== fabId || event.commandId !== commandId || !Number.isInteger(event.revision) || event.revision < 0) return false;
+          return request.apply(event);
         })),
     );
   }

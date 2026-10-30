@@ -77,12 +77,7 @@ export class CommandEventRecovery {
     // Keep the newest revisions for one command: a duplicate/older event cannot
     // displace the current pending head unnecessarily. The replacement keeps the
     // total unchanged and takes the newest global arrival position.
-    const sameRevision = queue.findIndex((held) => held.event.revision === event.revision);
-    if (sameRevision >= 0) {
-      const [previous] = queue.splice(sameRevision, 1);
-      this.removeArrival(previous.seq);
-      this.total -= 1;
-    }
+    if (queue.some((held) => held.event.revision === event.revision)) return true;
     const held: HeldEvent = { event, seq: this.nextSeq++ };
     queue.push(held);
     this.arrivals.push(held);
@@ -170,8 +165,9 @@ export class CommandEventRecovery {
 
   private evictOne(queue: HeldEvent[], key: string, reason: 'per-command' | 'global'): void {
     if (queue.length === 0) return;
-    const nonTerminal = queue.findIndex((held) => !isTerminal(held.event));
-    const index = nonTerminal >= 0 ? nonTerminal : 0;
+    const index = reason === 'per-command'
+      ? queue.reduce((oldest, held, current) => held.event.revision < queue[oldest].event.revision ? current : oldest, 0)
+      : Math.max(0, queue.findIndex((held) => !isTerminal(held.event)));
     const [removed] = queue.splice(index, 1);
     this.removeArrival(removed.seq);
     this.total -= 1;

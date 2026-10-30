@@ -228,3 +228,8 @@ Bridge 不 import 工作流实现、不 import `xstate`、不操作 React、不�
 | OPEN-V21-08 | XState v6 版本与 API 稳定性、actor 粒度（每 FAB 一个 actor 还是每命令一个 actor） | 工作流实现与测试 | M4 前核实并锁版本；建议命令级 actor + FAB 级 registry |
 | OPEN-V21-09 | 前端恢复记录的生命周期（仅内存 vs sessionStorage） | 页面刷新后的恢复范围 | 权威恢复在后端；前端不承诺跨刷新持久化，具体策略在 M3 决定 |
 | OPEN-V21-10 | CommandGateway 的 HTTP 提交契约（幂等键、202/结果码、请求指纹） | 与后端 API 契约 | 沿用现有开发 API 风格，M3 时与后端契约一起冻结 |
+
+
+## Round 5（进行中）
+
+Round 5 正在整改：observed 和 applied revision 独立；Actor 拒绝进入有界恢复队列并触发权威核对。

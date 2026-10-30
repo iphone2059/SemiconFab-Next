@@ -28,12 +28,12 @@ it('bounds the pending queue per command and overall, keeping the newest revisio
   expect(recovery.size).toBe(3);
 });
 
-it('replaces a duplicate revision instead of growing the queue', () => {
+it('keeps one held record for a duplicate revision', () => {
   const recovery = new CommandEventRecovery();
   recovery.hold(commandResult({ fabId: 'fab', commandId: 'cmd', revision: 2, outcome: 'executing' }));
   recovery.hold(commandResult({ fabId: 'fab', commandId: 'cmd', revision: 2, outcome: 'failed' }));
   expect(recovery.pendingFor('fab', 'cmd')).toHaveLength(1);
-  expect(recovery.pendingFor('fab', 'cmd')[0].outcome).toBe('failed');
+  expect(recovery.pendingFor('fab', 'cmd')[0].outcome).toBe('executing');
   expect(recovery.size).toBe(1);
 });
 

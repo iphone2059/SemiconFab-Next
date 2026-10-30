@@ -1,6 +1,6 @@
 import type { CommandOutcome, CommandResultEvent } from '@/contracts/command-events.contract';
 
-export type EquipmentCommandState = 'idle' | 'accepted' | 'executing' | 'succeeded' | 'failed' | 'cancelled';
+export type EquipmentCommandState = 'idle' | 'accepted' | 'executing' | 'expired' | 'succeeded' | 'failed' | 'cancelled';
 export type EquipmentCommandOutcome = CommandOutcome | 'pending';
 
 export interface EquipmentCommandContext {

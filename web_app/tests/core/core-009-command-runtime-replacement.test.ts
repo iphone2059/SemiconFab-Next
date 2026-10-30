@@ -12,7 +12,7 @@ it('CORE-009 rebuilds the same FAB on the same registry without old projections 
     const firstSource = new FakeCommandEventSource();
     const first = createFabRuntime(harness, { source: firstSource });
     first.start();
-    first.trackCommand('cmd-1');
+    first.registerAcceptedCommand('cmd-1');
     firstSource.emit(commandResult({ fabId: 'fab-a', commandId: 'cmd-1', revision: 1, outcome: 'accepted' }));
     expect(first.getProjection('cmd-1')).toMatchObject({ state: 'accepted', revision: 1 });
 
@@ -28,7 +28,7 @@ it('CORE-009 rebuilds the same FAB on the same registry without old projections 
     const second = createFabRuntime(harness, { source: secondSource });
     second.start();
     expect(second.getProjection('cmd-1')).toBeUndefined();
-    second.trackCommand('cmd-1');
+    second.registerAcceptedCommand('cmd-1');
     expect(second.getProjection('cmd-1')).toMatchObject({ state: 'idle', revision: -1, outcome: 'pending' });
 
     // A late event from the disposed generation must not reach the replacement.

@@ -181,7 +181,7 @@ export function createTransportHarness(options: TransportHarnessOptions = {}): T
     gaps,
     diagnostics: () => source.protocolDiagnostics,
     cursors: () => source.cursors,
-    cover: (cursor, authority) => source.cover(cursor, authority),
+    cover: (cursor, authority) => source.cover(cursor, authority, source.lossGeneration),
     acknowledge: (event) => {
       source.acknowledge(event);
       acked.push(event);

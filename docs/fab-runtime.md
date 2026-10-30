@@ -154,3 +154,8 @@ dispose():
 - 所有 stream consumer（commandResults + gaps/reconnected/transportFailures/connectionStatus/dirty）都有 owner Scope 内的 exit/defect observer；意外终止有界重启并触发权威恢复，超限 Unrecoverable。
 - replay-gap 一律 List 恢复（R4-04）；reconnect/transport-failure 从 acknowledged cursor 恢复，无安全 cursor 时 List。
 - Round 4 验证事实：前端全量 155 文件 / 908 tests PASS、typecheck/lint/build PASS；后端 226 tests PASS。浏览器 E2E/GPU/Compiler 等价未运行，见 `architecture/17-round4-remediation-record.md` §5。
+
+
+## Round 5（进行中）
+
+Round 5 正在整改：恢复使用完整 all List；快照前存在而快照中缺失的活动命令进入 expired-unresolved，不制造最终业务结果。

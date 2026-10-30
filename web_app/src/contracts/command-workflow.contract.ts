@@ -5,6 +5,7 @@ export interface CommandWorkflowProjection {
   readonly state: string;
   readonly revision: number;
   readonly outcome: CommandOutcome | 'pending';
+  readonly recoveryDisposition: 'tracked' | 'expired-unresolved';
 }
 
 /**
@@ -14,6 +15,7 @@ export interface CommandWorkflowProjection {
  */
 export interface CommandWorkflow {
   receive(event: CommandResultEvent): void;
+  markExpiredUnresolved(): void;
   reconcile(commandId: string): Promise<void>;
   dispose(): void;
   /** Optional read-only projection; the UI must not write it back. */

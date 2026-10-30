@@ -41,38 +41,16 @@ export interface CommandComposition {
   readonly realtimeTransport: boolean;
   /**
    * Authoritative recovery authority; `undefined` declares an explicitly
-   * display-only runtime. Never created without a realtime transport.
+   * display-only runtime when fetch is unavailable.
    */
   readonly gateway: CommandGateway | undefined;
 }
 
-/**
- * R4-06: resolve the composition root's command authority explicitly.
- *
- * - production: BOTH transports are required. A missing one is a fail-fast
- *   configuration error, because a production composition root cannot silently
- *   degrade to a display-only runtime.
- * - non-production (jsdom/Storybook): a missing realtime transport assembles an
- *   explicit display-only runtime (gateway: undefined + pending source) so the
- *   runtime is observable as Unavailable instead of claiming recovery authority
- *   over a stream it can never observe. A missing HTTP transport keeps the real
- *   SSE source but also declares display-only (live events only, no recovery).
- */
+/** Resolve HTTP authority and realtime capability independently. */
 export function resolveCommandComposition(capabilities: CommandCompositionCapabilities): CommandComposition {
-  if (capabilities.production && !capabilities.realtimeTransport) {
-    throw new Error(
-      'Command composition unavailable: this production build requires the realtime command transport (EventSource is missing). A display-only runtime is not a valid production configuration.',
-    );
-  }
-  if (capabilities.production && !capabilities.httpTransport) {
-    throw new Error(
-      'Command recovery authority unavailable: this production build must provide a CommandGateway (fetch is missing). A display-only runtime is not a valid production configuration.',
-    );
-  }
-  const authoritative = capabilities.realtimeTransport && capabilities.httpTransport;
   return {
     realtimeTransport: capabilities.realtimeTransport,
-    gateway: authoritative ? createHttpCommandGateway() : undefined,
+    gateway: capabilities.httpTransport ? createHttpCommandGateway() : undefined,
   };
 }
 
@@ -82,16 +60,8 @@ export function resolveCommandComposition(capabilities: CommandCompositionCapabi
  * that FAB's CommandTransportScope, one FAB-scoped telemetry runtime
  * (SSE -> Worker -> typed frame), and the HTTP authoritative command gateway.
  *
- * R4-06 composition health: the command composition is explicit about what the
- * environment can actually deliver. The authoritative HTTP CommandGateway is
- * created only when BOTH the realtime command transport (EventSource) and the
- * HTTP transport (fetch) exist. Without a realtime transport there is nothing to
- * observe, so the environment assembles an explicitly display-only runtime
- * (gateway: undefined + pending EventSource seam) whose recovery phase is
- * observable as Unavailable; it never claims recovery authority. A production
- * build additionally fails fast, because a production composition root that
- * cannot observe the realtime command stream is a configuration error, not a
- * supported degradation.
+ * HTTP and realtime availability are independent: absent EventSource degrades
+ * the runtime; absent HTTP authority makes command recovery unavailable.
  *
  * Phase C ownership: every FAB scope is forked from AppRuntime.rootScope by the
  * FabRuntime itself; the transport receives its CommandTransportScope and
@@ -129,11 +99,10 @@ export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode
     // One command SSE stream per FAB: the backend scopes + authorizes the stream
     // by the fabId query parameter and emits only that FAB's command results.
     // No site-level shared source exists (that would cross FAB identities and
-    // fail FAB-scoped authorization). The stream is lazy: FabRuntime/EventSource
-    // open it on the first tracked command.
+    // fail FAB-scoped authorization). The runtime opens the stream on startup.
     // R4-06: probe the environment once per assembled generation and derive the
-    // explicit command authority from it. Display-only assemblies get the pending
-    // source; only a realtime+HTTP environment gets the authoritative gateway.
+    // explicit command capabilities from it. Missing realtime uses the pending source;
+    // HTTP availability alone determines whether a gateway can be assembled.
     const composition = resolveCommandComposition({
       realtimeTransport: typeof EventSource !== 'undefined',
       httpTransport: typeof fetch === 'function',
@@ -149,18 +118,14 @@ export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode
     };
     // ADR-011 §2.1: the gateway returns native Effects and never runs them; the
     // FabRuntime executes them through the AppRuntime boundary.
-    // R3-07/R4-06: the composition root declares its recovery authority
-    // explicitly. resolveCommandComposition only creates the HTTP gateway when a
-    // realtime transport also exists; otherwise `undefined` marks an explicitly
-    // display-only runtime (observable Unavailable, never Healthy) and a
-    // production build has already failed fast above.
+    // The gateway and EventSource are assembled independently.
     const factory = new FabRuntimeFactory({
       runtime: appRuntime,
       parentScope: rootScope,
       projectionRegistry,
       sourceFor,
       gateway: composition.gateway,
-      lazyCommandSubscription: true,
+      lazyCommandSubscription: false,
     });
     for (const fab of fabs) registry.register(factory.create(fab.fabId, fab.siteId));
 

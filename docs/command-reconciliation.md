@@ -162,3 +162,8 @@ reconcile(commandId):
 - `FabReconciliationScheduler.schedule/scheduleMany` 返回逐命令 `ReconciliationResult`（succeeded/already-terminal/not-found/failed/timed-out/cancelled/dropped + payload-free error）；恢复批次必须校验每个结果，失败/超时/取消（仍活跃命令）使 RecoveryPass 失败并进入有界退避。
 - Recovery pass 的 cover 与时序：authoritative records 应用 → post-snapshot batch 收敛 → `source.cover(watermark, kind)` → 重置 attempts/active request → Healthy/Degraded。禁止先 cover 后 batch、批次失败仍 Healthy、批次前清零 attempts。
 - 权威 List/Journal 应用走 `receiveAuthoritative`（绕过 SSE observed 去重）；`flushRecovery` 只释放 Applied/Covered，rejected 重新入队并触发 Dirty。
+
+
+## Round 5（进行中）
+
+Round 5 正在整改：活动命令 GET 404 要求完整 List；被权威集合裁剪且最终结果未知时使用 expired-unresolved。

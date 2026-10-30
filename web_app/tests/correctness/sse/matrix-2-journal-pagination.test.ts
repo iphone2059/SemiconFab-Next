@@ -95,7 +95,7 @@ describe('matrix 2: journal pagination with epoch (ADR-010 3)', () => {
     const created = fab({ source, gateway });
     const runtime = created.runtime;
     runtime.start();
-    runtime.trackCommand('cmd-1');
+    runtime.registerAcceptedCommand('cmd-1');
     await flush(10);
 
     emitDirty(source, { reason: 'overflow', droppedCount: 3, delivered: { epoch: 'epoch-1', sequence: 0 }, gapStart: 1 });
@@ -122,7 +122,7 @@ describe('matrix 2: journal pagination with epoch (ADR-010 3)', () => {
       const gateway = baseGateway({ getCommandJournalPage: journal.handler });
       const created = fab({ source, gateway });
       created.runtime.start();
-      created.runtime.trackCommand('cmd-1');
+      created.runtime.registerAcceptedCommand('cmd-1');
       await flush(5);
       emitDirty(source, { reason: 'overflow', droppedCount: 1, delivered: { epoch: 'epoch-1', sequence: 0 }, gapStart: 1 });
       await expect.poll(() => journal.calls.length, { timeout: 2_000 }).toBeGreaterThanOrEqual(testCase.minPages);
@@ -146,7 +146,7 @@ describe('matrix 2: journal pagination with epoch (ADR-010 3)', () => {
     });
     const created = fab({ source, gateway });
     created.runtime.start();
-    created.runtime.trackCommand('cmd-1');
+    created.runtime.registerAcceptedCommand('cmd-1');
     await flush(5);
     const listCallsBefore = gateway.listCalls.length;
     emitDirty(source, { reason: 'stale-generation', droppedCount: 1, delivered: { epoch: 'old-epoch', sequence: 4 }, gapStart: 5 });
@@ -174,7 +174,7 @@ describe('matrix 2: journal pagination with epoch (ADR-010 3)', () => {
     });
     const created = fab({ source, gateway });
     created.runtime.start();
-    created.runtime.trackCommand('cmd-1');
+    created.runtime.registerAcceptedCommand('cmd-1');
     await flush(5);
     const listCallsBefore = gateway.listCalls.length;
     emitDirty(source, { reason: 'overflow', droppedCount: 1, delivered: { epoch: 'epoch-1', sequence: 1 }, gapStart: 2 });
@@ -205,7 +205,7 @@ describe('matrix 2: journal pagination with epoch (ADR-010 3)', () => {
     });
     const created = fab({ source, gateway });
     created.runtime.start();
-    created.runtime.trackCommand('cmd-1');
+    created.runtime.registerAcceptedCommand('cmd-1');
     await expect.poll(() => created.runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
     const listCallsBefore = gateway.listCalls.length;
     emitDirty(source, { reason: 'overflow', droppedCount: 4, delivered: { epoch: 'epoch-1', sequence: 0 }, gapStart: 1 });

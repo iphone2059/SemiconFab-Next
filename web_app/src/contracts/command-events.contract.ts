@@ -90,6 +90,10 @@ export type CommandStreamDirtyReason =
  */
 export type CommandCoverAuthority = 'journal' | 'list';
 
+export type CommandCoverResult =
+  | { readonly status: 'covered'; readonly cursor: CommandCursor; readonly authority: CommandCoverAuthority; readonly latchReleased: boolean }
+  | { readonly status: 'insufficient'; readonly cursor: CommandCursor; readonly authority: CommandCoverAuthority; readonly latchReleased: false; readonly reason: string; readonly recovery: 'list' };
+
 /**
  * The transport lost progress. The monotonic droppedCount preserves the loss
  * accounting even when several dirty signals coalesce. `delivered` is the
@@ -162,8 +166,8 @@ export interface CommandEventSource {
    * signalling remain valid sources.
    */
   readonly gaps?: Stream.Stream<CommandStreamGap>;
-  /** Connection lifecycle for the shared FAB command stream (optional for fakes). */
-  readonly connectionStatus?: Stream.Stream<CommandConnectionStatus>;
+  /** Connection lifecycle for the shared FAB command stream (required for every source). */
+  readonly connectionStatus: Stream.Stream<CommandConnectionStatus>;
   /**
    * Transport failure/interruption signal. A failed connection must be observable
    * and must trigger bounded authoritative reconciliation; it is never reported as
@@ -200,7 +204,9 @@ export interface CommandEventSource {
    * whether the watermark comes from a journal loop or a full authoritative List;
    * an unknown untracked position or a cross-epoch replacement requires list.
    */
-  cover(cursor: CommandCursor, authority?: CommandCoverAuthority): void;
+  cover(cursor: CommandCursor, authority?: CommandCoverAuthority, lossBarrier?: number): CommandCoverResult;
+  /** Capture before starting the authority request; changes when an untracked loss occurs. */
+  readonly lossGeneration: number;
   /**
    * Bounded protocol diagnostics (payload-free). Implementations keep the last N
    * causes/timestamps so malformed frames are observable without leaking payload

@@ -95,3 +95,8 @@ Babylon Lite 1.36   WebGPU-only 渲染（rendering/lite-backend.ts）
   - 契约/生成物/架构/frozen-assets/Python tools/migrate-legacy/`git diff --check` 源码门禁全部 PASS。
 - 仍未执行：浏览器 E2E、GPU 600s device-loss、Oxc Compiler ON/OFF 生产等价、完整 `scripts/verify.ps1`、真实 HTTP 400/409/429 端到端、真实多 FAB SSE 负载、真实 transport+FabRuntime unknown-gap 端到端。不得据此宣称最终验收 PASS。
 - 当前产品语义不变：默认 1 FAB、架构支持 1–32；命令刷新恢复仍为 active-only（ADR-010 §6.6）。
+
+
+## Round 5（进行中）
+
+Round 5 整改进行中；源码变更、逐项复审、自动化门禁和真实浏览器验收均未完成，详见 architecture/18-round5-remediation-specification.md。

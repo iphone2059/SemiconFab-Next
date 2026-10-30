@@ -11,7 +11,8 @@ function sameProjection(
 ): boolean {
   if (left === right) return true;
   if (!left || !right) return false;
-  return left.state === right.state && left.revision === right.revision && left.outcome === right.outcome;
+  return left.state === right.state && left.revision === right.revision && left.outcome === right.outcome &&
+    left.recoveryDisposition === right.recoveryDisposition;
 }
 
 export interface CommandProjectionStoreOptions {

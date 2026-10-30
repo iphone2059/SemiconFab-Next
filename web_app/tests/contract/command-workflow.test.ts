@@ -43,3 +43,14 @@ it('does not reconcile through the workflow adapter: the scheduler is the only a
   expect(workflow.context.revision).toBe(1);
   workflow.dispose();
 });
+
+
+it('keeps a pruned result unresolved until a later real terminal event arrives', () => {
+  const workflow = new XStateCommandWorkflowAdapter(fabId, commandId);
+  workflow.receive(commandResult({ fabId, commandId, revision: 1, outcome: 'executing' }));
+  workflow.markExpiredUnresolved();
+  expect(workflow.projection).toMatchObject({ state: 'expired', revision: 1, outcome: 'executing', recoveryDisposition: 'expired-unresolved' });
+  workflow.receive(commandResult({ fabId, commandId, revision: 2, outcome: 'succeeded' }));
+  expect(workflow.projection).toMatchObject({ state: 'succeeded', revision: 2, outcome: 'succeeded', recoveryDisposition: 'tracked' });
+  workflow.dispose();
+});

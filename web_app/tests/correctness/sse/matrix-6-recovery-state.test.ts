@@ -96,7 +96,7 @@ describe('matrix 6: recovery state machine (ADR-010 4)', () => {
     const created = fab({ source, gateway, recovery: RECOVERY });
     const runtime = created.runtime;
     runtime.start();
-    runtime.trackCommand('cmd-1');
+    runtime.registerAcceptedCommand('cmd-1');
     await flush(5);
 
     emitDirty(source, {
@@ -128,7 +128,7 @@ describe('matrix 6: recovery state machine (ADR-010 4)', () => {
     const created = fab({ source, gateway, recovery: RECOVERY });
     const runtime = created.runtime;
     runtime.start();
-    runtime.trackCommand('cmd-1');
+    runtime.registerAcceptedCommand('cmd-1');
     await flush(5);
     emitDirty(source, {
       reason: 'transport-failure',
@@ -162,7 +162,7 @@ describe('matrix 6: recovery state machine (ADR-010 4)', () => {
     const created = fab({ source, gateway, recovery: { backoffMs: [1], maxAttempts: 3 } });
     const runtime = created.runtime;
     runtime.start();
-    runtime.trackCommand('cmd-1');
+    runtime.registerAcceptedCommand('cmd-1');
     await flush(5);
     emitDirty(source, {
       reason: 'store-fault',
@@ -191,7 +191,7 @@ describe('matrix 6: recovery state machine (ADR-010 4)', () => {
     const created = fab({ source, gateway, recovery: RECOVERY });
     const runtime = created.runtime;
     runtime.start();
-    runtime.trackCommand('cmd-1');
+    runtime.registerAcceptedCommand('cmd-1');
     await flush(5);
     emitDirty(source, {
       reason: 'stale-generation',
@@ -217,7 +217,7 @@ describe('matrix 6: recovery state machine (ADR-010 4)', () => {
     const created = fab({ source, gateway, recovery: { backoffMs: [5, 5, 5, 5], maxAttempts: 8 } });
     const runtime = created.runtime;
     runtime.start();
-    runtime.trackCommand('cmd-1');
+    runtime.registerAcceptedCommand('cmd-1');
     await flush(5);
     emitDirty(source, {
       reason: 'overflow',

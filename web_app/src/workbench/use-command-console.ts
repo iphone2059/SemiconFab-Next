@@ -4,6 +4,8 @@ import { createEquipmentCommandIdempotencyKey } from '@/api/command.schema';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import { useFabRuntimeRegistry } from '@/app/runtime-provider';
 import type { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
+import type { CommandAdmissionReservation } from '@/runtime/fab-runtime';
+import { HttpFailure, IdempotencyConflict, InvalidRequest } from '@/api/http.transport';
 
 export const EQUIPMENT_IDS = Array.from({ length: 16 }, (_, index) => `equipment-${index}`);
 export const COMMAND_ACTIONS = ['START', 'STOP', 'PAUSE'] as const;
@@ -104,6 +106,7 @@ export function useCommandConsole({ siteId, fabId }: { siteId: string; fabId: st
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (state.busy) return;
     if (!runtime) {
       update((previous) => ({ ...previous, error: 'FAB 运行时尚未装配完成' }));
       return;
@@ -117,12 +120,12 @@ export function useCommandConsole({ siteId, fabId }: { siteId: string; fabId: st
       ? state.pendingKey.key
       : createEquipmentCommandIdempotencyKey();
     update((previous) => ({ ...previous, busy: true, error: '', pendingKey: { identity, key: idempotencyKey } }));
+    let reservation: CommandAdmissionReservation | undefined;
     try {
+      reservation = runtime.reserveCommandAdmission(idempotencyKey);
       const submitted = await appRuntime.runPromise(submitEquipmentCommand({ siteId, fabId, equipmentId, action, idempotencyKey }));
-      // A completion for a replaced scope must not enter the new FAB's page, its
-      // tracked list, or its runtime.
+      registry?.registerAcceptedCommand(siteId, fabId, submitted.commandId, reservation);
       if (!isCurrentScope()) return;
-      runtime.trackCommand(submitted.commandId);
       update((previous) => ({
         ...previous,
         // The validated response echoes the submitted FAB identity (cross-FAB responses throw).
@@ -130,8 +133,12 @@ export function useCommandConsole({ siteId, fabId }: { siteId: string; fabId: st
         pendingKey: null,
       }));
     } catch (cause) {
+      if (reservation?.state === 'reserved') reservation.release();
+      const rejected = cause instanceof InvalidRequest || cause instanceof IdempotencyConflict ||
+        (cause instanceof HttpFailure && cause.status >= 400 && cause.status < 500);
+      if (!rejected && reservation !== undefined) registry?.requestAuthoritativeRecovery(siteId, fabId);
       if (!isCurrentScope()) return;
-      update((previous) => ({ ...previous, error: cause instanceof Error ? cause.message : '命令提交失败' }));
+      update((previous) => ({ ...previous, error: cause instanceof Error ? cause.message : '命令提交失败', ...(rejected ? { pendingKey: null } : {}) }));
     } finally {
       if (isCurrentScope()) update((previous) => ({ ...previous, busy: false }));
     }

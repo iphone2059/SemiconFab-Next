@@ -2,8 +2,10 @@ import { afterEach, expect, it } from 'vitest';
 import type { TestFab } from '../support/command-fakes.ts';
 import {
   FakeCommandEventSource,
+  commandRecord,
   commandResult,
   createTestFab,
+  emptyRecoveryList,
   fakeCommandGateway,
 } from '../support/command-fakes.ts';
 
@@ -16,6 +18,7 @@ it('surfaces transport failures and reconnects without pretending they are comma
   const source = new FakeCommandEventSource();
   let queries = 0;
   const gateway = fakeCommandGateway({
+    listFabCommands: async () => emptyRecoveryList([commandRecord({ fabId: 'fab-a', commandId: 'cmd-1', revision: 1, outcome: 'executing' })]),
     getCommandStatus: async (fabId, commandId) => {
       queries += 1;
       return commandResult({ fabId, commandId, revision: 2, outcome: 'executing' });
@@ -26,7 +29,7 @@ it('surfaces transport failures and reconnects without pretending they are comma
   const runtime = fab.runtime;
   runtime.start();
   source.emit(commandResult({ fabId: 'fab-a', commandId: 'cmd-1', revision: 1, outcome: 'executing' }));
-  runtime.trackCommand('cmd-1');
+  runtime.registerAcceptedCommand('cmd-1');
   await Promise.resolve();
   const before = queries;
   source.failTransport({ message: 'SSE interrupted' });

@@ -11,7 +11,7 @@ function ProjectionRow({ fabId, commandId }: { fabId: string; commandId: string 
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '4px 0', borderBottom: '1px solid var(--line, #1e293b)' }}>
       <code>{commandId.slice(0, 8)}</code>
-      <span>{projection ? `${projection.outcome} · rev ${projection.revision}` : '等待 SSE 事件…'}</span>
+      <span>{projection ? projection.recoveryDisposition === 'expired-unresolved' ? '结果不可确认' : `${projection.outcome} · rev ${projection.revision}` : '等待 SSE 事件…'}</span>
     </div>
   );
 }

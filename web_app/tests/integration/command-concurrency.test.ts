@@ -2,7 +2,9 @@ import { afterEach, expect, it } from 'vitest';
 import type { TestFab } from '../support/command-fakes.ts';
 import {
   FakeCommandEventSource,
+  commandRecord,
   commandResult,
+  emptyRecoveryList,
   createTestFab,
   fakeCommandGateway,
 } from '../support/command-fakes.ts';
@@ -17,15 +19,17 @@ it('bounds per-FAB authoritative reconciliation to four simultaneous queries', a
   let active = 0;
   let maxActive = 0;
   let queries = 0;
+  const ids = Array.from({ length: 8 }, (_, index) => 'cmd-' + index);
   const gateway = fakeCommandGateway({
-    getCommandStatus: () => {
+    listFabCommands: async () => emptyRecoveryList(ids.map(commandId => commandRecord({ fabId: 'fab-a', commandId, revision: 1, outcome: 'executing' }))),
+    getCommandStatus: (_fabId, commandId) => {
       queries += 1;
       active += 1;
       maxActive = Math.max(maxActive, active);
       return new Promise((resolve) =>
         setTimeout(() => {
           active -= 1;
-          resolve(commandResult({ fabId: 'fab-a', commandId: 'x', revision: 2, outcome: 'succeeded' }));
+          resolve(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'succeeded' }));
         }, 15),
       );
     },
@@ -34,10 +38,9 @@ it('bounds per-FAB authoritative reconciliation to four simultaneous queries', a
   fabs.push(fab);
   const runtime = fab.runtime;
   runtime.start();
-  const ids = Array.from({ length: 8 }, (_, index) => 'cmd-' + index);
   for (const commandId of ids) {
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'executing' }));
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
   }
   await expect.poll(() => runtime.workflowCount, { timeout: 500 }).toBe(8);
   const completed = await runtime.reconcileTracked(ids);

@@ -25,7 +25,7 @@ function runtimeWithSource(source: FakeCommandEventSource): { runtime: FabRuntim
   const fab = createTestFab({ source });
   fabs.push(fab);
   fab.runtime.start();
-  fab.runtime.trackCommand(commandId);
+  fab.runtime.registerAcceptedCommand(commandId);
   return { runtime: fab.runtime, fab };
 }
 

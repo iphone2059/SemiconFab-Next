@@ -298,7 +298,7 @@ it('latches the ACK state on replay-gap without manufacturing a cursor (R4-01/R4
   source.cover({ epoch: 'new-epoch', sequence: 22 }, 'journal');
   await flush(5);
   expect(dirty.at(-1)?.reason).toBe('uncovered-gap');
-  source.cover({ epoch: 'new-epoch', sequence: 22 }, 'list');
+  source.cover({ epoch: 'new-epoch', sequence: 22 }, 'list', source.lossGeneration);
   expect(source.cursors.acknowledged).toEqual({ epoch: 'new-epoch', sequence: 22 });
   harness.host.runSync(Scope.close(scope, Exit.void));
   await flush();

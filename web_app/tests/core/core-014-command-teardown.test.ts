@@ -34,7 +34,7 @@ it('CORE-014 leaves 0 timers, stream consumers, actors and scheduler work after 
     fabs.push(fab);
     const runtime = fab.runtime;
     runtime.start();
-    runtime.trackCommand('cmd-1');
+    runtime.registerAcceptedCommand('cmd-1');
     source.emit(commandResult({ fabId: 'fab-a', commandId: 'cmd-1', revision: 2, outcome: 'succeeded' }));
     expect(runtime.terminalWorkflowCount).toBe(1);
     // The terminal sweep timer is a runtime-owned timer.
@@ -106,7 +106,7 @@ it('CORE-014 closes the scoped EventSource and its connect watchdog timer', asyn
         }),
     });
     runtime.start();
-    runtime.trackCommand('cmd-1');
+    runtime.registerAcceptedCommand('cmd-1');
     // The lazy bridge opens exactly one connection with a connect watchdog.
     await Promise.resolve();
     expect(eventSources).toHaveLength(1);

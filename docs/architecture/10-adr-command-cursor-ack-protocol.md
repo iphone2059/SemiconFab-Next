@@ -174,3 +174,8 @@ Recovering --不可恢复(epoch 无法替换? 持续 N 次失败/存储故障/sc
 
 - `recoveryAvailable = gateway !== undefined && source.availability === 'ready'`；新增 phase `Degraded` 与 `recoveryState.realtimeAvailability`。无实时 transport 时 HTTP 状态可收敛，但总体状态不得 Healthy。
 - 无 EventSource 的 composition root 只装配 display-only runtime；PROD 缺失 transport fail-fast。transport `availability` 为 getter：factory 缺失永久 unavailable；factory throw/connect timeout 有界重试耗尽后永久 unavailable，不再无限重连。
+
+
+## Round 5（进行中）
+
+Round 5 正在整改：cover 在修改游标或 ledger 前检查权威、epoch、高水位及快照开始时的丢失代次；不足时保持原状态并要求 List。

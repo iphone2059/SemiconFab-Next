@@ -207,3 +207,8 @@ WebSocket -> transport/MessageDecoder -> Worker -> TypedArray 缓冲区 -> Scene
 - **SSE ACK 安全锁**：transport 对所有无法证明已登记/已应用的位置（队列溢出、坏帧、无 ID 帧、epoch 跳变、非单调序号、server dirty、replay-gap、连接错误/超时、factory 异常、stale generation）设置粘性 latch 并记录 `untrackedHighWater` 或 unknown gap。`cover(cursor, authority)` 只有在权威 watermark 覆盖全部未登记位置时才释放；未知/跨 epoch 位置必须 List authority。cover 不足时保留 latch 并发布 `uncovered-gap`，不得推进 ACK 越过未登记位置。
 - **实时可用性**：`CommandEventSource.availability` 当前为 getter。无 EventSource factory 或失败打开次数超过 `maxConnectAttempts`（默认 4）后为 `unavailable`，transport 不再无限重连。FabRuntime 将 recovery authority（gateway + source ready）与 realtime availability 分开：实时 transport 不可用时 HTTP 可收敛但总体 phase 为 `Degraded`，不得 Healthy；无 EventSource 的 composition root 只装配 display-only runtime（`Unavailable`）。
 - **服务端 SSE 扫描游标（R4-09）**：命令 journal 的 sequence 是 Site 级，而事件按 FAB 过滤。live loop 在无 gap 的成功扫描中即使目标 FAB 没有事件也推进 `cursor = latestSequence`，仅在写出帧时 flush；避免空闲 FAB 重复 O(n) 扫描 Site journal。
+
+
+## Round 5（进行中）
+
+Round 5 正在整改：Transport availability 和实际 connection status 分开，只有连接 open 且恢复完成才能 Healthy。

@@ -22,15 +22,15 @@ it('CORE-008 runs each command-scope finalizer exactly once across eviction and 
       workflows.push(workflow);
       return workflow;
     },
-    retention: { maxTerminalWorkflows: 1, terminalTtlMs: 60_000, sweepIntervalMs: 1_000 },
+    retention: { maxResolvedWorkflows: 1, resolvedWorkflowTtlMs: 60_000, sweepIntervalMs: 1_000 },
   });
   fabs.push(fab);
   const runtime = fab.runtime;
   runtime.start();
-  runtime.trackCommand('active');
+  runtime.registerAcceptedCommand('active');
   source.emit(commandResult({ fabId: 'fab-a', commandId: 'active', revision: 1, outcome: 'executing' }));
   for (const commandId of ['done-1', 'done-2', 'done-3']) {
-    runtime.trackCommand(commandId);
+    runtime.registerAcceptedCommand(commandId);
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'succeeded' }));
   }
 
@@ -60,12 +60,12 @@ it('CORE-008 disposes actors after the terminal TTL while the projection stays r
       workflows.push(workflow);
       return workflow;
     },
-    retention: { terminalTtlMs: 100, sweepIntervalMs: 5, now: () => now },
+    retention: { resolvedWorkflowTtlMs: 100, sweepIntervalMs: 5, now: () => now },
   });
   fabs.push(fab);
   const runtime = fab.runtime;
   runtime.start();
-  runtime.trackCommand('cmd-1');
+  runtime.registerAcceptedCommand('cmd-1');
   source.emit(commandResult({ fabId: 'fab-a', commandId: 'cmd-1', revision: 2, outcome: 'succeeded' }));
   expect(runtime.workflowCount).toBe(1);
   now = 1_000;

@@ -178,3 +178,8 @@ HTTP 写入:  用户操作 -> mutation -> HTTP API -> 成功 -> invalidateQuerie
 - R14：禁止未登记 `any`/`as any`/无说明 `as unknown as` 与 `String()/Number()` 伪校验响应数据（同上）。
 - 视图生命周期：`state/runtimeStore.ts` 持有 `ViewerLifecycle`（idle/initializing/ready/recovering/failed/disposed），控制逻辑不再解析 `status` 文案；场景命令通过 `application/ports/scene.ts` 的 `ScenePort`，不进入 Zustand。
 - 场景端口与领域确定性见 [架构基线](architecture.md) §30；实时高频路径 `TelemetryRuntime` → Worker → `FrameRingBuffer` → 渲染 frame loop，UI 低频聚合经 `shared/scheduling/coalesced-dispatcher.ts`。
+
+
+## Round 5（进行中）
+
+Round 5 正在整改：Workflow 投影增加 recoveryDisposition，expired-unresolved 不表示成功、失败或取消。

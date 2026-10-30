@@ -1,6 +1,7 @@
-import { Duration, Effect, Exit, Option, Scope, Semaphore } from 'effect';
+import { Duration, Effect, Exit, Fiber, Option, Scope, Semaphore } from 'effect';
 import type { CommandGateway, CommandGatewayError } from '@/contracts/command-gateway.contract';
 import type { CommandWorkflow } from '@/contracts/command-workflow.contract';
+import type { CommandResultEvent } from '@/contracts/command-events.contract';
 import {
   CommandReconciler,
   type ReconciliationRequest,
@@ -136,6 +137,7 @@ export interface FabReconciliationSchedulerOptions {
   /** Authoritative gateway; without one every schedule resolves to a 'failed' result. */
   readonly gateway?: CommandGateway;
   readonly resolve: (commandId: string) => ReconciliationTarget | undefined;
+  readonly applyAuthoritative: (event: CommandResultEvent) => boolean;
   /** Terminal commands are never queued, never retried and never evicted from the queue silently. */
   readonly isTerminal: (commandId: string) => boolean;
   readonly maxConcurrent?: number;
@@ -155,17 +157,13 @@ interface ScheduledEntry {
   /** Monotonic request generation; a superseded generation must not write the actor. */
   readonly id: number;
   readonly commandId: string;
-  readonly waiters: Array<(value: ReconciliationResult) => void>;
+  readonly waiters: Set<(value: ReconciliationResult) => void>;
   settled: boolean;
-  readonly promise: Promise<ReconciliationResult>;
+  fiber?: Fiber.Fiber<void, never>;
 }
 
 function scheduledEntry(id: number, commandId: string): ScheduledEntry {
-  let resolve!: (value: ReconciliationResult) => void;
-  const promise = new Promise<ReconciliationResult>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return { id, commandId, waiters: [resolve], settled: false, promise };
+  return { id, commandId, waiters: new Set(), settled: false };
 }
 
 type ItemOutcome =
@@ -200,6 +198,7 @@ export class FabReconciliationScheduler {
   private readonly semaphore: Semaphore.Semaphore;
   private readonly reconciler?: CommandReconciler;
   private readonly resolveTarget: (commandId: string) => ReconciliationTarget | undefined;
+  private readonly applyAuthoritative: (event: CommandResultEvent) => boolean;
   private readonly isTerminal: (commandId: string) => boolean;
   private readonly maxConcurrent: number;
   private readonly maxQueued: number;
@@ -242,6 +241,7 @@ export class FabReconciliationScheduler {
     this.semaphore = Semaphore.makeUnsafe(maxConcurrent);
     this.reconciler = options.gateway ? new CommandReconciler(options.gateway) : undefined;
     this.resolveTarget = options.resolve;
+    this.applyAuthoritative = options.applyAuthoritative;
     this.isTerminal = options.isTerminal;
     this.maxConcurrent = maxConcurrent;
     this.maxQueued = maxQueued;
@@ -256,26 +256,28 @@ export class FabReconciliationScheduler {
    * in-flight promise (single-flight) or one queue entry. A disposed scheduler
    * answers 'cancelled' without scheduling anything.
    */
-  schedule(commandId: string): Promise<ReconciliationResult> {
+  schedule(commandId: string, options: { readonly signal?: AbortSignal } = {}): Promise<ReconciliationResult> {
     if (this.disposed) return Promise.resolve(result(commandId, 'cancelled'));
+    if (options.signal?.aborted) return Promise.resolve(result(commandId, 'cancelled'));
     this.scheduledCount += 1;
     if (this.isTerminal(commandId)) return Promise.resolve(result(commandId, 'already-terminal'));
     const inFlight = this.inFlightById.get(commandId);
-    if (inFlight) return inFlight.promise;
+    if (inFlight) return this.addWaiter(inFlight, options.signal);
     const queued = this.queuedById.get(commandId);
-    if (queued) return queued.promise;
+    if (queued) return this.addWaiter(queued, options.signal);
     if (this.queue.length >= this.maxQueued) this.dropForCapacity();
     const entry = scheduledEntry(this.nextEntryId++, commandId);
     this.queue.push(entry);
     this.queuedById.set(commandId, entry);
+    const promise = this.addWaiter(entry, options.signal);
     this.wake();
-    return entry.promise;
+    return promise;
   }
 
   /** Schedule every unique id and wait for the whole batch; no second worker pool exists. */
-  async scheduleMany(commandIds: Iterable<string>): Promise<readonly ReconciliationResult[]> {
+  async scheduleMany(commandIds: Iterable<string>, options: { readonly signal?: AbortSignal } = {}): Promise<readonly ReconciliationResult[]> {
     const unique = [...new Set(commandIds)];
-    return Promise.all(unique.map((commandId) => this.schedule(commandId)));
+    return Promise.all(unique.map((commandId) => this.schedule(commandId, options)));
   }
 
   /** Reconcile exactly one tracked command through the shared scheduler. */
@@ -358,7 +360,7 @@ export class FabReconciliationScheduler {
     this.inFlightById.set(entry.commandId, entry);
     const effect = Semaphore.withPermits(this.semaphore, 1)(this.itemEffect(entry));
     // The scheduler Scope owns the item fiber: dispose interrupts it exactly once.
-    this.runtime.runSync(Effect.forkIn(effect, this.schedulerScope));
+    entry.fiber = this.runtime.runSync(Effect.forkIn(effect, this.schedulerScope));
   }
 
   private itemEffect(entry: ScheduledEntry): Effect.Effect<void> {
@@ -379,6 +381,7 @@ export class FabReconciliationScheduler {
       const request: ReconciliationRequest = {
         entryId: entry.id,
         isCurrent: (identity) => self.isEntryCurrent(entry, target, identity),
+        apply: self.applyAuthoritative,
       };
       // ADR-011 §2.2: timeoutOption wraps the REAL reconciler Effect (never a
       // Promise), so the timeout interrupts the fiber -> tryPromise aborts the
@@ -445,6 +448,7 @@ export class FabReconciliationScheduler {
     if (identity.entryId !== entry.id) return false;
     if (identity.commandId !== entry.commandId) return false;
     if (this.inFlightById.get(entry.commandId) !== entry) return false;
+    if (entry.settled || entry.waiters.size === 0) return false;
     return target.isCurrent();
   }
 
@@ -474,7 +478,35 @@ export class FabReconciliationScheduler {
   private settle(entry: ScheduledEntry, value: ReconciliationResult): void {
     if (entry.settled) return;
     entry.settled = true;
-    const waiters = entry.waiters.splice(0);
+    const waiters = [...entry.waiters];
+    entry.waiters.clear();
     for (const waiter of waiters) waiter(value);
+  }
+
+  private addWaiter(entry: ScheduledEntry, signal?: AbortSignal): Promise<ReconciliationResult> {
+    return new Promise((resolve) => {
+      const finish = (value: ReconciliationResult): void => {
+        signal?.removeEventListener('abort', abort);
+        entry.waiters.delete(finish);
+        resolve(value);
+      };
+      const abort = (): void => {
+        if (!entry.waiters.has(finish)) return;
+        finish(result(entry.commandId, 'cancelled'));
+        if (entry.waiters.size !== 0 || entry.settled) return;
+        if (this.queuedById.get(entry.commandId) === entry) {
+          this.queuedById.delete(entry.commandId);
+          const index = this.queue.indexOf(entry);
+          if (index >= 0) this.queue.splice(index, 1);
+          entry.settled = true;
+          this.cancelledCount += 1;
+        } else if (entry.fiber !== undefined) {
+          this.runtime.runSync(Fiber.interrupt(entry.fiber));
+        }
+      };
+      entry.waiters.add(finish);
+      signal?.addEventListener('abort', abort, { once: true });
+      if (signal?.aborted) abort();
+    });
   }
 }

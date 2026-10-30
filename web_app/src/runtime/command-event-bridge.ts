@@ -58,7 +58,6 @@ export interface CommandEventBridgeOptions {
   readonly scope: Scope.Scope;
 }
 
-type DeliveryMode = 'realtime' | 'authoritative' | 'recovery';
 
 const CONSUMER_LABEL = 'command-event-bridge';
 
@@ -166,28 +165,39 @@ export class CommandEventBridge {
   receive(event: CommandResultEvent): CommandDeliveryOutcome {
     if (this.isForeign(event)) return 'ignored';
     const decision = this.correlation.observe(event);
-    if (decision === 'duplicate') {
+    if (decision === 'duplicate' || decision === 'stale') {
       const applied = this.correlation.lastAppliedRevision(event.fabId, event.commandId);
-      return applied !== undefined && applied >= event.revision ? 'duplicate-applied' : 'rejected';
+      if (applied !== undefined && applied >= event.revision) {
+        this.source.acknowledge(event);
+        if (this.correlation.hasUnappliedObservation(event.fabId, event.commandId)) {
+          this.options.onRejected?.(event);
+        }
+        return decision === 'duplicate' ? 'duplicate-applied' : 'stale-covered';
+      }
     }
-    if (decision === 'stale') return 'stale-covered';
     const workflow = this.workflows.get(event.fabId, event.commandId);
     if (!workflow) {
       this.holdUncorrelated(event);
       return 'held';
     }
-    return this.applyToWorkflow(workflow, event, 'realtime');
+    const outcome = this.applyToWorkflow(workflow, event);
+    if (outcome === 'rejected') {
+      this.recovery.hold(event);
+      this.options.onRejected?.(event);
+    } else if (this.correlation.hasUnappliedObservation(event.fabId, event.commandId)) {
+      this.options.onRejected?.(event);
+    }
+    return outcome;
   }
 
   /**
    * Authoritative delivery path (R4-03): a List/Journal snapshot is fresh authority,
    * so the observed-revision duplicate gate must never block it. The event is
    * re-delivered to the actor; the outcome is classified from the actor projection
-   * (afterRevision >= revision => applied/stale-covered, otherwise rejected). A
-   * workflow that exposes no projection is only trusted when coveredRevision proves
-   * the snapshot covered that revision.
+   * (afterRevision >= revision => applied/stale-covered, otherwise rejected).
+   * A workflow that exposes no projection cannot prove application.
    */
-  receiveAuthoritative(event: CommandResultEvent, coveredRevision?: number): CommandDeliveryOutcome {
+  receiveAuthoritative(event: CommandResultEvent, _coveredRevision?: number): CommandDeliveryOutcome {
     if (this.isForeign(event)) return 'ignored';
     // Record the observation without ever regressing the observed watermark, but
     // ignore the duplicate/stale decision: authoritative re-application is allowed.
@@ -197,7 +207,11 @@ export class CommandEventBridge {
       this.holdUncorrelated(event);
       return 'held';
     }
-    return this.applyToWorkflow(workflow, event, 'authoritative', coveredRevision);
+    const outcome = this.applyToWorkflow(workflow, event);
+    if (outcome === 'rejected' || this.correlation.hasUnappliedObservation(event.fabId, event.commandId)) {
+      this.options.onRejected?.(event);
+    }
+    return outcome;
   }
 
   /**
@@ -221,7 +235,7 @@ export class CommandEventBridge {
         held += 1;
         continue;
       }
-      const outcome = this.applyToWorkflow(workflow, event, 'recovery');
+      const outcome = this.applyToWorkflow(workflow, event);
       if (outcome === 'applied' || outcome === 'stale-covered') {
         this.recovery.release(event);
         applied += 1;
@@ -289,20 +303,20 @@ export class CommandEventBridge {
    *    be blocked behind an earlier pending entry until its own prefix is safe.
    * A verifiable workflow that does not advance rejects the event (terminal/stale):
    * observed but never applied/acked. A workflow that exposes no projection cannot
-   * prove application; an authoritative receive may fall back to coveredRevision.
+   * prove application.
    */
   private applyToWorkflow(
     workflow: CommandWorkflow,
     event: CommandResultEvent,
-    mode: DeliveryMode,
-    coveredRevision?: number,
   ): CommandDeliveryOutcome {
     const before = workflow.projection?.revision;
     workflow.receive(event);
-    const after = workflow.projection?.revision;
+    const projection = workflow.projection;
+    const after = projection?.revision;
     const verifiable = before !== undefined || after !== undefined;
     if (verifiable) {
       if ((after ?? -1) < event.revision) return 'rejected';
+      if (after === event.revision && projection?.outcome !== event.outcome) return 'rejected';
       // R4-03: the applied watermark may only advance after the projection proved
       // it advanced; markApplied itself is forward-only.
       this.correlation.markApplied(event);
@@ -310,13 +324,7 @@ export class CommandEventBridge {
       this.source.acknowledge(event);
       return (before ?? -1) >= event.revision ? 'stale-covered' : 'applied';
     }
-    // No projection: application cannot be proven, so the realtime/retry paths
-    // deliver optimistically (tests/custom adapters) but never mark applied; an
-    // authoritative receive is trusted only when the snapshot coverage proves it.
-    if (mode === 'authoritative' && !(coveredRevision !== undefined && coveredRevision >= event.revision)) {
-      return 'rejected';
-    }
-    this.options.onResultDelivered?.(event);
-    return 'applied';
+    // No projection means application cannot be proven.
+    return 'rejected';
   }
 }

@@ -41,8 +41,8 @@ it('keeps a ProjectionRow unrendered when unrelated or value-equal projections a
   fabs.push(fab);
   const runtime = fab.runtime;
   runtime.start();
-  runtime.trackCommand(trackedCommandId);
-  runtime.trackCommand(unrelatedCommandId);
+  runtime.registerAcceptedCommand(trackedCommandId);
+  runtime.registerAcceptedCommand(unrelatedCommandId);
   const registry = new FabRuntimeRegistry();
   registry.register(runtime);
 

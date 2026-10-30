@@ -139,7 +139,7 @@ it('CORE-010c a safe delivered cursor without a gap replays journal events inste
   fabs.push(fab);
   const runtime = fab.runtime;
   runtime.start();
-  runtime.trackCommand('cmd-1');
+  runtime.registerAcceptedCommand('cmd-1');
   await flush();
   // R4-04: a replay-gap control frame is always List recovery; the journal path is
   // entered only from a safe delivered/acknowledged cursor (e.g. dirty overflow

@@ -49,7 +49,7 @@ it('turns a capacity eviction into a coalesced authoritative reconciliation', as
   const runtime = fab.runtime;
   runtime.start();
   source.emit(commandResult({ fabId: 'fab-a', commandId: 'cmd-1', revision: 1, outcome: 'executing' }));
-  runtime.trackCommand('cmd-1');
+  runtime.registerAcceptedCommand('cmd-1');
   await Promise.resolve();
   const listCallsBefore = gateway.listCalls.length;
   // 300 uncorrelated terminal results overflow the 256-entry recovery queue.
@@ -68,6 +68,7 @@ it('R3-01: rejects an empty journal page older than the retained window and reco
   const source = new FakeCommandEventSource();
   let listAttempts = 0;
   const gateway = fakeCommandGateway({
+    getCommandStatus: async (fabId, commandId) => commandResult({ fabId, commandId, revision: 4, outcome: 'executing' }),
     // An old/defective backend answers a stale cursor with hasGap=false and an
     // empty page. The frontend must NOT treat that as "already recovered".
     getCommandJournalPage: async (): Promise<CommandJournalPage> => ({
@@ -91,7 +92,7 @@ it('R3-01: rejects an empty journal page older than the retained window and reco
   fabs.push(fab);
   const runtime = fab.runtime;
   runtime.start();
-  runtime.trackCommand('cmd-1');
+  runtime.registerAcceptedCommand('cmd-1');
   await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
   const listCallsBefore = gateway.listCalls.length;
 
@@ -107,7 +108,7 @@ it('R3-01: rejects an empty journal page older than the retained window and reco
   await expect.poll(() => runtime.getProjection('cmd-1')?.revision, { timeout: 1_000 }).toBe(4);
   expect(gateway.journalCalls.length).toBeGreaterThanOrEqual(1);
   expect(gateway.listCalls.length).toBeGreaterThan(listCallsBefore);
-  expect(runtime.recoveryState.phase).toBe('Healthy');
+  await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
   expect(runtime.recoveryState.needsNextAuthoritativePass).toBe(false);
   expect(runtime.recoveryHistory.some((entry) => entry.cause === 'replay-gap')).toBe(true);
 });
@@ -116,6 +117,7 @@ it('R3-03: accepts a FAB-filtered sparse Site page (FAB-A 1,3,5,7) as authoritat
   const source = new FakeCommandEventSource();
   const journalQueries: CommandJournalQuery[] = [];
   const gateway = fakeCommandGateway({
+    getCommandStatus: async (fabId, commandId) => commandResult({ fabId, commandId, revision: 4, outcome: 'executing' }),
     // Site-global sequence, FAB-A filtered page: 1,3,5,7. Sequences 2,4,6,8..10
     // belong to other FABs and are intentionally absent from this response.
     getCommandJournalPage: async (_siteId, _fabId, query): Promise<CommandJournalPage> => {
@@ -140,7 +142,7 @@ it('R3-03: accepts a FAB-filtered sparse Site page (FAB-A 1,3,5,7) as authoritat
   fabs.push(fab);
   const runtime = fab.runtime;
   runtime.start();
-  runtime.trackCommand('cmd-1');
+  runtime.registerAcceptedCommand('cmd-1');
   await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
   const listCallsBefore = gateway.listCalls.length;
 
@@ -159,5 +161,5 @@ it('R3-03: accepts a FAB-filtered sparse Site page (FAB-A 1,3,5,7) as authoritat
   expect(gateway.listCalls.length).toBe(listCallsBefore);
   await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
   // R3-02 seam: the authoritative watermark was signed to the transport ledger.
-  expect(source.cursors.acknowledged).toEqual({ epoch: 'epoch-1', sequence: 10 });
+  await expect.poll(() => source.cursors.acknowledged, { timeout: 1_000 }).toEqual({ epoch: 'epoch-1', sequence: 10 });
 });
