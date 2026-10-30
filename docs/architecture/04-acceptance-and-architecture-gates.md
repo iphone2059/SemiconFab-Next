@@ -129,7 +129,8 @@
   ROUTE-03                访问                    比较视图和筛选状态正确
                           `/equipment/compare`    
 
-  ROUTE-04                访问 `/fabs/FAB-01/3d`  Sites 成功且 FAB 存在时显示
+  ROUTE-04                访问 `/sites/{siteId}/fabs/{fabId}/3d`
+                          （精确复合身份）             Sites 成功且 Site+FAB 存在时显示
                                                   Twin
 
   ROUTE-05                访问未知 FAB            进入 root error

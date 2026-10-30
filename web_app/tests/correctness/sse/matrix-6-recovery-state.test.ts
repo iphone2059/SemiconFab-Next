@@ -240,3 +240,56 @@ describe('matrix 6: recovery state machine (ADR-010 4)', () => {
     expect(attempts).toBe(afterDispose);
   });
 });
+
+describe('R5.4-01: terminal Unrecoverable is invariant under internal lifecycle', () => {
+  it('connection transitions, timers and a stop/start remount keep Unrecoverable and the attempt budget', async () => {
+    const source = new FakeCommandEventSource();
+    let journalAttempts = 0;
+    const gateway = baseGateway({
+      getCommandJournalPage: async () => {
+        journalAttempts += 1;
+        throw new Error('HTTP 503 transient');
+      },
+    });
+    const created = fab({ source, gateway, recovery: { backoffMs: [1], maxAttempts: 3 } });
+    const runtime = created.runtime;
+    runtime.start();
+    await flush(5);
+
+    // A gap-with-safe-cursor dirty signal selects the bounded journal retry path.
+    emitDirty(source, {
+      reason: 'overflow',
+      droppedCount: 1,
+      delivered: { epoch: 'epoch-1', sequence: 0 },
+      gapStart: 1,
+      epoch: 'epoch-1',
+      sequence: 0,
+    });
+    await expect.poll(() => recoveryState(runtime)?.phase, { timeout: 2_000 }).toBe('Unrecoverable');
+    const budget = recoveryState(runtime)?.attempts;
+    expect(budget).toBe(3);
+    const callsAtTerminal = journalAttempts;
+
+    // Connection lifecycle transitions are internal: they may be observed and
+    // diagnosed, but must never clear the terminal phase or reset the budget.
+    source.setConnectionStatus('reconnecting');
+    source.failTransport({ message: 'SSE interrupted' });
+    source.setConnectionStatus('open');
+    source.reconnect();
+    source.setConnectionStatus('closed');
+
+    for (let index = 0; index < 10; index += 1) {
+      expect(recoveryState(runtime)?.phase).toBe('Unrecoverable');
+      expect(recoveryState(runtime)?.attempts).toBe(budget);
+      await flush(5);
+    }
+
+    // A stop()/start() remount keeps the terminal state and issues no internal request.
+    runtime.stop();
+    runtime.start();
+    await flush(30);
+    expect(recoveryState(runtime)?.phase).toBe('Unrecoverable');
+    expect(recoveryState(runtime)?.attempts).toBe(budget);
+    expect(journalAttempts).toBe(callsAtTerminal);
+  });
+});

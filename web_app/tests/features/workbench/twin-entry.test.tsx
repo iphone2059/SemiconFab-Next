@@ -29,9 +29,27 @@ it('keeps the website entrance free of 3D preview rendering and links to the can
       <WorkbenchApp />
     </ResourceTestProviders>,
   );
-  expect(container.innerHTML).toContain('href="/fabs/fab-1/3d"');
+  expect(container.innerHTML).toContain('href="/sites/site-1/fabs/fab-1/3d"');
   expect(container.innerHTML).toContain('href="/equipment"');
   expect(container.innerHTML).not.toContain('<canvas');
   expect(container.innerHTML).not.toContain('SITE DIGITAL VIEW');
   expect(container.innerHTML).not.toContain('预览');
+});
+
+it('R5.4-03-T10: the Workbench 3D link carries the composite (siteId, fabId) identity', () => {
+  workbenchActions.siteIdSet(registry, 'site-1');
+  vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+  const queryClient = createTestRuntime(registry);
+  seedSites(queryClient, [site]);
+  const { container } = render(
+    <ResourceTestProviders runtime={queryClient}>
+      <WorkbenchApp />
+    </ResourceTestProviders>,
+  );
+  const link = container.querySelector('a[target="_blank"]');
+  expect(link, 'the 3D FAB navigation link must exist').not.toBeNull();
+  expect(link?.getAttribute('href')).toBe('/sites/site-1/fabs/fab-1/3d');
+  // Both identity components are present; a single-id route is not enough.
+  expect(link?.getAttribute('href')).toContain('site-1');
+  expect(link?.getAttribute('href')).toContain('fab-1');
 });

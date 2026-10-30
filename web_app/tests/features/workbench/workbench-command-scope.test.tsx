@@ -6,6 +6,7 @@ import { createElement } from 'react';
 import * as Atom from 'effect/reactivity/Atom';
 import { RuntimeProvider } from '@/app/runtime-provider';
 import { CommandConsole } from '@/workbench/command-console';
+import type { FabIdentity } from '@/domain/fab-identity';
 import type { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
 import type { CommandWorkflowProjection } from '@/contracts/command-workflow.contract';
 import type { SubmitEquipmentCommandInput, SubmittedEquipmentCommand } from '@/api/commands.mutation';
@@ -27,6 +28,12 @@ interface FakeRuntime {
 interface RegistryFixture {
   registry: FabRuntimeRegistry;
   runtime: FakeRuntime;
+  /** How the registry answers the accepted-command handoff (R5.4-02 union). */
+  setRegisterKind: (kind: 'registered' | 'recovery-pending') => void;
+  /** Simulate the runtime generation disappearing before the HTTP 202 arrives. */
+  setAvailable: (available: boolean) => void;
+  readonly get: ReturnType<typeof vi.fn>;
+  readonly register: ReturnType<typeof vi.fn>;
 }
 
 function createRegistry(): RegistryFixture {
@@ -47,15 +54,31 @@ function createRegistry(): RegistryFixture {
     projectionAtom: vi.fn((commandId: string) => atomFor(commandId)),
   });
   const runtime = createRuntime();
+  let available = true;
+  let registerKind: 'registered' | 'recovery-pending' = 'registered';
+  // The registry is keyed by the full composite identity: both ids are required.
+  const get = vi.fn((identity: FabIdentity) => available && identity.fabId === 'fab-a' ? runtime : undefined);
+  // The registry owns the handoff: it releases a still-reserved admission exactly
+  // once and answers the AcceptedCommandRegistration union; the console never
+  // releases an accepted reservation itself.
+  const register = vi.fn((_identity: FabIdentity, commandId: string, reservation: { readonly state: string; release(): void }) => {
+    runtime.trackCommand(commandId);
+    if (reservation.state === 'reserved') reservation.release();
+    return { kind: registerKind };
+  });
   const registry = {
-    get: (fabId: string) => fabId === 'fab-a' ? runtime : undefined,
-    registerAcceptedCommand: (_siteId: string, _fabId: string, commandId: string, reservation: { release(): void }) => {
-      runtime.trackCommand(commandId);
-      reservation.release();
-    },
-    requestAuthoritativeRecovery: () => {},
+    get,
+    registerAcceptedCommand: register,
+    requestAuthoritativeRecovery: vi.fn(),
   } as unknown as FabRuntimeRegistry;
-  return { registry, runtime };
+  return {
+    registry,
+    runtime,
+    setRegisterKind: (kind) => { registerKind = kind; },
+    setAvailable: (next) => { available = next; },
+    get,
+    register,
+  };
 }
 
 interface Deferred<T> {
@@ -106,7 +129,8 @@ afterEach(() => {
 });
 
 it('ignores a previous site-scope completion after rebinding the same FAB in place', async () => {
-  const { registry, runtime } = createRegistry();
+  const fixture = createRegistry();
+  const { registry, runtime } = fixture;
   const pending = deferred<SubmittedEquipmentCommand>();
   submit.mockReturnValueOnce(Effect.promise(() => pending.promise));
   const console = renderConsole(registry, 'site-a', 'fab-a');
@@ -131,6 +155,13 @@ it('ignores a previous site-scope completion after rebinding the same FAB in pla
     await Promise.resolve();
   });
 
+  // The accepted id is handed off with the full composite identity of the submit,
+  // even though the console already rebound to another site scope.
+  expect(fixture.register).toHaveBeenCalledWith(
+    { siteId: 'site-a', fabId: 'fab-a' },
+    'cmd-a-1',
+    expect.anything(),
+  );
   // Nothing from the previous scope may enter the new console lifetime.
   expect(runtime.trackCommand).toHaveBeenCalledWith('cmd-a-1');
   expect(console.text()).not.toContain('cmd-a-1'.slice(0, 8));
@@ -241,4 +272,35 @@ it('tracks a submission on the configured FAB and drops its row when the site sc
   // The old scope's row cannot query the runtime after the console resets.
   expect(runtime.projectionAtom).not.toHaveBeenCalled();
   expect(runtime.trackCommand).toHaveBeenCalledTimes(1);
+});
+
+it('keeps a recovery-pending accepted command tracked and shows 等待 Runtime 恢复, never a failure', async () => {
+  const fixture = createRegistry();
+  const pending = deferred<SubmittedEquipmentCommand>();
+  submit.mockReturnValueOnce(Effect.promise(() => pending.promise));
+  const console = renderConsole(fixture.registry, 'site-a', 'fab-a');
+  fireEvent.submit(console.form());
+  await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+
+  // The runtime generation disappears before the HTTP 202 arrives; the registry
+  // retains the accepted command id for the next generation (R5.4-02 case C).
+  fixture.setAvailable(false);
+  fixture.setRegisterKind('recovery-pending');
+  await act(async () => {
+    pending.resolve(accepted('cmd-pending-1'));
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  // Handoff used the full identity and the registry (not the console) released
+  // the now-stale reservation exactly once.
+  expect(fixture.register).toHaveBeenCalledWith(
+    { siteId: 'site-a', fabId: 'fab-a' },
+    'cmd-pending-1',
+    expect.objectContaining({ state: 'released' }),
+  );
+  expect(console.text()).toContain('cmd-pending-1'.slice(0, 8));
+  expect(console.text()).toContain('等待 Runtime 恢复');
+  expect(console.text()).not.toContain('命令失败');
+  expect(console.alert()).toBeNull();
 });

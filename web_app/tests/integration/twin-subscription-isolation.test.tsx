@@ -74,7 +74,7 @@ afterEach(() => {
 });
 
 function renderTwin() {
-  render(<ResourceTestProviders runtime={client}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
+  render(<ResourceTestProviders runtime={client}><TwinPage siteId="site-1" fabId="fab-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
 }
 
 it('updates the AMHS readout from its own subscription without rerendering TwinContent/FabViewport', () => {

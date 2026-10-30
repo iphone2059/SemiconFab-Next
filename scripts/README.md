@@ -85,8 +85,8 @@ pnpm e2e
 
 ```powershell
 # 需要已启动 dev（API+Vite）；基线 worktree 使用 4fc8a94 与独立端口
-node tools/render_perf.mjs --url http://127.0.0.1:5173/fabs/<fabId>/3d --frames 600 --profile dev
-node tools/render_perf.mjs --url http://127.0.0.1:5173/fabs/<fabId>/3d --frames 600 --profile 60hz
+node tools/render_perf.mjs --url http://127.0.0.1:5173/sites/<siteId>/fabs/<fabId>/3d --frames 600 --profile dev
+node tools/render_perf.mjs --url http://127.0.0.1:5173/sites/<siteId>/fabs/<fabId>/3d --frames 600 --profile 60hz
 node tools/telemetry_stress.mjs --url http://127.0.0.1:5173/tests/telemetry-stress.html --seconds 8 --rate 60
 
 # 生产构建后测量 raw/gzip（对每个 worktree 的 web_app/dist/assets 执行）
@@ -147,7 +147,7 @@ node tools/check_generated_artifacts.mjs --update  # 生成器重新产出后重
 真实 GPU/浏览器门禁需要先启动 `./scripts/start-dev.ps1`，再运行：
 
 ```powershell
-./scripts/perf-render.ps1 -Url http://127.0.0.1:5173/fabs/{fabId}/3d
+./scripts/perf-render.ps1 -Url http://127.0.0.1:5173/sites/{siteId}/fabs/{fabId}/3d
 ```
 
 Worker/遥测压力门禁（同样需要先启动 dev server）：

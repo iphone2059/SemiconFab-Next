@@ -55,7 +55,7 @@ afterEach(() => {
 });
 
 it('renders split control/spec SPC judgements in the layout inspector strip', () => {
-  const view = render(<ResourceTestProviders runtime={client}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
+  const view = render(<ResourceTestProviders runtime={client}><TwinPage siteId="site-1" fabId="fab-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
   // G14: the doubled GPU boundary must actually apply. The real FabViewport would
   // render a <canvas>; the mock renders the scene div only.
   expect(view.container.querySelector('.scene.twin-canvas')).not.toBeNull();

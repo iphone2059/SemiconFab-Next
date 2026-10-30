@@ -12,9 +12,11 @@ it('builds the canonical route tree without a generated route file', () => {
     '/equipment',
     '/equipment/',
     '/equipment/compare',
-    '/fabs/$fabId/3d',
+    // R5.4-03: composite (siteId, fabId) identity; the old /fabs/$fabId/3d is gone.
+    '/sites/$siteId/fabs/$fabId/3d',
   ]));
   expect(ids).not.toContain('/equipment/index');
+  expect(ids).not.toContain('/fabs/$fabId/3d');
   expect(existsSync(new URL('../../src/routes/routeTree.gen.ts', import.meta.url))).toBe(false);
   expect(rootRoute.options.errorComponent, 'root error component must stay the route-level failure boundary').toBeTypeOf('function');
   expect(rootRoute.options.notFoundComponent, 'unknown URLs need the root 404 component').toBeTypeOf('function');

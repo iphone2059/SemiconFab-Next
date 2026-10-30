@@ -44,7 +44,7 @@ it('does not reapply a preset on GPU recovery but applies it on viewport reload 
   const client = createTestRuntime(registry);
   seedSites(client, [site]);
   twinDemoActions.playingSet(registry, false);
-  const view = render(<ResourceTestProviders runtime={client}><TwinPage fabId="fab-1" /></ResourceTestProviders>);
+  const view = render(<ResourceTestProviders runtime={client}><TwinPage siteId="site-1" fabId="fab-1" /></ResourceTestProviders>);
   try {
     await waitFor(() => expect(sceneViews()).toHaveLength(1));
     const epoch = registry.get(viewerSessionAtom).epoch!;
@@ -76,14 +76,14 @@ it('keeps paused DEMO states isolated while consuming telemetry in live mode', a
   const handler = createTelemetryWorkerHandler({ frameSize: 32 });
   const source = { onmessage: null as ((event: { data: string }) => void) | null, onopen: null as (() => void) | null, close() {} };
   const worker = { onmessage: null as ((event: { data: unknown }) => void) | null, postMessage(message: unknown) { const result = handler.handle(message); if (result) this.onmessage?.({ data: result }); }, terminate() {} };
-  const telemetry = new TelemetryRuntime({ url: 'fake', fabId: 'fab-1', eventSourceFactory: () => source, workerFactory: () => worker });
+  const telemetry = new TelemetryRuntime({ siteId: 'site-1', fabId: 'fab-1', url: 'fake', eventSourceFactory: () => source, workerFactory: () => worker });
   telemetry.start(); source.onopen?.();
   source.onmessage?.({ data: JSON.stringify({ topic: 'telemetry.frame', sequence: 1, payload: { fabId: 'fab-1', sequence: 1, capturedAt: 'now', samples: [{ entityId: 'equipment-0', values: { state: 2, utilization: 0.5 } }] } }) });
-  const telemetryRegistry = new FabTelemetryRegistry(); telemetryRegistry.replaceAll(new Map([['fab-1', telemetry]]));
+  const telemetryRegistry = new FabTelemetryRegistry(); telemetryRegistry.replaceAll([telemetry]);
   const client = createTestRuntime(registry);
   seedSites(client, [site]);
   twinDemoActions.playingSet(registry, false);
-  const view = render(<ResourceTestProviders runtime={client}><TelemetryProvider registry={telemetryRegistry}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></TelemetryProvider></ResourceTestProviders>);
+  const view = render(<ResourceTestProviders runtime={client}><TelemetryProvider registry={telemetryRegistry}><TwinPage siteId="site-1" fabId="fab-1" search={{ modal: 'arch' }} /></TelemetryProvider></ResourceTestProviders>);
   await waitFor(() => expect(backend.instances).toHaveLength(1));
   const toolStateSource = frameSource();
   expect(toolStateSource()).toEqual(registry.get(twinDemoAtom).states);

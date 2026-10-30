@@ -59,8 +59,52 @@ it('accepts changed URL input and still writes subsequent user edits', () => {
 it('preserves Twin research and locale deep links during initial hydration', () => {
   const search: RouterSearch = { mode: 'research', lang: 'en-US', theme: 'dark', modal: 'arch' };
   const updates: Partial<RouterSearch>[] = [];
-  render(<ResourceTestProviders runtime={client}><TwinPage fabId="fab-1" search={search} onSearchChange={patch => updates.push(patch)} /></ResourceTestProviders>);
+  render(<ResourceTestProviders runtime={client}><TwinPage siteId="site-1" fabId="fab-1" search={search} onSearchChange={patch => updates.push(patch)} /></ResourceTestProviders>);
   for (const patch of updates) expect({ ...search, ...patch }).toMatchObject(search);
   expect(registry.get(twinUiAtom).entryMode).toBe('research');
   expect(registry.get(localeAtom)).toEqual({ language: 'en', theme: 'dark' });
+});
+
+it('R5.4-03: resolves the exact composite route identity', () => {
+  render(<ResourceTestProviders runtime={client}><TwinPage siteId="site-1" fabId="fab-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
+  expect(document.querySelector('.twin-error')).toBeNull();
+  expect(document.title).toBe('SITE-1 / FAB-01 · 3D FAB');
+});
+
+it('R5.4-03: siteId alone selects the exact site and its default FAB', () => {
+  render(<ResourceTestProviders runtime={client}><TwinPage siteId="site-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
+  expect(document.querySelector('.twin-error')).toBeNull();
+  expect(document.title).toBe('SITE-1 / FAB-01 · 3D FAB');
+});
+
+it('R5.4-03: never first-matches a fabId that belongs to another site', () => {
+  const runtime = createTestRuntime(registry);
+  seedSites(runtime, [
+    { siteId: 'site-1', code: 'SITE-1', templateHash: 'test', fabs: [{ fabId: 'fab-1', code: 'FAB-01' }] },
+    { siteId: 'site-2', code: 'SITE-2', templateHash: 'test2', fabs: [{ fabId: 'fab-2', code: 'FAB-02' }] },
+  ]);
+  render(<ResourceTestProviders runtime={runtime}><TwinPage siteId="site-1" fabId="fab-2" search={{ modal: 'arch' }} /></ResourceTestProviders>);
+  const error = document.querySelector('.twin-error');
+  expect(error, 'mismatched (siteId, fabId) must render the FAB error').not.toBeNull();
+  expect(error?.textContent).toContain('FAB 不存在');
+});
+
+it('R5.4-03: the same fabId in two sites resolves to two distinct FABs', () => {
+  const runtime = createTestRuntime(registry);
+  seedSites(runtime, [
+    { siteId: 'site-1', code: 'SITE-1', templateHash: 'test', fabs: [{ fabId: 'fab-1', code: 'FAB-01' }] },
+    { siteId: 'site-2', code: 'SITE-2', templateHash: 'test2', fabs: [{ fabId: 'fab-1', code: 'FAB-02' }] },
+  ]);
+  const first = render(<ResourceTestProviders runtime={runtime}><TwinPage siteId="site-1" fabId="fab-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
+  expect(document.title).toBe('SITE-1 / FAB-01 · 3D FAB');
+  first.unmount();
+  render(<ResourceTestProviders runtime={runtime}><TwinPage siteId="site-2" fabId="fab-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
+  expect(document.title).toBe('SITE-2 / FAB-02 · 3D FAB');
+});
+
+it('R5.4-03: a bare fabId never first-matches a site', () => {
+  render(<ResourceTestProviders runtime={client}><TwinPage fabId="fab-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
+  const error = document.querySelector('.twin-error');
+  expect(error, 'a fabId without a siteId must not scan sites').not.toBeNull();
+  expect(error?.textContent).toContain('无法解析 FAB 站点');
 });

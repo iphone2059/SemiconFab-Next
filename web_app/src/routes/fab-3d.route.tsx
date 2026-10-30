@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { createRoute } from '@tanstack/react-router';
-import { requireFabSites } from '@/routes/route-data';
+import { requireFabIdentity } from '@/routes/route-data';
 import type { RouterSearch } from './route-search';
 import { decodeRouterSearch } from './route-search';
 import { rootRoute } from './root.route';
@@ -17,20 +17,24 @@ function FabSceneLoading() {
   return <main className="twin-page twin-loading"><span>正在加载 FAB…</span></main>;
 }
 
-/** Canonical 3D FAB page. FAB identity comes from the route param; URL/search state comes from the router. */
+/**
+ * Canonical 3D FAB page. The composite (siteId, fabId) identity comes from the
+ * route params; the loader validates exact membership and the URL/search state
+ * comes from the router. The old /fabs/$fabId/3d shape does not exist.
+ */
 export const fab3dRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/fabs/$fabId/3d',
+  path: '/sites/$siteId/fabs/$fabId/3d',
   validateSearch: decodeRouterSearch,
   loader: async ({ context, params }) => {
-    const site = await requireFabSites(context.appRuntime, params.fabId);
-    return { fabId: params.fabId, siteId: site.siteId };
+    const { site, fab } = await requireFabIdentity(context.appRuntime, { siteId: params.siteId, fabId: params.fabId });
+    return { siteId: site.siteId, fabId: fab.fabId };
   },
   component: FabSceneRoute,
 });
 
 function FabSceneRoute() {
-  const { fabId } = fab3dRoute.useParams();
+  const { siteId, fabId } = fab3dRoute.useParams();
   const search = fab3dRoute.useSearch();
   const navigate = fab3dRoute.useNavigate();
   const updateSearch = (patch: Partial<RouterSearch>, replace = true) => {
@@ -38,7 +42,7 @@ function FabSceneRoute() {
   };
   return (
     <Suspense fallback={<FabSceneLoading />}>
-      <TwinPage fabId={fabId} search={search} onSearchChange={updateSearch} />
+      <TwinPage siteId={siteId} fabId={fabId} search={search} onSearchChange={updateSearch} />
     </Suspense>
   );
 }

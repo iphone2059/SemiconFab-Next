@@ -41,3 +41,46 @@ it('surfaces transport failures and reconnects without pretending they are comma
   source.openStream();
   expect(runtime.connectionState).toBe('open');
 });
+
+const flush = (ms = 0): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Ready-event fake whose transport capability is permanently unavailable. */
+class UnavailableTransportSource extends FakeCommandEventSource {
+  override readonly availability = 'unavailable' as const;
+}
+
+it('R5.4-01: transport failures and connection transitions cannot clear a terminal recovery failure', async () => {
+  const source = new UnavailableTransportSource();
+  let listCalls = 0;
+  const gateway = fakeCommandGateway({
+    listFabCommands: async () => {
+      listCalls += 1;
+      throw new Error('HTTP 503 transient');
+    },
+  });
+  const fab = createTestFab({
+    source,
+    gateway,
+    connectionStatus: 'failed',
+    recovery: { backoffMs: [1], maxAttempts: 2 },
+  });
+  fabs.push(fab);
+  const runtime = fab.runtime;
+  runtime.start();
+  await expect.poll(() => runtime.recoveryState.phase, { timeout: 2_000 }).toBe('Unrecoverable');
+  const attempts = runtime.recoveryState.attempts;
+  const callsAtTerminal = listCalls;
+
+  // The transport interruption is still observable and diagnosed, but it is an
+  // internal lifecycle event: it cannot downgrade the terminal phase or restart
+  // the bounded recovery episode.
+  source.failTransport({ message: 'SSE interrupted' });
+  await expect.poll(() => runtime.transportFailure?.message, { timeout: 1_000 }).toBe('SSE interrupted');
+  source.openStream();
+  source.setConnectionStatus('closed');
+  await flush(30);
+
+  expect(runtime.recoveryState.phase).toBe('Unrecoverable');
+  expect(runtime.recoveryState.attempts).toBe(attempts);
+  expect(listCalls).toBe(callsAtTerminal);
+});

@@ -95,7 +95,7 @@ it('CORE-014 closes the scoped EventSource and its connect watchdog timer', asyn
     }
     const runtime = createFabRuntime(harness, {
       lazyCommandSubscription: true,
-      sourceFor: (_fabId, scope) =>
+      sourceFor: (_identity, scope) =>
         createSseCommandEventSource('/api/v1/sites/site-1/commands/stream?fabId=fab-a', {
           host: {
             addFinalizer: (finalizer) => {

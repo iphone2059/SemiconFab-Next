@@ -82,7 +82,7 @@ it('A02: SSE frames publish through one throttled projection instead of renderin
   seedSites(client, [site]);
   render(
     <ResourceTestProviders runtime={client}>
-      <TwinPage fabId="fab-1" search={{ modal: 'arch' }} />
+      <TwinPage siteId="site-1" fabId="fab-1" search={{ modal: 'arch' }} />
     </ResourceTestProviders>,
   );
 

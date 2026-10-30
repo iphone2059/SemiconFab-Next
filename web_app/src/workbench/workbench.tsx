@@ -113,7 +113,7 @@ export default function WorkbenchApp() {
   const fabs = site?.fabs ?? [];
   const selectedFab = fabs[Math.min(fabIndex, Math.max(0, fabs.length - 1))];
   // The 3D link points at the final canonical URL for the selected FAB.
-  const threeDeeHref = selectedFab ? fab3dPath(selectedFab.fabId) : '/';
+  const threeDeeHref = site && selectedFab ? fab3dPath(site.siteId, selectedFab.fabId) : '/';
   return (
     <div className="app-shell">
       <aside className="sidebar">

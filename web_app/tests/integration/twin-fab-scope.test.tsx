@@ -80,7 +80,7 @@ function setup(): AppRuntime<never> {
 function renderTwin(client: AppRuntime<never>, fabId: string) {
   return render(
     <ResourceTestProviders runtime={client}>
-      <TwinPage fabId={fabId} search={{ modal: 'arch' }} />
+      <TwinPage siteId="site-1" fabId={fabId} search={{ modal: 'arch' }} />
     </ResourceTestProviders>,
   );
 }
@@ -129,7 +129,7 @@ it('scopes status REST + SSE to the single configured canonical route FAB', asyn
 
   render(
     <ResourceTestProviders runtime={client}>
-      <TwinPage fabId="fab-a" search={{ modal: 'arch' }} />
+      <TwinPage siteId="site-1" fabId="fab-a" search={{ modal: 'arch' }} />
     </ResourceTestProviders>,
   );
 
@@ -168,7 +168,7 @@ it('A01: provider replacement starts a fresh runtime baseline; the old generatio
   seedSites(replacementClient, sites);
   view.rerender(
     <ResourceTestProviders key="replacement" runtime={replacementClient}>
-      <TwinPage fabId="fab-a" search={{ modal: 'arch' }} />
+      <TwinPage siteId="site-1" fabId="fab-a" search={{ modal: 'arch' }} />
     </ResourceTestProviders>,
   );
 

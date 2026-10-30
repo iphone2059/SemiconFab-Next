@@ -312,9 +312,9 @@ Research Events 等资源按表显式设置 600 秒。不要依赖 provider
 
   `/equipment/compare`                目录比较页；保留筛选和前进/后退行为
 
-  `/fabs/$fabId/3d`                   loader 验证 FAB 身份；未知 FAB
-                                      或必要数据加载失败进入 root error
-                                      boundary
+  `/sites/$siteId/fabs/$fabId/3d`     loader 精确验证复合 FAB 身份；未知
+                                      Site/FAB 或必要数据加载失败进入
+                                      root error boundary（R5.4-03）
 
   未知 URL                            root `notFoundComponent` 显示 404
   --------------------------------------------------------------------------

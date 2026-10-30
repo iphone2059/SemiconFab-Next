@@ -3,8 +3,12 @@
  * Real-browser WebGPU/render performance gate (headless Chrome, localhost secure context).
  *
  * Usage (start scripts/start-dev.ps1 first so API + Vite are running):
- *   node tools/render_perf.mjs --url http://127.0.0.1:5173/fabs/FAB-01/3d
+ *   node tools/render_perf.mjs --url http://127.0.0.1:5173/sites/<siteId>/fabs/<fabId>/3d
  *   node tools/render_perf.mjs --url ... --profile 60hz
+ *
+ * The default URL is the composite identity of the development fixture
+ * (DEMO-SITE / FAB-01); pass --url for any other canonical
+ * /sites/{siteId}/fabs/{fabId}/3d page.
  *
  * Measures actual renderer frame progress through the product perf bridge, verifies
  * navigator.gpu + adapter, and additionally gates p99 frame time, JS-heap growth and
@@ -28,7 +32,7 @@ const arg = (name, fallback) => {
   const index = process.argv.indexOf('--' + name);
   return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : fallback;
 };
-const targetUrl = new URL(arg('url', 'http://127.0.0.1:5173/fabs/FAB-01/3d'));
+const targetUrl = new URL(arg('url', 'http://127.0.0.1:5173/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/3d'));
 targetUrl.searchParams.set('perf', '1');
 const url = targetUrl.href;
 const chrome = arg('chrome', 'C:/Program Files/Google/Chrome/Application/chrome.exe');

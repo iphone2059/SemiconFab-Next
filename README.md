@@ -69,7 +69,7 @@ web_app/      唯一前端站点（严格单层 src；详见 web_app/README.md�
 cd web_app; pnpm e2e
 
 # 渲染/GPU 与遥测压力（需已启动 dev 栈）
-node tools/render_perf.mjs --url http://127.0.0.1:5173/fabs/<fabId>/3d --frames 600 --profile dev
+node tools/render_perf.mjs --url http://127.0.0.1:5173/sites/<siteId>/fabs/<fabId>/3d --frames 600 --profile dev
 node tools/telemetry_stress.mjs --url http://127.0.0.1:5173/tests/telemetry-stress.html --seconds 8 --rate 60
 
 # React Compiler 静态门禁（web_app）

@@ -2,7 +2,7 @@ import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { useEffect } from 'react';
 import type { FabDto, SiteDto } from '@/contracts/app-contracts';
-import { sitesDefinition } from '@/api/sites.resource';
+import { findSiteFab, sitesDefinition } from '@/api/sites.resource';
 import { useResource } from '@/api/use-resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import { searchToQueryString, type RouterSearch } from '@/routes/route-search';
@@ -18,12 +18,14 @@ import type { TwinLanguage } from '@/twin/twin-i18n';
 import { twinModalFrom, twinModeFrom, twinSiteIdFrom } from '@/twin/twin-search';
 
 export interface TwinRouteStateParams {
+  /** Canonical route siteId; with fabId it is the composite FAB identity (ADR-007 §3). */
+  siteId?: string;
   fabId?: string;
+  /** Page-store site fallback, used only when the route carries no identity (SSR, tests). */
+  pageSiteId?: string;
   /** Router-owned search state; the page never reads window.location for product state. */
   search?: RouterSearch;
   onSearchChange?: (patch: Partial<RouterSearch>, replace?: boolean) => void;
-  /** Page-store site fallback, used when TwinPage renders without a route param (SSR, tests). */
-  siteId?: string;
   mode: EntryMode;
   language: TwinLanguage;
   theme: 'light' | 'dark';
@@ -33,10 +35,58 @@ export interface TwinRouteStateParams {
 export interface TwinRouteState {
   site?: SiteDto;
   fab?: FabDto;
-  /** Canonical route identity wins; the site/first-FAB fallback fills the gap. */
+  /** Exact selected FAB id; never a cross-site first match. */
   selectedFabId?: string;
-  /** Site id that owns the FAB-scoped equipment status stream. */
-  statusSiteId?: string;
+}
+
+interface TwinRouteResolution {
+  site?: SiteDto;
+  fab?: FabDto;
+  selectedFabId?: string;
+  error?: string;
+}
+
+/**
+ * Resolves the composite route identity against the configured sites document.
+ *
+ * - siteId + fabId: EXACT membership. A missing site or a FAB that is not in
+ *   that site is an error; there is no first-match across sites.
+ * - siteId only: exact site; its first configured FAB is the explicit default
+ *   selection (a Site has 1..32 independent FABs).
+ * - neither: the pre-existing page-store / legacy ?siteId= / first-site fallback.
+ * - fabId without siteId: scoped to the page-store/legacy site only; it must
+ *   never first-match a site from the FAB id alone.
+ */
+function resolveTwinRoute(
+  sites: readonly SiteDto[],
+  identity: { siteId?: string; fabId?: string },
+  fallbackSiteId: string | undefined,
+  t: TwinRouteStateParams['t'],
+): TwinRouteResolution {
+  const { siteId, fabId } = identity;
+  if (siteId !== undefined) {
+    const site = sites.find((value) => value.siteId === siteId);
+    if (!site) return { error: t('指定的 FAB 站点不存在：{0}', [siteId]) };
+    if (fabId !== undefined) {
+      const resolved = findSiteFab(sites, { siteId, fabId });
+      if (!resolved) return { error: t('指定的 FAB 不存在：{0}', [fabId]) };
+      return { site: resolved.site, fab: resolved.fab, selectedFabId: resolved.fab.fabId };
+    }
+    const fab = site.fabs[0];
+    return { site, fab, selectedFabId: fab?.fabId };
+  }
+  if (fabId !== undefined) {
+    const scoped = fallbackSiteId === undefined ? undefined : sites.find((value) => value.siteId === fallbackSiteId);
+    if (!scoped) return { error: t('无法解析 FAB 站点：{0}', [fabId]) };
+    const resolved = findSiteFab(sites, { siteId: scoped.siteId, fabId });
+    if (!resolved) return { error: t('指定的 FAB 不存在：{0}', [fabId]) };
+    return { site: resolved.site, fab: resolved.fab, selectedFabId: resolved.fab.fabId };
+  }
+  const fallback = fallbackSiteId === undefined ? undefined : sites.find((value) => value.siteId === fallbackSiteId);
+  const site = fallback ?? sites[0];
+  if (!site) return { error: t('没有可用的 FAB 站点') };
+  const fab = site.fabs[0];
+  return { site, fab, selectedFabId: fab?.fabId };
 }
 
 /**
@@ -46,13 +96,15 @@ export interface TwinRouteState {
  * (mode, language, theme, legacy ?siteId= compatibility, modal deep links). This
  * hook mirrors it into the UI/locale/page stores and writes user changes back
  * through the router callback; nothing here touches history/location directly.
- * It also resolves the route FAB into the site/fab projection the page renders.
+ * It also resolves the composite route identity into the site/fab projection the
+ * page renders (no site inference from a bare fabId).
  */
 export function useTwinRouteState({
+  siteId,
   fabId,
+  pageSiteId,
   search,
   onSearchChange,
-  siteId,
   mode,
   language,
   theme,
@@ -67,6 +119,13 @@ export function useTwinRouteState({
   const searchTheme = search?.theme;
   const routeModal = twinModalFrom(search ?? {});
   const legacySiteId = twinSiteIdFrom(search ?? {});
+  const fallbackSiteId = legacySiteId ?? pageSiteId;
+  const sitesData = sitesView.data;
+  const resolution: TwinRouteResolution = sitesData === undefined
+    ? {}
+    : resolveTwinRoute(sitesData, { siteId, fabId }, fallbackSiteId, t);
+  const resolvedSiteId = resolution.site?.siteId;
+  const resolvedError = resolution.error;
 
   // URL is the owner of persisted language/theme overrides; the store is synced
   // from the router search and writes back through it (no history/location use).
@@ -96,31 +155,15 @@ export function useTwinRouteState({
   }, [language, theme, onSearchChange, searchLang, searchTheme, registry]);
 
   useEffect(() => {
-    if (!sitesView.data) return;
-    // Canonical route identity (/fabs/$fabId/3d) wins over the transitional
-    // ?siteId= compatibility parameter; the legacy parameter is still honoured
-    // when the route does not carry a FAB id.
-    let next: SiteDto | undefined;
-    if (fabId) {
-      next = sitesView.data.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId));
-      if (!next) {
-        twinPageActions.siteErrorSet(registry, t("指定的 FAB 不存在：{0}", [fabId]));
-        return;
-      }
-    } else if (siteId) {
+    if (sitesData === undefined) return;
+    if (resolvedError !== undefined) {
+      twinPageActions.siteErrorSet(registry, resolvedError);
       return;
-    } else {
-      next = legacySiteId ? sitesView.data.find((value) => value.siteId === legacySiteId) : sitesView.data[0];
-      if (!next) {
-        twinPageActions.siteErrorSet(registry, legacySiteId ? t("指定的 FAB 站点不存在：{0}", [legacySiteId]) : t("没有可用的 FAB 站点"));
-        return;
-      }
     }
-    // Multiple FABs are a first-class product shape: the route/first-FAB fallback
-    // selects one FAB, it never rejects the site for having more than one.
-    if (registry.get(twinPageAtom).siteId !== next.siteId) twinPageActions.siteIdSet(registry, next.siteId);
+    if (resolvedSiteId === undefined) return;
+    if (registry.get(twinPageAtom).siteId !== resolvedSiteId) twinPageActions.siteIdSet(registry, resolvedSiteId);
     if (registry.get(twinPageAtom).siteError !== undefined) twinPageActions.siteErrorSet(registry, undefined);
-  }, [sitesView.data, siteId, fabId, legacySiteId, t, registry, sitesView.error]);
+  }, [sitesData, resolvedSiteId, resolvedError, registry]);
 
   useEffect(() => {
     if (sitesView.error === undefined) return;
@@ -141,21 +184,11 @@ export function useTwinRouteState({
     }
   }, [routeModal, registry]);
 
-  const sitesData = sitesView.data;
-  const site = !sitesData
-    ? undefined
-    : fabId
-      ? sitesData.find((value) => value.fabs.some((fabValue) => fabValue.fabId === fabId))
-      : sitesData.find((value) => value.siteId === siteId) ?? sitesData[0];
-  // R3-10: the URL owns FAB identity. Only when the URL has no fabId (or references unknown
-  // data) do we fall back to the first configured FAB; a Site normally has 3 independent FABs,
-  // so this is an explicit default selection rather than a single-FAB assumption.
-  const selectedFabId = (fabId ?? site?.fabs[0]?.fabId);
-  const fab = (site ? site.fabs.find((value) => value.fabId === selectedFabId) ?? site.fabs[0] : undefined);
+  const { site, fab, selectedFabId } = resolution;
 
   useEffect(() => {
     if (site) document.title = `${site.code} / ${fab?.code ?? 'FAB'} · 3D FAB`;
   }, [site, fab, registry]);
 
-  return { site, fab, selectedFabId, statusSiteId: site?.siteId };
+  return { site, fab, selectedFabId };
 }

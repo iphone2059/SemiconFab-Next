@@ -1,6 +1,7 @@
 import type { AppRuntime } from '@/app/app-runtime';
-import type { SiteDto } from '@/contracts/app-contracts';
-import { findSiteByFabId, sitesDefinition } from '@/api/sites.resource';
+import type { FabDto, SiteDto } from '@/contracts/app-contracts';
+import type { FabIdentity } from '@/domain/fab-identity';
+import { findSiteFab, sitesDefinition } from '@/api/sites.resource';
 
 /**
  * Route loaders read the sites document through the AppRuntime ResourceManager
@@ -13,9 +14,17 @@ export async function loadSites(runtime: AppRuntime<never>): Promise<SiteDto[]> 
   return runtime.resources.ensure(runtime.resources.handle(sitesDefinition));
 }
 
-export async function requireFabSites(runtime: AppRuntime<never>, fabId: string): Promise<SiteDto> {
+/**
+ * Validates the exact composite (siteId, fabId) route identity against the
+ * configured sites document. A FAB from another site is NOT a match (no
+ * first-match across sites), so a nonexistent combination fails the route.
+ */
+export async function requireFabIdentity(
+  runtime: AppRuntime<never>,
+  identity: FabIdentity,
+): Promise<{ site: SiteDto; fab: FabDto }> {
   const sites = await loadSites(runtime);
-  const site = findSiteByFabId(sites, fabId);
-  if (!site) throw new Error(`FAB 不存在：${fabId}`);
-  return site;
+  const resolved = findSiteFab(sites, identity);
+  if (!resolved) throw new Error(`FAB 不存在：${identity.fabId}`);
+  return resolved;
 }

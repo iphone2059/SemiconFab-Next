@@ -2,6 +2,7 @@ import type { Scope } from 'effect';
 import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import type { CommandEventSource } from '@/contracts/command-events.contract';
 import type { CommandGateway } from '@/contracts/command-gateway.contract';
+import type { FabIdentity } from '@/domain/fab-identity';
 import type {
   CommandWorkflowFactory,
   FabRuntimeRecoveryOptions,
@@ -17,8 +18,8 @@ export interface FabRuntimeFactoryOptions {
   readonly parentScope: Scope.Scope;
   /** Required single projection registry (AppRuntime.registry in production). */
   readonly projectionRegistry: AtomRegistry.AtomRegistry;
-  /** Per-FAB typed source provider; receives the FAB's CommandTransportScope. */
-  readonly sourceFor: (fabId: string, scope: Scope.Scope) => CommandEventSource;
+  /** Per-FAB typed source provider; receives the complete identity and CommandTransportScope. */
+  readonly sourceFor: (identity: FabIdentity, scope: Scope.Scope) => CommandEventSource;
   /**
    * R3-07: REQUIRED explicit recovery authority (same contract as
    * FabRuntimeOptions.gateway). Pass the authoritative CommandGateway, or
@@ -45,10 +46,10 @@ export interface FabRuntimeFactoryOptions {
 export class FabRuntimeFactory {
   constructor(private readonly options: FabRuntimeFactoryOptions) {}
 
-  create(fabId: string, siteId: string): FabRuntime {
+  create(identity: FabIdentity): FabRuntime {
     return new FabRuntime({
-      siteId,
-      fabId,
+      siteId: identity.siteId,
+      fabId: identity.fabId,
       runtime: this.options.runtime,
       parentScope: this.options.parentScope,
       projectionRegistry: this.options.projectionRegistry,

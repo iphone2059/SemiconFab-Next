@@ -109,7 +109,7 @@ it('keeps Query cache and ordering across same-FAB remounts while detaching old 
   seedSites(client, [site]);
   const tree = (
     <ResourceTestProviders runtime={client}>
-      <TwinPage fabId="fab-a" search={{ modal: 'arch' }} />
+      <TwinPage siteId="site-1" fabId="fab-a" search={{ modal: 'arch' }} />
     </ResourceTestProviders>
   );
   const view = render(tree);

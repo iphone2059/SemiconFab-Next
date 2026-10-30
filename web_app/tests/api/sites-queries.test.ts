@@ -1,11 +1,14 @@
 import { Effect } from 'effect';
 import { afterEach, expect, it, vi } from 'vitest';
-import { fetchSites as fetchSitesEffect, findSiteByFabId, sitesDefinition } from '@/api/sites.resource';
+import { fetchSites as fetchSitesEffect, findSiteFab, sitesDefinition } from '@/api/sites.resource';
 
 const fetchSites = (...args: Parameters<typeof fetchSitesEffect>) => Effect.runPromise(fetchSitesEffect(...args));
 
+// Two Sites deliberately configure the SAME fabId: only the composite
+// (siteId, fabId) identity can distinguish them (ADR-007 §3).
 const sites = [
-  { siteId: 'site-1', code: 'SITE-1', templateHash: 'hash-1', fabs: [{ fabId: 'FAB-01', code: 'FAB-01' }] },
+  { siteId: 'site-a', code: 'SITE-A', templateHash: 'hash-a', fabs: [{ fabId: 'fab-01', code: 'FAB-A-01' }] },
+  { siteId: 'site-b', code: 'SITE-B', templateHash: 'hash-b', fabs: [{ fabId: 'fab-01', code: 'FAB-B-01' }] },
 ];
 
 const jsonResponse = (value: unknown) =>
@@ -48,9 +51,19 @@ it('validates the minimal sites document shape', async () => {
   await expect(fetchSites(emptyFabs)).rejects.toThrow(/fabs/);
 });
 
-it('looks sites up by FAB identity', () => {
-  expect(findSiteByFabId(sites, 'FAB-01')?.siteId).toBe('site-1');
-  expect(findSiteByFabId(sites, 'FAB-99')).toBeUndefined();
+it('R5.4-03: resolves the exact composite FAB identity with no cross-site first match', () => {
+  expect(findSiteFab(sites, { siteId: 'site-a', fabId: 'fab-01' })).toMatchObject({
+    site: { siteId: 'site-a' },
+    fab: { fabId: 'fab-01', code: 'FAB-A-01' },
+  });
+  expect(findSiteFab(sites, { siteId: 'site-b', fabId: 'fab-01' })).toMatchObject({
+    site: { siteId: 'site-b' },
+    fab: { fabId: 'fab-01', code: 'FAB-B-01' },
+  });
+  // A known fabId under the WRONG site is not a match; there is no fabId-only scan.
+  expect(findSiteFab(sites, { siteId: 'site-a', fabId: 'fab-02' })).toBeUndefined();
+  expect(findSiteFab(sites, { siteId: 'site-c', fabId: 'fab-01' })).toBeUndefined();
+  expect(findSiteFab([], { siteId: 'site-a', fabId: 'fab-01' })).toBeUndefined();
 });
 
 it('resolves the single configured FAB by its supplied identity', async () => {
@@ -60,6 +73,6 @@ it('resolves the single configured FAB by its supplied identity', async () => {
   }];
   const fetcher = vi.fn<typeof fetch>(async () => jsonResponse(catalog));
   expect(await fetchSites(fetcher)).toEqual(catalog);
-  expect(findSiteByFabId(catalog, 'configured-fab')?.siteId).toBe('site-1');
-  expect(findSiteByFabId(catalog, 'FAB-01')).toBeUndefined();
+  expect(findSiteFab(catalog, { siteId: 'site-1', fabId: 'configured-fab' })?.fab.fabId).toBe('configured-fab');
+  expect(findSiteFab(catalog, { siteId: 'site-1', fabId: 'FAB-01' })).toBeUndefined();
 });

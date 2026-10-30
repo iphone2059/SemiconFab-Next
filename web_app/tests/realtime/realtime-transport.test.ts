@@ -447,11 +447,17 @@ it('feeds telemetry frames through the Worker and exposes renderer tool states',
     terminate: vi.fn(),
   };
   const runtime = new TelemetryRuntime({
+    siteId: 'site-1',
+    fabId: 'fab-a',
     url: '/api/v1/sites/site-1/fabs/fab-a/telemetry/stream',
     eventSourceFactory: (url) => { const value = new FakeEventSource(url); sources.push(value); return value; },
     workerFactory: () => worker,
   });
   runtime.start();
+  // R5.4-03: the runtime consumes exactly the composition-root URL for its identity.
+  expect(sources[0].url).toBe('/api/v1/sites/site-1/fabs/fab-a/telemetry/stream');
+  expect(runtime.siteId).toBe('site-1');
+  expect(runtime.fabId).toBe('fab-a');
   const samples = Array.from({ length: 16 }, (_, index) => ({
     entityId: `equipment-${index}`,
     values: { state: index % 4, utilization: 0.5 },

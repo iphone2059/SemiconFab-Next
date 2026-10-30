@@ -2,6 +2,7 @@ import { Effect, Scope } from 'effect';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { CommandEventSource } from '@/contracts/command-events.contract';
 import type { CommandJournalPage, CommandJournalQuery } from '@/contracts/command-gateway.contract';
+import type { FabIdentity } from '@/domain/fab-identity';
 import { createSseCommandEventSource } from '@/realtime/command-event-source.transport';
 import {
   type CommandTestRuntime,
@@ -135,7 +136,7 @@ describe('matrix 1: recovery starts from the safe acknowledged prefix, never obs
       });
       const runtime = createFabRuntime(harness, {
         gateway,
-        sourceFor: (_fabId: string, scope: Scope.Scope) => {
+        sourceFor: (_identity: FabIdentity, scope: Scope.Scope) => {
           const created = createSseCommandEventSource(
             '/api/v1/sites/site-1/commands/stream?fabId=fab-a',
             {

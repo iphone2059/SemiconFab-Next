@@ -38,12 +38,16 @@ if (!(await waitForAuthorized(apiUrl + '/api/v1/sites', apiHeaders, 15000))) {
 }
 const sites = await (await fetch(apiUrl + '/api/v1/sites', { headers: apiHeaders })).json();
 const catalog = await (await fetch(apiUrl + '/api/v1/catalog', { headers: apiHeaders })).json();
-const fab = sites[0]?.fabs?.[0];
-if (!fab) {
-  console.error('production e2e requires at least one configured FAB');
+const site = sites[0];
+const fab = site?.fabs?.[0];
+if (!site?.siteId || !fab?.fabId) {
+  console.error('production e2e requires at least one configured Site/FAB identity');
   process.exit(2);
 }
+// FAB identity is the composite (siteId, fabId); the canonical route carries both.
+const siteId = site.siteId;
 const fabId = fab.fabId;
+const twinPath = (identitySiteId, identityFabId) => '/sites/' + encodeURIComponent(identitySiteId) + '/fabs/' + encodeURIComponent(identityFabId) + '/3d';
 const scenarios = [];
 let browser;
 let profileDir;
@@ -138,7 +142,7 @@ try {
   });
 
   await recordScenario('P5', 'Twin WebGPU scene, no WebGL fallback, tool selection and DEMO clock', async ({ step, record }) => {
-    await navigate('/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
+    await navigate(twinPath(siteId, fabId), 'document.querySelector("main.twin-page")');
     await browser.waitFor('document.querySelector("canvas")', 30000, 'twin canvas');
     await browser.waitFor('document.querySelector("#bottom-hud-footer") && !document.querySelector(".twin-render-status") && document.querySelector("#bottom-hud-footer").innerText.includes("WebGPU")', timeoutMs, 'WebGPU ready footer');
     const gpu = await browser.evaluate('(() => { const canvas = document.querySelector("canvas"); if (!canvas) return null; return { webgpu: !!canvas.getContext("webgpu"), webgl: !!canvas.getContext("webgl"), webgl2: !!canvas.getContext("webgl2") }; })()');
@@ -160,7 +164,7 @@ try {
   });
 
   await recordScenario('P6', 'Twin realtime REST + SSE feed is LIVE', async ({ step, record }) => {
-    await navigate('/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
+    await navigate(twinPath(siteId, fabId), 'document.querySelector("main.twin-page")');
     await browser.waitFor('document.querySelector(".twin-feed")', 20000, 'twin feed');
     // The default source is DEMO; the realtime gate must select the SSE source.
     const switched = await browser.evaluate('(() => { const select = [...document.querySelectorAll("select")].find((element) => [...element.options].some((option) => option.value === "sse-live")); if (!select) return false; select.value = "sse-live"; select.dispatchEvent(new Event("change", {bubbles:true})); return true; })()');
@@ -172,20 +176,22 @@ try {
   });
 
   await recordScenario('P7', 'Unknown FAB route fails closed in production', async ({ step }) => {
-    await navigate('/fabs/unknown-fab/3d', 'document.querySelector(".fatal, main.twin-page.twin-error")');
+    // Unknown-FAB scenario keeps a KNOWN siteId with an unknown fabId: the exact
+    // composite membership check must fail, never a cross-site first match.
+    await navigate(twinPath(siteId, 'unknown-fab'), 'document.querySelector(".fatal, main.twin-page.twin-error")');
     await browser.waitText('FAB 不存在', 20000);
     step('unknown FAB shows the route error', 'FAB 不存在', (await browser.textOf('.fatal, main.twin-page.twin-error')).slice(0, 120));
   });
 
   await recordScenario('P8', 'Page exit/re-enter leaves no duplicate event streams', async ({ step, record }) => {
-    await navigate('/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
+    await navigate(twinPath(siteId, fabId), 'document.querySelector("main.twin-page")');
     await sleep(2500);
     const firstStreams = browser.requests.filter((request) => request.type === 'EventSource').length;
     browser.activeEventSources.clear();
     await navigate('/', 'document.querySelector(".workbench-run-form")');
     await sleep(1000);
     browser.activeEventSources.clear();
-    await navigate('/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
+    await navigate(twinPath(siteId, fabId), 'document.querySelector("main.twin-page")');
     await sleep(3000);
     const active = [...browser.activeEventSources];
     const duplicates = active.length - new Set(active.map((value) => value.split(' ')[1])).size;
@@ -222,7 +228,7 @@ try {
     webUrl,
     apiUrl,
     browser: browser?.session.version?.Browser ?? null,
-    fixtures: { sites: sites.length, fabs: sites.reduce((sum, site) => sum + site.fabs.length, 0), catalogItems: catalog.items.length, fabId },
+    fixtures: { sites: sites.length, fabs: sites.reduce((sum, value) => sum + value.fabs.length, 0), catalogItems: catalog.items.length, siteId, fabId },
     scenarios,
     passed: scenarios.filter((scenario) => scenario.pass).length,
     failed: scenarios.filter((scenario) => !scenario.pass).length,

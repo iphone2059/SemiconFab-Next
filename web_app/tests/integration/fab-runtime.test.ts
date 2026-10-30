@@ -46,13 +46,13 @@ describe('FabRuntime single-FAB assembly (CE-07)', () => {
     const first = createFab({ source: oldSource });
     registry.register(first.runtime);
     expect(registry.size).toBe(1);
-    expect(registry.fabIds).toEqual(['fab-a']);
+    expect(registry.fabIdentities).toEqual([{ siteId: 'site-1', fabId: 'fab-a' }]);
     registry.startAll();
     const oldWorkflow = first.runtime.registerAcceptedCommand(commandId);
     oldSource.emit(commandResult({ fabId: 'fab-a', commandId, revision: 5, outcome: 'executing' }));
     expect(adapter(first.runtime).state).toBe('executing');
 
-    expect(registry.remove('fab-a')).toBe(first.runtime);
+    expect(registry.remove({ siteId: 'site-1', fabId: 'fab-a' })).toBe(first.runtime);
     expect(oldSource.commandObservers).toBe(0);
     const current = createFab({ source: newSource });
     registry.register(current.runtime);
@@ -192,11 +192,11 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     registry.register(created.runtime);
     const lifecycle = new FabLifecycleCoordinator(registry);
     lifecycle.start();
-    registry.get('fab-a')!.registerAcceptedCommand(commandId);
+    registry.get({ siteId: 'site-1', fabId: 'fab-a' })!.registerAcceptedCommand(commandId);
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'accepted' }));
     lifecycle.stop();
     source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'executing' }));
-    expect(adapter(registry.get('fab-a')!).state).toBe('accepted');
+    expect(adapter(registry.get({ siteId: 'site-1', fabId: 'fab-a' })!).state).toBe('accepted');
     lifecycle.dispose();
     expect(registry.size).toBe(0);
     expect(lifecycle.running).toBe(false);
@@ -993,5 +993,47 @@ describe('Round 5.1 / P2-03 independent workflow and correlation TTLs', () => {
     // workflow sweep + correlation sweep are independently owned and both cleared.
     expect(clearTimeoutSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
     clearTimeoutSpy.mockRestore();
+  });
+});
+
+describe('R5.4-01 terminal recovery state survives the FabRuntime lifecycle', () => {
+  it('keeps Unrecoverable across stop()/start() remount and re-arms only explicit authoritative recovery', async () => {
+    let failing = true;
+    let listCalls = 0;
+    const gateway = fakeCommandGateway({
+      listFabCommands: async () => {
+        listCalls += 1;
+        if (failing) throw new Error('HTTP 503 transient');
+        return emptyRecoveryList();
+      },
+    });
+    const source = new FakeCommandEventSource();
+    const created = createFab({
+      source,
+      gateway,
+      recovery: { backoffMs: [1], maxAttempts: 2 },
+    });
+    const runtime = created.runtime;
+    runtime.start();
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 2_000 }).toBe('Unrecoverable');
+    const budget = runtime.recoveryState.attempts;
+    expect(budget).toBe(2);
+
+    // A stop()/start() remount (e.g. a runtime replacement/remount path) is an
+    // internal lifecycle event: the terminal phase and its attempt budget survive.
+    runtime.stop();
+    runtime.start();
+    await flush(30);
+    expect(runtime.recoveryState.phase).toBe('Unrecoverable');
+    expect(runtime.recoveryState.attempts).toBe(budget);
+    const callsAfterRemount = listCalls;
+
+    // Only a new external authoritative-recovery request opens a new episode; the
+    // runtime must not stay stuck in the terminal phase when authority is healthy.
+    failing = false;
+    runtime.requestAuthoritativeRecovery();
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 2_000 }).toBe('Healthy');
+    expect(listCalls).toBeGreaterThan(callsAfterRemount);
+    expect(runtime.recoveryState.attempts).toBe(0);
   });
 });

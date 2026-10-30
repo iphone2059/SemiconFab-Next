@@ -46,6 +46,9 @@ const devKey = arg('dev-key', readDevKey(root));
 const pnpm = arg('pnpm', path.join(root, '.local/tooling/pnpm/12.15.0/node_modules/pnpm/bin/pnpm.mjs'));
 fs.mkdirSync(outDir, { recursive: true });
 
+// Canonical composite FAB route: (siteId, fabId) are both required (ADR-007 §3).
+const twinPath = (siteId, fabId) => '/sites/' + encodeURIComponent(siteId) + '/fabs/' + encodeURIComponent(fabId) + '/3d';
+
 const pnpmExec = (args, env) => {
   const result = spawnSync(process.execPath, [pnpm, ...args], { cwd: webApp, encoding: 'utf8', env: { ...process.env, ...env } });
   if (result.error) throw result.error;
@@ -351,8 +354,8 @@ const SCENARIOS = [
     id: 'closure-capture',
     description: 'Stale-closure safety: selecting two tools updates the inspector to the latest',
     selectors: ['.twin-inspector #inspect-name, .original-inspector #inspect-name', 'main'],
-    async run(browser, record, webUrl, fabId) {
-      await browser.navigate(webUrl + '/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
+    async run(browser, record, webUrl, siteId, fabId) {
+      await browser.navigate(webUrl + twinPath(siteId, fabId), 'document.querySelector("main.twin-page")');
       await browser.waitFor('document.querySelectorAll("#equipment-list button[data-equipment-id]").length > 1', 25000, 'sidebar tools');
       // Wait for the scene bootstrap to finish: a loading banner ("正在初始化 WebGPU…" /
       // "正在加载原版设备模型…") otherwise leaks into one mode's DOM snapshot.
@@ -370,8 +373,8 @@ const SCENARIOS = [
     id: 'dynamic-import-gpu',
     description: 'Dynamic-imported WebGPU scene mounts (async import boundary)',
     selectors: ['#bottom-hud-footer', 'canvas'],
-    async run(browser, record, webUrl, fabId) {
-      await browser.navigate(webUrl + '/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
+    async run(browser, record, webUrl, siteId, fabId) {
+      await browser.navigate(webUrl + twinPath(siteId, fabId), 'document.querySelector("main.twin-page")');
       await browser.waitFor('document.querySelector("canvas")', 30000, 'canvas');
       await browser.waitFor('document.querySelector("#bottom-hud-footer") && !document.querySelector(".twin-render-status") && document.querySelector("#bottom-hud-footer").innerText.includes("WebGPU")', 45000, 'WebGPU ready');
       const barrier = await quiesce(browser, 'gpu-ready', { timeoutMs: 12000 });
@@ -386,8 +389,8 @@ const SCENARIOS = [
     id: 'atom-subscriptions',
     description: 'Effect/Atom subscription updates: DEMO source clock + feed state',
     selectors: ['#btn-sim-play', '#lbl-sim-cycle', '.twin-feed'],
-    async run(browser, record, webUrl, fabId) {
-      await browser.navigate(webUrl + '/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
+    async run(browser, record, webUrl, siteId, fabId) {
+      await browser.navigate(webUrl + twinPath(siteId, fabId), 'document.querySelector("main.twin-page")');
       await browser.waitFor('document.querySelector("#bottom-hud-footer") && !document.querySelector(".twin-render-status") && document.querySelector("#bottom-hud-footer").innerText.includes("WebGPU")', 45000, 'WebGPU ready');
       await browser.waitFor('document.querySelector("#btn-sim-play")', 25000, 'sim controls');
       await browser.evaluate('(() => { const select = [...document.querySelectorAll("select")].find((element) => [...element.options].some((option) => option.value === "demo")); if (!select) return false; select.value = "demo"; select.dispatchEvent(new Event("change", {bubbles:true})); return true; })()');
@@ -406,13 +409,13 @@ const SCENARIOS = [
     id: 'fab-switch',
     description: 'FAB identity switch/reload keeps one scene lifetime',
     selectors: ['#bottom-hud-footer', 'canvas'],
-    async run(browser, record, webUrl, fabId) {
-      await browser.navigate(webUrl + '/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
+    async run(browser, record, webUrl, siteId, fabId) {
+      await browser.navigate(webUrl + twinPath(siteId, fabId), 'document.querySelector("main.twin-page")');
       await browser.waitFor('document.querySelector("canvas")', 30000, 'canvas');
       await browser.waitFor('document.querySelector("#bottom-hud-footer") && !document.querySelector(".twin-render-status") && document.querySelector("#bottom-hud-footer").innerText.includes("WebGPU")', 45000, 'WebGPU ready');
       const loadedBarrier = await quiesce(browser, 'fab-loaded', { timeoutMs: 12000 });
       record(await snapshot(browser, 'fab-loaded', ['#bottom-hud-footer'], { quiescence: loadedBarrier }));
-      await browser.navigate(webUrl + '/fabs/' + fabId + '/3d?mode=engineer', 'document.querySelector("main.twin-page")');
+      await browser.navigate(webUrl + twinPath(siteId, fabId) + '?mode=engineer', 'document.querySelector("main.twin-page")');
       await browser.waitFor('document.querySelector("canvas")', 30000, 'canvas after fab switch');
       await browser.waitFor('document.querySelector("#bottom-hud-footer") && !document.querySelector(".twin-render-status") && document.querySelector("#bottom-hud-footer").innerText.includes("WebGPU")', 45000, 'WebGPU ready after switch');
       const switchedBarrier = await quiesce(browser, 'fab-switched', { timeoutMs: 12000 });
@@ -423,8 +426,8 @@ const SCENARIOS = [
     id: 'external-mutable-registry',
     description: 'External mutable telemetry/AMHS registry read stays subscribed',
     selectors: ['#research-amhs-badge, #bottom-hud-footer', '.twin-feed'],
-    async run(browser, record, webUrl, fabId) {
-      await browser.navigate(webUrl + '/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
+    async run(browser, record, webUrl, siteId, fabId) {
+      await browser.navigate(webUrl + twinPath(siteId, fabId), 'document.querySelector("main.twin-page")');
       await browser.waitFor('document.querySelector("#bottom-hud-footer")', 30000, 'footer');
       const barrier = await quiesce(browser, 'registry-readouts', { timeoutMs: 12000 });
       record(await snapshot(browser, 'registry-readouts', ['#bottom-hud-footer', '.twin-feed', '#hud-grid-badge'], { quiescence: barrier }));
@@ -626,7 +629,7 @@ const openBrowserWithRetry = async (profilePrefix, instrument) => {
   throw lastError;
 };
 
-const runMode = async (mode, buildResult, fabId) => {
+const runMode = async (mode, buildResult, siteId, fabId) => {
   const modeApiUrl = mode === 'on' ? apiUrlOn : apiUrlOff;
   const { server, port } = await startServer(buildResult.dir, modeApiUrl);
   const webUrl = 'http://127.0.0.1:' + port;
@@ -650,7 +653,7 @@ const runMode = async (mode, buildResult, fabId) => {
       browser.consoleErrors = [];
       ACTIVE_CONTEXT = { mode, scenario: scenario.id };
       try {
-        await scenario.run(browser, record, webUrl, fabId);
+        await scenario.run(browser, record, webUrl, siteId, fabId);
         trace[scenario.id] = steps;
         process.stdout.write('  ' + mode + ' ' + scenario.id + ': ' + steps.length + ' steps\n');
       } catch (error) {
@@ -755,15 +758,16 @@ const main = async () => {
   if (JSON.stringify(fixturesOn) !== JSON.stringify(fixturesOff)) {
     throw new Error('fixtures are not identical: ON backend ' + JSON.stringify(fixturesOn).slice(0, 400) + ' vs OFF backend ' + JSON.stringify(fixturesOff).slice(0, 400));
   }
+  const siteId = sites[0]?.siteId;
   const fabId = sites[0]?.fabs?.[0]?.fabId;
-  if (!fabId) throw new Error('equivalence run requires one configured FAB');
+  if (!siteId || !fabId) throw new Error('equivalence run requires one configured Site/FAB identity');
 
   console.log('CORE-011: driving compiler ON build');
-  const on = await runMode('on', onBuild, fabId);
+  const on = await runMode('on', onBuild, siteId, fabId);
   console.log('CORE-011: collecting ON authoritative side effects');
   const onSideEffects = await collectSideEffects('on', apiUrlOn);
   console.log('CORE-011: driving compiler OFF control build');
-  const off = await runMode('off', offBuild, fabId);
+  const off = await runMode('off', offBuild, siteId, fabId);
   console.log('CORE-011: collecting OFF authoritative side effects');
   const offSideEffects = await collectSideEffects('off', apiUrlOff);
 
@@ -780,6 +784,7 @@ const main = async () => {
     browserVersions: { on: on.browserVersion, off: off.browserVersion },
     apiUrl: { on: apiUrlOn, off: apiUrlOff },
     fixtures: { identical: true, sites: fixturesOn },
+    siteId,
     fabId,
     builds: artifactEvidence,
     scenarios: SCENARIOS.map((scenario) => ({

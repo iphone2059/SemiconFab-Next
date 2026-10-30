@@ -17,6 +17,9 @@ it('A15: the 3D route declares the Twin page as a dynamic route-boundary split',
   expect(routeSource).toMatch(/<Suspense\b/);
   expect(routeSource).toMatch(/fallback=/);
   expect(routeSource).toMatch(/loader:/);
+  // R5.4-03: the split page is reached only through the canonical composite route.
+  expect(routeSource).toContain("path: '/sites/$siteId/fabs/$fabId/3d'");
+  expect(routeSource).not.toContain("path: '/fabs/$fabId/3d'");
 });
 
 it('A15: the frozen ARCH G-01 Vite server/build parameters are unchanged and no file-router plugin remains', () => {

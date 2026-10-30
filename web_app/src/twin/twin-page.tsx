@@ -42,6 +42,8 @@ import { useTwinSceneSync } from '@/twin/use-twin-scene-sync';
 import { useWaferPlayback } from '@/twin/use-wafer-playback';
 
 interface TwinContentProps {
+  /** Canonical route siteId; with fabId it is the composite FAB identity. */
+  siteId?: string;
   fabId?: string;
   /** Router-owned search state; the page never reads window.location for product state. */
   search?: RouterSearch;
@@ -56,7 +58,7 @@ interface TwinContentProps {
  * under ./controllers. This component only subscribes to the slices it renders,
  * wires the controllers to the layout and renders the frozen DOM.
  */
-function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
+function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps) {
   const registry = useContext(RegistryContext);
   const scene = useRef<FabViewportHandle>(null);
   const { t, language, toggleLanguage, theme, ui, demo, page, status, lifecycle, viewerEpoch } = useTwinSlices();
@@ -76,12 +78,15 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
   const researchTime = ui.research.timeSec;
   const researchPlaying = ui.research.playing;
   const researchSpeed = ui.research.speed;
-  const { siteId, siteError: error, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, infoDialog, showResearchUtil, onboardingDontShow, ymsOpen } = page;
+  const { siteId: pageSiteId, siteError: error, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, infoDialog, showResearchUtil, onboardingDontShow, ymsOpen } = page;
 
-  const { site, fab, selectedFabId, statusSiteId } = useTwinRouteState({
-    fabId, search, onSearchChange, siteId, mode, language, theme, t,
+  const { site, fab, selectedFabId } = useTwinRouteState({
+    siteId, fabId, pageSiteId, search, onSearchChange, mode, language, theme, t,
   });
-  const telemetry = useFabTelemetry(selectedFabId);
+  // The telemetry runtime is scoped to the exact composite identity the route
+  // resolved: two sites may both configure a FAB with the same fabId.
+  const telemetryIdentity = site && fab ? { siteId: site.siteId, fabId: fab.fabId } : undefined;
+  const telemetry = useFabTelemetry(telemetryIdentity);
   // R3-10: instance ids are FAB-scoped (a FAB-02 viewer must not show FAB-01 tool ids).
   const layoutIdentities = useMemo(() => layoutIdentitiesForFab(fab?.code ?? 'FAB-01'), [fab?.code]);
   // The tour controller is scoped to the viewer it writes to: a FAB switch or a
@@ -158,7 +163,7 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
 
   return (
     <main className="twin-page" data-spatial-mode={ui.spatialMode ?? 'none'}>
-      {statusSiteId && selectedFabId && <EquipmentStatusPipeline siteId={statusSiteId} fabId={selectedFabId} />}
+      {site && fab && <EquipmentStatusPipeline siteId={site.siteId} fabId={fab.fabId} />}
       <header className="twin-topbar">
         <a className="twin-brand" href="/" aria-label={t("首页")}>
           <span className="twin-brand-mark"><OriginalIcon name="home" size={18} /></span>
@@ -485,16 +490,18 @@ function TwinContent({ fabId, search, onSearchChange }: TwinContentProps) {
 }
 
 export interface TwinPageProps {
+  /** Canonical route siteId; with fabId it is the composite FAB identity. */
+  siteId?: string;
   fabId?: string;
   search?: RouterSearch;
   onSearchChange?: (patch: Partial<RouterSearch>, replace?: boolean) => void;
 }
 
-export function TwinPage({ fabId, search, onSearchChange }: TwinPageProps = {}) {
+export function TwinPage({ siteId, fabId, search, onSearchChange }: TwinPageProps = {}) {
 
   return (
     <TwinLocaleProvider>
-      <TwinContent fabId={fabId} search={search} onSearchChange={onSearchChange} />
+      <TwinContent siteId={siteId} fabId={fabId} search={search} onSearchChange={onSearchChange} />
     </TwinLocaleProvider>
   );
 }

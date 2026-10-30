@@ -44,8 +44,12 @@ const devKey = readDevKey(root);
 if (!(await waitForHttp(webUrl + '/', 8000))) { console.error('gpu gate web target not reachable: ' + webUrl); process.exit(2); }
 if (!(await waitForAuthorized(apiUrl + '/api/v1/sites', devKey ? { 'X-Fab-Dev-Key': devKey } : {}, 15000))) { console.error('gpu gate API not reachable (authenticated /api/v1/sites): ' + apiUrl); process.exit(2); }
 const sites = await (await fetch(apiUrl + '/api/v1/sites', { headers: devKey ? { 'X-Fab-Dev-Key': devKey } : {} })).json();
-const fabId = sites[0]?.fabs?.[0]?.fabId;
-if (!fabId) { console.error('gpu gate requires one configured FAB'); process.exit(2); }
+const site = sites[0];
+// FAB identity is the composite (siteId, fabId); the canonical route carries both.
+const siteId = site?.siteId;
+const fabId = site?.fabs?.[0]?.fabId;
+if (!siteId || !fabId) { console.error('gpu gate requires one configured Site/FAB identity'); process.exit(2); }
+const twinPath = (identitySiteId, identityFabId) => '/sites/' + encodeURIComponent(identitySiteId) + '/fabs/' + encodeURIComponent(identityFabId) + '/3d';
 
 const INSTRUMENT = [
   '(function () {',
@@ -80,7 +84,7 @@ const perfState = (browser) => browser.evaluate('(() => { const perf = window.__
 let browser;
 let profileDir;
 const results = {
-  generatedAt: now(), commit, webUrl, apiUrl, fabId, durationSeconds, minCycles,
+  generatedAt: now(), commit, webUrl, apiUrl, siteId, fabId, durationSeconds, minCycles,
   chromium: null, adapter: null, contexts: null, injectionMethod: 'perf.forceDeviceLoss',
   initial: null, cycles: [], heapSamples: [], lifecycleTrace: [], auxiliaryProbe: null,
   circuitBreaker: null,
@@ -92,7 +96,7 @@ try {
   profileDir = uniqueProfile('fab-gpu-gate-');
   browser = await Browser.open({ chrome, port: await findFreePort(), userDataDir: profileDir, instrument: INSTRUMENT });
   results.chromium = browser.session.version?.Browser ?? null;
-  await browser.navigate(webUrl + '/fabs/' + fabId + '/3d?perf', 'document.querySelector("main.twin-page")');
+  await browser.navigate(webUrl + twinPath(siteId, fabId) + '?perf', 'document.querySelector("main.twin-page")');
   await browser.waitFor('document.querySelector("canvas")', 45000, 'twin canvas');
   await browser.waitFor('document.querySelector("#bottom-hud-footer") && document.querySelector("#bottom-hud-footer").innerText.includes("WebGPU") && !document.querySelector(".twin-render-status")', 90000, 'WebGPU ready');
   await browser.waitFor('!!window.__SEMICONFAB_PERF__ && typeof window.__SEMICONFAB_PERF__.forceDeviceLoss === "function"', 30000, '?perf acceptance bridge');
@@ -190,7 +194,7 @@ try {
     };
     const probeBaseline = browser.consoleErrors.length;
     try {
-      await browser.navigate(webUrl + '/fabs/' + fabId + '/3d?perf&recoveryBudget=8', 'document.querySelector("canvas")');
+      await browser.navigate(webUrl + twinPath(siteId, fabId) + '?perf&recoveryBudget=8', 'document.querySelector("canvas")');
       await browser.waitFor('document.querySelector("#bottom-hud-footer") && document.querySelector("#bottom-hud-footer").innerText.includes("WebGPU") && !document.querySelector(".twin-render-status")', 90000, 'probe WebGPU ready');
       const initialLifecycle = await browser.evaluate('window.__SEMICONFAB_PERF__ ? window.__SEMICONFAB_PERF__.getLifecycle() : null');
       probe.budget = initialLifecycle ? initialLifecycle.recoveryBudget ?? null : null;

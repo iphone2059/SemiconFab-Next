@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useSyncExternalStore, type ReactNode } from 'react';
+import type { FabIdentity } from '@/domain/fab-identity';
 import type { FabTelemetryRegistry } from '@/realtime/telemetry-registry';
 import type { TelemetryRuntime } from '@/realtime/telemetry-runtime';
 
@@ -15,24 +16,39 @@ export function TelemetryProvider({ registry, version = 0, children }: { registr
 }
 
 /**
- * Returns the telemetry runtime for a FAB and starts it only while a consumer
- * is mounted. Idle FABs therefore do not hold SSE/Worker connections.
+ * Returns the telemetry runtime for a complete FAB identity and starts it only
+ * while a consumer is mounted. Idle FABs therefore do not hold SSE/Worker
+ * connections, and two sites that share a fabId never share a runtime.
  *
- * Acquisition is reference counted by the registry: concurrent consumers of
- * the same FAB share one runtime and only the last unmount stops it. The
- * runtime identity is part of the effect dependency list so a registry
- * replacement (sites reload) acquires the new generation.
+ * Acquisition is reference counted per composite identity: concurrent consumers
+ * of the same (siteId, fabId) share one runtime and only the last unmount stops
+ * it; the release closure is bound to the exact runtime instance, so a registry
+ * replacement (sites reload) can never be stopped by a stale cleanup.
+ *
+ * The hook keys its external-store subscription and its acquire effect on the
+ * siteId/fabId primitives (not on the caller's identity object identity): a
+ * caller that recreates the identity object every render does not re-subscribe or
+ * re-acquire.
  */
-export function useFabTelemetry(fabId: string | undefined): TelemetryRuntime | undefined {
+export function useFabTelemetry(identity: FabIdentity | undefined): TelemetryRuntime | undefined {
   const registry = useContext(TelemetryContext)?.registry;
-  const subscribe = (listener: () => void) => registry?.subscribe(listener) ?? (() => {});
-  const getSnapshot = () => fabId ? registry?.get(fabId) : undefined;
+  const siteId = identity?.siteId;
+  const fabId = identity?.fabId;
+  const hasIdentity = siteId !== undefined && fabId !== undefined;
+  const subscribe = useCallback(
+    (listener: () => void) => registry?.subscribe(listener) ?? (() => {}),
+    [registry],
+  );
+  const getSnapshot = useCallback(
+    () => (hasIdentity ? registry?.get({ siteId, fabId }) : undefined),
+    [registry, hasIdentity, siteId, fabId],
+  );
   const runtime = useSyncExternalStore(subscribe, getSnapshot, () => undefined);
 
   useEffect(() => {
-    if (!registry || !fabId) return;
-    return registry.acquire(fabId);
-  }, [registry, fabId, runtime]);
+    if (!registry || !hasIdentity) return;
+    return registry.acquire({ siteId, fabId });
+  }, [registry, hasIdentity, siteId, fabId, runtime]);
 
   return runtime;
 }

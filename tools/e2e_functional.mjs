@@ -54,12 +54,16 @@ if (!(await waitForHttp(baseUrl + '/', 5000))) {
 }
 const sites = await (await fetch(baseUrl + '/api/v1/sites')).json();
 const catalog = await (await fetch(baseUrl + '/api/v1/catalog')).json();
-const fab = sites[0]?.fabs?.[0];
-if (!fab) {
-  console.error('e2e requires at least one configured FAB');
+const site = sites[0];
+const fab = site?.fabs?.[0];
+if (!site?.siteId || !fab?.fabId) {
+  console.error('e2e requires at least one configured Site/FAB identity');
   process.exit(2);
 }
+// FAB identity is the composite (siteId, fabId); the canonical route carries both.
+const siteId = site.siteId;
 const fabId = fab.fabId;
+const twinPath = (identitySiteId, identityFabId) => '/sites/' + encodeURIComponent(identitySiteId) + '/fabs/' + encodeURIComponent(identityFabId) + '/3d';
 const catalogEntry = catalog.items[0];
 const validImportFile = path.join(downloadDir, 'valid-catalog.json');
 fs.writeFileSync(validImportFile, JSON.stringify({ entries: [catalogEntry] }));
@@ -402,8 +406,8 @@ try {
   });
 
   // S6: Twin DEMO play/pause, wafer follow, research replay.
-  await runScenario('S6', 'Twin DEMO playback / wafer / research', '/fabs/' + fabId + '/3d', async ({ step }) => {
-    await navigate('/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
+  await runScenario('S6', 'Twin DEMO playback / wafer / research', twinPath(siteId, fabId), async ({ step }) => {
+    await navigate(twinPath(siteId, fabId), 'document.querySelector("main.twin-page")');
     await waitFor('document.querySelector("canvas")', 30000, 'twin canvas');
     await setStatusSource('demo');
     await waitFor('!document.querySelector("#btn-sim-play").disabled', 10000, 'demo play enabled');
@@ -425,8 +429,8 @@ try {
   });
 
   // S7: Twin live REST snapshot + SSE, stream failure/reconnect.
-  await runScenario('S7', 'Twin realtime REST/SSE reconnect', '/fabs/' + fabId + '/3d', async ({ step, record, screenshot }) => {
-    await navigate('/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
+  await runScenario('S7', 'Twin realtime REST/SSE reconnect', twinPath(siteId, fabId), async ({ step, record, screenshot }) => {
+    await navigate(twinPath(siteId, fabId), 'document.querySelector("main.twin-page")');
     await waitFor('[...document.querySelectorAll("select")].some((select) => [...select.options].some((option) => option.value === "sse-live"))', 20000, 'status source select');
     await setStatusSource('sse-live');
     await waitFor('document.querySelector(".twin-feed").innerText.match(/LIVE|CACHE|CONNECTING/)', 25000, 'feed state');
@@ -447,8 +451,10 @@ try {
   });
 
   // S8: Unknown FAB route error.
-  await runScenario('S8', 'Unknown FAB route error', '/fabs/unknown-fab/3d', async ({ step }) => {
-    await navigate('/fabs/unknown-fab/3d', 'document.querySelector(".fatal, [role=\\"alert\\"]")');
+  // Unknown-FAB scenario keeps a KNOWN siteId with an unknown fabId: the exact
+  // composite membership check must fail, never a cross-site first match.
+  await runScenario('S8', 'Unknown FAB route error', twinPath(siteId, 'unknown-fab'), async ({ step }) => {
+    await navigate(twinPath(siteId, 'unknown-fab'), 'document.querySelector(".fatal, [role=\\"alert\\"]")');
     await waitText('FAB 不存在', 20000);
     step('unknown FAB shows route error without old FAB data', 'FAB 不存在', (await textOf('.fatal, [role="alert"]')).slice(0, 120));
   });
@@ -462,8 +468,8 @@ try {
 
   // S10: Exit/re-enter without duplicate SSE/Worker connections.
   const workerTargetsBefore = (await (await fetch('http://127.0.0.1:' + port + '/json/list')).json()).filter((entry) => entry.type === 'worker').length;
-  await runScenario('S10', 'Page exit/re-enter connection hygiene', '/fabs/' + fabId + '/3d', async ({ step, record }) => {
-    await navigate('/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
+  await runScenario('S10', 'Page exit/re-enter connection hygiene', twinPath(siteId, fabId), async ({ step, record }) => {
+    await navigate(twinPath(siteId, fabId), 'document.querySelector("main.twin-page")');
     await waitFor('document.querySelector(".twin-feed")', 20000, 'twin feed');
     await sleep(2500);
     const firstStreams = requests.filter((request) => request.type === 'EventSource').length;
@@ -471,7 +477,7 @@ try {
     await waitFor('document.querySelector("main")', 20000, 'workbench shell');
     await sleep(1000);
     activeEventSources.clear();
-    await navigate('/fabs/' + fabId + '/3d', 'document.querySelector("main.twin-page")');
+    await navigate(twinPath(siteId, fabId), 'document.querySelector("main.twin-page")');
     await sleep(3000);
     const active = [...activeEventSources];
     const duplicates = active.length - new Set(active.map((value) => value.split(' ')[1])).size;
@@ -490,7 +496,7 @@ try {
     target: baseUrl,
     browser: version?.Browser ?? null,
     commit: process.env.E2E_COMMIT ?? null,
-    fixtures: { sites: sites.length, fabs: sites.reduce((sum, site) => sum + site.fabs.length, 0), catalogItems: catalog.items.length },
+    fixtures: { sites: sites.length, fabs: sites.reduce((sum, value) => sum + value.fabs.length, 0), catalogItems: catalog.items.length, siteId, fabId },
     scenarios,
     passed: scenarios.filter((scenario) => scenario.pass).length,
     failed: scenarios.filter((scenario) => !scenario.pass).length,

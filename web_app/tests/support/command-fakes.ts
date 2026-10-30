@@ -26,6 +26,7 @@ import type {
   CommandRecoveryRecord,
 } from '@/contracts/command-gateway.contract';
 import type { CommandWorkflow, CommandWorkflowRegistry } from '@/contracts/command-workflow.contract';
+import type { FabIdentity } from '@/domain/fab-identity';
 import type {
   CommandWorkflowFactory,
   FabRuntimeRecoveryOptions,
@@ -625,7 +626,7 @@ export interface TestFabOptions {
   readonly fabId?: string;
   readonly siteId?: string;
   readonly source?: CommandEventSource;
-  readonly sourceFor?: (fabId: string, scope: Scope.Scope) => CommandEventSource;
+  readonly sourceFor?: (identity: FabIdentity, scope: Scope.Scope) => CommandEventSource;
   readonly gateway?: CommandGateway;
   readonly createWorkflow?: CommandWorkflowFactory;
   readonly retention?: FabRuntimeRetentionOptions;
@@ -666,7 +667,7 @@ export function createFabRuntime(harness: CommandTestRuntime, options: TestFabOp
     reconcileTimeoutMs: options.reconcileTimeoutMs,
     maxActiveCommands: options.maxActiveCommands,
   });
-  return factory.create(options.fabId ?? 'fab-a', options.siteId ?? 'site-1');
+  return factory.create({ siteId: options.siteId ?? 'site-1', fabId: options.fabId ?? 'fab-a' });
 }
 
 export interface TestFab {

@@ -46,6 +46,7 @@ import {
   createPhysicalRequestBudget,
 } from '@/runtime/fab-reconciliation-scheduler';
 import type { RuntimeHost } from '@/runtime/fab-runtime-host';
+import type { FabIdentity } from '@/domain/fab-identity';
 import { runCommandStream, stopCommandStream } from '@/runtime/command-stream';
 import { XStateCommandWorkflowAdapter } from '@/runtime/xstate-command-workflow-adapter';
 
@@ -176,10 +177,11 @@ export interface FabRuntimeOptions {
    */
   readonly projectionRegistry: AtomRegistry.AtomRegistry;
   /**
-   * Creates the per-FAB command event source; the FabRuntime passes the
-   * CommandTransportScope that owns the EventSource and consumer fibers.
+   * Creates the per-FAB command event source from the complete (siteId, fabId)
+   * identity; the FabRuntime passes the CommandTransportScope that owns the
+   * EventSource and consumer fibers.
    */
-  readonly sourceFor: (fabId: string, scope: Scope.Scope) => CommandEventSource;
+  readonly sourceFor: (identity: FabIdentity, scope: Scope.Scope) => CommandEventSource;
   /**
    * R3-07: REQUIRED explicit command-recovery authority. A composition root must
    * state whether authoritative recovery exists: pass the native-Effect
@@ -659,7 +661,9 @@ export class FabRuntime {
     });
     this.createWorkflow = options.createWorkflow ??
       ((fabId, commandId) => new XStateCommandWorkflowAdapter(fabId, commandId));
-    this.source = options.sourceFor(options.fabId, this.transportScope);
+    // R5.4-03: the source is created from the complete composite identity so the
+    // composition root can never silently pair a FAB with another Site's stream.
+    this.source = options.sourceFor({ siteId: options.siteId, fabId: options.fabId }, this.transportScope);
     this.realtimeAvailability = this.source.availability;
     // HTTP authority and realtime capability are independent.
     this.recoveryAvailable = options.gateway !== undefined;
@@ -717,15 +721,22 @@ export class FabRuntime {
       this.scheduleCorrelationSweep();
       return;
     }
-    if (this.realtimeAvailability === 'unavailable') {
+    if (this.realtimeAvailability === 'unavailable' && this.phase !== 'Unrecoverable' && this.phase !== 'Unavailable') {
       // R4-06: HTTP authority exists but no live transport: converge may still run,
       // but the observable phase is Degraded until recovery proves otherwise.
       this.setPhase('Degraded');
       this.recordDiagnostic('realtime-unavailable', 'start(): realtime command transport unavailable; runtime stays Degraded');
     }
-    // Startup/refresh recovery: the authoritative list is the only recovery entry
-    // for a page that never saw the submit (ADR-008 §2.4/ADR-010 §4).
-    this.enterDirty({ listOnly: true, cause: 'refresh' });
+    if (this.phase === 'Unrecoverable') {
+      // R5.4-01: restart/remount after terminal recovery failure must not clear the
+      // terminal state nor reset the attempt budget. Only a new external dirty
+      // signal may open a new bounded episode.
+      this.recordDiagnostic('refresh', 'start(): runtime stays Unrecoverable until a new external dirty signal');
+    } else {
+      // Startup/refresh recovery: the authoritative list is the only recovery entry
+      // for a page that never saw the submit (ADR-008 §2.4/ADR-010 §4).
+      this.enterDirty({ listOnly: true, cause: 'refresh' });
+    }
     this.scheduleWorkflowSweep();
     this.scheduleCorrelationSweep();
   }
@@ -829,7 +840,9 @@ export class FabRuntime {
   }
 
   requestAuthoritativeRecovery(): void {
-    this.enterDirty({ listOnly: true, cause: 'protocol-error' });
+    // R5.4-01: an explicit external recovery request is a new dirty input; it is
+    // the one owner-visible API allowed to re-arm a terminal Unrecoverable runtime.
+    this.enterDirty({ listOnly: true, cause: 'protocol-error' }, 'external-dirty');
   }
 
   /**
@@ -1227,7 +1240,7 @@ export class FabRuntime {
           'replay-gap',
           'backend replay could not cover a disconnect' + (gap.epoch !== undefined ? ' (epoch=' + gap.epoch + ')' : ''),
         );
-        this.enterDirty({ listOnly: true, cause: 'replay-gap' });
+        this.enterDirty({ listOnly: true, cause: 'replay-gap' }, 'external-dirty');
       });
     }
     if (this.source.reconnected) {
@@ -1261,8 +1274,10 @@ export class FabRuntime {
       if (status === 'reconnecting' || status === 'failed') {
         // Transport interruption/failure is never a business command outcome; it
         // starts the bounded authoritative reconciliation path (R4-06/P2-01).
+        // R5.4-01: a connection transition can neither clear Unrecoverable nor
+        // reset its attempt budget; enterDirty treats this as an internal trigger.
         this.enterDirty({ listOnly: true, cause: 'transport-failure' });
-        if (this.phase !== 'Recovering') this.setPhase('Degraded');
+        if (this.phase !== 'Recovering' && this.phase !== 'Unrecoverable' && this.phase !== 'Unavailable') this.setPhase('Degraded');
         return;
       }
       // P2-01: 'closed' is the deliberate idle lifecycle state (the last consumer
@@ -1571,16 +1586,31 @@ export class FabRuntime {
       ...(cursor !== undefined ? { cursor } : {}),
       listOnly,
       cause: dirty.reason,
-    });
+    }, 'external-dirty');
   }
 
   /**
    * Enter Dirty with a merged recovery request and schedule the coalesced pass.
-   * A new external signal re-arms an Unrecoverable runtime (the condition is
-   * still observable until authoritative recovery succeeds again).
+   *
+   * R5.4-01 terminal-state protection: only a NEW external dirty input may re-arm
+   * an Unrecoverable runtime (the condition stays observable until authoritative
+   * recovery succeeds again). Connection lifecycle transitions, pending-source
+   * finite stream exits, component remounts (start()), internal defects and
+   * ordinary timers are internal: they must leave the terminal phase and the
+   * attempt budget untouched.
    */
-  private enterDirty(input: { cursor?: CommandCursor; listOnly: boolean; cause?: CommandRecoveryDirtyCause }): void {
+  private enterDirty(
+    input: { cursor?: CommandCursor; listOnly: boolean; cause?: CommandRecoveryDirtyCause },
+    trigger: 'external-dirty' | 'internal' = 'internal',
+  ): void {
     if (this.disposed) return;
+    if (this.phase === 'Unrecoverable' && trigger !== 'external-dirty') {
+      this.recordDiagnostic(
+        input.cause ?? 'protocol-error',
+        'recovery request ignored: runtime is Unrecoverable until a new external dirty signal',
+      );
+      return;
+    }
     this.mergeRecoveryRequest(input);
     if (input.cause !== undefined) this.lastDirtyCause = input.cause;
     if (!this.recoveryAvailable) {
@@ -1852,7 +1882,20 @@ export class FabRuntime {
     return covered;
   }
 
+  /**
+   * R5.4-01: the single phase transition entry.
+   *
+   * Terminal `Unrecoverable` and no-authority `Unavailable` are invariant under
+   * realtime availability: a missing/unavailable SSE transport must never
+   * downgrade a terminal recovery failure (or a display-only runtime) to
+   * `Degraded`. Only non-terminal phases are mapped to `Degraded` while the
+   * realtime source is unavailable. No caller-specific override exists.
+   */
   private setPhase(phase: CommandRecoveryPhase): void {
+    if (phase === 'Unrecoverable' || phase === 'Unavailable') {
+      this.phase = phase;
+      return;
+    }
     this.phase = this.recoveryAvailable && this.source.availability === 'unavailable' ? 'Degraded' : phase;
   }
 

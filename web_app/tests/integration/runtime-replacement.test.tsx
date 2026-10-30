@@ -12,7 +12,7 @@ import {
   createTestFab,
 } from '../support/command-fakes.ts';
 
-const fabId = 'fab-a';
+const identity = { siteId: 'site-1', fabId: 'fab-a' } as const;
 const commandId = 'cmd-1';
 
 const fabs: TestFab[] = [];
@@ -30,7 +30,7 @@ function runtimeWithSource(source: FakeCommandEventSource): { runtime: FabRuntim
 }
 
 function Probe() {
-  const projection = useCommandProjection(fabId, commandId);
+  const projection = useCommandProjection(identity, commandId);
   return <span data-testid="projection">{projection ? projection.state + ':' + projection.revision : 'none'}</span>;
 }
 
@@ -45,7 +45,7 @@ it('re-subscribes to the replacement runtime instead of keeping a disposed one',
       <RuntimeProvider registry={firstRegistry} version={0}><Probe /></RuntimeProvider>
     </RegistryContext.Provider>,
   );
-  firstSource.emit(commandResult({ fabId, commandId, revision: 1, outcome: 'accepted' }));
+  firstSource.emit(commandResult({ fabId: identity.fabId, commandId, revision: 1, outcome: 'accepted' }));
   await waitFor(() => expect(screen.getByTestId('projection').textContent).toBe('accepted:1'));
 
   firstRegistry.disposeAll();
@@ -62,11 +62,11 @@ it('re-subscribes to the replacement runtime instead of keeping a disposed one',
   );
   // The context version + different Atom identity make the hook read the new runtime.
   await waitFor(() => expect(screen.getByTestId('projection').textContent).toBe('idle:-1'));
-  secondSource.emit(commandResult({ fabId, commandId, revision: 1, outcome: 'accepted' }));
+  secondSource.emit(commandResult({ fabId: identity.fabId, commandId, revision: 1, outcome: 'accepted' }));
   await waitFor(() => expect(screen.getByTestId('projection').textContent).toBe('accepted:1'));
 
   // A late event from the old source/runtime must not update the replacement projection.
-  firstSource.emit(commandResult({ fabId, commandId, revision: 2, outcome: 'executing' }));
+  firstSource.emit(commandResult({ fabId: identity.fabId, commandId, revision: 2, outcome: 'executing' }));
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(screen.getByTestId('projection').textContent).toBe('accepted:1');
   secondRegistry.disposeAll();

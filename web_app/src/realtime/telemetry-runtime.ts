@@ -36,9 +36,18 @@ interface WorkerLike {
 export type TelemetryRuntimeStatus = 'stopped' | 'idle' | 'live' | 'stale';
 
 export interface TelemetryRuntimeOptions {
-  readonly url: string;
+  /** Site that owns this FAB; part of the immutable composite runtime identity (R5.4-03). */
+  readonly siteId: string;
   /** FAB identity for the scoped stream; frames for another FAB are rejected. */
-  readonly fabId?: string;
+  readonly fabId: string;
+  /**
+   * Site-scoped telemetry stream URL, built by the composition root from the same
+   * identity: `/api/v1/sites/{siteId}/fabs/{fabId}/telemetry/stream`. The runtime
+   * never derives or repairs it, so a runtime can never be paired with a stream of
+   * another site. The frame wire schema carries no siteId: isolation comes from the
+   * URL plus this per-runtime identity.
+   */
+  readonly url: string;
   /** Test seam; production defaults to browser EventSource. */
   readonly eventSourceFactory?: (url: string) => EventSourceLike;
   /** Test seam; production defaults to a module Worker. */
@@ -110,7 +119,12 @@ export class TelemetryRuntime {
     this.workerTimeoutMs = Math.max(0, options.workerTimeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS);
   }
 
-  get fabId(): string | undefined {
+  /** Immutable composite identity of this runtime; part of every registry key. */
+  get siteId(): string {
+    return this.options.siteId;
+  }
+
+  get fabId(): string {
     return this.options.fabId;
   }
 
@@ -360,8 +374,10 @@ export class TelemetryRuntime {
         try {
           const decoded = decoder.decode(event.data);
           if (decoded.kind !== 'telemetry') return;
-          // One runtime per FAB: a crossed frame must never enter this Worker.
-          if (this.options.fabId !== undefined && decoded.event.fabId !== this.options.fabId) return;
+          // One runtime per (siteId, fabId): the site-scoped URL isolates the stream and
+          // a crossed FAB frame must never enter this Worker. Frames carry no siteId
+          // (wire schema unchanged), so the URL + runtime identity prove the site.
+          if (decoded.event.fabId !== this.options.fabId) return;
           if (decoded.event.sequence <= acceptedSequence) return;
           acceptedSequence = decoded.event.sequence;
           // Bounded latest-wins with delta-safe merge: while one frame awaits its

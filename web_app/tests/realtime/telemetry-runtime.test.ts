@@ -26,7 +26,7 @@ function harness(deferred = false) {
     },
     terminate() { terminated = true; },
   };
-  const runtime = new TelemetryRuntime({ url: 'fake', fabId: 'fab-a', eventSourceFactory: () => source, workerFactory: () => worker });
+  const runtime = new TelemetryRuntime({ siteId: 'site-1', fabId: 'fab-a', url: 'fake', eventSourceFactory: () => source, workerFactory: () => worker });
   runtime.start(); source.onopen?.();
   const send = (sequence: number, state: number) => source.onmessage?.({ data: JSON.stringify({
     topic: 'telemetry.frame', sequence, payload: { fabId: 'fab-a', sequence, capturedAt: '2026-10-27T00:00:00Z', samples: [{ entityId: 'equipment-0', values: { state, utilization: 0.5 } }] },
@@ -109,6 +109,7 @@ it('rejects a telemetry frame addressed to another FAB', () => {
   }) });
   expect(runtime.getSnapshot()?.sequence).toBe(1);
   expect(runtime.fabId).toBe('fab-a');
+  expect(runtime.siteId).toBe('site-1');
   runtime.stop();
 });
 
@@ -352,8 +353,9 @@ function recoveryHarness(options: { deliverNow?: boolean; workerTimeoutMs?: numb
     close() {},
   };
   const runtime = new TelemetryRuntime({
-    url: 'fake',
+    siteId: 'site-1',
     fabId: 'fab-a',
+    url: 'fake',
     eventSourceFactory: () => source,
     workerFactory: factory,
     workerTimeoutMs: options.workerTimeoutMs ?? 0,
@@ -660,4 +662,107 @@ it('accepts ArrayBuffer views and legacy number[] worker replies', () => {
   expect(runtime.getSnapshot()?.sequence).toBe(2);
   expect(runtime.getToolStates()?.[0]).toBe('idle');
   runtime.stop();
+});
+
+/**
+ * R5.4-03: one runtime per exact (siteId, fabId). The harness proves the runtime
+ * exposes its identity, requests only the composition-root URL and never lets two
+ * same-fabId runtimes of different sites share state.
+ */
+function identityHarness(siteId: string, fabId: string, url: string) {
+  const handler = createTelemetryWorkerHandler({ frameSize: 32 });
+  const requestedUrls: string[] = [];
+  const source = {
+    onopen: null as (() => void) | null,
+    onmessage: null as ((event: { data: string }) => void) | null,
+    close() {},
+  };
+  const worker = {
+    onmessage: null as ((event: { data: unknown }) => void) | null,
+    postMessage(message: unknown) {
+      const result = handler.handle(message);
+      if (result) this.onmessage?.({ data: result });
+    },
+    terminate() {},
+  };
+  const runtime = new TelemetryRuntime({
+    siteId,
+    fabId,
+    url,
+    eventSourceFactory: (target) => { requestedUrls.push(target); return source; },
+    workerFactory: () => worker,
+  });
+  const send = (sequence: number, state: number, frameFabId = fabId) => source.onmessage?.({ data: JSON.stringify({
+    topic: 'telemetry.frame', sequence,
+    payload: {
+      fabId: frameFabId, sequence, capturedAt: '2026-10-27T00:00:00Z',
+      samples: [{ entityId: 'equipment-0', values: { state, utilization: 0.5 } }],
+    },
+  }) });
+  const start = () => { runtime.start(); source.onopen?.(); };
+  return { runtime, source, requestedUrls, send, start };
+}
+
+it('R5.4-03 T05/T12: same-fabId runtimes of different sites request their own URL and stay independent', () => {
+  const siteA = identityHarness('site-a', 'fab-01', '/api/v1/sites/site-a/fabs/fab-01/telemetry/stream');
+  const siteB = identityHarness('site-b', 'fab-01', '/api/v1/sites/site-b/fabs/fab-01/telemetry/stream');
+  expect(siteA.runtime.siteId).toBe('site-a');
+  expect(siteA.runtime.fabId).toBe('fab-01');
+  expect(siteB.runtime.siteId).toBe('site-b');
+  expect(siteB.runtime.fabId).toBe('fab-01');
+
+  siteA.start();
+  siteB.start();
+  // The URL is supplied by the composition root; the runtime never derives it and
+  // never repairs it from a bare fabId.
+  expect(siteA.requestedUrls).toEqual(['/api/v1/sites/site-a/fabs/fab-01/telemetry/stream']);
+  expect(siteB.requestedUrls).toEqual(['/api/v1/sites/site-b/fabs/fab-01/telemetry/stream']);
+
+  siteA.send(1, 2);
+  siteB.send(1, 1);
+  expect(siteA.runtime.getToolStates()?.[0]).toBe('down');
+  expect(siteB.runtime.getToolStates()?.[0]).toBe('idle');
+
+  // The Site A stream's newer frame never changes the Site B runtime.
+  siteA.send(2, 3);
+  expect(siteA.runtime.getToolStates()?.[0]).toBe('maint');
+  expect(siteB.runtime.getSnapshot()?.sequence).toBe(1);
+  expect(siteB.runtime.getToolStates()?.[0]).toBe('idle');
+
+  siteB.runtime.stop();
+  expect(siteB.runtime.getSnapshot()).toBeUndefined();
+  expect(siteA.runtime.getToolStates()?.[0]).toBe('maint');
+  siteA.runtime.stop();
+});
+
+it('R5.4-03 T11: a late event from the old site generation cannot modify the replacement telemetry runtime', () => {
+  const old = identityHarness('site-a', 'fab-01', '/api/v1/sites/site-a/fabs/fab-01/telemetry/stream');
+  old.start();
+  old.send(1, 2);
+  expect(old.runtime.getToolStates()?.[0]).toBe('down');
+  // Capture the live SSE handler before the old generation is stopped: it models a
+  // browser that has already queued an event from the closed site-a connection.
+  const lateOldHandler = old.source.onmessage;
+  old.runtime.stop();
+
+  const next = identityHarness('site-b', 'fab-01', '/api/v1/sites/site-b/fabs/fab-01/telemetry/stream');
+  next.start();
+  // The wire frame carries only fabId (schema unchanged); the same fabId exists in
+  // site-b, so only the stopped generation's guards may reject this late frame.
+  lateOldHandler?.({ data: JSON.stringify({
+    topic: 'telemetry.frame', sequence: 9,
+    payload: {
+      fabId: 'fab-01', sequence: 9, capturedAt: '2026-10-27T00:00:00Z',
+      samples: [{ entityId: 'equipment-0', values: { state: 2, utilization: 0.5 } }],
+    },
+  }) });
+  expect(old.runtime.getSnapshot()).toBeUndefined();
+  expect(next.runtime.getSnapshot()).toBeUndefined();
+  expect(next.runtime.getToolStates()).toBeUndefined();
+
+  // The replacement generation applies only its own frames.
+  next.send(1, 1);
+  expect(next.runtime.getSnapshot()?.sequence).toBe(1);
+  expect(next.runtime.getToolStates()?.[0]).toBe('idle');
+  next.runtime.stop();
 });

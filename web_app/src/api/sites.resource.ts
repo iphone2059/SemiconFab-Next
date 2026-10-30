@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import { sitesSchema } from '@/api/sites.schema';
-import type { SiteDto } from '@/contracts/app-contracts';
+import type { FabDto, SiteDto } from '@/contracts/app-contracts';
+import type { FabIdentity } from '@/domain/fab-identity';
 import { createHttpTransport, decodeApiResponse, type ApiError, type FetchLike } from '@/api/http.transport';
 import { defineResource } from '@/api/resource';
 import { RESOURCE_POLICIES } from '@/api/resource-policy';
@@ -23,7 +24,18 @@ export const sitesDefinition = defineResource({
   policy: RESOURCE_POLICIES.sites,
 });
 
-/** Route-param -> site lookup; the URL owns FAB identity in M1. */
-export function findSiteByFabId(sites: readonly SiteDto[], fabId: string): SiteDto | undefined {
-  return sites.find((site) => site.fabs.some((fab) => fab.fabId === fabId));
+/**
+ * Exact composite (siteId, fabId) lookup (ADR-007 §3). A FAB is identified by
+ * both ids: a bare fabId is not unique across sites, so there is no first-match
+ * fallback and no site inference from a fabId. Returns the configured Site and
+ * its FAB only when the pair exists in the sites document.
+ */
+export function findSiteFab(
+  sites: readonly SiteDto[],
+  identity: FabIdentity,
+): { site: SiteDto; fab: FabDto } | undefined {
+  const site = sites.find((value) => value.siteId === identity.siteId);
+  if (!site) return undefined;
+  const fab = site.fabs.find((value) => value.fabId === identity.fabId);
+  return fab === undefined ? undefined : { site, fab };
 }

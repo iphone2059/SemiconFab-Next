@@ -185,12 +185,12 @@ web_app/
 
 与 V2.1 目标计划的差异：计划中的 `realtime/synchronization/` 与 `api/endpoints/` 未创建（合批原语归 `shared/scheduling/`，HTTP 归 `api/transport/http.ts`）；`api/schemas/`、`shared/`、`application/ports/` 已在递归整改中真实建立。目录解释以本节与 §30 为准。
 
-### 4.1 最终产品 URL（2026-10-27 一次性切换，永久不变）
+### 4.1 最终产品 URL（2026-10-27 一次性切换；Round 5.4 改为复合 FAB 身份）
 
 | URL | 页面/职责 | 状态 |
 |---|---|---|
 | `/` | 工作台 / FAB 总览 | M1 已有 |
-| `/fabs/$fabId/3d` | 3D FAB（3D 场景） | M1 已迁移 |
+| `/sites/$siteId/fabs/$fabId/3d` | 3D FAB（3D 场景，复合 (siteId, fabId) 身份） | R5.4-03 已迁移 |
 | `/equipment` | 设备目录 | M1 已迁移 |
 | `/equipment/compare` | 设备对比 | M1 已迁移 |
 | `/fabs/$fabId` | FAB 概览（后续里程碑实现） | 预留，当前未路由（无重定向） |

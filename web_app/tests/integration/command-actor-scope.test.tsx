@@ -80,7 +80,7 @@ it('renders through the Atom projection via useCommandProjection', () => {
   const runtimes = new FabRuntimeRegistry();
   runtimes.register(runtime);
   const { result, rerender } = renderHook(
-    () => useCommandProjection('fab-a', 'cmd-1'),
+    () => useCommandProjection({ siteId: 'site-1', fabId: 'fab-a' }, 'cmd-1'),
     {
       wrapper: ({ children }) => (
         <RegistryContext.Provider value={fab.harness.registry}>

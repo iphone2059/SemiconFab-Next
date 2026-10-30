@@ -1,17 +1,36 @@
-import { useCommandProjection } from '@/app/runtime-provider';
+import { useCommandProjection, useFabRuntimeRegistry } from '@/app/runtime-provider';
+import type { FabIdentity } from '@/domain/fab-identity';
 import { Panel } from '@/workbench/panel';
 import {
   COMMAND_ACTIONS,
   EQUIPMENT_IDS,
   useCommandConsole,
+  type CommandHandoff,
 } from '@/workbench/use-command-console';
 
-function ProjectionRow({ fabId, commandId }: { fabId: string; commandId: string }) {
-  const projection = useCommandProjection(fabId, commandId);
+/**
+ * R5.4-02 handoff presentation: an accepted command id retained by the registry
+ * (no current runtime yet) still has a tracked row and shows the runtime-waiting
+ * state. It is never rendered as a failure; once a runtime registers, the same
+ * row reads that runtime's authoritative projection.
+ */
+function ProjectionRow({ identity, commandId, handoff }: {
+  identity: FabIdentity;
+  commandId: string;
+  handoff: CommandHandoff;
+}) {
+  const registry = useFabRuntimeRegistry();
+  const projection = useCommandProjection(identity, commandId);
+  const waitingForRuntime = handoff === 'recovery-pending' && registry?.get(identity) === undefined;
+  const label = waitingForRuntime
+    ? '等待 Runtime 恢复'
+    : projection
+      ? projection.recoveryDisposition === 'expired-unresolved' ? '结果不可确认' : `${projection.outcome} · rev ${projection.revision}`
+      : '等待 SSE 事件…';
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '4px 0', borderBottom: '1px solid var(--line, #1e293b)' }}>
       <code>{commandId.slice(0, 8)}</code>
-      <span>{projection ? projection.recoveryDisposition === 'expired-unresolved' ? '结果不可确认' : `${projection.outcome} · rev ${projection.revision}` : '等待 SSE 事件…'}</span>
+      <span>{label}</span>
     </div>
   );
 }
@@ -49,7 +68,14 @@ export function CommandConsole({ siteId, fabId }: { siteId: string; fabId: strin
       {console.error && <div className="error" role="alert">{console.error}</div>}
       {console.tracked.length === 0
         ? <div className="empty">还没有命令。提交后，accepted → executing → succeeded 由后端模拟 SSE 推进。</div>
-        : console.tracked.map((entry) => <ProjectionRow key={entry.commandId} fabId={entry.fabId} commandId={entry.commandId} />)}
+        : console.tracked.map((entry) => (
+          <ProjectionRow
+            key={entry.commandId}
+            identity={{ siteId: entry.siteId, fabId: entry.fabId }}
+            commandId={entry.commandId}
+            handoff={entry.handoff}
+          />
+        ))}
     </Panel>
   );
 }

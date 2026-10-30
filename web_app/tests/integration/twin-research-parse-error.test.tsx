@@ -54,7 +54,7 @@ it('A16: shows a distinct visible research parse error when ResearchReplay.parse
   seedSites(client, [site]);
   render(
     <ResourceTestProviders runtime={client}>
-      <TwinPage fabId="fab-1" search={{ mode: 'research', modal: 'arch' }} />
+      <TwinPage siteId="site-1" fabId="fab-1" search={{ mode: 'research', modal: 'arch' }} />
     </ResourceTestProviders>,
   );
 

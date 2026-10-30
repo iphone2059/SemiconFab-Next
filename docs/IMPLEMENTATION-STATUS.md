@@ -31,7 +31,7 @@ XState 6 Alpha      命令生命周期（runtime/*command*；经 CommandWorkflow
 Babylon Lite 1.36   WebGPU-only 渲染（rendering/lite-backend.ts）
 ```
 
-- 产品 URL：`/`、`/fabs/{fabId}/3d`、`/equipment`、`/equipment/compare`；无旧地址重定向/兼容转发。
+- 产品 URL：`/`、`/sites/{siteId}/fabs/{fabId}/3d`（复合 FAB 身份，R5.4-03）、`/equipment`、`/equipment/compare`；无旧地址重定向/兼容转发。
 - 目录（严格单层）：`src/api app catalog components contracts domain generated lib localization realtime rendering routes runtime state twin workbench`；`src` 根只允许 `main.tsx`（`source-layout.test.ts`）。
 - 已删除：Zustand、TanStack Query、Zod、RxJS、`@tanstack/router-plugin`、`QueryClient/queryKeys/QueryProvider`、`createSliceStore`、旧 `features/` 路径。
 - 资源所有权：Router loader 与页面共享 `ensureResource`；远程快照只在 Resource Atom；Gate 仅保存 epoch/sequence；无第二 Map/Effect Cache 快照（`resource-ownership.test.ts`）。

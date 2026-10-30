@@ -36,6 +36,9 @@ it('production E2E drives the built artifact in a fixed browser and fails closed
   expect(tool).toContain('SSE connection established');
   expect(tool).toContain('unknown FAB shows the route error');
   expect(tool).toContain('no duplicate event streams');
+  // R5.4-03: production e2e navigates only the canonical composite identity route.
+  expect(tool).toContain('twinPath(siteId, fabId)');
+  expect(tool).not.toContain("'/fabs/' + fabId");
   expect(tool).toContain('process.exitCode = 1');
   // It must not start a dev server/preview itself (Lead-owned scripts do that).
   expect(tool).not.toContain("'vite', '--host'");
@@ -51,7 +54,12 @@ it('GPU gate injects a real device loss, asserts recovery and no WebGL fallback'
   // device-loss -> recovering -> ready recovery path without a GPU-process crash.
   expect(tool).toContain('__SEMICONFAB_PERF__');
   expect(tool).toContain('forceDeviceLoss');
-  expect(tool).toContain("'/3d?perf'");
+  // R5.4-03: the canonical route is composite (siteId, fabId); the old single-id
+  // /fabs/$fabId/3d address is deleted, never an alias.
+  expect(tool).toContain("twinPath(siteId, fabId) + '?perf'");
+  expect(tool).toContain("'/sites/'");
+  // No single-id route builder remains (the canonical path is composite).
+  expect(tool).not.toContain("'/fabs/' + fabId");
   // Information-only real GPU-process crash probe (Browser domain; Chrome 155 has no
   // Page.crashGpuProcess). It is recorded as a limitation, never a silent pass.
   expect(tool).toContain('Browser.crashGpuProcess');

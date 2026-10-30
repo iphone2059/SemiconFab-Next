@@ -2,20 +2,23 @@
  * Canonical V2.1 route scheme. The legacy product URLs were deleted in M2:
  * there are no aliases and no redirects, so an old address is an honest 404.
  *
- *   /                          workbench / FAB overview
- *   /fabs/$fabId/3d            3D FAB page
- *   /equipment                 equipment catalog
- *   /equipment/compare         equipment comparison
+ *   /                                  workbench / FAB overview
+ *   /sites/$siteId/fabs/$fabId/3d      3D FAB page (composite FAB identity)
+ *   /equipment                         equipment catalog
+ *   /equipment/compare                 equipment comparison
+ *
+ * The pre-R5.4 single-id route /fabs/$fabId/3d is deleted (no alias, no redirect):
+ * a FAB is identified by (siteId, fabId), see ADR-007 §3.
  *
  * Reserved for later milestones (no routes yet):
  *   /equipment/$equipmentId, /amhs, /alarms
  */
 
-const FAB_3D_PATH = /^\/fabs\/([^/]+)\/3d\/?$/;
+const FAB_3D_PATH = /^\/sites\/([^/]+)\/fabs\/([^/]+)\/3d\/?$/;
 
-/** Canonical 3D FAB pathname. */
-export function fab3dPath(fabId: string): string {
-  return `/fabs/${encodeURIComponent(fabId)}/3d`;
+/** Canonical 3D FAB pathname for one composite FAB identity. */
+export function fab3dPath(siteId: string, fabId: string): string {
+  return `/sites/${encodeURIComponent(siteId)}/fabs/${encodeURIComponent(fabId)}/3d`;
 }
 
 export type CanonicalView = 'workbench' | 'twin' | 'catalog' | 'compare';
