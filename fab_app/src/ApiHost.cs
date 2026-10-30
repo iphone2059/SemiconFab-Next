@@ -324,11 +324,9 @@ internal static class ApiHost
                     {
                         foreach (var envelope in pending.Events)
                             await WriteCommandEventAsync(context.Response, epoch, envelope, cancellationToken);
+                        cursor = pending.LatestSequence;
                         if (pending.Events.Length > 0)
-                        {
-                            cursor = pending.LatestSequence;
                             await context.Response.Body.FlushAsync(cancellationToken);
-                        }
                     }
                     await Task.Delay(TimeSpan.FromMilliseconds(EquipmentCommandService.StreamPollMilliseconds), cancellationToken);
                 }
