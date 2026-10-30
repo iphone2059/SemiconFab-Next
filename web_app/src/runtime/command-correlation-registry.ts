@@ -45,6 +45,7 @@ interface TerminalOrderEntry {
  */
 export class CommandCorrelationRegistry {
   private readonly revisions = new Map<string, CorrelationEntry>();
+  private readonly applied = new Map<string, { readonly revision: number; readonly terminal: boolean }>();
   /** Terminal keys in completion order; `terminalHead` advances as entries are evicted. */
   private readonly terminalOrder: TerminalOrderEntry[] = [];
   private terminalHead = 0;
@@ -98,7 +99,22 @@ export class CommandCorrelationRegistry {
   }
 
   isTerminal(fabId: string, commandId: string): boolean | undefined {
-    return this.revisions.get(CommandCorrelationRegistry.key(fabId, commandId))?.terminal;
+    return this.applied.get(CommandCorrelationRegistry.key(fabId, commandId))?.terminal;
+  }
+
+  isApplied(event: CommandResultEvent): boolean {
+    const applied = this.applied.get(CommandCorrelationRegistry.key(event.fabId, event.commandId));
+    return applied !== undefined && applied.revision >= event.revision;
+  }
+
+  markApplied(event: CommandResultEvent): void {
+    const key = CommandCorrelationRegistry.key(event.fabId, event.commandId);
+    const current = this.applied.get(key);
+    if (current !== undefined && current.revision >= event.revision) return;
+    this.applied.set(key, {
+      revision: event.revision,
+      terminal: TERMINAL_OUTCOMES.has(event.outcome),
+    });
   }
 
   /**
@@ -115,6 +131,8 @@ export class CommandCorrelationRegistry {
       for (const [key, entry] of this.revisions) {
         if (entry.terminal && now - entry.updatedAt >= this.terminalTtlMs) {
           this.revisions.delete(key);
+          const applied = this.applied.get(key);
+          if (applied?.terminal && applied.revision <= entry.revision) this.applied.delete(key);
           evicted += 1;
         }
       }
@@ -126,6 +144,7 @@ export class CommandCorrelationRegistry {
 
   clear(): void {
     this.revisions.clear();
+    this.applied.clear();
     this.terminalOrder.length = 0;
     this.terminalHead = 0;
     this.terminalSeq = 0;
@@ -181,6 +200,8 @@ export class CommandCorrelationRegistry {
       // keep its watermark no matter how many active commands exceed maxEntries.
       if (oldest === null) break;
       this.revisions.delete(oldest.key);
+      const applied = this.applied.get(oldest.key);
+      if (applied?.terminal) this.applied.delete(oldest.key);
       this.terminalEntries -= 1;
       evicted += 1;
     }
