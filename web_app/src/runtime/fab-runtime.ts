@@ -533,6 +533,7 @@ export class FabRuntime {
       recovery: this.recovery,
       onResultDelivered: (event) => { this.afterDelivery(event.commandId); },
       onRejected: () => this.enterDirty({ listOnly: true, cause: 'protocol-error' }),
+      onStreamExit: () => this.onUnexpectedStreamExit('command result consumer'),
       runtime: options.runtime,
       scope: this.transportScope,
     });
@@ -860,7 +861,13 @@ export class FabRuntime {
 
   private subscribeSignals(): void {
     const subscribe = <A>(stream: import('effect').Stream.Stream<A>, handler: (value: A) => void): void => {
-      this.signalFibers.push(runCommandStream(this.runtime, this.transportScope, stream, handler));
+      this.signalFibers.push(runCommandStream(
+        this.runtime,
+        this.transportScope,
+        stream,
+        handler,
+        this.source.availability === 'ready' ? () => this.onUnexpectedStreamExit('command signal consumer') : undefined,
+      ));
     };
     if (this.source.gaps) {
       subscribe(this.source.gaps, () => {
@@ -895,6 +902,18 @@ export class FabRuntime {
   private acknowledgedCursor(): CommandCursor | undefined {
     const cursors = (this.source as { cursors?: { acknowledged?: CommandCursor } }).cursors;
     return cursors?.acknowledged;
+  }
+
+  private onUnexpectedStreamExit(owner: string): void {
+    if (this.disposed || !this.started || !this.recoveryAvailable || this.source.availability !== 'ready') return;
+    this.bridgeStarted = false;
+    this.interruptRecoveryPass();
+    this.clearRetryTimer();
+    this.pendingRecovery = undefined;
+    this.activeRecoveryRequest = undefined;
+    this.lastError = owner + ' terminated while its owner was active';
+    this.setPhase('Unrecoverable');
+    this.recordDiagnostic('error', this.lastError);
   }
 
   private onDirty(dirty: CommandStreamDirty): void {
