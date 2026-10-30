@@ -270,7 +270,61 @@ describe('bridge acknowledges only after the actor applied (R3-02 three-state sp
       await disposeTransportHarness(sourceHarness);
     }
   });
+
+  it('retries an observed but rejected revision through the authoritative path', async () => {
+    const sourceHarness = createTransportHarness({ capacity: 16, autoAck: false });
+    const source = sourceHarness.source;
+    const workflows = new FakeWorkflowRegistry();
+    const workflow = new RejectOnceProjectionWorkflow();
+    workflows.register('fab-a', 'cmd-retry', workflow);
+    const bridge = new CommandEventBridge(source, workflows, {
+      fabId: 'fab-a',
+      runtime: sourceHarness.harness.host,
+      scope: sourceHarness.scope,
+    });
+    bridge.start();
+    try {
+      const fake = await open(sourceHarness);
+      fake.emit(commandEnvelope({ revision: 12, commandId: 'cmd-retry' }), cursorId('epoch-1', 12));
+      await flush(10);
+      const event = eventFor(sourceHarness, 12);
+      expect(workflow.projection.revision).toBe(-1);
+      expect(bridge.pendingCount).toBe(1);
+      expect(bridge.correlationRegistry.isApplied(event)).toBe(false);
+      expect(source.cursors.acknowledged).toBeUndefined();
+
+      expect(bridge.receiveAuthoritative(event)).toBe('applied');
+      expect(workflow.projection.revision).toBe(12);
+      expect(bridge.pendingCount).toBe(0);
+      expect(bridge.correlationRegistry.isApplied(event)).toBe(true);
+      expect(source.cursors.acknowledged).toEqual({ epoch: 'epoch-1', sequence: 12 });
+    } finally {
+      bridge.dispose();
+      await disposeTransportHarness(sourceHarness);
+    }
+  });
 });
+
+class RejectOnceProjectionWorkflow implements CommandWorkflow {
+  private revisionValue = -1;
+  private reject = true;
+
+  receive(event: CommandResultEvent): void {
+    if (this.reject) {
+      this.reject = false;
+      return;
+    }
+    this.revisionValue = Math.max(this.revisionValue, event.revision);
+  }
+
+  async reconcile(): Promise<void> {}
+
+  dispose(): void {}
+
+  get projection(): CommandWorkflowProjection {
+    return { state: this.revisionValue < 0 ? 'idle' : 'executing', revision: this.revisionValue, outcome: 'executing' };
+  }
+}
 
 /** Test workflow that exposes a projection and advances it synchronously. */
 class ProjectionWorkflow implements CommandWorkflow {
