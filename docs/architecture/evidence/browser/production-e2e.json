@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-30T06:54:45.181Z",
-  "commit": "96b33d0834ec7cafe288b8304e0ed1e3b9c2c4f7",
+  "generatedAt": "2026-10-30T08:06:03.136Z",
+  "commit": "a7ef24b37086d938db4e1198ed3d0c2a9590eb1e",
   "mode": "on",
   "webUrl": "http://127.0.0.1:4180",
   "apiUrl": "http://127.0.0.1:5180",
@@ -55,11 +55,11 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/39f8e17f-50dd-436d-a1e9-fbd5d37f28cf",
+            "url": "http://127.0.0.1:4180/api/v1/runs/cc3cfb9a-f689-4360-857a-1f1cdcfa365c",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/39f8e17f-50dd-436d-a1e9-fbd5d37f28cf/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/cc3cfb9a-f689-4360-857a-1f1cdcfa365c/results",
             "count": 1
           }
         ]
@@ -186,19 +186,19 @@
             "count": 5
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/39f8e17f-50dd-436d-a1e9-fbd5d37f28cf",
+            "url": "http://127.0.0.1:4180/api/v1/runs/cc3cfb9a-f689-4360-857a-1f1cdcfa365c",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/39f8e17f-50dd-436d-a1e9-fbd5d37f28cf/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/cc3cfb9a-f689-4360-857a-1f1cdcfa365c/results",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/9c407a86-4ab0-43d0-b733-ec61016a2f13",
+            "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980",
             "count": 2
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/9c407a86-4ab0-43d0-b733-ec61016a2f13/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980/results",
             "count": 1
           }
         ]
@@ -233,7 +233,7 @@
         {
           "description": "DEMO clock advances (Atom subscription path)",
           "expected": "cycle label changes",
-          "actual": "#2 -> #4",
+          "actual": "#2 -> #3",
           "pass": true
         }
       ],
@@ -350,7 +350,7 @@
       "pass": true,
       "actual": "all assertions passed",
       "consoleErrors": [
-        "console: Error: FAB 不存在：unknown-fab\n    at Qp (http://127.0.0.1:4180/assets/index-C2SMfrT4.js:3:300554)\n    at async loader (http://127.0.0.1:4180/assets/index-C2SMfrT4.js:3:301053)\n    at async fn (http://127.0.0.1:4180/assets/react-DUhVkHCG.js:11:24506)"
+        "console: Error: FAB 不存在：unknown-fab\n    at $p (http://127.0.0.1:4180/assets/index-BDdu-IJq.js:3:302991)\n    at async loader (http://127.0.0.1:4180/assets/index-BDdu-IJq.js:3:303490)\n    at async fn (http://127.0.0.1:4180/assets/react-DUhVkHCG.js:11:24506)"
       ],
       "network": {
         "total": 8,
@@ -422,11 +422,11 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/9c407a86-4ab0-43d0-b733-ec61016a2f13",
+            "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/9c407a86-4ab0-43d0-b733-ec61016a2f13/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980/results",
             "count": 1
           }
         ]
@@ -457,13 +457,9 @@
       "actual": "all assertions passed",
       "consoleErrors": [],
       "network": {
-        "total": 17,
+        "total": 16,
         "eventSources": 1,
         "keyRequests": [
-          {
-            "url": "http://127.0.0.1:4180/api/v1/sites/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/fabs/37793fb6-5679-b7a3-3fef-d970433697c1/equipment-status",
-            "count": 1
-          },
           {
             "url": "http://127.0.0.1:4180/api/v1/sites",
             "count": 1
@@ -477,11 +473,11 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/9c407a86-4ab0-43d0-b733-ec61016a2f13",
+            "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980",
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/runs/9c407a86-4ab0-43d0-b733-ec61016a2f13/results",
+            "url": "http://127.0.0.1:4180/api/v1/runs/f3df5572-260f-438a-bf45-de2ba644e980/results",
             "count": 1
           },
           {
@@ -493,7 +489,7 @@
             "count": 1
           },
           {
-            "url": "http://127.0.0.1:4180/api/v1/commands/cfbabc50-77a6-4df1-9ace-08beba7a4c0a",
+            "url": "http://127.0.0.1:4180/api/v1/commands/cb746064-8992-4307-adc9-50d5dd16b488",
             "count": 2
           }
         ]
