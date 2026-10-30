@@ -1,6 +1,5 @@
 import { Stream } from 'effect';
-import type { CommandEventSource } from '@/contracts/command-events.contract';
-
+import type { CommandConnectionStatus, CommandEventSource } from '@/contracts/command-events.contract';
 /**
  * Display-only command source for environments that cannot host an EventSource
  * (e.g. jsdom/Storybook) or before a FAB runtime is assembled (R4-06).
@@ -17,26 +16,18 @@ import type { CommandEventSource } from '@/contracts/command-events.contract';
  */
 export function createPendingCommandEventSource(): CommandEventSource {
   return {
-    commandResults: Stream.empty,
-    reconnected: Stream.empty,
-    gaps: Stream.empty,
-    // Round 5.1 / P2-01: this source is permanently unavailable in this
-    // environment, so its lifecycle is 'failed' from the start (never 'closed',
-    // which would mean a deliberately idle connection). It is a single replayed
-    // value, exactly like a real transport reporting a permanent failure.
-    connectionStatus: Stream.succeed('failed'),
-    transportFailures: Stream.empty,
-    dirty: Stream.empty,
+    commandResults: Stream.never,
+    reconnected: Stream.never,
+    gaps: Stream.never,
+    connectionStatus: Stream.concat(Stream.succeed<CommandConnectionStatus>('failed'), Stream.never),
+    transportFailures: Stream.never,
+    dirty: Stream.never,
     acknowledge: () => undefined,
-    // Round 5.2 / review P1-03: no ledger exists here, so there is no delivered
-    // frame to supersede; the deliberate no-op keeps the pending source honest.
     supersede: () => undefined,
     cover: (cursor, authority = 'journal') => ({ status: 'insufficient', cursor, authority, latchReleased: false, reason: 'transport unavailable', recovery: 'list' }),
     lossGeneration: 0,
     availability: 'unavailable',
     protocolDiagnostics: Object.freeze([]),
-    // P1-01: pendingAcknowledgements is a required contract number. Nothing was
-    // delivered, so the real (not missing) pending count is zero.
     cursors: { pendingAcknowledgements: 0 },
   };
 }
