@@ -537,7 +537,10 @@ export class FabRuntime {
       recovery: this.recovery,
       onResultDelivered: (event) => { this.afterDelivery(event.commandId); },
       onRejected: () => this.enterDirty({ listOnly: true, cause: 'protocol-error' }),
-      onStreamExit: () => this.onUnexpectedStreamExit('command result consumer'),
+      onStreamExit: () => {
+        this.bridgeStarted = false;
+        this.onUnexpectedStreamExit('command result consumer');
+      },
       runtime: options.runtime,
       scope: this.transportScope,
     });
@@ -735,6 +738,10 @@ export class FabRuntime {
     return this.recoveryAvailable ? 'available' : 'unavailable';
   }
 
+  get realtimeAvailability(): CommandSourceAvailability {
+    return this.source.availability;
+  }
+
   /** R3-08: evidence of the last authoritative snapshot (covered drops vs pending drops). */
   get lastRecoverySnapshot(): CommandRecoverySnapshotState | undefined {
     return this.lastSnapshotState;
@@ -918,7 +925,7 @@ export class FabRuntime {
   }
 
   private onUnexpectedStreamExit(owner: string): void {
-    if (this.disposed || !this.started || !this.recoveryAvailable || this.source.availability !== 'ready') return;
+    if (this.disposed || !this.started || !this.recoveryAvailable || this.source.availability !== 'ready' || this.phase === 'Unrecoverable') return;
     this.bridgeStarted = false;
     this.interruptRecoveryPass();
     this.clearRetryTimer();
@@ -1198,7 +1205,10 @@ export class FabRuntime {
   }
 
   private setPhase(phase: CommandRecoveryPhase): void {
-    this.phase = phase === 'Healthy' && this.source.availability === 'unavailable' ? 'Degraded' : phase;
+    this.phase = phase === 'Healthy' &&
+      (this.source.availability === 'unavailable' || this.connectionStatus === 'reconnecting' || this.connectionStatus === 'failed')
+      ? 'Degraded'
+      : phase;
   }
 
   private recordDiagnostic(cause: CommandRecoveryDiagnostic['cause'], message?: string): void {
