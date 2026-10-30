@@ -532,6 +532,7 @@ export class FabRuntime {
       correlation: this.correlation,
       recovery: this.recovery,
       onResultDelivered: (event) => { this.afterDelivery(event.commandId); },
+      onRejected: () => this.enterDirty({ listOnly: true, cause: 'protocol-error' }),
       runtime: options.runtime,
       scope: this.transportScope,
     });
@@ -1282,14 +1283,18 @@ export class FabRuntime {
           yield* self.ensureRecoveryCurrent(generation);
           if (record.terminal) continue;
           if (!self.workflows.has(record.commandId)) self.trackCommand(record.commandId);
-          self.bridge.receive({
+          const outcome = self.bridge.receiveAuthoritative({
             fabId: record.fabId,
             commandId: record.commandId,
             revision: record.revision,
             outcome: record.outcome,
             occurredAt: record.occurredAt,
           });
-          appliedRecords += 1;
+          if (outcome === 'applied' || outcome === 'already-applied') appliedRecords += 1;
+          if (outcome === 'rejected') {
+            const error = new RecoveryProtocolError('authoritative list record was rejected by the command workflow');
+            return yield* Effect.fail(new RecoveryPassFailure(classifyRecoveryError(error), error));
+          }
         }
       } finally {
         self.suppressSnapshotScheduling = false;
@@ -1362,8 +1367,12 @@ export class FabRuntime {
         previousLatestSequence = page.latestSequence;
         previousFirstRetainedSequence = page.firstRetainedSequence;
         for (const event of page.events) {
-          self.bridge.receive(toResultEvent(event));
-          appliedRecords += 1;
+          const outcome = self.bridge.receiveAuthoritative(toResultEvent(event));
+          if (outcome === 'applied' || outcome === 'already-applied') appliedRecords += 1;
+          if (outcome === 'rejected') {
+            const error = new RecoveryProtocolError('authoritative journal event was rejected by the command workflow');
+            return yield* Effect.fail(new RecoveryPassFailure(classifyRecoveryError(error), error));
+          }
         }
         cursor = { epoch, sequence: page.nextAfterSequence };
         if (page.nextAfterSequence >= page.latestSequence) {
