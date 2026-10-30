@@ -104,6 +104,19 @@ describe('FabRuntime reconciliation and lifecycle (CE-06/CE-08)', () => {
     await expect.poll(() => runtime.getProjection(commandId)?.outcome, { timeout: 500 }).toBe('succeeded');
   });
 
+  it('enters Unrecoverable when an owned command-result consumer completes unexpectedly', async () => {
+    const source = new FakeCommandEventSource();
+    const gateway = fakeCommandGateway();
+    const { runtime } = createFab({ source, gateway });
+    runtime.start();
+    runtime.trackCommand(commandId);
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
+
+    source.complete();
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Unrecoverable');
+    expect(runtime.recoveryState.lastError).toMatch(/command result consumer terminated/);
+  });
+
   it('coalesces authoritative queries and ignores their results after disposal', async () => {
     const source = new FakeCommandEventSource();
     let complete!: (event: ReturnType<typeof commandResult>) => void;
