@@ -224,9 +224,11 @@ export function parseCommandReplayGap(data: string, cursor: { epoch?: string; se
   }
   const epoch = typeof payload.epoch === 'string' && payload.epoch ? payload.epoch : cursor.epoch;
   const requested = typeof payload.requestedLastEventId === 'string' ? payload.requestedLastEventId : undefined;
+  const requestedCursor = requested === undefined ? undefined : parseFullCursor(requested);
+  const sequence = requestedCursor?.epoch === epoch ? requestedCursor.sequence : undefined;
   return {
     ...(epoch ? { epoch } : {}),
-    ...(cursor.sequence !== undefined ? { sequence: cursor.sequence } : {}),
+    ...(sequence !== undefined ? { sequence } : {}),
     ...(requested ? { cursor: requested } : {}),
   };
 }
@@ -306,6 +308,10 @@ export function createSseCommandEventSource(
    * authoritative cover can release the safe prefix again (ADR-010 §6.2).
    */
   let ackBlockedUntilCover = false;
+  let untrackedUnknown = false;
+  let untrackedEpoch: string | undefined;
+  let untrackedHighWater: number | undefined;
+  let recoveryVersion = 0;
   /** One Dirty signal per stalled-prefix episode (later applied behind a pending head). */
   let prefixStallSignalled = false;
 
@@ -336,11 +342,32 @@ export function createSseCommandEventSource(
    * delivered-but-unapplied position: recovery must not skip pending events.
    */
   const dirty = new BoundedSignal<CommandStreamDirty>(1, 'coalesce-newest');
+  const recordUntrackedCursor = (cursor?: CommandCursor): void => {
+    if (cursor === undefined) {
+      untrackedUnknown = true;
+      recoveryVersion += 1;
+      return;
+    }
+    if (untrackedEpoch === undefined) {
+      untrackedEpoch = cursor.epoch;
+      untrackedHighWater = cursor.sequence;
+      return;
+    }
+    if (untrackedEpoch !== cursor.epoch) {
+      untrackedUnknown = true;
+      recoveryVersion += 1;
+      return;
+    }
+    untrackedHighWater = Math.max(untrackedHighWater ?? cursor.sequence, cursor.sequence);
+  };
   const publishDirty = (
     reason: CommandStreamDirtyReason,
     droppedIncrement: number,
     includeEpisode: boolean,
+    cursor?: CommandCursor,
   ): void => {
+    ackBlockedUntilCover = true;
+    recordUntrackedCursor(cursor);
     droppedTotal += droppedIncrement;
     const safe = state.acknowledged;
     const episode = includeEpisode ? lossEpisode : undefined;
@@ -362,7 +389,7 @@ export function createSseCommandEventSource(
     cursor?: CommandCursor,
   ): void => {
     recordDiagnostic(kind, detail, cursor);
-    publishDirty(reason, 0, false);
+    publishDirty(reason, 0, false, cursor);
   };
   const publishControl = <A>(channel: BoundedSignal<A>, value: A): void => {
     const outcome = channel.publish(value);
@@ -403,7 +430,10 @@ export function createSseCommandEventSource(
    * moves here. Capacity/epoch/non-monotonic conditions degrade to Dirty.
    */
   const appendLedgerEntry = (event: CommandResultEvent, cursor: CommandCursor): void => {
-    if (ledgerSaturated || ackBlockedUntilCover) return; // already Dirty; wait for authoritative cover
+    if (ledgerSaturated || ackBlockedUntilCover) {
+      recordUntrackedCursor(cursor);
+      return;
+    }
     const acknowledged = state.acknowledged;
     if (acknowledged && acknowledged.epoch === cursor.epoch && cursor.sequence <= acknowledged.sequence) {
       // The frame is at/before the safe prefix: already applied or covered.
@@ -482,18 +512,23 @@ export function createSseCommandEventSource(
    * issued by the owner (FabRuntime serializes cover per recovery generation); the
    * transport additionally never regresses the same-epoch acknowledged sequence.
    */
-  const cover = (cursor: CommandCursor): void => {
+  const cover = (
+    cursor: CommandCursor,
+    expectedRecoveryVersion: number,
+    kind: 'journal' | 'list',
+  ): boolean => {
+    if (expectedRecoveryVersion !== recoveryVersion) return false;
+    if (ackBlockedUntilCover) {
+      if (untrackedUnknown && kind !== 'list') return false;
+      if (untrackedEpoch !== undefined && untrackedEpoch !== cursor.epoch && kind !== 'list') return false;
+      if (untrackedEpoch === cursor.epoch && untrackedHighWater !== undefined && cursor.sequence < untrackedHighWater) return false;
+    }
+    const acknowledged = state.acknowledged;
+    if (acknowledged && acknowledged.epoch !== cursor.epoch && kind !== 'list') return false;
     for (const entry of ledger) {
       if (entry.epoch !== cursor.epoch || entry.sequence <= cursor.sequence) entry.status = 'covered';
     }
-    const acknowledged = state.acknowledged;
-    if (!acknowledged) {
-      state.acknowledged = { ...cursor };
-    } else if (acknowledged.epoch === cursor.epoch) {
-      if (cursor.sequence > acknowledged.sequence) state.acknowledged = { ...cursor };
-    } else {
-      // Authoritative epoch replacement (never a data-frame side effect). The owner
-      // guarantees only the current recovery generation reaches this branch.
+    if (!acknowledged || acknowledged.epoch !== cursor.epoch || cursor.sequence > acknowledged.sequence) {
       state.acknowledged = { ...cursor };
     }
     const delivered = state.delivered;
@@ -503,8 +538,12 @@ export function createSseCommandEventSource(
     ledgerEpoch = cursor.epoch;
     ledgerSaturated = false;
     ackBlockedUntilCover = false;
+    untrackedUnknown = false;
+    untrackedEpoch = undefined;
+    untrackedHighWater = undefined;
     prefixStallSignalled = false;
     drainAcknowledgedPrefix();
+    return true;
   };
 
   const recordDeliveredFrame = (event: CommandResultEvent, cursor: CommandCursor | undefined): void => {
@@ -528,7 +567,7 @@ export function createSseCommandEventSource(
           ? { gapStart: Math.min(lossEpisode.gapStart, cursor.sequence), gapEnd: Math.max(lossEpisode.gapEnd, cursor.sequence) }
           : { gapStart: cursor.sequence, gapEnd: cursor.sequence };
       }
-      publishDirty('overflow', outcome.dropped, lossEpisode !== undefined);
+      publishDirty('overflow', outcome.dropped, lossEpisode !== undefined, cursor);
       return;
     }
     if (outcome.accepted) {
@@ -625,6 +664,7 @@ export function createSseCommandEventSource(
     if (!factory) {
       publishStatus('failed');
       publishControl(failures, { message: 'EventSource is not available in this environment' });
+      publishDirty('closed', 0, false);
       return;
     }
     let source: EventSourceLike;
@@ -633,6 +673,7 @@ export function createSseCommandEventSource(
     } catch (cause) {
       publishStatus('failed');
       publishControl(failures, { message: 'command stream connection failed', cause });
+      publishDirty('closed', 0, false);
       return;
     }
     state.source = source;
@@ -651,12 +692,10 @@ export function createSseCommandEventSource(
     const onReplayGap = (event: SseMessageLike): void => {
       if (isStale()) return;
       if (!isJsonObject(event.data)) {
-        // The gap signal is still authoritative (replay could not cover), but the
-        // malformed control payload itself is a bounded diagnostic.
-        recordDiagnostic('control-frame', 'replay-gap control frame was not JSON', parseFullCursor(event.lastEventId));
+        recordDiagnostic('control-frame', 'replay-gap control frame was not JSON');
       }
-      const observed = parseCommandCursor(event.lastEventId);
-      publishControl(gaps, parseCommandReplayGap(event.data, observed));
+      publishDirty('server-overflow', 0, false);
+      publishControl(gaps, parseCommandReplayGap(event.data, {}));
     };
     const onServerDirty = (event: SseMessageLike): void => {
       if (isStale()) return;
@@ -673,12 +712,7 @@ export function createSseCommandEventSource(
       // The frame's cursor is a server position, never our delivered position: it
       // must not advance any local cursor. droppedCount stays monotonic.
       droppedTotal = Math.max(droppedTotal, frame.droppedCount);
-      const safe = state.acknowledged;
-      dirty.publish({
-        reason: SERVER_DIRTY_REASON[frame.reason],
-        droppedCount: droppedTotal,
-        ...(safe ? { delivered: { ...safe } } : {}),
-      });
+      publishDirty(SERVER_DIRTY_REASON[frame.reason], 0, false);
     };
     source.addEventListener?.('replay-gap', onReplayGap);
     source.addEventListener?.('dirty', onServerDirty);
@@ -722,6 +756,7 @@ export function createSseCommandEventSource(
       if (isStale()) return;
       publishStatus('reconnecting');
       publishControl(failures, { message: 'command stream transport error', cause: event });
+      publishDirty('closed', 0, false);
       // EventSource would auto-reconnect with an unowned timer; the transport owns
       // the single connection explicitly and reopens after reconnectDelayMs. The
       // recovery start point is the safe acknowledged cursor exposed via cursors.
@@ -762,6 +797,9 @@ export function createSseCommandEventSource(
     transportFailures: failures.stream,
     dirty: dirty.stream,
     acknowledge,
+    get recoveryVersion(): number {
+      return recoveryVersion;
+    },
     cover,
     availability: 'ready',
     get protocolDiagnostics(): readonly CommandProtocolDiagnostic[] {
