@@ -28,6 +28,8 @@ export interface CommandCursor {
   readonly sequence: number;
 }
 
+export type CommandRecoveryCoverageKind = 'journal' | 'list';
+
 /**
  * A disconnect could not be fully replayed from the backend journal (epoch
  * change, pruned cursor, malformed Last-Event-ID). Results may be missing, so
@@ -179,7 +181,10 @@ export interface CommandEventSource {
    * not roll the acknowledged cursor back. Transport implementations must also
    * never regress the same-epoch acknowledged sequence.
    */
-  cover(cursor: CommandCursor): void;
+  /** Monotonic generation for unlocated losses; a pass captures it before its authority read. */
+  readonly recoveryVersion: number;
+  /** Returns false when the pass raced a new loss or its watermark cannot prove coverage. */
+  cover(cursor: CommandCursor, recoveryVersion: number, kind: CommandRecoveryCoverageKind): boolean;
   /**
    * Bounded protocol diagnostics (payload-free). Implementations keep the last N
    * causes/timestamps so malformed frames are observable without leaking payload
