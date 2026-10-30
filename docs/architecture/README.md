@@ -88,4 +88,4 @@ web_app/src/
 - 长时 heap 仅记录 600 帧窗口；非分钟级稳定性测试。
 - 生产构建产物已测量（raw/gzip），浏览器功能与性能基线使用 Vite dev server。
 - Round 4 源码整改后的验证事实：前端 155 文件 / 908 测试 PASS、typecheck 0、oxlint 0、vite build PASS；后端 226 测试 PASS；契约/生成物/架构/frozen-assets/Python tools 源码门禁 PASS。浏览器 E2E、GPU soak、Compiler ON/OFF 等价与完整 verify.ps1 仍未执行，见 `17-round4-remediation-record.md` §5。
-- 不 push、不 merge；任务按提交逐项记录在 `evidence/effect4-progress.md`。
+- **提交约定（用户指令，2026-10-30）：每一轮整改/修复完成后必须立即 `git commit` 并 `git push origin main`，不得只留本地提交；回复中报告 commit SHA 与 GitHub compare 链接。** 任务同时按提交逐项记录在 `evidence/effect4-progress.md`。
