@@ -85,7 +85,7 @@ export class CommandEventRecovery {
     this.total += 1;
     while (queue.length > this.maxPerCommand) this.evictOne(queue, key, 'per-command');
     while (this.total > this.maxTotal) this.evictGlobal();
-    return this.total > 0;
+    return queue.includes(held);
   }
 
   pendingFor(fabId: string, commandId: string): readonly CommandResultEvent[] {
