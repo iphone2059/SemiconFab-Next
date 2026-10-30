@@ -20,6 +20,8 @@ export interface CommandEventBridgeOptions {
   readonly onResultDelivered?: (event: CommandResultEvent) => void;
   /** Called when a workflow rejects an observed revision and authoritative recovery must retry it. */
   readonly onRejected?: (event: CommandResultEvent) => void;
+  /** Called when the scoped stream consumer exits while the bridge is still started. */
+  readonly onStreamExit?: () => void;
   /** Approved Effect execution boundary (AppRuntime satisfies it structurally). */
   readonly runtime: RuntimeHost;
   /** CommandTransportScope: the only owner of the command-result consumer fiber. */
@@ -60,6 +62,12 @@ export class CommandEventBridge {
       this.source.commandResults,
       (event) => {
         if (this.started) this.receive(event);
+      },
+      () => {
+        if (!this.started) return;
+        this.started = false;
+        this.commandFiber = undefined;
+        this.options.onStreamExit?.();
       },
     );
   }
