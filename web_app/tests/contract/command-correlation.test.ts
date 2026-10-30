@@ -10,10 +10,13 @@ it('evicts the oldest *completed* terminal, not the longest-running one that fin
   // Audited scenario: A starts running first, B completes, then A completes last.
   const registry = new CommandCorrelationRegistry({ maxTerminalEntries: 1, terminalTtlMs: 0 });
   registry.observe(result('A', 1, 'executing'));
+  registry.markApplied(result('A', 1, 'executing'));
   registry.observe(result('B', 2, 'succeeded'));
+  registry.markApplied(result('B', 2, 'succeeded'));
   // Terminal cap 1: B is the only terminal and stays.
   expect(registry.isTerminal(fabId, 'B')).toBe(true);
   registry.observe(result('A', 2, 'succeeded'));
+  registry.markApplied(result('A', 2, 'succeeded'));
   // Completion order is B then A, so A (the most recently completed) must be
   // retained and the earlier completion of B evicted. The old Map-insertion
   // implementation evicted A because its first revision arrived first.
@@ -28,10 +31,15 @@ it('evicts the oldest *completed* terminal, not the longest-running one that fin
 it('keeps the most recently completed terminals when several are evicted', () => {
   const registry = new CommandCorrelationRegistry({ maxTerminalEntries: 2, terminalTtlMs: 0 });
   registry.observe(result('running', 1, 'executing'));
+  registry.markApplied(result('running', 1, 'executing'));
   registry.observe(result('done-1', 2, 'succeeded'));
+  registry.markApplied(result('done-1', 2, 'succeeded'));
   registry.observe(result('done-2', 2, 'succeeded'));
-  registry.observe(result('done-3', 2, 'succeeded')); // evicts done-1
-  registry.observe(result('running', 2, 'succeeded')); // evicts done-2
+  registry.markApplied(result('done-2', 2, 'succeeded'));
+  registry.observe(result('done-3', 2, 'succeeded'));
+  registry.markApplied(result('done-3', 2, 'succeeded'));
+  registry.observe(result('running', 2, 'succeeded'));
+  registry.markApplied(result('running', 2, 'succeeded'));
   expect(registry.isTerminal(fabId, 'done-3')).toBe(true);
   expect(registry.isTerminal(fabId, 'running')).toBe(true);
   expect(registry.isTerminal(fabId, 'done-1')).toBeUndefined();
@@ -41,7 +49,10 @@ it('keeps the most recently completed terminals when several are evicted', () =>
 
 it('never evicts active commands for the absolute maxEntries cap', () => {
   const registry = new CommandCorrelationRegistry({ maxEntries: 2, maxTerminalEntries: 8, terminalTtlMs: 0 });
-  for (let index = 0; index < 5; index += 1) registry.observe(result('active-' + index, 1, 'executing'));
+  for (let index = 0; index < 5; index += 1) {
+    registry.observe(result('active-' + index, 1, 'executing'));
+    registry.markApplied(result('active-' + index, 1, 'executing'));
+  }
   expect(registry.size).toBe(5);
   expect(registry.terminalCount).toBe(0);
   for (let index = 0; index < 5; index += 1) expect(registry.lastRevision(fabId, 'active-' + index)).toBe(1);
@@ -56,9 +67,11 @@ it('retains duplicate/stale decisions and TTL sweeps without touching active com
   let now = 0;
   const registry = new CommandCorrelationRegistry({ maxTerminalEntries: 8, terminalTtlMs: 100, now: () => now });
   expect(registry.observe(result('active', 1, 'executing'))).toBe('new');
+  registry.markApplied(result('active', 1, 'executing'));
   expect(registry.observe(result('active', 1, 'executing'))).toBe('duplicate');
   expect(registry.observe(result('active', 0, 'accepted'))).toBe('stale');
   expect(registry.observe(result('done', 2, 'succeeded'))).toBe('new');
+  registry.markApplied(result('done', 2, 'succeeded'));
   expect(registry.observe(result('done', 2, 'failed'))).toBe('duplicate');
   expect(registry.lastRevision(fabId, 'done')).toBe(2);
   now = 50;
@@ -87,6 +100,7 @@ it('stays O(1) per observe while thousands of active commands accumulate', () =>
   expect(registry.terminalCount).toBe(0);
   // A terminal added afterwards evicts only itself (per-event bound enforcement).
   registry.observe(result('done', 2, 'succeeded'));
+  registry.markApplied(result('done', 2, 'succeeded'));
   expect(registry.isTerminal(fabId, 'done')).toBe(true);
   expect(registry.size).toBe(4_001);
 });
