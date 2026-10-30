@@ -279,6 +279,8 @@ export function createSseCommandEventSource(
   const reconnectDelayMs = Math.max(0, options.reconnectDelayMs ?? 250);
   const ackLedgerCapacity = Math.max(1, options.ackLedgerCapacity ?? DEFAULT_ACK_LEDGER_CAPACITY);
   const decoder = new MessageDecoder();
+  const eventSourceFactory = options.eventSourceFactory ?? browserEventSourceFactory();
+  let sourceAvailability: 'ready' | 'unavailable' = eventSourceFactory ? 'ready' : 'unavailable';
   const state: {
     status: CommandConnectionStatus;
     source: EventSourceLike | null;
@@ -661,8 +663,7 @@ export function createSseCommandEventSource(
     if (stopped || state.source) return;
     const generation = state.generation + 1;
     state.generation = generation;
-    const factory = options.eventSourceFactory ?? browserEventSourceFactory();
-    if (!factory) {
+    if (!eventSourceFactory) {
       publishStatus('failed');
       publishControl(failures, { message: 'EventSource is not available in this environment' });
       publishDirty('closed', 0, false);
@@ -670,8 +671,9 @@ export function createSseCommandEventSource(
     }
     let source: EventSourceLike;
     try {
-      source = factory(url);
+      source = eventSourceFactory(url);
     } catch (cause) {
+      sourceAvailability = 'unavailable';
       publishStatus('failed');
       publishControl(failures, { message: 'command stream connection failed', cause });
       publishDirty('closed', 0, false);
@@ -801,7 +803,9 @@ export function createSseCommandEventSource(
       return recoveryVersion;
     },
     cover,
-    availability: 'ready',
+    get availability(): 'ready' | 'unavailable' {
+      return sourceAvailability;
+    },
     get protocolDiagnostics(): readonly CommandProtocolDiagnostic[] {
       return protocolDiagnosticLog.slice();
     },
