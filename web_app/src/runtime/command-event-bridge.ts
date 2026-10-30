@@ -80,7 +80,10 @@ export class CommandEventBridge {
 
   receiveAuthoritative(event: CommandResultEvent): 'applied' | 'unverifiable' | 'held' | 'rejected' | 'already-applied' | 'ignored' {
     if (this.options.fabId && event.fabId !== this.options.fabId) return 'ignored';
-    if (this.correlation.isApplied(event)) return 'already-applied';
+    if (this.correlation.isApplied(event)) {
+      this.recovery.remove(event);
+      return 'already-applied';
+    }
     this.correlation.observe(event);
     const workflow = this.workflows.get(event.fabId, event.commandId);
     if (!workflow) {
@@ -90,6 +93,7 @@ export class CommandEventBridge {
       return retained ? 'held' : 'rejected';
     }
     const result = this.applyToWorkflow(workflow, event);
+    if (result === 'applied') this.recovery.remove(event);
     if (result === 'rejected') {
       this.recovery.hold(event);
       this.options.onRejected?.(event);
