@@ -73,6 +73,19 @@ export interface ReconciliationDropDiagnostic {
   readonly inFlight: number;
 }
 
+export type ReconciliationBatchOutcome =
+  | 'reconciled'
+  | 'terminal'
+  | 'missing-target'
+  | 'unavailable'
+  | 'failed'
+  | 'disposed';
+
+export interface ReconciliationBatchResult {
+  readonly commandId: string;
+  readonly outcome: ReconciliationBatchOutcome;
+}
+
 export interface FabReconciliationSchedulerStats {
   readonly scheduled: number;
   readonly queued: number;
@@ -220,11 +233,24 @@ export class FabReconciliationScheduler {
     return entry.promise;
   }
 
-  /** Schedule every id and wait for the whole batch; no second worker pool exists. */
-  async scheduleMany(commandIds: Iterable<string>): Promise<number> {
+  /** Schedule every id and preserve the terminal result of every item. */
+  async scheduleManyDetailed(commandIds: Iterable<string>): Promise<readonly ReconciliationBatchResult[]> {
     const unique = [...new Set(commandIds)];
-    const results = await Promise.all(unique.map((commandId) => this.schedule(commandId)));
-    return results.filter(Boolean).length;
+    return Promise.all(unique.map(async (commandId): Promise<ReconciliationBatchResult> => {
+      if (this.disposed) return { commandId, outcome: 'disposed' };
+      if (this.isTerminal(commandId)) return { commandId, outcome: 'terminal' };
+      if (!this.resolveTarget(commandId)) return { commandId, outcome: 'missing-target' };
+      if (!this.reconciler) return { commandId, outcome: 'unavailable' };
+      if (await this.schedule(commandId)) return { commandId, outcome: 'reconciled' };
+      if (this.isTerminal(commandId)) return { commandId, outcome: 'terminal' };
+      return { commandId, outcome: 'failed' };
+    }));
+  }
+
+  /** Schedule every id and return the number of successful reconciliations. */
+  async scheduleMany(commandIds: Iterable<string>): Promise<number> {
+    const results = await this.scheduleManyDetailed(commandIds);
+    return results.filter((result) => result.outcome === 'reconciled').length;
   }
 
   /** Reconcile exactly one tracked command through the shared scheduler. */
