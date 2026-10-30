@@ -42,7 +42,20 @@ export interface CommandStreamGap {
   readonly cursor?: string;
 }
 
-export type CommandConnectionStatus = 'connecting' | 'open' | 'reconnecting' | 'failed';
+/**
+ * Connection lifecycle of the per-FAB command SSE stream (Round 5.1 / P2-01).
+ *
+ * - connecting: an attempt to establish the connection is in progress;
+ * - open: the connection is established;
+ * - reconnecting: the connection was interrupted and a reconnect is scheduled;
+ * - failed: the connection is permanently unavailable in this environment
+ *   (no EventSource factory, or the bounded open-attempt budget was exhausted);
+ * - closed: the connection was deliberately closed and there is no active
+ *   connection right now (e.g. the last commandResults consumer left). This is a
+ *   normal idle lifecycle state and must never be reported as `failed`, and it
+ *   must never be mistaken for `open`.
+ */
+export type CommandConnectionStatus = 'connecting' | 'open' | 'reconnecting' | 'failed' | 'closed';
 
 /**
  * Why the bounded command transport could not deliver/advance safely. A dirty
@@ -120,11 +133,19 @@ export interface CommandStreamDirty {
  * event has been applied (or authoritatively covered).
  */
 export interface CommandSourceCursors {
+  /** Highest SSE position actually observed (advances only on a valid SSE id). */
   readonly observed?: CommandCursor;
+  /** Highest position successfully published to the bounded consumer queues. */
   readonly delivered?: CommandCursor;
+  /** Last safe ACK-ledger prefix: every earlier delivered event is applied|covered. */
   readonly acknowledged?: CommandCursor;
-  /** Delivered events still waiting for their ordered applied prefix (bounded). */
-  readonly pendingAcknowledgements?: number;
+  /**
+   * Delivered events still waiting for their ordered applied prefix (bounded).
+   * Required (Round 5.1 / P1-01): recovery may only report Healthy when this is a
+   * real zero, never when the source failed to report the value. Every real and
+   * fake source must provide it.
+   */
+  readonly pendingAcknowledgements: number;
 }
 
 /** Bounded protocol diagnostics kind; payload-free by contract (ADR-010 §6.4). */
@@ -203,6 +224,14 @@ export interface CommandEventSource {
    * signals uncovered-gap) until the cover provably covers it. The authority says
    * whether the watermark comes from a journal loop or a full authoritative List;
    * an unknown untracked position or a cross-epoch replacement requires list.
+   *
+   * Round 5.1 / P1-04 cursor invariant: a cover may advance `acknowledged`
+   * (and mark ledger entries covered / replace `ledgerEpoch`), but it must NEVER
+   * advance `delivered`. `delivered` means "actually published to a bounded
+   * consumer" and only a real SSE delivery can move it. In particular a
+   * cross-epoch List cover leaves `delivered` in the old epoch until an actual
+   * frame of the new epoch is delivered. Same-epoch invariant:
+   * acknowledged <= delivered <= observed.
    */
   cover(cursor: CommandCursor, authority?: CommandCoverAuthority, lossBarrier?: number): CommandCoverResult;
   /** Capture before starting the authority request; changes when an untracked loss occurs. */

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CommandOutcome, CommandResultEvent } from '@/contracts/command-events.contract';
+import type { CommandRecoveryList } from '@/contracts/command-gateway.contract';
+import type { FabRuntime } from '@/runtime/fab-runtime';
 import type { CommandWorkflow, CommandWorkflowProjection } from '@/contracts/command-workflow.contract';
 import type { TestFab, TestFabOptions } from '../support/command-fakes.ts';
 import {
@@ -175,8 +177,14 @@ class CountingWorkflow implements CommandWorkflow {
   private revisionValue = -1;
   private outcomeValue: CommandOutcome | 'pending' = 'pending';
 
-  receive(event: CommandResultEvent): void {
+  receiveRealtime(event: CommandResultEvent): void {
     if (event.revision <= this.revisionValue) return;
+    this.revisionValue = event.revision;
+    this.outcomeValue = event.outcome;
+  }
+
+  receiveAuthoritative(event: CommandResultEvent): void {
+    if (event.revision < this.revisionValue) return;
     this.revisionValue = event.revision;
     this.outcomeValue = event.outcome;
   }
@@ -359,5 +367,115 @@ describe('FabRuntime bounded workflow/correlation retention (batch 2/3)', () => 
     expect(registry.lastObservedRevision(fabId, 'active')).toBe(1);
     expect(registry.lastObservedRevision(fabId, 'done-1')).toBeUndefined();
     expect(registry.size).toBe(1);
+  });
+});
+
+describe('Round 5.1 post-snapshot recovery races (batch 2/3)', () => {
+  it('never reports Healthy when a new recovery request arrives during the post-snapshot batch', async () => {
+    const source = new FakeCommandEventSource();
+    type ListMode = 'track' | 'block' | 'resolved';
+    let listMode: ListMode = 'track';
+    let blockedList!: (value: CommandRecoveryList) => void;
+    let pauseStatus = false;
+    let releaseStatus!: (value: CommandResultEvent) => void;
+    const tracked = commandRecord({ fabId, commandId: 'cmd-1', revision: 1, outcome: 'executing' });
+    const gateway = fakeCommandGateway({
+      listFabCommands: async () => {
+        if (listMode === 'block') return new Promise<CommandRecoveryList>((resolve) => { blockedList = resolve; });
+        return emptyRecoveryList([tracked]);
+      },
+      getCommandStatus: async (targetFab, commandId) => {
+        if (pauseStatus && commandId === 'cmd-1') {
+          pauseStatus = false;
+          return new Promise<CommandResultEvent>((resolve) => { releaseStatus = resolve; });
+        }
+        return commandResult({ fabId: targetFab, commandId, revision: 1, outcome: 'executing' });
+      },
+    });
+    const { runtime } = createFab({ source, gateway, recovery: { backoffMs: [1], maxAttempts: 8 } });
+    runtime.start();
+    runtime.registerAcceptedCommand('cmd-1');
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
+
+    // First authoritative pass; its post-snapshot batch pauses on cmd-1.
+    pauseStatus = true;
+    source.emitDirty({ reason: 'overflow', droppedCount: 1 });
+    await expect.poll(() => typeof releaseStatus, { timeout: 1_000 }).toBe('function');
+    // A second recovery request arrives while the snapshot is already applied.
+    source.emitDirty({ reason: 'overflow', droppedCount: 2 });
+    await expect.poll(() => runtime.recoveryState.recoveryPending, { timeout: 1_000 }).toBe(true);
+
+    // The first pass may not commit Healthy for the stale snapshot; the follow-up
+    // List pass is observable and the runtime stays non-Healthy until it finishes.
+    listMode = 'block';
+    releaseStatus(commandResult({ fabId, commandId: 'cmd-1', revision: 1, outcome: 'executing' }));
+    await expect.poll(() => typeof blockedList, { timeout: 1_000 }).toBe('function');
+    expect(runtime.recoveryState.phase).not.toBe('Healthy');
+    expect(runtime.lastRecoverySnapshot?.needsNextAuthoritativePass).toBe(true);
+
+    listMode = 'resolved';
+    blockedList(emptyRecoveryList([tracked]));
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 2_000 }).toBe('Healthy');
+    expect(runtime.lastRecoverySnapshot?.needsNextAuthoritativePass).toBe(false);
+  });
+
+  it('compensates a drop observed during the post-snapshot batch before reporting Healthy', async () => {
+    const source = new FakeCommandEventSource();
+    let runtimeRef: FabRuntime | undefined;
+    let listMode: 'track' | 'block' | 'resolved' = 'track';
+    let blockedList!: (value: CommandRecoveryList) => void;
+    let armed = false;
+    let injected = false;
+    const tracked = commandRecord({ fabId, commandId: 'cmd-1', revision: 1, outcome: 'executing' });
+    const gateway = fakeCommandGateway({
+      listFabCommands: async () => {
+        if (listMode === 'block') return new Promise<CommandRecoveryList>((resolve) => { blockedList = resolve; });
+        return emptyRecoveryList([tracked]);
+      },
+      getCommandStatus: async (targetFab, commandId) => {
+        if (armed && !injected) {
+          injected = true;
+          // New commands registered while the snapshot is already authoritative
+          // overflow the 1-slot scheduler queue: generation-stamped drop intents.
+          // The compensation pass will need a List, so block it before it can run.
+          listMode = 'block';
+          queueMicrotask(() => {
+            runtimeRef?.registerAcceptedCommand('late-1');
+            runtimeRef?.registerAcceptedCommand('late-2');
+          });
+        }
+        return commandResult({ fabId: targetFab, commandId, revision: 1, outcome: 'executing' });
+      },
+    });
+    const { runtime } = createFab({
+      source,
+      gateway,
+      maxConcurrentReconciliations: 1,
+      maxQueuedReconciliations: 1,
+      // A 50ms retry budget keeps the compensation pass observable after the drop;
+      // the test never relies on a race between the timer and the List block.
+      recovery: { backoffMs: [50], maxAttempts: 8, maxCompensationPasses: 2 },
+    });
+    runtimeRef = runtime;
+    runtime.start();
+    runtime.registerAcceptedCommand('cmd-1');
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
+
+    armed = true;
+    source.emitDirty({ reason: 'overflow', droppedCount: 1 });
+    // The drop is recorded after the authoritative snapshot; the compensation pass
+    // is then kept on a blocked List so the stale-snapshot gap is observable: the
+    // runtime is not Healthy while authority is outstanding.
+    await expect.poll(() => typeof blockedList, { timeout: 2_000 }).toBe('function');
+    expect(runtime.pendingDropCount).toBeGreaterThan(0);
+    expect(runtime.recoveryState.phase).not.toBe('Healthy');
+    expect(runtime.recoveryState.needsNextAuthoritativePass).toBe(true);
+
+    listMode = 'resolved';
+    blockedList(emptyRecoveryList([tracked]));
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 2_000 }).toBe('Healthy');
+    expect(runtime.pendingDropCount).toBe(0);
+    expect(runtime.recoveryState.needsNextAuthoritativePass).toBe(false);
+    expect(runtime.coveredDropCount).toBeGreaterThanOrEqual(1);
   });
 });

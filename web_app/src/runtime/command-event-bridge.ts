@@ -12,6 +12,11 @@ import { CommandEventRecovery } from '@/runtime/command-event-recovery';
  * Explicit outcome of offering one result to the workflow layer (R4-03). The old
  * void return made "already applied", "held for a missing workflow" and "rejected
  * by the actor projection" indistinguishable to the runtime.
+ *
+ * Round 5.1 / P1-02 adds `conflict`: the realtime stream delivered a revision
+ * whose outcome disagrees with the recorded outcome for that revision. A conflict
+ * is never acknowledged and never applied; only an authoritative observation may
+ * resolve/correct it.
  */
 export type CommandDeliveryOutcome =
   | 'applied'
@@ -19,6 +24,7 @@ export type CommandDeliveryOutcome =
   | 'duplicate-applied'
   | 'stale-covered'
   | 'rejected'
+  | 'conflict'
   | 'ignored';
 
 /** Counts of one retry pass over the bounded recovery queue. */
@@ -27,6 +33,9 @@ export interface CommandFlushResult {
   readonly held: number;
   readonly rejected: number;
 }
+
+/** Which contract method delivered the event: the source decides the channel, never the retry path. */
+type CommandDeliveryChannel = 'realtime' | 'authoritative';
 
 export interface CommandEventBridgeOptions {
   /** When set, only events for this FAB are considered (per-FAB runtime); the key remains (fabId, commandId). */
@@ -37,6 +46,13 @@ export interface CommandEventBridgeOptions {
   readonly onUncorrelated?: (event: CommandResultEvent) => void;
   /** Called after a result is delivered to a workflow (used by Runtime projections). */
   readonly onResultDelivered?: (event: CommandResultEvent) => void;
+  /**
+   * Round 5.1 / P1-02: a realtime revision arrived with a different outcome than
+   * the one already recorded for that revision. The event is held as an
+   * unresolved conflict (never ACKed, never applied); the owner must converge
+   * authoritatively. FabRuntime maps this to Dirty + list-only recovery.
+   */
+  readonly onConflict?: (event: CommandResultEvent) => void;
   /**
    * R4-03: a retried event was rejected by the actor projection. It stays held
    * (bounded by the existing queue) and is reported so FabRuntime can enter Dirty
@@ -72,6 +88,13 @@ const CONSUMER_LABEL = 'command-event-bridge';
  * observed watermark, while receiveAuthoritative() bypasses that gate for an
  * authoritative List/Journal snapshot and re-delivers to the actor. Only a
  * projection that provably advanced calls correlation.markApplied().
+ *
+ * Round 5.1 / P1-02: a same-revision outcome conflict is reported as `conflict`
+ * / onConflict, recorded in the bounded recovery queue (never ACKed, never
+ * applied) and resolved only when an authoritative observation covers the
+ * revision. The data source — not the call path — selects receiveRealtime vs
+ * receiveAuthoritative; flushRecovery() always retries queued SSE events as
+ * realtime and can never upgrade them.
  *
  * R4-05: the consumer fiber is forked into the supplied CommandTransportScope and
  * observed through runCommandStream's observer: handler defects are reported
@@ -160,11 +183,21 @@ export class CommandEventBridge {
   /**
    * Realtime delivery path. De-dupes on the observed revision and returns an
    * explicit outcome: delivered to the actor => applied/rejected, missing workflow
-   * => held, duplicate => duplicate-applied/rejected, older => stale-covered.
+   * => held, duplicate => duplicate-applied/rejected, older => stale-covered, and
+   * a same-revision outcome disagreement => conflict (never acknowledged, never
+   * applied; it is recorded for authoritative resolution).
    */
   receive(event: CommandResultEvent): CommandDeliveryOutcome {
     if (this.isForeign(event)) return 'ignored';
     const decision = this.correlation.observe(event);
+    if (decision === 'conflict') {
+      // Round 5.1 / P1-02: the outcome invariant for this revision is violated on
+      // the wire. Do NOT ACK (even if appliedRevision >= revision), do NOT apply,
+      // do NOT overwrite the recorded observation: only authority may resolve it.
+      this.recovery.holdConflict(event);
+      this.options.onConflict?.(event);
+      return 'conflict';
+    }
     if (decision === 'duplicate' || decision === 'stale') {
       const applied = this.correlation.lastAppliedRevision(event.fabId, event.commandId);
       if (applied !== undefined && applied >= event.revision) {
@@ -180,7 +213,7 @@ export class CommandEventBridge {
       this.holdUncorrelated(event);
       return 'held';
     }
-    const outcome = this.applyToWorkflow(workflow, event);
+    const outcome = this.applyToWorkflow(workflow, event, 'realtime');
     if (outcome === 'rejected') {
       this.recovery.hold(event);
       this.options.onRejected?.(event);
@@ -192,23 +225,35 @@ export class CommandEventBridge {
 
   /**
    * Authoritative delivery path (R4-03): a List/Journal snapshot is fresh authority,
-   * so the observed-revision duplicate gate must never block it. The event is
-   * re-delivered to the actor; the outcome is classified from the actor projection
-   * (afterRevision >= revision => applied/stale-covered, otherwise rejected).
-   * A workflow that exposes no projection cannot prove application.
+   * so the observed-revision duplicate gate must never block it. The recorded
+   * outcome may be corrected/resolved here (observeAuthoritative) and the actor is
+   * re-delivered with receiveAuthoritative; the outcome is classified from the
+   * actor projection (afterRevision >= revision => applied/stale-covered, otherwise
+   * rejected). A workflow that exposes no projection cannot prove application.
    */
   receiveAuthoritative(event: CommandResultEvent, _coveredRevision?: number): CommandDeliveryOutcome {
     if (this.isForeign(event)) return 'ignored';
-    // Record the observation without ever regressing the observed watermark, but
-    // ignore the duplicate/stale decision: authoritative re-application is allowed.
-    this.correlation.observe(event);
+    // Record/repair the observation without ever regressing the observed watermark.
+    // The duplicate/stale decision never blocks authoritative re-application: a
+    // same-revision correction must reach the actor so the projection converges.
+    this.correlation.observeAuthoritative(event);
     const workflow = this.workflows.get(event.fabId, event.commandId);
     if (!workflow) {
-      this.holdUncorrelated(event);
+      // Authoritative records are held exactly once (no onUncorrelated duplicate
+      // signal: authority already knows this command, it merely needs its actor).
+      this.recovery.hold(event);
       return 'held';
     }
-    const outcome = this.applyToWorkflow(workflow, event);
-    if (outcome === 'rejected' || this.correlation.hasUnappliedObservation(event.fabId, event.commandId)) {
+    const outcome = this.applyToWorkflow(workflow, event, 'authoritative');
+    if (outcome === 'applied' || outcome === 'stale-covered') {
+      // Round 5.1 / P1-02: the authoritative revision is applied/covered, so every
+      // recorded conflict at or below it is resolved.
+      this.recovery.resolveAuthoritative(event);
+    }
+    if (outcome === 'rejected') {
+      this.recovery.hold(event);
+      this.options.onRejected?.(event);
+    } else if (this.correlation.hasUnappliedObservation(event.fabId, event.commandId)) {
       this.options.onRejected?.(event);
     }
     return outcome;
@@ -220,6 +265,11 @@ export class CommandEventBridge {
    * snapshot. R4-03: this is a snapshot + selective release, never a drain-and-drop:
    * events leave the queue only when applied/covered; rejected events are re-held
    * and reported through onRejected; still-uncorrelated events stay held.
+   *
+   * Round 5.1 / P1-03 source isolation: the queue only ever holds events that
+   * arrived through the realtime source, so a retry pass always uses
+   * receiveRealtime(); it can never upgrade a queued SSE event into authority.
+   * Conflict records are not part of the snapshot and are never applied here.
    */
   flushRecovery(): CommandFlushResult {
     let applied = 0;
@@ -235,7 +285,7 @@ export class CommandEventBridge {
         held += 1;
         continue;
       }
-      const outcome = this.applyToWorkflow(workflow, event);
+      const outcome = this.applyToWorkflow(workflow, event, 'realtime');
       if (outcome === 'applied' || outcome === 'stale-covered') {
         this.recovery.release(event);
         applied += 1;
@@ -269,8 +319,14 @@ export class CommandEventBridge {
     this.correlation.clear();
   }
 
+  /** Held realtime events plus unresolved conflict records (never Healthy while > 0). */
   get pendingCount(): number {
     return this.recovery.size;
+  }
+
+  /** Unresolved same-revision outcome conflicts (Round 5.1 / P1-02). */
+  get conflictCount(): number {
+    return this.recovery.conflictCount;
   }
 
   get correlationRegistry(): CommandCorrelationRegistry {
@@ -295,8 +351,9 @@ export class CommandEventBridge {
   }
 
   /**
-   * Apply one event to its workflow, then acknowledge it ONLY after the actor
-   * provably advanced to that revision (ADR-010 §6.2). Three states stay separate:
+   * Apply one event through the source-selected workflow contract, then
+   * acknowledge it ONLY after the actor provably advanced to that revision
+   * (ADR-010 §6.2). Three states stay separate:
    *  - observed: correlation registry saw the revision (dedupe/ordering only);
    *  - applied: the actor projection advanced to the revision and markApplied ran;
    *  - acknowledged: transport ordered-ledger entry marked applied, which may still
@@ -304,13 +361,18 @@ export class CommandEventBridge {
    * A verifiable workflow that does not advance rejects the event (terminal/stale):
    * observed but never applied/acked. A workflow that exposes no projection cannot
    * prove application.
+   *
+   * Round 5.1 / P1-03: the channel is decided by the event's data source only —
+   * a queued/retried realtime event can never be delivered as authoritative.
    */
   private applyToWorkflow(
     workflow: CommandWorkflow,
     event: CommandResultEvent,
+    channel: CommandDeliveryChannel,
   ): CommandDeliveryOutcome {
     const before = workflow.projection?.revision;
-    workflow.receive(event);
+    if (channel === 'authoritative') workflow.receiveAuthoritative(event);
+    else workflow.receiveRealtime(event);
     const projection = workflow.projection;
     const after = projection?.revision;
     const verifiable = before !== undefined || after !== undefined;
@@ -318,7 +380,7 @@ export class CommandEventBridge {
       if ((after ?? -1) < event.revision) return 'rejected';
       if (after === event.revision && projection?.outcome !== event.outcome) return 'rejected';
       // R4-03: the applied watermark may only advance after the projection proved
-      // it advanced; markApplied itself is forward-only.
+      // it advanced; markApplied itself refuses an outcome-disagreeing event.
       this.correlation.markApplied(event);
       this.options.onResultDelivered?.(event);
       this.source.acknowledge(event);

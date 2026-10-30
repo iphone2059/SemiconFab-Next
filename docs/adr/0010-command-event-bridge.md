@@ -230,6 +230,6 @@ Bridge 不 import 工作流实现、不 import `xstate`、不操作 React、不�
 | OPEN-V21-10 | CommandGateway 的 HTTP 提交契约（幂等键、202/结果码、请求指纹） | 与后端 API 契约 | 沿用现有开发 API 风格，M3 时与后端契约一起冻结 |
 
 
-## Round 5（进行中）
+## Round 5 / Round 5.1（已实施）
 
-Round 5 正在整改：observed 和 applied revision 独立；Actor 拒绝进入有界恢复队列并触发权威核对。
+Round 5 已由提交 `4c8f0c1` 实施：observed 和 applied revision 独立；Actor 拒绝进入有界恢复队列并触发权威核对。Round 5.1 最新契约以 `web_app/src/contracts/command-workflow.contract.ts` 与 `command-events.contract.ts` 为准：数据来源决定 `receiveRealtime` vs `receiveAuthoritative`（无 source-agnostic `receive`），同 revision 不同 outcome 为 conflict（不 ACK、仅权威可解），`pendingCount` 包含 held + conflicts；规范见 `../architecture/19-round5.1-remediation-specification.md`（P1-02/P1-03）。

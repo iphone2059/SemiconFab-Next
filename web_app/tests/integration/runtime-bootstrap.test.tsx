@@ -29,7 +29,11 @@ function RegistryProbe() {
 
 const runtimes: AppRuntime<never>[] = [];
 function runtimeWithSites(): AppRuntime<never> {
-  const runtime = createRuntimeWithSites(sites);
+  return runtimeFor(sites);
+}
+
+function runtimeFor(configuredSites: typeof sites): AppRuntime<never> {
+  const runtime = createRuntimeWithSites(configuredSites);
   runtimes.push(runtime);
   return runtime;
 }
@@ -96,9 +100,11 @@ it('starts only the consumed FAB telemetry runtime and exposes useFabTelemetry(f
   expect(telemetryUrls).toEqual([
     '/api/v1/sites/site-1/fabs/fab-a/telemetry/stream',
   ]);
-  // Command streams are lazy: no per-FAB SSE connection is opened until the
-  // first command is tracked. Then the stream is FAB-scoped + authorized.
-  expect(commandUrls).toEqual(['/api/v1/sites/site-1/commands/stream?fabId=fab-a']);
+  // P2-02: command streams are truly on-demand: no per-FAB SSE connection is
+  // opened until the FAB has command demand (reservation/active/held result).
+  // Tracking a command eagerly is demand, so exactly one FAB-scoped +
+  // authorized stream opens (never one per UI subscription or per workflow).
+  expect(commandUrls).toEqual([]);
   captured?.get('fab-a')?.registerAcceptedCommand('cmd-a');
   await waitFor(() => expect([...commandUrls].sort()).toEqual([
     '/api/v1/sites/site-1/commands/stream?fabId=fab-a',
@@ -233,8 +239,63 @@ it('does not hold idle FAB telemetry/command SSE connections on the workbench ro
   const view = render(<AppProviders runtime={runtimeWithSites()}><RegistryProbe /><WorkbenchApp /></AppProviders>);
   await waitFor(() => expect(captured?.size).toBe(1));
   await new Promise((resolve) => setTimeout(resolve, 50));
-  expect(urls).toEqual(['/api/v1/sites/site-1/commands/stream?fabId=fab-a']);
+  // P2-02: the workbench projects existing state only; no command activity and no
+  // telemetry consumer means no SSE connection is held for the idle FAB.
+  expect(urls).toEqual([]);
   view.unmount();
+});
+
+it('P2-02 assembles 32 FAB runtimes with zero command SSE streams until a FAB has demand', async () => {
+  const manyFabs = Array.from({ length: 32 }, (_value, index) => ({
+    fabId: 'fab-' + String(index + 1).padStart(2, '0'),
+    code: 'FAB-' + (index + 1),
+  }));
+  const manySites = [{ siteId: 'site-1', code: 'SITE-1', templateHash: 'h'.repeat(64), fabs: manyFabs }];
+  const commandUrls: string[] = [];
+  const closed: string[] = [];
+  class FakeEventSource {
+    onopen: (() => void) | null = null;
+    onmessage: ((event: { data: string }) => void) | null = null;
+    onerror: ((event: unknown) => void) | null = null;
+    constructor(readonly url: string) {
+      if (url.includes('/commands/stream')) commandUrls.push(url);
+    }
+    addEventListener() {}
+    removeEventListener() {}
+    close() { closed.push(this.url); }
+  }
+  vi.stubGlobal('EventSource', FakeEventSource);
+  // Keep authoritative recovery pending: this test is only about transport demand.
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+
+  const view = render(<AppProviders runtime={runtimeFor(manySites)}><RegistryProbe /></AppProviders>);
+  await waitFor(() => expect(captured?.size).toBe(32));
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  // 32 assembled FABs (and 32 idle runtimes) => no 32 command SSE connections.
+  expect(commandUrls).toEqual([]);
+
+  // Only the FAB with command demand opens exactly one stream.
+  captured?.get('fab-07')?.registerAcceptedCommand('cmd-07');
+  await waitFor(() => expect(commandUrls).toEqual([
+    '/api/v1/sites/site-1/commands/stream?fabId=fab-07',
+  ]));
+  // A second FAB adds its own single stream; the first is untouched.
+  captured?.get('fab-08')?.registerAcceptedCommand('cmd-08');
+  await waitFor(() => expect([...commandUrls].sort()).toEqual([
+    '/api/v1/sites/site-1/commands/stream?fabId=fab-07',
+    '/api/v1/sites/site-1/commands/stream?fabId=fab-08',
+  ]));
+  expect(commandUrls.filter((url) => url.includes('fabId=fab-07'))).toHaveLength(1);
+  expect(commandUrls.filter((url) => url.includes('fabId=fab-08'))).toHaveLength(1);
+
+  // Closing one FAB resource releases its stream only (multi-FAB isolation).
+  captured?.remove('fab-08');
+  await waitFor(() => expect(closed.filter((url) => url.includes('fabId=fab-08'))).toHaveLength(1));
+  expect(closed.some((url) => url.includes('fabId=fab-07'))).toBe(false);
+
+  // Unmount/dispose closes every remaining command stream.
+  view.unmount();
+  await waitFor(() => expect(commandUrls.every((url) => closed.includes(url))).toBe(true));
 });
 
 it('shows the configured FAB in the workbench without a redundant FAB selector', async () => {
@@ -336,7 +397,8 @@ it('keeps the production runtime degraded without EventSource', async () => {
 it('R4-06 keeps the pending command source explicitly display-only', () => {
   const source = createPendingCommandEventSource();
   expect(source.availability).toBe('unavailable');
-  expect(source.cursors).toEqual({});
+  // P1-01: the required field is a real zero, never an absent value.
+  expect(source.cursors).toEqual({ pendingAcknowledgements: 0 });
   expect(source.protocolDiagnostics).toEqual([]);
   // acknowledge/cover are deliberate no-ops: nothing was delivered or covered.
   expect(() => source.acknowledge({ fabId: 'fab-a', commandId: 'cmd-1', revision: 1, outcome: 'accepted', occurredAt: '2026-10-27T00:00:00Z' })).not.toThrow();

@@ -3,6 +3,7 @@ import * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import type {
   CommandConnectionStatus,
   CommandCoverAuthority,
+  CommandCoverResult,
   CommandCursor,
   CommandEventSource,
   CommandOutcome,
@@ -34,29 +35,53 @@ import { FabRuntime } from '@/runtime/fab-runtime';
 import { FabRuntimeFactory } from '@/runtime/fab-runtime-factory';
 import type { RuntimeHost } from '@/runtime/fab-runtime-host';
 
+/**
+ * Round 5.1 test doubles (P2-04). The doubles model the *protocol states* the
+ * runtime must react to (realtime vs authoritative channel, expired-unresolved,
+ * pending ACK ledger, cover results, connection lifecycle, revision/outcome
+ * conflicts) instead of hiding them behind always-successful behaviour. Ordered
+ * journal-position realism stays in the real transport tests
+ * (realtime-transport.test.ts / matrix-1-*.test.ts); these doubles let FabRuntime
+ * and bridge tests control the exact protocol state.
+ */
 export class FakeCommandWorkflow implements CommandWorkflow {
+  /** Events the actor projection actually advanced on (either channel). */
   readonly events: CommandResultEvent[] = [];
+  /** Every realtime-channel delivery attempt, including ignored ones. */
+  readonly realtimeEvents: CommandResultEvent[] = [];
+  /** Every authoritative-channel delivery attempt, including ignored ones. */
+  readonly authoritativeEvents: CommandResultEvent[] = [];
   readonly reconciled: string[] = [];
   disposed = false;
   private expired = false;
+  private revision = -1;
+  private outcome: CommandOutcome | 'pending' = 'pending';
+  private lastEventValue?: CommandResultEvent;
 
-  receive(event: CommandResultEvent): void {
-    this.events.push(event);
+  /**
+   * Realtime channel: strictly monotonic revisions only; an expired workflow can
+   * never be revived by a realtime frame regardless of its revision.
+   */
+  receiveRealtime(event: CommandResultEvent): void {
+    this.realtimeEvents.push(event);
+    if (this.expired) return;
+    if (!Number.isInteger(event.revision) || event.revision <= this.revision) return;
+    this.apply(event);
+  }
+
+  /**
+   * Authoritative channel: no revision rollback; equal revision is allowed so an
+   * authoritative record can resolve expired / correct a wrong local outcome.
+   */
+  receiveAuthoritative(event: CommandResultEvent): void {
+    this.authoritativeEvents.push(event);
+    if (!Number.isInteger(event.revision) || event.revision < this.revision) return;
     this.expired = false;
+    if (event.revision === this.revision && event.outcome === this.outcome) return;
+    this.apply(event);
   }
 
   markExpiredUnresolved(): void { this.expired = true; }
-
-  get projection() {
-    const event = this.events.reduce<CommandResultEvent | undefined>((latest, candidate) =>
-      latest === undefined || candidate.revision > latest.revision ? candidate : latest, undefined);
-    return {
-      state: this.expired ? 'expired' : event?.outcome ?? 'idle',
-      revision: event?.revision ?? -1,
-      outcome: event?.outcome ?? 'pending' as const,
-      recoveryDisposition: this.expired ? 'expired-unresolved' as const : 'tracked' as const,
-    };
-  }
 
   async reconcile(commandId: string): Promise<void> {
     this.reconciled.push(commandId);
@@ -64,6 +89,26 @@ export class FakeCommandWorkflow implements CommandWorkflow {
 
   dispose(): void {
     this.disposed = true;
+  }
+
+  get projection() {
+    return {
+      state: this.expired ? 'expired' : this.outcome === 'pending' ? 'idle' : this.outcome,
+      revision: this.revision,
+      outcome: this.outcome,
+      recoveryDisposition: this.expired ? 'expired-unresolved' as const : 'tracked' as const,
+    };
+  }
+
+  private apply(event: CommandResultEvent): void {
+    this.revision = event.revision;
+    this.outcome = event.outcome;
+    this.lastEventValue = event;
+    this.events.push(event);
+  }
+
+  get lastEvent(): CommandResultEvent | undefined {
+    return this.lastEventValue;
   }
 }
 
@@ -77,11 +122,17 @@ export class CountingCommandWorkflow implements CommandWorkflow {
 
   constructor(readonly fabId: string, readonly commandId: string) {}
 
-  receive(event: CommandResultEvent): void {
+  receiveRealtime(event: CommandResultEvent): void {
+    if (this.expired) return;
     if (event.revision <= this.revision) return;
-    this.revision = event.revision;
-    this.outcome = event.outcome;
+    this.apply(event);
+  }
+
+  receiveAuthoritative(event: CommandResultEvent): void {
+    if (event.revision < this.revision) return;
     this.expired = false;
+    if (event.revision === this.revision && event.outcome === this.outcome) return;
+    this.apply(event);
   }
 
   markExpiredUnresolved(): void { this.expired = true; }
@@ -100,6 +151,12 @@ export class CountingCommandWorkflow implements CommandWorkflow {
       recoveryDisposition: this.expired ? 'expired-unresolved' as const : 'tracked' as const,
     };
   }
+
+  private apply(event: CommandResultEvent): void {
+    this.revision = event.revision;
+    this.outcome = event.outcome;
+    this.events.push(event);
+  }
 }
 
 export class FakeWorkflowRegistry implements CommandWorkflowRegistry {
@@ -113,16 +170,50 @@ export class FakeWorkflowRegistry implements CommandWorkflowRegistry {
     this.workflows.set(FakeWorkflowRegistry.key(fabId, commandId), workflow);
   }
 
+  unregister(fabId: string, commandId: string): void {
+    this.workflows.delete(FakeWorkflowRegistry.key(fabId, commandId));
+  }
+
   get(fabId: string, commandId: string): CommandWorkflow | undefined {
     return this.workflows.get(FakeWorkflowRegistry.key(fabId, commandId));
   }
 }
 
+/** Placeholder-position conflict record (fake only; the queue owns the real type). */
+interface FakeLedgerEntry {
+  readonly cursor: CommandCursor;
+  readonly event: CommandResultEvent;
+  status: 'pending' | 'applied' | 'covered';
+}
+
+/** Controlled authoritative-cover outcome for the fake source. */
+export type FakeCoverResult = 'covered' | 'insufficient';
+
 /**
  * Effect-Stream command source for tests. Every signal is a real Stream fed by a
  * PubSub; observer counters are incremented by Stream lifecycle effects so tests
- * can assert that a disposed runtime detached all stream consumers. The dirty
- * signal is a first-class channel (bounded-transport overflow contract).
+ * can assert that a disposed runtime detached all stream consumers.
+ *
+ * Round 5.1 behaviour:
+ * - connectionStatus is a *stateful, controllable* lifecycle: it replays the
+ *   current status to a new subscriber (like the real transport does for its
+ *   first subscriber) and changes only through setConnectionStatus()/openStream()/
+ *   failTransport(). It never announces an implicit 'open'.
+ * - the ACK ledger is real: delivered frames become pending entries, acknowledge()
+ *   only marks the matching identity applied, and the acknowledged cursor advances
+ *   only over a contiguous applied|covered prefix. pendingAcknowledgements is the
+ *   live ledger length (required contract field).
+ * - cover() never modifies delivered (P1-04). A covered cover marks entries at or
+ *   before the watermark covered and advances acknowledged; an insufficient cover
+ *   changes nothing. coverNever advances delivered.
+ * - deliverUnprocessed(event, cursor?) records a frame that reached the bounded
+ *   consumer queue but was not yet consumed/applied (the post-cover pending-ACK
+ *   race); emit() publishes it to the commandResults stream.
+ * - the fake SSE has no server-assigned journal positions: unless a test supplies
+ *   an explicit cursor, a delivered frame is recorded at the current safe
+ *   acknowledged position (so a List snapshot at or above that position covers
+ *   it). Ordered-position realism is owned by the real transport tests, per the
+ *   Round 5.1 fake boundary (P2-04 §10.5).
  */
 export class FakeCommandEventSource implements CommandEventSource {
   private readonly resultsBus = Effect.runSync(PubSub.unbounded<CommandResultEvent>());
@@ -137,9 +228,13 @@ export class FakeCommandEventSource implements CommandEventSource {
   private failureCount = 0;
   private statusCount = 0;
   private dirtyCount = 0;
+  private connectionStatusValue: CommandConnectionStatus = 'closed';
   private observedCursor?: CommandCursor;
   private deliveredCursor?: CommandCursor;
   private acknowledgedCursorValue?: CommandCursor;
+  private readonly ledger: FakeLedgerEntry[] = [];
+  private ledgerEpochValue?: string;
+  private coverResultValue: FakeCoverResult = 'covered';
 
   private countStream<A>(bus: PubSub.PubSub<A>, counters: { increment: () => void; decrement: () => void }): Stream.Stream<A> {
     return Stream.fromPubSub(bus).pipe(
@@ -164,30 +259,60 @@ export class FakeCommandEventSource implements CommandEventSource {
     increment: () => { this.failureCount += 1; },
     decrement: () => { this.failureCount = Math.max(0, this.failureCount - 1); },
   });
-  readonly connectionStatus = Stream.concat(Stream.succeed<CommandConnectionStatus>('open'), this.countStream(this.statusBus, {
-    increment: () => { this.statusCount += 1; },
-    decrement: () => { this.statusCount = Math.max(0, this.statusCount - 1); },
-  }));
+  /**
+   * Stateful lifecycle stream: a new subscriber first observes the current status
+   * (exactly like the real transport's first-subscriber replay), then changes.
+   * There is no unconditional 'open' announcement (P2-04 §10.1).
+   */
+  readonly connectionStatus: Stream.Stream<CommandConnectionStatus> = Stream.concat(
+    Stream.suspend(() => Stream.succeed(this.connectionStatusValue)),
+    this.countStream(this.statusBus, {
+      increment: () => { this.statusCount += 1; },
+      decrement: () => { this.statusCount = Math.max(0, this.statusCount - 1); },
+    }),
+  );
   readonly dirty = this.countStream(this.dirtyBus, {
     increment: () => { this.dirtyCount += 1; },
     decrement: () => { this.dirtyCount = Math.max(0, this.dirtyCount - 1); },
   });
 
-  /** ADR-010 §6.2 test double: the consumer reports an applied event. The real
-   * ordered-ledger prefix enforcement is covered against the SSE transport; this
-   * fake only tracks the observable cursor for FabRuntime-level tests. */
+  /** Record that the actor applied one delivered event; drains the safe prefix. */
   acknowledge(event: CommandResultEvent): void {
-    this.acknowledgedCursorValue = advanceFakeCursor(this.acknowledgedCursorValue, {
-      epoch: 'epoch-1',
-      sequence: event.revision,
-    });
+    const entry = this.ledger.find((candidate) =>
+      candidate.status === 'pending' &&
+      candidate.event.fabId === event.fabId &&
+      candidate.event.commandId === event.commandId &&
+      candidate.event.revision === event.revision);
+    if (!entry) return;
+    entry.status = 'applied';
+    this.drainAcknowledgedPrefix();
   }
 
-  /** ADR-010 §6.2: authoritative recovery safe watermark from FabRuntime. */
-  cover(cursor: CommandCursor, authority: CommandCoverAuthority = 'journal') {
-    this.acknowledgedCursorValue = advanceFakeCursor(this.acknowledgedCursorValue, cursor);
-    this.deliveredCursor = advanceFakeCursor(this.deliveredCursor, cursor);
-    return { status: 'covered' as const, cursor, authority, latchReleased: false };
+  /**
+   * Authoritative cover. Only marks ledger entries / advances acknowledged (and
+   * replaces the ledger epoch on an authoritative cross-epoch List cover). Never
+   * modifies delivered or observed (P1-04).
+   */
+  cover(cursor: CommandCursor, authority: CommandCoverAuthority = 'journal', _lossBarrier?: number): CommandCoverResult {
+    if (this.coverResultValue === 'insufficient' || !isValidCursor(cursor)) {
+      return { status: 'insufficient', cursor: { ...cursor }, authority, latchReleased: false, reason: 'fake cover is configured insufficient', recovery: 'list' };
+    }
+    const previousEpoch = this.acknowledgedCursorValue?.epoch ?? this.ledgerEpochValue;
+    const epochReplaced = previousEpoch !== undefined && previousEpoch !== cursor.epoch;
+    if (epochReplaced && authority !== 'list') {
+      return { status: 'insufficient', cursor: { ...cursor }, authority, latchReleased: false, reason: 'journal cover cannot replace an epoch', recovery: 'list' };
+    }
+    if (epochReplaced) {
+      this.ledger.length = 0;
+    } else {
+      for (const entry of this.ledger) {
+        if (entry.cursor.epoch === cursor.epoch && entry.cursor.sequence <= cursor.sequence) entry.status = 'covered';
+      }
+    }
+    this.ledgerEpochValue = cursor.epoch;
+    this.acknowledgedCursorValue = advanceSafeAcknowledged(this.acknowledgedCursorValue, cursor);
+    this.drainAcknowledgedPrefix();
+    return { status: 'covered', cursor: { ...cursor }, authority, latchReleased: false };
   }
 
   readonly lossGeneration = 0;
@@ -203,12 +328,29 @@ export class FakeCommandEventSource implements CommandEventSource {
       ...(this.observedCursor ? { observed: this.observedCursor } : {}),
       ...(this.deliveredCursor ? { delivered: this.deliveredCursor } : {}),
       ...(this.acknowledgedCursorValue ? { acknowledged: this.acknowledgedCursorValue } : {}),
+      pendingAcknowledgements: this.ledger.length,
     };
+  }
+
+  get pendingAcknowledgementCount(): number {
+    return this.ledger.length;
+  }
+
+  /** Test seam: control the next cover() outcome (P2-04 §10.2). */
+  setCoverResult(result: FakeCoverResult): void {
+    this.coverResultValue = result;
+  }
+
+  /** Test seam: drive the connection lifecycle explicitly (P2-04 §10.1). */
+  setConnectionStatus(status: CommandConnectionStatus): void {
+    this.connectionStatusValue = status;
+    PubSub.publishUnsafe(this.statusBus, status);
   }
 
   /** Test seam: force the recovery start cursor (e.g. a reconnect after a gap). */
   setAcknowledgedCursor(cursor: CommandCursor | undefined): void {
     this.acknowledgedCursorValue = cursor;
+    this.ledger.length = 0;
   }
 
   reconnect(): void { PubSub.publishUnsafe(this.reconnectBus, undefined); }
@@ -218,11 +360,11 @@ export class FakeCommandEventSource implements CommandEventSource {
 
   /** Simulate an EventSource transport interruption (never a command outcome). */
   failTransport(failure: CommandTransportFailure = { message: 'transport failure' }): void {
-    PubSub.publishUnsafe(this.statusBus, 'reconnecting');
+    this.setConnectionStatus('reconnecting');
     PubSub.publishUnsafe(this.failureBus, failure);
   }
 
-  openStream(): void { PubSub.publishUnsafe(this.statusBus, 'open'); }
+  openStream(): void { this.setConnectionStatus('open'); }
 
   /** Bounded-bus overflow / stale-generation / closed-connection signal. */
   emitDirty(dirty: CommandStreamDirty = { reason: 'overflow', droppedCount: 1 }): void {
@@ -236,17 +378,61 @@ export class FakeCommandEventSource implements CommandEventSource {
   get statusObservers(): number { return this.statusCount; }
   get dirtyObservers(): number { return this.dirtyCount; }
 
-  emit(event: CommandResultEvent): void {
-    const cursor: CommandCursor = { epoch: 'epoch-1', sequence: event.revision };
-    this.observedCursor = advanceFakeCursor(this.observedCursor, cursor);
-    this.deliveredCursor = advanceFakeCursor(this.deliveredCursor, cursor);
+  /**
+   * Deliver one frame through the bounded consumer bus. An explicit cursor can be
+   * supplied to model a real journal position; otherwise the frame is recorded at
+   * the current safe acknowledged position (epoch-1:0 initially).
+   */
+  emit(event: CommandResultEvent, cursor?: CommandCursor): CommandCursor {
+    const at = this.deliver(event, cursor);
     PubSub.publishUnsafe(this.resultsBus, event);
+    return at;
+  }
+
+  /**
+   * Record a delivered-but-not-yet-consumed frame: the transport/ledger has it as
+   * pending, but the bridge has not seen/applied it (the exact post-cover race the
+   * runtime barrier must reject).
+   */
+  deliverUnprocessed(event: CommandResultEvent, cursor?: CommandCursor): CommandCursor {
+    return this.deliver(event, cursor);
   }
 
   /** Ends the live command stream; the bridge stops consuming it. */
   complete(): void {
     Effect.runSync(PubSub.shutdown(this.resultsBus));
   }
+
+  private deliver(event: CommandResultEvent, cursor?: CommandCursor): CommandCursor {
+    const at = cursor ?? this.defaultCursor();
+    this.observedCursor = advanceFakeCursor(this.observedCursor, at);
+    this.deliveredCursor = advanceFakeCursor(this.deliveredCursor, at);
+    this.ledger.push({ cursor: at, event, status: 'pending' });
+    return at;
+  }
+
+  /** Default delivered position: the current safe acknowledged position in this epoch. */
+  private defaultCursor(): CommandCursor {
+    const epoch = this.ledgerEpochValue ?? this.acknowledgedCursorValue?.epoch ?? 'epoch-1';
+    const sequence = this.acknowledgedCursorValue !== undefined && this.acknowledgedCursorValue.epoch === epoch
+      ? this.acknowledgedCursorValue.sequence
+      : 0;
+    return { epoch, sequence };
+  }
+
+  /** Advance acknowledged only over a contiguous applied|covered ledger prefix. */
+  private drainAcknowledgedPrefix(): void {
+    while (this.ledger.length > 0 && this.ledger[0].status !== 'pending') {
+      const head = this.ledger.shift()!;
+      this.acknowledgedCursorValue = advanceSafeAcknowledged(this.acknowledgedCursorValue, head.cursor);
+    }
+    if (this.ledger.length === 0) this.ledgerEpochValue = undefined;
+  }
+}
+
+function isValidCursor(cursor: CommandCursor): boolean {
+  return typeof cursor.epoch === 'string' && cursor.epoch.length > 0 &&
+    Number.isSafeInteger(cursor.sequence) && cursor.sequence >= 0;
 }
 
 export function commandResult(
@@ -430,11 +616,20 @@ export interface TestFabOptions {
   readonly reconcileTimeoutMs?: number;
   /** R4-08: active command admission bound for tests that intentionally exceed the default. */
   readonly maxActiveCommands?: number;
+  /**
+   * Connection lifecycle fixture for a FakeCommandEventSource (default 'open': a
+   * test FAB starts connected). Pass 'closed'/'failed'/'reconnecting' to model an
+   * idle/degraded runtime; the fake itself never announces 'open' implicitly.
+   */
+  readonly connectionStatus?: CommandConnectionStatus;
 }
 
 /** Build one FabRuntime on an isolated test runtime; call dispose() in afterEach. */
 export function createFabRuntime(harness: CommandTestRuntime, options: TestFabOptions = {}): FabRuntime {
   const fallbackSource = options.source ?? new FakeCommandEventSource();
+  if (fallbackSource instanceof FakeCommandEventSource) {
+    fallbackSource.setConnectionStatus(options.connectionStatus ?? 'open');
+  }
   const factory = new FabRuntimeFactory({
     runtime: harness.host,
     parentScope: harness.rootScope,
@@ -503,4 +698,10 @@ function advanceFakeCursor(current: CommandCursor | undefined, candidate: Comman
   if (!current) return candidate;
   if (current.epoch === candidate.epoch) return candidate.sequence >= current.sequence ? candidate : current;
   return candidate;
+}
+
+function advanceSafeAcknowledged(current: CommandCursor | undefined, candidate: CommandCursor): CommandCursor {
+  if (!current) return candidate;
+  if (current.epoch !== candidate.epoch) return current;
+  return candidate.sequence > current.sequence ? candidate : current;
 }

@@ -8,6 +8,8 @@ export interface CommandRecoveryOptions {
   readonly maxPerCommand?: number;
   /** Max held revisions across all commands. */
   readonly maxTotal?: number;
+  /** Max retained unresolved same-revision outcome conflicts (Round 5.1 / P1-02). */
+  readonly maxConflicts?: number;
   /**
    * Called for every capacity eviction. FabRuntime turns this observable
    * diagnostic into a coalesced authoritative reconciliation because a dropped
@@ -21,6 +23,37 @@ export interface CommandRecoveryEviction {
   readonly reason: 'per-command' | 'global';
   readonly terminal: boolean;
   readonly droppedTotal: number;
+}
+
+/**
+ * Result of offering an event to the bounded recovery queue (Round 5.1 / P1-02).
+ * `conflict` means the queue already holds the same command+revision with a
+ * different outcome: the revision invariant was violated on the wire and only an
+ * authoritative observation may resolve it.
+ */
+export type CommandRecoveryHoldResult = 'inserted' | 'duplicate' | 'conflict';
+
+/**
+ * Bounded record of one unresolved same-revision outcome conflict. This is a
+ * protocol diagnostic, never an event to apply: it is excluded from
+ * snapshot()/drain()/pendingFor() and is never delivered by flushRecovery(). It
+ * only leaves the queue when an authoritative observation covers that revision
+ * (`resolveAuthoritative`).
+ */
+export interface CommandRecoveryConflict {
+  readonly fabId: string;
+  readonly commandId: string;
+  readonly revision: number;
+  /** The conflicting (later) event whose outcome disagreed with the record. */
+  readonly event: CommandResultEvent;
+  /**
+   * The event already held for that same revision when the conflict arrived, if
+   * it was still queued. Undefined when the earlier event had already been
+   * applied/released (only the correlation watermark remembers it).
+   */
+  readonly held?: CommandResultEvent;
+  /** Global arrival sequence of the conflict within this queue (diagnostics/order). */
+  readonly seq: number;
 }
 
 const TERMINAL_OUTCOMES = new Set(['succeeded', 'failed', 'cancelled']);
@@ -47,15 +80,25 @@ interface HeldEvent {
  *
  * R4-03: a retry pass (snapshot/release) reads the queue without draining it, so a
  * failed/rejected re-application stays held instead of being lost on the floor.
+ *
+ * Round 5.1 / P1-02: the queue also owns the bounded set of unresolved same-revision
+ * outcome *conflicts* reported by the correlation layer (including conflicts whose
+ * earlier event was already applied). A conflict is never delivered or applied; it
+ * participates in `size`/`pendingCount` so Recovery can never become Healthy while
+ * an unresolved event conflict exists, and it is cleared only by an authoritative
+ * observation covering the revision.
  */
 export class CommandEventRecovery {
   private readonly pending = new Map<string, HeldEvent[]>();
   /** Every held event in true global arrival order (the authoritative FIFO). */
   private readonly arrivals: HeldEvent[] = [];
+  /** Bounded unresolved same-revision outcome conflicts; never part of the FIFO. */
+  private readonly conflictRecords: CommandRecoveryConflict[] = [];
   private nextSeq = 1;
   private total = 0;
   private readonly maxPerCommand: number;
   private readonly maxTotal: number;
+  private readonly maxConflicts: number;
   private readonly onEvict?: (eviction: CommandRecoveryEviction) => void;
   private dropped = 0;
   private readonly evictions: CommandRecoveryEviction[] = [];
@@ -64,27 +107,72 @@ export class CommandEventRecovery {
   constructor(options: CommandRecoveryOptions = {}) {
     this.maxPerCommand = resolveIntegerOption('recovery.maxPerCommand', options.maxPerCommand, 32, { min: 1 });
     this.maxTotal = resolveIntegerOption('recovery.maxTotal', options.maxTotal, 256, { min: 1 });
+    this.maxConflicts = resolveIntegerOption('recovery.maxConflicts', options.maxConflicts, 64, { min: 1 });
     this.onEvict = options.onEvict;
   }
 
-  hold(event: CommandResultEvent): boolean {
+  /**
+   * Hold one realtime/queued event. A duplicate revision with the same outcome is
+   * a no-op; a duplicate revision with a *different* outcome is a conflict: it is
+   * reported but neither inserted nor allowed to overwrite the first held event.
+   */
+  hold(event: CommandResultEvent): CommandRecoveryHoldResult {
     const key = keyOf(event);
     let queue = this.pending.get(key);
     if (!queue) {
       queue = [];
       this.pending.set(key, queue);
     }
-    // Keep the newest revisions for one command: a duplicate/older event cannot
-    // displace the current pending head unnecessarily. The replacement keeps the
-    // total unchanged and takes the newest global arrival position.
-    if (queue.some((held) => held.event.revision === event.revision)) return true;
+    // Same revision is never re-queued: identical outcome is a duplicate, a
+    // different outcome is an unresolved conflict (only authority can resolve it).
+    const existing = queue.find((held) => held.event.revision === event.revision);
+    if (existing !== undefined) {
+      return existing.event.outcome === event.outcome ? 'duplicate' : 'conflict';
+    }
     const held: HeldEvent = { event, seq: this.nextSeq++ };
     queue.push(held);
     this.arrivals.push(held);
     this.total += 1;
     while (queue.length > this.maxPerCommand) this.evictOne(queue, key, 'per-command');
     while (this.total > this.maxTotal) this.evictGlobal();
-    return this.total > 0;
+    return 'inserted';
+  }
+
+  /**
+   * Record an unresolved same-revision outcome conflict reported by correlation.
+   * This is deliberately NOT a held event: it can never be applied, so it is
+   * excluded from snapshot/drain/pendingFor and from flushRecovery(). The record
+   * is deduplicated per (command, revision, outcome) so a repeated conflicting
+   * frame cannot grow the queue, and the set is bounded by `maxConflicts` (the
+   * oldest unresolved conflict is the one that is dropped).
+   */
+  holdConflict(event: CommandResultEvent): CommandRecoveryConflict {
+    const existing = this.conflictRecords.find(
+      (conflict) =>
+        conflict.fabId === event.fabId &&
+        conflict.commandId === event.commandId &&
+        conflict.revision === event.revision &&
+        conflict.event.outcome === event.outcome,
+    );
+    if (existing !== undefined) return existing;
+    const queue = this.pending.get(keyOf(event));
+    const held = queue?.find((entry) => entry.event.revision === event.revision)?.event;
+    const conflict: CommandRecoveryConflict = {
+      fabId: event.fabId,
+      commandId: event.commandId,
+      revision: event.revision,
+      event,
+      ...(held !== undefined ? { held } : {}),
+      seq: this.nextSeq++,
+    };
+    this.conflictRecords.push(conflict);
+    while (this.conflictRecords.length > this.maxConflicts) {
+      this.conflictRecords.shift();
+      // A dropped conflict record is lost resolution bookkeeping: keep the loss
+      // accounting monotonic and observable like any other dropped recovery entry.
+      this.dropped += 1;
+    }
+    return conflict;
   }
 
   pendingFor(fabId: string, commandId: string): readonly CommandResultEvent[] {
@@ -125,6 +213,28 @@ export class CommandEventRecovery {
   }
 
   /**
+   * Authoritative recovery resolved/corrected a command revision: drop every
+   * recorded conflict for that (fabId, commandId) at or below the authoritative
+   * revision (a higher-revision conflict is still unresolved). Returns the number
+   * of removed conflict records.
+   */
+  resolveAuthoritative(event: CommandResultEvent): number {
+    let removed = 0;
+    for (let index = this.conflictRecords.length - 1; index >= 0; index -= 1) {
+      const conflict = this.conflictRecords[index];
+      if (
+        conflict.fabId === event.fabId &&
+        conflict.commandId === event.commandId &&
+        conflict.revision <= event.revision
+      ) {
+        this.conflictRecords.splice(index, 1);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
+  /**
    * Authoritative status query; a returned result is queued for the next retry
    * pass. The gateway returns a native Effect (ADR-011 §2.1): the caller owns the
    * approved execution boundary and passes it explicitly.
@@ -143,6 +253,7 @@ export class CommandEventRecovery {
   clear(): void {
     this.pending.clear();
     this.arrivals.length = 0;
+    this.conflictRecords.length = 0;
     this.total = 0;
   }
 
@@ -150,8 +261,19 @@ export class CommandEventRecovery {
     this.clear();
   }
 
+  /** Normal held events plus unresolved conflict records (the recovery barrier uses this). */
   get size(): number {
-    return this.total;
+    return this.total + this.conflictRecords.length;
+  }
+
+  /** Unresolved same-revision outcome conflicts currently retained (Round 5.1 / P1-02). */
+  get conflictCount(): number {
+    return this.conflictRecords.length;
+  }
+
+  /** Bounded, oldest-first unresolved conflicts (diagnostics; never applied). */
+  get conflicts(): readonly CommandRecoveryConflict[] {
+    return this.conflictRecords;
   }
 
   get droppedCount(): number {

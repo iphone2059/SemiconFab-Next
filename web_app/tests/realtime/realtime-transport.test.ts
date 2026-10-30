@@ -1,6 +1,7 @@
-import { Effect, Exit, Scope } from 'effect';
-import { afterEach, expect, it, vi } from 'vitest';
+import { Effect, Exit, Fiber, Scope } from 'effect';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandConfigurationError } from '@/contracts/command-config';
+import { createPendingCommandEventSource } from '@/runtime/command-sources';
 import { COMMAND_RESULT_TOPIC, TELEMETRY_TOPIC } from '@/realtime/message-decoder';
 import {
   createSseCommandEventSource,
@@ -316,17 +317,23 @@ it('reports unavailable and never opens when the environment has no EventSource 
   await flush();
   // Availability is knowable before the lazy connection opens.
   expect(source.availability).toBe('unavailable');
+  // P2-01: a source that can never connect starts (and reports) 'failed' without
+  // waiting for a commandResults consumer, exactly like the pending source.
+  expect(statuses).toEqual(['failed']);
   // The first consumer still receives the permanent-unavailability signals.
   runCommandStream(harness.host, scope, source.commandResults, () => {});
   await flush(5);
   expect(source.availability).toBe('unavailable');
   expect(dirty.some((signal) => signal.reason === 'transport-unavailable')).toBe(true);
-  expect(statuses).toContain('failed');
+  expect(statuses).toEqual(['failed']);
   expect(failures.some((failure) => /unavailable/.test(failure.message))).toBe(true);
   expect(source.protocolDiagnostics.some((entry) => /unavailable/.test(entry.reason))).toBe(true);
   expect(source.cursors.acknowledged).toBeUndefined();
+  expect(source.cursors.pendingAcknowledgements).toBe(0);
   harness.host.runSync(Scope.close(scope, Exit.void));
   await flush();
+  // A deliberate close must never downgrade the permanent 'failed' to 'closed'.
+  expect(statuses).toEqual(['failed']);
 });
 
 it('becomes permanently unavailable after bounded failed open attempts and stops retrying (R4-06a)', async () => {
@@ -348,15 +355,32 @@ it('becomes permanently unavailable after bounded failed open attempts and stops
   runCommandStream(harness.host, scope, source.commandResults, () => {});
   await expect.poll(() => attempts, { timeout: 2_000 }).toBe(3);
   await expect.poll(() => source.availability, { timeout: 2_000 }).toBe('unavailable');
+  await flush(5);
   expect(dirty.some((signal) => signal.reason === 'transport-unavailable')).toBe(true);
-  expect(statuses).toContain('failed');
   expect(failures.some((failure) => /could not be opened/.test(failure.message))).toBe(true);
+  // P2-01: each transient attempt is 'reconnecting' (never 'failed'), only the
+  // exhausted budget is the permanent 'failed', published exactly once.
+  expect(statuses).toEqual([
+    'closed',
+    'connecting',
+    'reconnecting',
+    'connecting',
+    'reconnecting',
+    'connecting',
+    'failed',
+  ]);
+  expect(statuses.filter((status) => status === 'failed')).toHaveLength(1);
+  expect(statuses).not.toContain('open');
   // Once permanently unavailable, no further open attempt is made (no loop).
   const attemptsAtUnavailable = attempts;
   await new Promise((resolve) => setTimeout(resolve, 30));
   expect(attempts).toBe(attemptsAtUnavailable);
   harness.host.runSync(Scope.close(scope, Exit.void));
   await flush();
+  // Ordinary close must not downgrade the permanent failure: the only 'closed' is
+  // the initial idle replay, and nothing follows 'failed'.
+  expect(statuses.filter((status) => status === 'closed')).toHaveLength(1);
+  expect(statuses.at(-1)).toBe('failed');
 });
 
 it('retries a connect timeout through the bounded reconnect path, then reports unavailable (R4-06a)', async () => {
@@ -366,19 +390,26 @@ it('retries a connect timeout through the bounded reconnect path, then reports u
     maxConnectAttempts: 2,
   });
   const dirty: Array<{ reason: string }> = [];
+  const statuses: string[] = [];
   runCommandStream(harness.host, scope, source.dirty!, (signal) => dirty.push(signal));
+  runCommandStream(harness.host, scope, source.connectionStatus!, (status) => statuses.push(status));
   runCommandStream(harness.host, scope, source.commandResults, () => {});
   await flush();
   expect(sources).toHaveLength(1);
-  // The first attempt times out and is retried (not silently dropped).
+  // The first attempt times out and is retried (not silently dropped); a connect
+  // timeout is a transient attempt failure ('reconnecting'), never 'failed'.
   await expect.poll(() => source.availability, { timeout: 2_000 }).toBe('unavailable');
+  await flush(5);
   expect(sources).toHaveLength(2);
   expect(dirty.some((signal) => signal.reason === 'transport-unavailable')).toBe(true);
+  expect(statuses).toEqual(['closed', 'connecting', 'reconnecting', 'connecting', 'failed']);
+  expect(statuses).not.toContain('open');
   const createdAtUnavailable = sources.length;
   await new Promise((resolve) => setTimeout(resolve, 30));
   expect(sources).toHaveLength(createdAtUnavailable);
   harness.host.runSync(Scope.close(scope, Exit.void));
   await flush();
+  expect(statuses.at(-1)).toBe('failed');
 });
 
 it('strictly validates transport capacity/timeout options at construction (R4-07)', () => {
@@ -495,13 +526,18 @@ it('retains the previous state for entities missing from a later frame instead o
 
 it('surfaces connection status and transport failures without fabricating command outcomes', async () => {
   const { harness, scope, sources, source } = commandTransport();
+  // The lifecycle observer outlives the transport Scope so the close transition
+  // itself is observable (the transport consumer fibers are interrupted by close).
+  const statusScope = Scope.makeUnsafe();
   const failures: unknown[] = [];
   const statuses: string[] = [];
   runCommandStream(harness.host, scope, source.transportFailures!, (failure) => failures.push(failure));
-  runCommandStream(harness.host, scope, source.connectionStatus!, (status) => statuses.push(status));
+  runCommandStream(harness.host, statusScope, source.connectionStatus!, (status) => statuses.push(status));
   runCommandStream(harness.host, scope, source.commandResults, () => {});
   await flush();
-  expect(statuses).toEqual(['connecting']);
+  // P2-01: the first status subscriber observes the idle lifecycle ('closed');
+  // the first commandResults consumer then starts an attempt ('connecting').
+  expect(statuses).toEqual(['closed', 'connecting']);
   sources[0].onopen?.();
   await flush();
   expect(statuses.at(-1)).toBe('open');
@@ -509,10 +545,164 @@ it('surfaces connection status and transport failures without fabricating comman
   await flush();
   // A transport failure is an observable signal and triggers the owned reconnect
   // path (one explicit connection at a time), never a command outcome.
-  expect(statuses).toContain('reconnecting');
+  expect(statuses.at(-1)).toBe('reconnecting');
   expect(failures).toHaveLength(1);
   expect(failures[0]).toMatchObject({ message: 'command stream transport error' });
+  // Scope close is a deliberate close: it must report 'closed', never 'open'.
   harness.host.runSync(Scope.close(scope, Exit.void));
   await flush();
   expect(sources[0].closed).toBe(true);
+  expect(statuses.at(-1)).toBe('closed');
+  harness.host.runSync(Scope.close(statusScope, Exit.void));
 });
+describe('Round 5.1 / P2-01 command connection lifecycle', () => {
+  it('starts closed, publishes connecting before the connection attempt and open on onopen', async () => {
+    const { harness, scope, sources, source } = commandTransport();
+    const statuses: string[] = [];
+    runCommandStream(harness.host, scope, source.connectionStatus!, (status) => statuses.push(status));
+    await flush();
+    // A transport that has not opened yet is deliberately idle ('closed'), not
+    // 'connecting' and never 'failed'.
+    expect(statuses).toEqual(['closed']);
+
+    runCommandStream(harness.host, scope, source.commandResults, () => {});
+    await flush();
+    expect(sources).toHaveLength(1);
+    // 'connecting' is published while the attempt is in progress and before onopen.
+    expect(statuses).toEqual(['closed', 'connecting']);
+
+    sources[0].onopen?.();
+    await flush();
+    expect(statuses).toEqual(['closed', 'connecting', 'open']);
+  });
+
+  it('treats a transient factory failure as reconnecting, retries and then opens', async () => {
+    const created: FakeEventSource[] = [];
+    let attempts = 0;
+    const { harness, scope, source } = commandTransport({
+      eventSourceFactory: (url) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('factory boom');
+        const fake = new FakeEventSource(url);
+        created.push(fake);
+        return fake;
+      },
+      reconnectDelayMs: 5,
+      maxConnectAttempts: 3,
+    });
+    const statuses: string[] = [];
+    const failures: Array<{ message: string }> = [];
+    runCommandStream(harness.host, scope, source.connectionStatus!, (status) => statuses.push(status));
+    runCommandStream(harness.host, scope, source.transportFailures!, (failure) => failures.push(failure as { message: string }));
+    runCommandStream(harness.host, scope, source.commandResults, () => {});
+    await expect.poll(() => created.length, { timeout: 2_000 }).toBe(1);
+    await flush(5);
+    // A transient attempt failure is 'reconnecting' (a retry is scheduled), never
+    // the permanent 'failed'; the retry publishes its own 'connecting'.
+    expect(statuses).toEqual(['closed', 'connecting', 'reconnecting', 'connecting']);
+    expect(statuses).not.toContain('failed');
+    expect(failures.some((failure) => failure.message === 'command stream connection failed')).toBe(true);
+
+    created[0].onopen?.();
+    await flush();
+    expect(statuses.at(-1)).toBe('open');
+    expect(statuses).not.toContain('failed');
+  });
+
+  it('publishes reconnecting on an interruption and connecting/open when the retry succeeds', async () => {
+    const { harness, scope, sources, source } = commandTransport({ reconnectDelayMs: 5, maxConnectAttempts: 3 });
+    const statuses: string[] = [];
+    runCommandStream(harness.host, scope, source.connectionStatus!, (status) => statuses.push(status));
+    runCommandStream(harness.host, scope, source.commandResults, () => {});
+    await flush();
+    sources[0].onopen?.();
+    await flush();
+    expect(statuses).toEqual(['closed', 'connecting', 'open']);
+
+    sources[0].onerror?.({ message: 'network down' });
+    await flush();
+    expect(statuses).toEqual(['closed', 'connecting', 'open', 'reconnecting']);
+    expect(sources[0].closed).toBe(true);
+
+    await expect.poll(() => sources.length, { timeout: 2_000 }).toBe(2);
+    await flush(5);
+    expect(statuses).toEqual(['closed', 'connecting', 'open', 'reconnecting', 'connecting']);
+    sources[1].onopen?.();
+    await flush();
+    expect(statuses).toEqual(['closed', 'connecting', 'open', 'reconnecting', 'connecting', 'open']);
+  });
+
+  it('closes on the last commandResults consumer and re-opens for a new subscriber', async () => {
+    const { harness, scope, sources, source } = commandTransport();
+    const statuses: string[] = [];
+    runCommandStream(harness.host, scope, source.connectionStatus!, (status) => statuses.push(status));
+    const firstConsumer = runCommandStream(harness.host, scope, source.commandResults, () => {});
+    await flush();
+    sources[0].onopen?.();
+    await flush();
+    expect(statuses).toEqual(['closed', 'connecting', 'open']);
+
+    // The last consumer leaves: the owned connection closes and the lifecycle is
+    // 'closed' (normal idle), never a forged 'open'/'failed'.
+    harness.host.runSync(Fiber.interrupt(firstConsumer));
+    await flush();
+    expect(sources).toHaveLength(1);
+    expect(sources[0].closed).toBe(true);
+    expect(statuses).toEqual(['closed', 'connecting', 'open', 'closed']);
+
+    // A new consumer establishes exactly one new connection: connecting -> open.
+    const secondConsumer = runCommandStream(harness.host, scope, source.commandResults, () => {});
+    await flush();
+    expect(sources).toHaveLength(2);
+    expect(statuses.at(-1)).toBe('connecting');
+    sources[1].onopen?.();
+    await flush();
+    expect(statuses).toEqual(['closed', 'connecting', 'open', 'closed', 'connecting', 'open']);
+    harness.host.runSync(Fiber.interrupt(secondConsumer));
+  });
+
+  it('scope finalizer publishes closed and never forges open', async () => {
+    const { harness, scope, sources, source } = commandTransport();
+    // Keep the lifecycle observer alive past the transport Scope close so the
+    // finalizer transition is observable.
+    const statusScope = Scope.makeUnsafe();
+    const statuses: string[] = [];
+    runCommandStream(harness.host, statusScope, source.connectionStatus!, (status) => statuses.push(status));
+    runCommandStream(harness.host, scope, source.commandResults, () => {});
+    await flush();
+    sources[0].onopen?.();
+    await flush();
+    harness.host.runSync(Scope.close(scope, Exit.void));
+    await flush();
+    expect(sources[0].closed).toBe(true);
+    expect(statuses.at(-1)).toBe('closed');
+    expect(statuses).not.toContain('failed');
+    harness.host.runSync(Scope.close(statusScope, Exit.void));
+  });
+
+  it('reports the pending command source as failed with a real zero pending-ACK count', async () => {
+    const runtime = createCommandTestRuntime();
+    const scope = Scope.makeUnsafe();
+    try {
+      const pending = createPendingCommandEventSource();
+      const statuses: string[] = [];
+      runCommandStream(runtime.host, scope, pending.connectionStatus, (status) => statuses.push(status));
+      await flush();
+      // Same permanent meaning as a transport with no EventSource factory: 'failed',
+      // never the idle 'closed' and never 'open'.
+      expect(statuses).toEqual(['failed']);
+      expect(pending.availability).toBe('unavailable');
+      // Required contract field: a real zero (not a missing value).
+      expect(pending.cursors).toEqual({ pendingAcknowledgements: 0 });
+      expect(pending.cover({ epoch: 'epoch-1', sequence: 1 })).toMatchObject({
+        status: 'insufficient',
+        recovery: 'list',
+      });
+      expect(pending.cursors).toEqual({ pendingAcknowledgements: 0 });
+    } finally {
+      runtime.host.runSync(Scope.close(scope, Exit.void));
+      await runtime.dispose();
+    }
+  });
+});
+

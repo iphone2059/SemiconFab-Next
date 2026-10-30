@@ -4,6 +4,7 @@
 - 基线：`main@9ab2fd3f3cc5304f030dbf7f8e46a414ccd4ebda`（第二轮审查报告 CR-01/CR-02）
 - 取代：ADR-007 §5 的单一 `observed` 游标与“一页 journal 即恢复”的实现描述
 - 关联验收：矩阵 1/2/6；CR-01、CR-02、CR-06
+- Round 5.1 修订（2026-10-30）：新增 §9「三游标与 Cover 语义」（P1-04：cover 永不修改 delivered）；规范与验收见 `19-round5.1-remediation-specification.md`。
 
 ## 1. 已证缺陷（本轮复现依据）
 
@@ -176,6 +177,51 @@ Recovering --不可恢复(epoch 无法替换? 持续 N 次失败/存储故障/sc
 - 无 EventSource 的 composition root 只装配 display-only runtime；PROD 缺失 transport fail-fast。transport `availability` 为 getter：factory 缺失永久 unavailable；factory throw/connect timeout 有界重试耗尽后永久 unavailable，不再无限重连。
 
 
-## Round 5（进行中）
+## 8. Round 5 修订（已实施，2026-10-30）
 
-Round 5 正在整改：cover 在修改游标或 ledger 前检查权威、epoch、高水位及快照开始时的丢失代次；不足时保持原状态并要求 List。
+Round 5 源码整改已提交 `4c8f0c1`：cover 在修改游标或 ledger 前检查权威、epoch、高水位及快照开始时的丢失代次；不足时保持原状态并要求 List。Round 5 规范见 `18-round5-remediation-specification.md`。
+
+## 9. Round 5.1 修订：三游标与 Cover 语义（2026-10-30）
+
+状态：契约/源码整改（Round 5.1）；规范见 `19-round5.1-remediation-specification.md` §2.4 与 §6。本节优先于本文前文对 cover 的任何旧描述。
+
+### 9.1 Cover 的唯一合法副作用
+
+`cover(cursor: CommandCursor, authority?: CommandCoverAuthority, lossBarrier?: number): CommandCoverResult` 只允许：
+
+1. 把有序 ACK ledger 中 `epoch` 相同且 `sequence <= cursor.sequence` 的条目标记为 `covered`；权威 epoch 替换时清空/替换旧 ledger（旧 epoch 的位置不可比较）。
+2. 推进 `acknowledged`（安全前缀）：同 epoch 只增不减；权威 List 可以替换 epoch 身份。
+3. 设置 `ledgerEpoch = cursor.epoch`。
+4. 在证明覆盖所有 untracked 位置后释放 ACK latch（R4-01 规则不变：已知位置要求同 epoch 且 `cursor.sequence >= untrackedHighWater`；未知/跨 epoch 位置要求 `authority === 'list'`）。
+5. 返回 `{ status: 'covered', ... }`；覆盖不足时返回 `{ status: 'insufficient', ... }`，且不改变任何游标/ledger/loss 状态。
+
+**禁止**：`cover` 修改 `delivered`。`delivered` 的唯一含义是“已成功 publish 到有界消费者”，只能由真实 SSE 帧的成功投递推进；权威水位不能证明任何帧被投递过。P1-04 之前 transport 中“cover 时用 cover 游标推进 delivered”的实现已被删除，不得以任何形式恢复。
+
+### 9.2 同 epoch 不变量
+
+同一 epoch 内任意时刻必须满足：
+
+```text
+acknowledged.sequence <= delivered.sequence <= observed.sequence
+```
+
+- `observed`：解析到有效 SSE `id:` 后更新（只用于诊断/去重）。
+- `delivered`：`commandResults.publish` 成功（帧进入有界消费者队列）后更新。
+- `acknowledged`：有序 ledger 头部连续 `applied|covered` 前缀出队后推进；或由 `cover` 推进。
+- `pendingAcknowledgements`：已投递但仍在 ledger 中 pending 的条目数；契约上为必填 `number`，不是可选字段（缺失不得当作 0）。
+
+### 9.3 跨 epoch 语义
+
+- epoch 不同的位置**只按 epoch 身份判断**，禁止用 sequence 大小比较新旧。
+- 权威 List cover 用新 epoch 替换 `acknowledged`/epoch 身份（并可以替换 `ledgerEpoch`、清空旧 ledger）。
+- `delivered` 跨 epoch 时**不跟随 cover**：它保留旧 epoch 的位置，直到新 epoch 的真实 SSE 帧被成功投递后，才跳到那个实际投递的 sequence。
+- 因此不能把跨 epoch cover 当作“新 epoch 的某个位置已投递”；恢复起点只来自 `acknowledged`（或 list-only）。
+
+### 9.4 失败路径与测试要求
+
+- `insufficient` cover：保留 latch、发布 `uncovered-gap`（无 gapStart）并触发下一轮权威 List；游标/ledger/loss 状态不变。
+- 测试矩阵（`web_app/tests/correctness/sse/matrix-1-three-cursor.test.ts`、`web_app/tests/correctness/sse/matrix-1-ordered-ack-ledger.test.ts`、`web_app/tests/realtime/realtime-transport.test.ts`）：
+  - observed 25 / delivered 10 / acknowledged 8，List cover `epoch-1:20` → delivered 仍为 10、acknowledged 20；
+  - delivered `epoch-A:10`，List cover `epoch-B:20` → delivered 仍为 `epoch-A:10`，acknowledged `epoch-B:20`；
+  - cover 成功但 watermark 之后仍有 delivered-pending 条目 → 该条目保持 pending，acknowledged 不越过它；
+  - insufficient cover 不改变任何游标/ledger。

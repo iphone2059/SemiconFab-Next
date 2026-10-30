@@ -60,6 +60,6 @@ export interface ResourceDefinition<A, E> {
 - R4-09（SSE 扫描游标）：`ApiHost` live loop 在 `pending.HasGap == false` 时始终推进 Site 级 `cursor = pending.LatestSequence`，即使目标 FAB 过滤后无事件；仅实际写出帧时 flush。
 
 
-## Round 5（进行中）
+## Round 5 / Round 5.1（已实施）
 
-Round 5 正在整改：POST 前预留 admission；服务端接受后由 FAB registry 注册，接受后注册不再执行容量拒绝。
+Round 5 已由提交 `4c8f0c1` 实施：POST 前预留 admission；服务端接受后由 FAB registry 注册，接受后注册不再执行容量拒绝。Round 5.1 将 Admission reservation（reserve→commit/release 一次）与 Accepted Registration（HTTP 202 后不再本地拒绝）列为冻结模块（不改设计），见 `19-round5.1-remediation-specification.md` §2.5。

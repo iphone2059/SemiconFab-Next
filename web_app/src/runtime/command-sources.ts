@@ -20,7 +20,11 @@ export function createPendingCommandEventSource(): CommandEventSource {
     commandResults: Stream.empty,
     reconnected: Stream.empty,
     gaps: Stream.empty,
-    connectionStatus: Stream.empty,
+    // Round 5.1 / P2-01: this source is permanently unavailable in this
+    // environment, so its lifecycle is 'failed' from the start (never 'closed',
+    // which would mean a deliberately idle connection). It is a single replayed
+    // value, exactly like a real transport reporting a permanent failure.
+    connectionStatus: Stream.succeed('failed'),
     transportFailures: Stream.empty,
     dirty: Stream.empty,
     acknowledge: () => undefined,
@@ -28,6 +32,8 @@ export function createPendingCommandEventSource(): CommandEventSource {
     lossGeneration: 0,
     availability: 'unavailable',
     protocolDiagnostics: Object.freeze([]),
-    cursors: {},
+    // P1-01: pendingAcknowledgements is a required contract number. Nothing was
+    // delivered, so the real (not missing) pending count is zero.
+    cursors: { pendingAcknowledgements: 0 },
   };
 }

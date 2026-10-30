@@ -121,11 +121,17 @@ describe('matrix 6: recovery state machine (ADR-010 4)', () => {
     const gateway = baseGateway({
       getCommandJournalPage: async () => {
         attempts += 1;
-        if (shouldFail) throw new Error('HTTP 503 transient');
+        if (shouldFail) {
+          // Give the failure a small real latency so the observable intermediate
+          // phase (Dirty/Recovering/WaitingRetry) is not raced past by 8 immediate
+          // 1ms retries: the test asserts the retry lifecycle, not a timing race.
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          throw new Error('HTTP 503 transient');
+        }
         return pageWith(3);
       },
     });
-    const created = fab({ source, gateway, recovery: RECOVERY });
+    const created = fab({ source, gateway, recovery: { backoffMs: [25], maxAttempts: 8 } });
     const runtime = created.runtime;
     runtime.start();
     runtime.registerAcceptedCommand('cmd-1');

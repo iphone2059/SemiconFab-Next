@@ -44,8 +44,18 @@ export function createGatewayTestRuntime(): GatewayTestRuntime {
 
 export class RecordingWorkflow implements CommandWorkflow {
   markExpiredUnresolved(): void {}
+  /** All channel deliveries (kept for the existing scheduler assertions). */
   readonly received: CommandResultEvent[] = [];
-  receive(event: CommandResultEvent): void { this.received.push(event); }
+  readonly receivedRealtime: CommandResultEvent[] = [];
+  readonly receivedAuthoritative: CommandResultEvent[] = [];
+  receiveRealtime(event: CommandResultEvent): void {
+    this.receivedRealtime.push(event);
+    this.received.push(event);
+  }
+  receiveAuthoritative(event: CommandResultEvent): void {
+    this.receivedAuthoritative.push(event);
+    this.received.push(event);
+  }
   async reconcile(): Promise<void> {}
   dispose(): void {}
 }
@@ -190,7 +200,7 @@ export function createSchedulerHarness(rt: GatewayTestRuntime, options: Schedule
     applyAuthoritative: (event) => {
       const workflow = workflows.get(event.commandId);
       if (!workflow) return false;
-      workflow.receive(event);
+      workflow.receiveAuthoritative(event);
       return true;
     },
     isTerminal: (commandId) => options.isTerminal?.(commandId) ?? false,

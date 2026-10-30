@@ -209,6 +209,6 @@ WebSocket -> transport/MessageDecoder -> Worker -> TypedArray 缓冲区 -> Scene
 - **服务端 SSE 扫描游标（R4-09）**：命令 journal 的 sequence 是 Site 级，而事件按 FAB 过滤。live loop 在无 gap 的成功扫描中即使目标 FAB 没有事件也推进 `cursor = latestSequence`，仅在写出帧时 flush；避免空闲 FAB 重复 O(n) 扫描 Site journal。
 
 
-## Round 5（进行中）
+## Round 5 / Round 5.1（已实施）
 
-Round 5 正在整改：Transport availability 和实际 connection status 分开，只有连接 open 且恢复完成才能 Healthy。
+Round 5 已由提交 `4c8f0c1` 实施：Transport availability 和实际 connection status 分开，只有连接 open 且恢复完成才能 Healthy。Round 5.1 进一步完成 `CommandConnectionStatus` 五态生命周期（新增合法空闲态 `closed`，与永久 `failed` 区分）、三游标 cover 语义（cover 永不修改 `delivered`）与 Recovery pre/post 双屏障；规范见 `architecture/19-round5.1-remediation-specification.md`（P1-01/P1-04/P2-01）。

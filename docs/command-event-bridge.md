@@ -297,6 +297,49 @@ const source: CommandEventSource = { commandResult$: subject.asObservable() };
 - 当前权威应用路径（List/Journal）由 FabRuntime 调用 `receiveAuthoritative`；`CommandEventRecovery` 增加非破坏性 `snapshot()/release()` 供 retry pass 使用，容量/参数严格校验。
 
 
-## Round 5（进行中）
+## 15. Round 5 修订（已实施，2026-10-30）
 
-Round 5 正在整改：仅在 Actor 投影证明应用或此前已应用时 ACK；拒绝的事件保留以供恢复。
+Round 5 源码整改已提交 `4c8f0c1`：仅在 Actor 投影证明应用或此前已应用时 ACK；拒绝的事件保留以供恢复；`receiveAuthoritative` 绕过 SSE observed 去重；`flushRecovery` 只释放 Applied/Covered。Round 5 规范见 `architecture/18-round5-remediation-specification.md`。
+
+## 16. Round 5.1 修订：Conflict 路径与来源隔离（2026-10-30）
+
+状态：契约/源码整改（Round 5.1）；规范见 `architecture/19-round5.1-remediation-specification.md` §2.2/§4。本节优先于本文前文与 §14 的描述。
+
+### 16.1 Conflict 判定（correlation 真值表）
+
+同一 `(fabId, commandId)` 的 revision 单调；**同一 revision 必须对应同一 outcome**：
+
+| 到达事件（realtime） | 判定 | 处理 |
+|---|---|---|
+| 无记录 / revision > 当前 | new | 记录 observed revision + outcome，继续投递 |
+| revision == 当前 且 outcome 相同 | duplicate | 若 applied >= revision：ACK 并返回 duplicate-applied；否则按“已观察但未应用”处理 |
+| revision == 当前 且 outcome 不同 | **conflict** | 不得投递 actor、不得 ACK；写 conflict 记录；通知 onConflict |
+| revision < 当前 | stale | 不得回退；若 applied >= revision 可 ACK 并返回 stale-covered |
+
+- conflict 不修改 correlation 中已记录的 observed revision/outcome。
+- `CommandEventBridge.receive(event)` 返回显式结果，新增 `'conflict'`；conflict 分支即使 `appliedRevision >= revision` 也**不得 ACK**。
+- 权威结果到达后：`correlation.observeAuthoritative(event)` 记录权威 outcome（同 revision 视为解决 conflict/权威修正；更高 revision 收敛；更低 revision 为 stale 不回退）→ `workflow.receiveAuthoritative` → 校验投影 → `markApplied`（outcome 必须匹配）→ `recovery.resolveAuthoritative(event)` 清除 `revision <= 权威 revision` 的 conflict → ACK。
+
+### 16.2 `receiveRealtime` vs `receiveAuthoritative` 的来源隔离
+
+- 契约不再有 source-agnostic `receive`：数据来源决定调用哪个方法（见 `command-workflow.contract.ts` 与 `architecture/19-round5.1-remediation-specification.md` §5）。
+- realtime 路径只调用 `workflow.receiveRealtime`；权威 List/Journal 路径只调用 `workflow.receiveAuthoritative`。
+- **来源由事件来源决定，而不是由调用路径决定**：恢复队列 retry（`flushRecovery`）里的 SSE 事件仍然是 realtime，不得升级为 authoritative；Journal replay 是 authoritative。
+- `receiveAuthoritative` 负责权威修正：可以修正错误投影（包括终态投影）、可以解决 `expired-unresolved`（revision 相等或更高的有效记录）；realtime 永远不能做这两件事。
+- `receiveAuthoritative` 不走 SSE observed-revision 去重门槛（允许同一 revision 重新投递 actor），但仍遵循“revision 不回退 + outcome 校验”。
+
+### 16.3 终态投影的权威修正
+
+- 终态（succeeded/failed/cancelled）不是 XState final，不是不可修正的封印。
+- 权威记录 revision > 当前：应用新终态；revision == 当前且 outcome 不同：以权威 outcome 修正状态/outcome（revision 不变）；同 outcome：no-op；更低 revision：拒绝。
+- 修正后 `projection.recoveryDisposition` 回到 `tracked`；`markApplied` 只在 outcome 匹配后推进 applied watermark；ACK 仅在 actor 投影证明该 revision/outcome 后发生。
+
+### 16.4 pendingCount 与 ACK
+
+- `CommandEventBridge.pendingCount = recovery.size`：**held events + conflict records**。conflict 参与 pendingCount，但：
+  - 不出现在 `recovery.snapshot()`/`drain()`/`pendingFor()`；
+  - 不会被 `flushRecovery()` 应用或释放；
+  - 不会 ACK（conflict 事件本身永远没有应用证明）。
+- `conflictCount` 暴露未解决的 conflict 数量；`recovery.resolveAuthoritative()` 是唯一的清除入口。
+- `flushRecovery()` 返回 `{applied, held, rejected}` 不变：held 事件仍按 realtime 语义重投；rejected 重新入队并触发 `onRejected`；conflicts 原样保留。
+- 无 workflow 的 realtime 事件 → hold + `onUncorrelated` → 返回 `'held'`，不 ACK；`onUncorrelated`/`onConflict` 都触发 FabRuntime 的 list-only 权威恢复（见 `fab-runtime.md` §13）。

@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { CommandCorrelationRegistry } from '@/runtime/command-correlation-registry';
 import { CommandConfigurationError } from '@/contracts/command-config';
 import { commandResult } from '../support/command-fakes.ts';
@@ -65,6 +65,7 @@ it('tracks observed and applied revisions separately and only advances applied f
   expect(registry.lastAppliedRevision(fabId, 'cmd')).toBeUndefined();
   registry.observe(result('cmd', 3, 'executing'));
   expect(registry.lastObservedRevision(fabId, 'cmd')).toBe(3);
+  expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('executing');
   // Observed is not applied: only an actor-proven advance sets the applied watermark.
   expect(registry.lastAppliedRevision(fabId, 'cmd')).toBeUndefined();
   registry.markApplied(result('cmd', 2, 'executing'));
@@ -72,6 +73,12 @@ it('tracks observed and applied revisions separately and only advances applied f
   // Forward-only: an older authoritative re-application cannot regress it.
   registry.markApplied(result('cmd', 1, 'accepted'));
   expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(2);
+  // R5.1: the applied watermark only advances for the recorded outcome. The
+  // wire observation of revision 3 was 'executing', so an ordinary 'succeeded'
+  // frame cannot prove application; authority must correct the record first.
+  registry.markApplied(result('cmd', 3, 'succeeded'));
+  expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(2);
+  expect(registry.observeAuthoritative(result('cmd', 3, 'succeeded'))).toBe('new');
   registry.markApplied(result('cmd', 3, 'succeeded'));
   expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(3);
   // A newer observation keeps coverage while the observed watermark advances.
@@ -101,8 +108,11 @@ it('retains duplicate/stale decisions and TTL sweeps without touching active com
   expect(registry.observe(result('active', 1, 'executing'))).toBe('duplicate');
   expect(registry.observe(result('active', 0, 'accepted'))).toBe('stale');
   expect(registry.observe(result('done', 2, 'succeeded'))).toBe('new');
-  expect(registry.observe(result('done', 2, 'failed'))).toBe('duplicate');
+  // Same revision with a different outcome is a conflict; the recorded outcome
+  // is not mutated by an ordinary observation.
+  expect(registry.observe(result('done', 2, 'failed'))).toBe('conflict');
   expect(registry.lastObservedRevision(fabId, 'done')).toBe(2);
+  expect(registry.lastObservedOutcome(fabId, 'done')).toBe('succeeded');
   now = 50;
   expect(registry.sweep()).toBe(0);
   now = 100;
@@ -131,4 +141,190 @@ it('stays O(1) per observe while thousands of active commands accumulate', () =>
   registry.observe(result('done', 2, 'succeeded'));
   expect(registry.isTerminal(fabId, 'done')).toBe(true);
   expect(registry.size).toBe(4_001);
+});
+
+describe('Round 5.1 / P1-02 correlation revision+outcome invariant', () => {
+  it('spec §4.4: rev3 accepted -> rev3 accepted is a duplicate', () => {
+    const registry = new CommandCorrelationRegistry();
+    expect(registry.observe(result('cmd', 3, 'accepted'))).toBe('new');
+    expect(registry.observe(result('cmd', 3, 'accepted'))).toBe('duplicate');
+    expect(registry.size).toBe(1);
+    expect(registry.lastObservedRevision(fabId, 'cmd')).toBe(3);
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('accepted');
+  });
+
+  it('spec §4.4: rev3 accepted -> rev3 failed is a conflict with no record mutation', () => {
+    const registry = new CommandCorrelationRegistry();
+    expect(registry.observe(result('cmd', 3, 'accepted'))).toBe('new');
+    expect(registry.observe(result('cmd', 3, 'failed'))).toBe('conflict');
+    // The conflict is reported, never accepted as a new observation.
+    expect(registry.lastObservedRevision(fabId, 'cmd')).toBe(3);
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('accepted');
+    expect(registry.isTerminal(fabId, 'cmd')).toBe(false);
+    expect(registry.terminalCount).toBe(0);
+    expect(registry.size).toBe(1);
+    // Repeated conflicting frames stay conflicts; nothing changes.
+    expect(registry.observe(result('cmd', 3, 'failed'))).toBe('conflict');
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('accepted');
+  });
+
+  it('spec §4.4: rev3 executing -> rev3 succeeded is a conflict, not a terminal transition', () => {
+    const registry = new CommandCorrelationRegistry();
+    expect(registry.observe(result('cmd', 3, 'executing'))).toBe('new');
+    expect(registry.observe(result('cmd', 3, 'succeeded'))).toBe('conflict');
+    // An ordinary conflicting event may not flip the terminal bookkeeping.
+    expect(registry.isTerminal(fabId, 'cmd')).toBe(false);
+    expect(registry.terminalCount).toBe(0);
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('executing');
+  });
+
+  it('occurredAt never participates in correlation decisions', () => {
+    const registry = new CommandCorrelationRegistry();
+    const first = commandResult({ fabId, commandId: 'cmd', revision: 3, outcome: 'accepted', occurredAt: '2026-01-01T00:00:00.000Z' });
+    const second = commandResult({ fabId, commandId: 'cmd', revision: 3, outcome: 'accepted', occurredAt: '2026-01-02T00:00:00.000Z' });
+    expect(registry.observe(first)).toBe('new');
+    expect(registry.observe(second)).toBe('duplicate');
+  });
+
+  it('records the outcome of the current highest observed revision', () => {
+    const registry = new CommandCorrelationRegistry();
+    expect(registry.observe(result('cmd', 1, 'accepted'))).toBe('new');
+    expect(registry.observe(result('cmd', 2, 'executing'))).toBe('new');
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('executing');
+    expect(registry.observe(result('cmd', 3, 'succeeded'))).toBe('new');
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('succeeded');
+    expect(registry.isTerminal(fabId, 'cmd')).toBe(true);
+    // Older revisions stay stale and never roll the outcome back.
+    expect(registry.observe(result('cmd', 2, 'executing'))).toBe('stale');
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('succeeded');
+  });
+});
+
+describe('Round 5.1 / P1-02 authoritative resolution and correction', () => {
+  it('authoritative same revision resolves a conflict and records the authoritative outcome', () => {
+    const registry = new CommandCorrelationRegistry();
+    expect(registry.observe(result('cmd', 3, 'accepted'))).toBe('new');
+    expect(registry.observe(result('cmd', 3, 'failed'))).toBe('conflict');
+    // Authority corrects the recorded outcome at the same revision.
+    expect(registry.observeAuthoritative(result('cmd', 3, 'failed'))).toBe('new');
+    expect(registry.lastObservedRevision(fabId, 'cmd')).toBe(3);
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('failed');
+    expect(registry.isTerminal(fabId, 'cmd')).toBe(true);
+    expect(registry.terminalCount).toBe(1);
+    // The corrected record now treats the authoritative outcome as duplicate and
+    // the superseded realtime outcome as a new conflict.
+    expect(registry.observe(result('cmd', 3, 'failed'))).toBe('duplicate');
+    expect(registry.observe(result('cmd', 3, 'accepted'))).toBe('conflict');
+    expect(registry.observeAuthoritative(result('cmd', 3, 'failed'))).toBe('duplicate');
+  });
+
+  it('authoritative same revision with the same outcome is a duplicate', () => {
+    const registry = new CommandCorrelationRegistry();
+    expect(registry.observe(result('cmd', 3, 'executing'))).toBe('new');
+    expect(registry.observeAuthoritative(result('cmd', 3, 'executing'))).toBe('duplicate');
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('executing');
+  });
+
+  it('authoritative higher revision converges and preserves the applied watermark', () => {
+    const registry = new CommandCorrelationRegistry();
+    expect(registry.observe(result('cmd', 2, 'executing'))).toBe('new');
+    registry.markApplied(result('cmd', 2, 'executing'));
+    expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(2);
+    expect(registry.observeAuthoritative(result('cmd', 5, 'succeeded'))).toBe('new');
+    expect(registry.lastObservedRevision(fabId, 'cmd')).toBe(5);
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('succeeded');
+    expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(2);
+    expect(registry.isTerminal(fabId, 'cmd')).toBe(true);
+    expect(registry.terminalCount).toBe(1);
+    expect(registry.hasUnappliedObservation(fabId, 'cmd')).toBe(true);
+  });
+
+  it('authoritative lower revision is stale with no revision/outcome rollback', () => {
+    const registry = new CommandCorrelationRegistry();
+    expect(registry.observe(result('cmd', 5, 'succeeded'))).toBe('new');
+    expect(registry.observeAuthoritative(result('cmd', 3, 'failed'))).toBe('stale');
+    expect(registry.lastObservedRevision(fabId, 'cmd')).toBe(5);
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('succeeded');
+    expect(registry.isTerminal(fabId, 'cmd')).toBe(true);
+    expect(registry.terminalCount).toBe(1);
+  });
+
+  it('active -> terminal same-revision correction keeps terminal bookkeeping coherent', () => {
+    const registry = new CommandCorrelationRegistry({ maxTerminalEntries: 2, terminalTtlMs: 0 });
+    expect(registry.observe(result('cmd', 3, 'executing'))).toBe('new');
+    expect(registry.terminalCount).toBe(0);
+    expect(registry.observeAuthoritative(result('cmd', 3, 'failed'))).toBe('new');
+    expect(registry.isTerminal(fabId, 'cmd')).toBe(true);
+    expect(registry.terminalCount).toBe(1);
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('failed');
+    // The terminal TTL sweep must still see the corrected entry.
+    expect(registry.sweep()).toBe(0);
+    // ... and the terminal cap must be able to evict it.
+    expect(registry.observe(result('other', 1, 'succeeded'))).toBe('new');
+    expect(registry.terminalCount).toBe(2);
+    expect(registry.observe(result('third', 1, 'succeeded'))).toBe('new');
+    expect(registry.terminalCount).toBe(2);
+    expect(registry.isTerminal(fabId, 'cmd')).toBeUndefined();
+  });
+
+  it('terminal -> active same-revision correction restores active retention', () => {
+    const registry = new CommandCorrelationRegistry({ terminalTtlMs: 0 });
+    expect(registry.observe(result('cmd', 3, 'succeeded'))).toBe('new');
+    expect(registry.terminalCount).toBe(1);
+    // Authority says the command is still active: correct the recorded outcome
+    // in place; it must stop counting as a terminal.
+    expect(registry.observeAuthoritative(result('cmd', 3, 'executing'))).toBe('new');
+    expect(registry.isTerminal(fabId, 'cmd')).toBe(false);
+    expect(registry.terminalCount).toBe(0);
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('executing');
+    // The lazy terminal-order queue must not resurrect/duplicate the entry.
+    expect(registry.sweep()).toBe(0);
+    expect(registry.terminalCount).toBe(0);
+    expect(registry.isTerminal(fabId, 'cmd')).toBe(false);
+  });
+
+  it('terminal -> terminal same-revision correction keeps one completion entry', () => {
+    let now = 0;
+    const registry = new CommandCorrelationRegistry({ maxTerminalEntries: 2, terminalTtlMs: 100, now: () => now });
+    expect(registry.observe(result('cmd', 3, 'succeeded'))).toBe('new');
+    expect(registry.observeAuthoritative(result('cmd', 3, 'failed'))).toBe('new');
+    expect(registry.terminalCount).toBe(1);
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('failed');
+    // The completion order entry remained valid: TTL from the corrected terminal.
+    now = 60;
+    expect(registry.sweep()).toBe(0);
+    now = 100;
+    expect(registry.sweep()).toBe(1);
+    expect(registry.isTerminal(fabId, 'cmd')).toBeUndefined();
+    expect(registry.terminalCount).toBe(0);
+    expect(registry.size).toBe(0);
+  });
+
+  it('markApplied refuses an outcome that disagrees with the recorded observation', () => {
+    const registry = new CommandCorrelationRegistry();
+    expect(registry.observe(result('cmd', 3, 'accepted'))).toBe('new');
+    expect(registry.observe(result('cmd', 3, 'failed'))).toBe('conflict');
+    // An ordinary conflicting event can never advance the applied watermark.
+    registry.markApplied(result('cmd', 3, 'failed'));
+    expect(registry.lastAppliedRevision(fabId, 'cmd')).toBeUndefined();
+    // The matching recorded outcome can.
+    registry.markApplied(result('cmd', 3, 'accepted'));
+    expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(3);
+    // Forward-only: the refused conflicting event still cannot regress it.
+    registry.markApplied(result('cmd', 3, 'failed'));
+    expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(3);
+  });
+
+  it('markApplied defensively observes a missing entry', () => {
+    const registry = new CommandCorrelationRegistry();
+    registry.markApplied(result('cmd', 2, 'executing'));
+    expect(registry.lastObservedRevision(fabId, 'cmd')).toBe(2);
+    expect(registry.lastObservedOutcome(fabId, 'cmd')).toBe('executing');
+    expect(registry.lastAppliedRevision(fabId, 'cmd')).toBe(2);
+  });
+
+  it('lastObservedOutcome is undefined for an unknown command', () => {
+    const registry = new CommandCorrelationRegistry();
+    expect(registry.lastObservedOutcome(fabId, 'missing')).toBeUndefined();
+  });
 });

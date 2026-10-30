@@ -164,6 +164,83 @@ reconcile(commandId):
 - 权威 List/Journal 应用走 `receiveAuthoritative`（绕过 SSE observed 去重）；`flushRecovery` 只释放 Applied/Covered，rejected 重新入队并触发 Dirty。
 
 
-## Round 5（进行中）
+## 13. Round 5 修订（已实施，2026-10-30）
 
-Round 5 正在整改：活动命令 GET 404 要求完整 List；被权威集合裁剪且最终结果未知时使用 expired-unresolved。
+Round 5 源码整改已提交 `4c8f0c1`：活动命令 GET 404 要求完整 List；被权威集合裁剪且最终结果未知时使用 `expired-unresolved`。Round 5 规范见 `architecture/18-round5-remediation-specification.md`。
+
+## 14. Round 5.1 修订：Recovery 最终验收屏障（2026-10-30）
+
+状态：契约/源码整改（Round 5.1）；规范见 `architecture/19-round5.1-remediation-specification.md` §2.1/§3。本节优先于本文 §4/§12 中“恢复完成即 Healthy”的任何旧描述。
+
+### 14.1 四个必须分开的事实
+
+Recovery 的完成不是单一事件。以下四个事实互相独立，任何一个成功都不能替代其他三个：
+
+1. **HTTP recovery success**：gateway 返回了 Journal 页/List 响应；
+2. **List/journal application**：权威记录已经通过 `receiveAuthoritative` 应用到 actor；
+3. **actor batch completion**：post-snapshot scheduler 对每个活动命令给出了收敛结果；
+4. **ACK cover success**：transport 接受权威水位（`cover(...) = covered`）并且 post-cover pending ACK 为 0。
+
+“HTTP 成功”不等于“已应用”，“已应用”不等于“活动命令已收敛”，“已收敛”不等于“ACK 安全前缀已签收”。**cover 成功本身永远不意味着 Healthy。**
+
+### 14.2 最终验收屏障流水线（严格顺序）
+
+```text
+Recovering (generation g, owned fiber in RecoveryScope)
+  1. snapshot = executeRecoveryEffect(g, request)
+       - list: listFabCommands(site, fab, 'all')，validate 后逐条 receiveAuthoritative
+       - journal: 分页循环到 latestSequence，epoch/序号/保留窗口校验通过
+  2. apply authoritative records
+       - receiveAuthoritative 绕过 SSE observed 去重；applied|stale-covered 才计入
+       - 本地活动而权威集合缺失的命令 -> markExpiredUnresolved（不伪造终态）
+  3. reconcile active commands（post-snapshot scheduler batch）
+       - 每个仍活动命令的结果必须收敛；failed/timed-out/cancelled/not-found -> pass 失败
+  4. PRE-COVER barrier（同步检查，失败 -> 不 Healthy）
+       pendingRecovery === undefined
+       recoveryPending === false
+       bridge.pendingCount === 0            （held events + conflicts）
+       effective pendingDropCount === 0     （drop generation <= snapshot.dropBarrier 视为已覆盖）
+       bridge.conflictCount === 0
+       batchFailure === undefined
+       realtimeAvailability === 'ready'      （环境条件）
+       connectionStatus === 'open'           （环境条件；closed idle 不 Healthy，也不强制打开）
+  5. cover = source.cover({epoch, sequence}, snapshot.kind, snapshot.lossBarrier)
+       status 必须为 'covered'；insufficient -> 本轮失败（保留 ACK latch，下一轮 List）
+  6. POST-COVER barrier（与 cover 同一个同步窗口，中间不得有 async 让出点）
+       source.cursors.pendingAcknowledgements === 0   （必填 number；缺失=失败，绝不视为 0）
+       bridge.pendingCount === 0
+       bridge.conflictCount === 0
+       pendingRecovery === undefined / recoveryPending === false
+  7. 只有 4、5、6 全部通过才 completeRecoverySuccess：
+       attempts=0、清除 activeRecoveryRequest、resolveCoveredDrops
+       Healthy 仅当 recoveryAvailable && realtimeAvailability==='ready' && connectionStatus==='open'
+       否则 Degraded（不得 Healthy）
+```
+
+失败语义（不得静默、不得绕过）：
+
+- 任一屏障失败：`needsNextAuthoritativePass = true`，记录有界诊断，绝不 Healthy。然后按失败类别处理：
+  - **正确性失败**（pending request/queued pass、bridge held/conflict、未覆盖 drop、batchFailure）：合并 `{ listOnly: true }` 恢复请求，走既有 `scheduleCompensationPass` / 有界退避路径；耗尽后 `Unrecoverable`，绝不 Healthy。
+  - **环境失败**（`realtimeAvailability !== 'ready'`、`connectionStatus !== 'open'`）：只置 `Degraded`，**不进入补偿循环**；由下一次连接状态迁移重新武装一次权威 pass（而不是失败重试风暴）；不得强行打开连接来满足屏障。
+- post-cover 屏障失败时 **不得** 清除 ACK/ledger 状态，**不得** 修改 `delivered`（runtime 从不写 delivered），保留现场等待下一轮权威 List 覆盖。
+- 无 workflow 的 realtime 事件（`onUncorrelated`）与同 revision 不同 outcome 的冲突（`onConflict`）在恢复过程中到达：写诊断、置 `needsNextAuthoritativePass`、合并 list-only 请求、**不 ACK**；若当前无进行中的 pass 才调度新 pass，不得并行第二个恢复执行器。
+
+### 14.3 expired-unresolved 与恢复的关系
+
+- 只有“完整权威 List 证明本地仍活动的命令缺失”才能进入 `expired-unresolved`；它是恢复处置（recovery disposition），不是业务终态。
+- 进入后该命令不再计为活动命令（不阻塞 Healthy、不会被无限 reconcile），但 UI/投影保留“结果未知”语义，禁止伪造 succeeded/failed/cancelled。
+- realtime 事件（任意 revision）永远不能把它复活；只有经校验的权威记录能把它恢复为 `tracked` 并应用 revision/outcome。
+- 若后续权威记录始终缺失，保持 `expired-unresolved` 并给出可观察诊断；不重试成终态。
+
+### 14.4 测试要求
+
+`web_app/tests/integration/fab-runtime.test.ts`：
+
+- post-snapshot reconciliation 期间注入无 workflow 的 realtime 事件 → `bridge.pendingCount > 0`、`needsNextAuthoritativePass`、phase 不是 Healthy、调度新的 List pass；下一轮 List 返回权威记录后重新收敛才 Healthy；
+- cover 返回 `covered` 但 `cursors.pendingAcknowledgements === 1` → 不是 Healthy；下一轮权威 List 覆盖该 pending 条目后才 Healthy；
+- post-snapshot drop（generation > dropBarrier）→ `needsNextAuthoritativePass`、有界补偿，不得 Healthy；
+- 批次失败（failed/timed-out/cancelled）→ pass 失败进入有界退避，不重置 attempts、不 cover、不 Healthy。
+
+`web_app/tests/integration/fab-runtime-batch23.test.ts`：快照应用之后、对账批次期间到达的新事件/新请求 → 补偿 List pass，期间不得 Healthy，权威解决后收敛。
+
+失败/覆盖/屏障诊断必须可观察（phase、`needsNextAuthoritativePass`、`coveredDropCount`、`compensationAttempts`、`lastDirtyCause`），但诊断不得包含命令 payload。

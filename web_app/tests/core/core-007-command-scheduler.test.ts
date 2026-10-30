@@ -95,10 +95,8 @@ it('CORE-007 explicit reconcileCommand is single-flight per command', async () =
 
 it('CORE-007 queue capacity is bounded, drops are diagnosed, and the authoritative list is the recovery path', async () => {
   const source = new FakeCommandEventSource();
-  const gateways: number[] = [];
   const gateway = fakeCommandGateway({
     getCommandStatus: async (fabId, commandId) => {
-      gateways.push(1);
       await new Promise((resolve) => setTimeout(resolve, 40));
       return commandResult({ fabId, commandId, revision: 1, outcome: 'executing' });
     },
@@ -120,10 +118,11 @@ it('CORE-007 queue capacity is bounded, drops are diagnosed, and the authoritati
   const drop = runtime.lastReconciliationDrop;
   expect(drop?.reason).toBe('queue-capacity');
   expect(drop?.droppedTotal).toBeGreaterThanOrEqual(1);
-  expect(gateways.length).toBeGreaterThan(0);
   // ADR-011 §2.2: the scheduler keeps no hidden retry buffer. The drop is durable
   // recovery intent: FabRuntime enters Dirty and the authoritative LIST is the
-  // convergence path, so the dropped commands are never silently lost.
+  // convergence path. The recovered state is observable per command - a command the
+  // authoritative snapshot proves absent becomes expired-unresolved, never silently
+  // lost (Round 5.1: recovery may not invent a status query as its only proof).
   await expect.poll(() => gateway.listCalls.length, { timeout: 3_000 }).toBeGreaterThan(listCallsBefore);
   await expect.poll(() => runtime.recoveryState.phase, { timeout: 3_000 }).toBe('Healthy');
   expect(runtime.lastRecoveryList).toBeDefined();

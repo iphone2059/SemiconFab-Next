@@ -5,6 +5,7 @@ import type { CommandJournalPage, CommandJournalQuery } from '@/contracts/comman
 import { createSseCommandEventSource } from '@/realtime/command-event-source.transport';
 import {
   type CommandTestRuntime,
+  commandRecord,
   commandResult,
   createCommandTestRuntime,
   createFabRuntime,
@@ -96,7 +97,13 @@ describe('matrix 1: recovery starts from the safe acknowledged prefix, never obs
       const journalPages: Array<{ afterSequence: number; limit: number }> = [];
       let transportSource: CommandEventSource | undefined;
       const gateway = fakeCommandGateway({
-        listFabCommands: async () => emptyRecoveryList(),
+        // Round 5.1 / P1-01 + P2-04: an authoritative List snapshot that omitted
+        // cmd-1 while it is locally active would prove it expired-unresolved, so the
+        // fake authority must include the command it accepted.
+        listFabCommands: async () =>
+          emptyRecoveryList([
+            commandRecord({ fabId: 'fab-a', commandId: 'cmd-1', revision: 0, outcome: 'accepted' }),
+          ]),
         getCommandStatus: async (fabId: string, commandId: string) =>
           commandResult({ fabId, commandId, revision: 0, outcome: 'accepted' }),
         getCommandJournalPage: async (
@@ -192,3 +199,94 @@ describe('matrix 1: recovery starts from the safe acknowledged prefix, never obs
     }
   });
 });
+describe('Round 5.1 / P1-04 cover never forges the delivered cursor (ADR-010 §6.3)', () => {
+  it('List cover may advance acknowledged beyond delivered because the dropped range is proven, but delivered stays the last real delivery', async () => {
+    const harness = transport({ capacity: 4, autoAck: false });
+    await flush();
+    // Synchronous burst: only 0..3 fit the bounded consumer bus; 4..9 are observed
+    // (valid SSE ids) but never delivered, and the ACK latch records the high water.
+    for (let sequence = 0; sequence < 10; sequence += 1) {
+      harness.sources[0].emit(commandEnvelope({ revision: sequence }), cursorId('epoch-1', sequence));
+    }
+    await flush(20);
+    expect(harness.receivedRevisions).toEqual([0, 1, 2, 3]);
+    expect(harness.cursors().observed).toEqual({ epoch: 'epoch-1', sequence: 9 });
+    expect(harness.cursors().delivered).toEqual({ epoch: 'epoch-1', sequence: 3 });
+    expect(harness.cursors().pendingAcknowledgements).toBe(4);
+
+    // A List cover below the proven untracked high water is not authoritative for
+    // the dropped range: it changes nothing (cursor/ledger/loss identity included).
+    const before = harness.cursors();
+    const lossBefore = harness.source.lossGeneration;
+    const refused = harness.source.cover({ epoch: 'epoch-1', sequence: 7 }, 'journal', lossBefore);
+    expect(refused.status).toBe('insufficient');
+    expect(harness.cursors()).toEqual(before);
+    expect(harness.source.lossGeneration).toBe(lossBefore);
+
+    // The authoritative List watermark 9 proves the whole dropped range. The
+    // acknowledged safe cursor may jump to it, but delivered must NOT be forged to
+    // 9: only an actual SSE frame published to the bounded consumers moves it.
+    const covered = harness.source.cover({ epoch: 'epoch-1', sequence: 9 }, 'list', lossBefore);
+    expect(covered).toMatchObject({ status: 'covered', latchReleased: true });
+    await flush(5);
+    expect(harness.cursors()).toMatchObject({
+      observed: { epoch: 'epoch-1', sequence: 9 },
+      delivered: { epoch: 'epoch-1', sequence: 3 },
+      acknowledged: { epoch: 'epoch-1', sequence: 9 },
+      pendingAcknowledgements: 0,
+    });
+    // Nothing was published after the cover: delivered is unchanged and cannot
+    // exceed the frames the bounded consumer actually accepted.
+    expect(harness.receivedRevisions).toEqual([0, 1, 2, 3]);
+
+    // Only a new real delivery moves delivered, monotonically, inside the epoch.
+    harness.sources[0].emit(commandEnvelope({ revision: 10 }), cursorId('epoch-1', 10));
+    await flush(10);
+    expect(harness.cursors().delivered).toEqual({ epoch: 'epoch-1', sequence: 10 });
+    expect(harness.cursors().observed).toEqual({ epoch: 'epoch-1', sequence: 10 });
+  });
+
+  it('cross-epoch List cover replaces acknowledged/epoch identity but delivered stays in the old epoch until a real frame arrives', async () => {
+    const harness = transport({ capacity: 16, autoAck: false });
+    await flush();
+    harness.sources[0].onopen?.();
+    // Delivered epoch-a:10 with eight applied (0..7) and later entries still pending.
+    for (let sequence = 0; sequence <= 10; sequence += 1) {
+      harness.sources[0].emit(commandEnvelope({ revision: sequence }), cursorId('epoch-a', sequence));
+    }
+    await flush(10);
+    for (let sequence = 0; sequence < 8; sequence += 1) {
+      harness.source.acknowledge(harness.received.find((event) => event.revision === sequence)!);
+    }
+    expect(harness.cursors()).toMatchObject({
+      observed: { epoch: 'epoch-a', sequence: 10 },
+      delivered: { epoch: 'epoch-a', sequence: 10 },
+      acknowledged: { epoch: 'epoch-a', sequence: 7 },
+      pendingAcknowledgements: 3,
+    });
+
+    // The authoritative List proves an epoch replacement; only the List authority
+    // may accept it. The cover is NOT a delivered frame: acknowledged moves into
+    // epoch-b, delivered must remain the last epoch-a frame actually delivered.
+    const result = harness.source.cover({ epoch: 'epoch-b', sequence: 20 }, 'list', harness.source.lossGeneration);
+    expect(result).toMatchObject({ status: 'covered', latchReleased: false });
+    await flush(5);
+    expect(harness.cursors()).toMatchObject({
+      observed: { epoch: 'epoch-a', sequence: 10 },
+      delivered: { epoch: 'epoch-a', sequence: 10 },
+      acknowledged: { epoch: 'epoch-b', sequence: 20 },
+      pendingAcknowledgements: 0,
+    });
+
+    // A real epoch-b frame is the only thing that moves delivered into the new epoch.
+    harness.sources[0].emit(commandEnvelope({ revision: 21 }), cursorId('epoch-b', 21));
+    await flush(10);
+    expect(harness.cursors()).toMatchObject({
+      observed: { epoch: 'epoch-b', sequence: 21 },
+      delivered: { epoch: 'epoch-b', sequence: 21 },
+      acknowledged: { epoch: 'epoch-b', sequence: 20 },
+      pendingAcknowledgements: 1,
+    });
+  });
+});
+

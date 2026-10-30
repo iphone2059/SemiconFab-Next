@@ -42,7 +42,8 @@ it('owns one CommandScope per command and no global workflow scope or subscribe 
   const fab = createTestFab({
     source: new FakeCommandEventSource(),
     createWorkflow: (_fabId, commandId): CommandWorkflow => ({
-      receive() {},
+      receiveRealtime() {},
+      receiveAuthoritative() {},
       markExpiredUnresolved() {},
       async reconcile() {},
       dispose() {

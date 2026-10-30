@@ -55,6 +55,14 @@ export type CommandWorkflowFactory = (fabId: string, commandId: string) => Comma
 export interface FabRuntimeRetentionOptions {
   /** Keep a terminal workflow alive (and its actor disposable) for this long. */
   readonly resolvedWorkflowTtlMs?: number;
+  /**
+   * Round 5.1 / P2-03: independent TTL for terminal correlation watermarks. It is
+   * deliberately NOT coupled to resolvedWorkflowTtlMs: a correlation watermark is
+   * only a dedupe/ordering hint, while a terminal workflow is actor/UI retention.
+   * 0 disables *time-based* correlation expiry only; terminalCount/maxEntries
+   * capacity bounds and the workflow TTL keep working.
+   */
+  readonly correlationTerminalTtlMs?: number;
   /** Hard cap on retained terminal workflows; the oldest terminal entries go first. */
   readonly maxResolvedWorkflows?: number;
   /** Hard cap on read-only projections kept after a workflow is evicted. */
@@ -206,6 +214,7 @@ export interface FabRuntimeOptions {
 
 interface ResolvedRetention {
   readonly resolvedWorkflowTtlMs: number;
+  readonly correlationTerminalTtlMs: number;
   readonly maxResolvedWorkflows: number;
   readonly maxRetainedProjections: number;
   readonly sweepIntervalMs: number;
@@ -214,6 +223,7 @@ interface ResolvedRetention {
 
 const DEFAULT_RETENTION: ResolvedRetention = {
   resolvedWorkflowTtlMs: 300_000,
+  correlationTerminalTtlMs: 300_000,
   maxResolvedWorkflows: 64,
   maxRetainedProjections: 128,
   sweepIntervalMs: 15_000,
@@ -224,6 +234,7 @@ function resolveRetention(options: FabRuntimeRetentionOptions | undefined): Reso
   // R4-07: strict fail-fast validation; Math.max silently accepted NaN/Infinity.
   return {
     resolvedWorkflowTtlMs: resolveTimeoutOption('retention.resolvedWorkflowTtlMs', options?.resolvedWorkflowTtlMs, DEFAULT_RETENTION.resolvedWorkflowTtlMs, { min: 0 }),
+    correlationTerminalTtlMs: resolveTimeoutOption('retention.correlationTerminalTtlMs', options?.correlationTerminalTtlMs, DEFAULT_RETENTION.correlationTerminalTtlMs, { min: 0 }),
     maxResolvedWorkflows: resolveIntegerOption('retention.maxResolvedWorkflows', options?.maxResolvedWorkflows, DEFAULT_RETENTION.maxResolvedWorkflows, { min: 1, max: 100_000 }),
     maxRetainedProjections: resolveIntegerOption('retention.maxRetainedProjections', options?.maxRetainedProjections, DEFAULT_RETENTION.maxRetainedProjections, { min: 0, max: 100_000 }),
     sweepIntervalMs: resolveTimeoutOption('retention.sweepIntervalMs', options?.sweepIntervalMs, DEFAULT_RETENTION.sweepIntervalMs, { min: 1 }),
@@ -271,6 +282,23 @@ interface RecoveryDropIntent {
   readonly generation: number;
   readonly commandId: string;
   readonly droppedTotal: number;
+}
+
+/**
+ * Round 5.1 / P1-01: one rejected final Healthy barrier. `correctness` conditions
+ * demand more authority through the bounded compensation path; `environment`
+ * conditions (no live connection / unavailable transport) are the R4-06/P2-01
+ * Degraded state and are re-armed by the next connection lifecycle signal.
+ */
+interface HealthyBarrierFailure {
+  /**
+   * - stale-request: a newer authoritative request arrived during this pass (the
+   *   pass is superseded, not wrong) -> one coalesced immediate pass;
+   * - correctness: authoritative evidence is missing -> bounded compensation;
+   * - environment: no live connection/transport -> Degraded, re-armed by lifecycle.
+   */
+  readonly kind: 'stale-request' | 'correctness' | 'environment';
+  readonly reason: string;
 }
 
 /** R3-05/R3-08: one authoritative snapshot produced by one recovery pass generation. */
@@ -482,7 +510,9 @@ export class FabRuntime {
   private stopping = false;
   private bridgeRestartAttempts = 0;
   private bridgeRestartTimer?: ReturnType<typeof setTimeout>;
-  private sweepTimer?: ReturnType<typeof setTimeout>;
+  /** P2-03: independent sweeps; neither timer may stop the other lifecycle. */
+  private workflowSweepTimer?: ReturnType<typeof setTimeout>;
+  private correlationSweepTimer?: ReturnType<typeof setTimeout>;
 
   private recoveryScheduled = false;
   private passRunning = false;
@@ -525,7 +555,11 @@ export class FabRuntime {
   private readonly maxActiveCommands: number;
   private readonly maxConcurrentReconciliations: number;
   private readonly reconcileTimeoutMs: number;
-  private connectionStatus: CommandConnectionStatus = 'connecting';
+  /**
+   * P2-01: initial lifecycle is idle ('closed'), never 'connecting': this runtime has
+   * not attempted a connection yet and must not report an attempt it never made.
+   */
+  private connectionStatus: CommandConnectionStatus = 'closed';
   private lastTransportFailure?: CommandTransportFailure;
   private lastDirty?: CommandStreamDirty;
   private lastEviction?: CommandRecoveryEviction;
@@ -593,6 +627,9 @@ export class FabRuntime {
     const correlationCapacity = this.maxActiveCommands + this.retention.maxResolvedWorkflows;
     this.correlation = new CommandCorrelationRegistry({
       maxTerminalEntries: this.retention.maxResolvedWorkflows,
+      // P2-03: correlation watermarks expire on their own TTL (independent of the
+      // workflow actor retention); 0 disables time-based expiry only.
+      terminalTtlMs: this.retention.correlationTerminalTtlMs,
       // R4-08: the hard absolute cap is aligned with the active admission bound plus
       // the retained terminal capacity; it is a real cap (active entries included).
       maxEntries: correlationCapacity,
@@ -638,6 +675,11 @@ export class FabRuntime {
       correlation: this.correlation,
       recovery: this.recovery,
       onResultDelivered: (event) => { this.afterDelivery(event.commandId); },
+      // Round 5.1 / P1-01: a held (uncorrelated) or same-revision conflicting event
+      // is a correctness signal; the owner must converge authoritatively and must
+      // never report Healthy while it is unresolved.
+      onUncorrelated: (event) => this.onBridgeUncorrelated(event),
+      onConflict: (event) => this.onBridgeConflict(event),
       // R4-03/R4-05: rejected actor application and consumer-fiber termination are
       // owner-visible; the bridge never silently drops either.
       onRejected: (event) => this.onBridgeRejected(event),
@@ -655,10 +697,9 @@ export class FabRuntime {
     this.bridgeRestartAttempts = 0;
     this.signalRestartCounts.clear();
     this.subscribeSignals();
-    if (!this.lazyCommandSubscription || this.workflows.size > 0) {
-      this.bridge.start();
-      this.bridgeStarted = true;
-    }
+    // P2-02: start() re-evaluates on-demand command-stream demand; reservations or
+    // active workflows created before start() are not lost.
+    this.syncCommandSubscription();
     this.refreshRealtimeAvailability();
     if (!this.recoveryAvailable) {
       // R3-07/R4-06: display-only composition. Transport signals still deliver live
@@ -669,7 +710,8 @@ export class FabRuntime {
         this.realtimeAvailability === 'unavailable' ? 'realtime-unavailable' : 'no-authority',
         'start(): authoritative command recovery unavailable; live events only, phase stays Unavailable',
       );
-      this.scheduleSweep();
+      this.scheduleWorkflowSweep();
+      this.scheduleCorrelationSweep();
       return;
     }
     if (this.realtimeAvailability === 'unavailable') {
@@ -681,7 +723,8 @@ export class FabRuntime {
     // Startup/refresh recovery: the authoritative list is the only recovery entry
     // for a page that never saw the submit (ADR-008 §2.4/ADR-010 §4).
     this.enterDirty({ listOnly: true, cause: 'refresh' });
-    this.scheduleSweep();
+    this.scheduleWorkflowSweep();
+    this.scheduleCorrelationSweep();
   }
 
   /**
@@ -715,7 +758,10 @@ export class FabRuntime {
     }
     for (const fiber of this.signalFibers) stopCommandStream(this.runtime, fiber);
     this.signalFibers.length = 0;
-    this.clearSweepTimer();
+    // P2-03: both retention sweeps are owned here; stopping one may never leave the
+    // other lifecycle armed.
+    this.clearWorkflowSweepTimer();
+    this.clearCorrelationSweepTimer();
     this.stopping = false;
   }
 
@@ -744,16 +790,23 @@ export class FabRuntime {
           this.registerAcceptedCommand(commandId);
         } catch (cause) {
           this.enterDirty({ listOnly: true, cause: 'protocol-error' });
+          this.syncCommandSubscription();
           throw cause;
         }
+        this.syncCommandSubscription();
       },
       release: () => {
         if (state !== 'reserved') throw new Error('command reservation is no longer reserved');
         state = 'released';
         this.reservations.delete(idempotencyKey);
+        // P2-02: a failed submit may remove the last reason to hold the stream.
+        this.syncCommandSubscription();
       },
     };
     this.reservations.set(idempotencyKey, reservation);
+    // P2-02 §8.3: the command stream is demanded by the reservation BEFORE the HTTP
+    // POST is sent, so an SSE event can arrive before the HTTP 202 response.
+    this.syncCommandSubscription();
     return reservation;
   }
 
@@ -831,11 +884,13 @@ export class FabRuntime {
     this.publishProjection(commandId);
     this.subscribeProjection(commandId, workflow);
     this.startWorkflow(workflow);
-    if (!this.bridgeStarted && this.started && !this.disposed) {
-      this.bridge.start();
-      this.bridgeStarted = true;
-    }
+    // P2-02: one FAB-scoped command stream serves every workflow of this FAB; a new
+    // active workflow demands the shared stream, never a second EventSource.
+    this.syncCommandSubscription();
     const flushed = this.bridge.flushRecovery();
+    // A flush may resolve the only held event (or the workflow may already be
+    // terminal), which can remove the last demand again.
+    this.syncCommandSubscription();
     if (flushed.rejected > 0) {
       // R4-03: a held result the actor rejected is not dropped; authoritative
       // recovery must reapply it from the backend.
@@ -1024,6 +1079,21 @@ export class FabRuntime {
     return this.bridge.pendingCount;
   }
 
+  /** Round 5.1 / P1-02: unresolved same-revision outcome conflicts (never Healthy while > 0). */
+  get pendingConflictCount(): number {
+    return this.bridge.conflictCount;
+  }
+
+  /** P2-03: retained correlation watermarks (independent of the workflow TTL). */
+  get correlationWatermarkCount(): number {
+    return this.correlation.size;
+  }
+
+  /** P2-03: retained terminal correlation watermarks (expire on the correlation TTL). */
+  get correlationTerminalWatermarkCount(): number {
+    return this.correlation.terminalCount;
+  }
+
   get running(): boolean {
     return this.started;
   }
@@ -1114,7 +1184,8 @@ export class FabRuntime {
     this.resolvedAt.clear();
     for (const unsubscribe of this.projectionSubscriptions.values()) unsubscribe();
     this.projectionSubscriptions.clear();
-    this.clearSweepTimer();
+    this.clearWorkflowSweepTimer();
+    this.clearCorrelationSweepTimer();
     this.bridge.dispose();
     this.correlation.clear();
     this.projectionStore.invalidateAll();
@@ -1177,11 +1248,27 @@ export class FabRuntime {
       this.connectionStatus = status;
       this.refreshRealtimeAvailability();
       if (status !== 'open' && this.phase === 'Healthy') this.setPhase('Degraded');
-      if (this.started && this.recoveryAvailable && status !== previous) {
-        if (status === 'open' || status === 'reconnecting' || status === 'failed') {
-          this.enterDirty({ listOnly: true, cause: status === 'open' ? 'reconnect' : 'transport-failure' });
-          if (status !== 'open' && this.phase !== 'Recovering') this.setPhase('Degraded');
-        }
+      if (!this.started || !this.recoveryAvailable || status === previous) return;
+      if (status === 'open') {
+        // A live connection became available again: only an authoritative pass may
+        // re-earn Healthy (it is also the pre-cover barrier's `open` condition).
+        this.enterDirty({ listOnly: true, cause: 'reconnect' });
+        return;
+      }
+      if (status === 'reconnecting' || status === 'failed') {
+        // Transport interruption/failure is never a business command outcome; it
+        // starts the bounded authoritative reconciliation path (R4-06/P2-01).
+        this.enterDirty({ listOnly: true, cause: 'transport-failure' });
+        if (this.phase !== 'Recovering') this.setPhase('Degraded');
+        return;
+      }
+      // P2-01: 'closed' is the deliberate idle lifecycle state (the last consumer
+      // left / no connection exists). It must never be treated as 'open' and never
+      // as 'failed': the runtime is not Healthy, but this is NOT a transport failure
+      // and must not start a recovery loop. The next 'open' signal re-arms one pass.
+      if (status === 'closed' && this.phase !== 'Unrecoverable' && this.phase !== 'Unavailable') {
+        this.setPhase('Degraded');
+        this.recordDiagnostic('refresh', 'command stream closed: idle until the next command needs it');
       }
     });
     if (this.source.dirty) {
@@ -1265,10 +1352,8 @@ export class FabRuntime {
     this.bridgeRestartTimer = setTimeout(() => {
       this.bridgeRestartTimer = undefined;
       if (this.disposed || !this.started || this.stopping || this.bridgeStarted) return;
-      if (!this.lazyCommandSubscription || this.workflows.size > 0) {
-        this.bridge.start();
-        this.bridgeStarted = true;
-      }
+      // P2-02: restart only while this FAB still needs the live command stream.
+      this.syncCommandSubscription();
     }, 1);
   }
 
@@ -1287,6 +1372,122 @@ export class FabRuntime {
     this.lastError = cause instanceof Error ? cause.message : String(cause);
     this.recordDiagnostic('decode-error', 'command result consumer handler failed');
     if (this.started) this.enterDirty({ listOnly: true, cause: 'protocol-error' });
+  }
+
+  /**
+   * Round 5.1 / P1-01: a realtime result arrived for a command this runtime does
+   * not track. It is held by the bridge (bounded queue) and MUST NOT be ACKed; the
+   * next authoritative LIST pass is the only way to decide whether the command is
+   * real (track + apply) or was already gone. The event is never applied here.
+   *
+   * The handler deliberately does not go through enterDirty(): that would reset the
+   * bounded compensation episode and clear needsNextAuthoritativePass. A running
+   * pass observes the merged request through its pre-cover barrier instead; with no
+   * pass in flight one authoritative pass is (re)armed immediately.
+   */
+  private onBridgeUncorrelated(event: CommandResultEvent): void {
+    if (this.disposed) return;
+    this.recordDiagnostic(
+      'protocol-error',
+      'uncorrelated command result held for command ' + event.commandId + ' revision ' + event.revision,
+    );
+    this.needsNextAuthoritativePass = true;
+    this.mergeRecoveryRequest({ listOnly: true, cause: 'protocol-error' });
+    // A held event keeps the command stream demanded until authority resolves it.
+    this.syncCommandSubscription();
+    if (!this.started || !this.recoveryAvailable) return;
+    if (this.passRunning || this.recoveryScheduled || this.recoveryBatchRunning) return;
+    this.clearRetryTimer();
+    this.nextRetryAt = undefined;
+    if (this.phase === 'Unrecoverable') this.attempts = 0;
+    if (this.phase !== 'Unavailable') this.setPhase('Dirty');
+    this.scheduleRecoveryPass();
+  }
+
+  /**
+   * Round 5.1 / P1-02/P1-01: a same-revision outcome conflict was observed on the
+   * live stream. It is NOT ACKed and NOT applied; only an authoritative record may
+   * resolve it. The barrier/compensation treatment is identical to an uncorrelated
+   * held event, plus a dedicated conflict diagnostic.
+   */
+  private onBridgeConflict(event: CommandResultEvent): void {
+    if (this.disposed) return;
+    this.recordDiagnostic(
+      'protocol-error',
+      'command result conflict held for command ' + event.commandId + ' revision ' + event.revision +
+        ' (outcome disagrees with the recorded revision)',
+    );
+    this.needsNextAuthoritativePass = true;
+    this.mergeRecoveryRequest({ listOnly: true, cause: 'protocol-error' });
+    this.syncCommandSubscription();
+    if (!this.started || !this.recoveryAvailable) return;
+    if (this.passRunning || this.recoveryScheduled || this.recoveryBatchRunning) return;
+    this.clearRetryTimer();
+    this.nextRetryAt = undefined;
+    if (this.phase === 'Unrecoverable') this.attempts = 0;
+    if (this.phase !== 'Unavailable') this.setPhase('Dirty');
+    this.scheduleRecoveryPass();
+  }
+
+  /**
+   * Round 5.1 / P2-02: true command-stream demand of this FAB. The live SSE stream is
+   * needed only while a command can still produce results this runtime must see:
+   *  (a) an uncommitted admission reservation (the submit is in flight);
+   *  (b) an active (non-terminal) tracked workflow;
+   *  (c) an unresolved held event or conflict in the bridge queue.
+   *
+   * HTTP journal/List recovery is NOT demand: authoritative convergence works
+   * without the live transport, so an idle FAB never keeps an SSE connection open.
+   * Terminal workflows retained for UI projection are never demand either.
+   */
+  private hasCommandStreamDemand(): boolean {
+    // O(1): active = tracked minus terminal (the terminal index is maintained by
+    // recordTerminal/evictWorkflow; this must stay cheap on the registration path).
+    return this.reservations.size > 0 || this.countActiveCommands() > 0 || this.bridge.pendingCount > 0;
+  }
+
+  /**
+   * Round 5.1 / P2-02: keep the per-FAB command stream open exactly while the FAB has
+   * demand. One FAB has at most one bridge/SSE (multiple commands share it); a
+   * terminal transition that removes the last demand closes it, and the next
+   * reservation/active workflow re-opens it. Eager (non-lazy) composition keeps the
+   * historical open-while-started behavior.
+   */
+  private syncCommandSubscription(): void {
+    if (this.disposed || !this.started) return;
+    if (!this.lazyCommandSubscription) {
+      if (!this.bridgeStarted) {
+        this.bridge.start();
+        this.bridgeStarted = true;
+      }
+      return;
+    }
+    const demand = this.hasCommandStreamDemand();
+    if (demand) {
+      if (!this.bridgeStarted) {
+        this.bridge.start();
+        this.bridgeStarted = true;
+      }
+      return;
+    }
+    if (this.bridgeStarted) {
+      // bridge.stop() interrupts the consumer fiber; the real transport closes the
+      // EventSource and publishes the idle 'closed' lifecycle status (P2-01).
+      this.bridgeStarted = false;
+      this.bridge.stop();
+    }
+  }
+
+  /**
+   * Deferred subscription re-evaluation. Delivery callbacks run inside the bridge's
+   * own consumer fiber, so a terminal delivery must not interrupt that fiber from
+   * within its own handler; the demand drop settles on the next microtask.
+   */
+  private scheduleCommandSubscriptionSync(): void {
+    if (this.disposed) return;
+    queueMicrotask(() => {
+      if (!this.disposed) this.syncCommandSubscription();
+    });
   }
 
   private clearSignalRestartTimer(): void {
@@ -1451,6 +1652,9 @@ export class FabRuntime {
       return;
     }
     const request = this.takeRecoveryRequest();
+    // A queued request is being taken by this pass now; keeping the flag set would
+    // make the pass's own pre-cover barrier see a phantom pending request.
+    this.recoveryPending = false;
     this.passRunning = true;
     this.clearRetryTimer();
     this.nextRetryAt = undefined;
@@ -1520,13 +1724,24 @@ export class FabRuntime {
       this.recoveryFiber = undefined;
     }
     if (this.disposed || !this.started || generation !== this.recoveryGeneration) return;
+    if (this.phase === 'Unrecoverable') {
+      // Bounded recovery is exhausted. A merged request is retained, but only a new
+      // external signal (enterDirty) may re-arm the runtime; an internal auto-loop
+      // here would spin forever without backoff.
+      this.recoveryPending = false;
+      return;
+    }
     if (this.recoveryPending || this.pendingRecovery !== undefined) {
       this.recoveryPending = false;
+      // A bounded retry/compensation timer is already armed: the merged request is
+      // taken by that pass. Scheduling a parallel immediate pass would bypass the
+      // backoff and the compensation bound (P1-01 barrier failures arm that timer).
+      if (this.retryTimer !== undefined || this.phase === 'WaitingRetry') return;
       this.clearRetryTimer();
       this.nextRetryAt = undefined;
-      if (this.phase !== 'Unrecoverable' && this.phase !== 'Unavailable' && this.phase !== 'WaitingRetry') {
-        this.setPhase('Dirty');
-      }
+      // (A display-only runtime never runs a pass; a live started runtime may be
+      // Dirty/Recovering here, never 'open-idle'.)
+      this.setPhase('Dirty');
       this.scheduleRecoveryPass();
     }
   }
@@ -1772,6 +1987,9 @@ export class FabRuntime {
           }
         }
         const flushed = self.bridge.flushRecovery();
+        // P2-02: an authoritative flush can resolve the last held result, which may
+        // remove the last command-stream demand of an otherwise idle FAB.
+        self.syncCommandSubscription();
         if (flushed.rejected > 0 || flushed.held > 0) {
           return yield* Effect.fail(new RecoveryPassFailure(
             classifyRecoveryError(new RecoveryProtocolError('held command result was rejected by its actor during list recovery')),
@@ -1931,21 +2149,24 @@ export class FabRuntime {
           new Error('reconciliation-batch-incomplete'),
         ));
       }
-      if (self.overflowDropGeneration > snapshot.dropBarrier || self.pendingDrops.some((drop) => drop.generation > snapshot.dropBarrier)) {
+      self.refreshRealtimeAvailability();
+      if (self.hasUncoveredDrops(snapshot.dropBarrier)) {
         self.needsNextAuthoritativePass = true;
         const previous = self.lastSnapshotState;
         if (previous !== undefined) self.lastSnapshotState = { ...previous, needsNextAuthoritativePass: true };
         self.scheduleCompensationPass(generation);
         return;
       }
-      if (self.pendingRecovery !== undefined || self.recoveryPending) {
-        self.needsNextAuthoritativePass = true;
-        self.setPhase('Dirty');
-        return;
-      }
-      self.refreshRealtimeAvailability();
-      if (self.realtimeAvailability !== 'ready') {
-        self.setPhase('Degraded');
+      // ==========================================================================
+      // P1-01 PRE-COVER Healthy barrier (Round 5.1).
+      // From this point until completeRecoverySuccess() there must be NO async
+      // yield point: every condition below is read synchronously and the cover and
+      // the Healthy commit happen inside the same Effect.gen step, so no realtime
+      // event, held result or pending acknowledgement can slip in between.
+      // ==========================================================================
+      const preCover = self.preCoverBarrierFailure(snapshot, batchFailure);
+      if (preCover !== undefined) {
+        self.handleHealthyBarrierFailure('pre-cover', preCover, generation);
         return;
       }
       const cover = self.source.cover({ epoch: snapshot.epoch, sequence: snapshot.sequence }, snapshot.kind, snapshot.lossBarrier);
@@ -1955,10 +2176,151 @@ export class FabRuntime {
           new Error('cover-insufficient'),
         ));
       }
+      // ==========================================================================
+      // P1-01 POST-COVER Healthy barrier (same synchronous interval as the cover).
+      // The cover marked the ordered transport ledger covered up to the snapshot
+      // watermark, so a still-pending delivered entry (or a bridge-held result) now
+      // proves this snapshot missed an event: never Healthy, never clear the ledger,
+      // never write `delivered`. The next LIST pass must cover it.
+      // ==========================================================================
+      const postCover = self.postCoverBarrierFailure();
+      if (postCover !== undefined) {
+        self.handleHealthyBarrierFailure('post-cover', postCover, generation);
+        return;
+      }
       const covered = self.resolveCoveredDrops(snapshot.dropBarrier);
       if (self.lastSnapshotState !== undefined) self.lastSnapshotState = { ...self.lastSnapshotState, coveredDrops: covered };
       self.completeRecoverySuccess(snapshot);
     });
+  }
+
+  /** R3-08: drop intents this snapshot's dropBarrier does NOT prove covered. */
+  private uncoveredDropCount(dropBarrier: number): number {
+    let pending = 0;
+    for (const drop of this.pendingDrops) if (drop.generation > dropBarrier) pending += 1;
+    if (this.overflowDropGeneration > dropBarrier) pending += 1;
+    return pending;
+  }
+
+  private hasUncoveredDrops(dropBarrier: number): boolean {
+    return this.uncoveredDropCount(dropBarrier) > 0;
+  }
+
+  /**
+   * Round 5.1 / P1-01: the pre-cover final barrier. All synchronous reads; the
+   * caller must not yield between this check, the cover and the Healthy commit.
+   *
+   * Correctness evidence is checked before environment readiness so a genuine
+   * authoritative gap always goes through the bounded compensation path rather
+   * than being masked as a transport state.
+   */
+  private preCoverBarrierFailure(
+    snapshot: RecoverySnapshot,
+    batchFailure: string | undefined,
+  ): HealthyBarrierFailure | undefined {
+    if (this.pendingRecovery !== undefined) {
+      return { kind: 'stale-request', reason: 'a newer recovery request is still pending' };
+    }
+    if (this.recoveryPending) {
+      return { kind: 'stale-request', reason: 'another recovery pass is queued' };
+    }
+    if (this.bridge.pendingCount !== 0) {
+      return {
+        kind: 'correctness',
+        reason: this.bridge.pendingCount + ' bridge-held/conflicted command result(s) are unresolved',
+      };
+    }
+    const uncoveredDrops = this.uncoveredDropCount(snapshot.dropBarrier);
+    if (uncoveredDrops !== 0) {
+      return {
+        kind: 'correctness',
+        reason: uncoveredDrops + ' post-snapshot reconciliation drop(s) remain outside the drop barrier',
+      };
+    }
+    if (this.bridge.conflictCount !== 0) {
+      return { kind: 'correctness', reason: this.bridge.conflictCount + ' unresolved command conflict(s)' };
+    }
+    if (batchFailure !== undefined) {
+      return { kind: 'correctness', reason: batchFailure };
+    }
+    // Environment readiness (R4-06/P2-01): without a live command transport the
+    // runtime may converge its HTTP state but must never claim Healthy. This is not
+    // an authoritative correctness gap, so it does not enter the compensation loop;
+    // the next connection-status transition re-arms one authoritative pass.
+    if (this.realtimeAvailability !== 'ready') {
+      return { kind: 'environment', reason: 'realtime command transport is ' + this.realtimeAvailability };
+    }
+    if (this.connectionStatus !== 'open') {
+      return { kind: 'environment', reason: 'command stream connection is ' + this.connectionStatus };
+    }
+    return undefined;
+  }
+
+  /**
+   * Round 5.1 / P1-01: the post-cover final barrier. Runs synchronously immediately
+   * after source.cover(); the transport ledger only advances through the cover, so
+   * any leftover pending acknowledgement (or held result) proves the snapshot did
+   * not cover everything the live stream delivered.
+   */
+  private postCoverBarrierFailure(): HealthyBarrierFailure | undefined {
+    if (this.bridge.pendingCount !== 0) {
+      return {
+        kind: 'correctness',
+        reason: this.bridge.pendingCount + ' bridge-held/conflicted command result(s) appeared after the snapshot',
+      };
+    }
+    const pendingAcknowledgements = this.source.cursors?.pendingAcknowledgements;
+    // A missing count is a barrier failure, never an implicit zero (P1-01): a source
+    // that cannot report its delivered-but-unapplied ledger cannot prove the cover.
+    if (typeof pendingAcknowledgements !== 'number' || !Number.isSafeInteger(pendingAcknowledgements) || pendingAcknowledgements < 0) {
+      return { kind: 'correctness', reason: 'source did not report a valid pending acknowledgement count' };
+    }
+    if (pendingAcknowledgements !== 0) {
+      return {
+        kind: 'correctness',
+        reason: pendingAcknowledgements + ' delivered command acknowledgement(s) remain unapplied after cover',
+      };
+    }
+    if (this.pendingRecovery !== undefined) {
+      return { kind: 'stale-request', reason: 'a newer recovery request is still pending after cover' };
+    }
+    if (this.recoveryPending) {
+      return { kind: 'stale-request', reason: 'another recovery pass is queued after cover' };
+    }
+    return undefined;
+  }
+
+  /**
+   * Round 5.1 / P1-01: a rejected final barrier can never be masked. The watermark
+   * evidence is kept with needsNextAuthoritativePass=true, the pending ACK ledger
+   * and delivered cursor are left untouched, and the next pass is armed as a LIST
+   * pass through the existing bounded compensation state machine.
+   */
+  private handleHealthyBarrierFailure(
+    stage: 'pre-cover' | 'post-cover',
+    failure: HealthyBarrierFailure,
+    generation: number,
+  ): void {
+    this.needsNextAuthoritativePass = true;
+    const previous = this.lastSnapshotState;
+    if (previous !== undefined) this.lastSnapshotState = { ...previous, needsNextAuthoritativePass: true };
+    this.recordDiagnostic('protocol-error', stage + ' Healthy barrier rejected: ' + failure.reason);
+    if (failure.kind === 'environment') {
+      if (this.recoveryAvailable && this.phase !== 'Unrecoverable' && this.phase !== 'Unavailable') {
+        this.setPhase('Degraded');
+      }
+      return;
+    }
+    this.mergeRecoveryRequest({ listOnly: true, cause: 'protocol-error' });
+    if (failure.kind === 'stale-request') {
+      // The pass is superseded by newer authority demand, not an evidence gap: arm
+      // one coalesced immediate pass (the pre-existing retry path). The bounded
+      // compensation machine stays reserved for post-snapshot evidence failures.
+      if (this.phase !== 'Unrecoverable' && this.phase !== 'Unavailable') this.setPhase('Dirty');
+      this.scheduleRecoveryPass();
+      return;
+    }
+    this.scheduleCompensationPass(generation);
   }
 
   /**
@@ -2214,6 +2576,10 @@ export class FabRuntime {
   private afterDelivery(commandId: string): void {
     this.publishProjection(commandId);
     this.recordTerminal(commandId);
+    // P2-02: a terminal transition can remove the last command-stream demand. The
+    // caller may be the bridge's own consumer fiber, so the re-evaluation is
+    // deferred instead of interrupting that fiber from its own handler.
+    this.scheduleCommandSubscriptionSync();
   }
 
   /** Subscribe to actor snapshots before start; unsubscribe is owned with the workflow. */
@@ -2248,7 +2614,7 @@ export class FabRuntime {
       this.resolvedAt.delete(commandId);
     }
     this.enforceTerminalLimit();
-    this.scheduleSweep();
+    this.scheduleWorkflowSweep();
   }
 
   private enforceTerminalLimit(): void {
@@ -2258,32 +2624,61 @@ export class FabRuntime {
     for (let index = 0; index < excess && index < ordered.length; index += 1) this.evictWorkflow(ordered[index][0]);
   }
 
-  private scheduleSweep(): void {
+  /**
+   * P2-03: workflow-actor retention sweep, independent of the correlation sweep.
+   * TTL=0 disables time-based workflow eviction only; the count cap stays enforced
+   * by enforceTerminalLimit().
+   */
+  private scheduleWorkflowSweep(): void {
     if (this.disposed || this.resolvedAt.size === 0 || this.retention.resolvedWorkflowTtlMs === 0) {
-      this.clearSweepTimer();
+      this.clearWorkflowSweepTimer();
       return;
     }
-    if (this.sweepTimer !== undefined) return;
+    if (this.workflowSweepTimer !== undefined) return;
     const now = this.retention.now();
     const nextExpiry = Math.min(...[...this.resolvedAt.values()].map((at) => at + this.retention.resolvedWorkflowTtlMs));
     const delay = Math.max(1, Math.min(this.retention.sweepIntervalMs, nextExpiry - now));
-    this.sweepTimer = setTimeout(() => {
-      this.sweepTimer = undefined;
-      this.sweep();
+    this.workflowSweepTimer = setTimeout(() => {
+      this.workflowSweepTimer = undefined;
+      this.sweepWorkflows();
     }, delay);
   }
 
-  private sweep(): void {
+  /** Evict expired terminal workflows and re-arm the workflow sweep only. */
+  private sweepWorkflows(): void {
     if (this.disposed || !this.started) return;
-    const now = this.retention.now();
     if (this.retention.resolvedWorkflowTtlMs > 0) {
+      const now = this.retention.now();
       for (const [commandId, resolvedAt] of [...this.resolvedAt]) {
         if (now - resolvedAt >= this.retention.resolvedWorkflowTtlMs) this.evictWorkflow(commandId);
       }
     }
     this.enforceTerminalLimit();
+    this.scheduleWorkflowSweep();
+  }
+
+  /**
+   * P2-03: correlation-watermark sweep, independent of the workflow sweep.
+   * TTL=0 disables time-based correlation expiry only; terminalCount/maxEntries
+   * capacity caps stay enforced per observation inside the registry.
+   */
+  private scheduleCorrelationSweep(): void {
+    if (this.disposed || this.retention.correlationTerminalTtlMs === 0) {
+      this.clearCorrelationSweepTimer();
+      return;
+    }
+    if (this.correlationSweepTimer !== undefined) return;
+    this.correlationSweepTimer = setTimeout(() => {
+      this.correlationSweepTimer = undefined;
+      this.sweepCorrelation();
+    }, this.retention.sweepIntervalMs);
+  }
+
+  /** Expire terminal correlation watermarks and re-arm the correlation sweep only. */
+  private sweepCorrelation(): void {
+    if (this.disposed || !this.started) return;
     this.correlation.sweep();
-    this.scheduleSweep();
+    this.scheduleCorrelationSweep();
   }
 
   /**
@@ -2306,10 +2701,16 @@ export class FabRuntime {
     else this.projectionStore.forget(commandId);
   }
 
-  private clearSweepTimer(): void {
-    if (this.sweepTimer === undefined) return;
-    clearTimeout(this.sweepTimer);
-    this.sweepTimer = undefined;
+  private clearWorkflowSweepTimer(): void {
+    if (this.workflowSweepTimer === undefined) return;
+    clearTimeout(this.workflowSweepTimer);
+    this.workflowSweepTimer = undefined;
+  }
+
+  private clearCorrelationSweepTimer(): void {
+    if (this.correlationSweepTimer === undefined) return;
+    clearTimeout(this.correlationSweepTimer);
+    this.correlationSweepTimer = undefined;
   }
 }
 

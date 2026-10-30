@@ -156,6 +156,84 @@ dispose():
 - Round 4 验证事实：前端全量 155 文件 / 908 tests PASS、typecheck/lint/build PASS；后端 226 tests PASS。浏览器 E2E/GPU/Compiler 等价未运行，见 `architecture/17-round4-remediation-record.md` §5。
 
 
-## Round 5（进行中）
+## 12. Round 5 修订（已实施，2026-10-30）
 
-Round 5 正在整改：恢复使用完整 all List；快照前存在而快照中缺失的活动命令进入 expired-unresolved，不制造最终业务结果。
+Round 5 源码整改已提交 `4c8f0c1`：恢复使用完整 all List；快照前存在而快照中缺失的活动命令进入 `expired-unresolved`，不制造最终业务结果。规范见 `architecture/18-round5-remediation-specification.md`。
+
+## 13. Round 5.1 修订（2026-10-30，当前事实优先）
+
+状态：契约/源码整改（Round 5.1）；规范见 `architecture/19-round5.1-remediation-specification.md` §2、§3、§7–§9。本节优先于本文前文与 §11 中冲突的旧描述。
+
+### 13.1 Healthy 的完整前置条件（12 条，缺一不可）
+
+FabRuntime 只有在**当前 recovery generation** 同时满足以下全部条件时才能进入 `Healthy`；任何一条不满足都不得报告 Healthy（`Degraded`/`Dirty`/`WaitingRetry`/`Unrecoverable`）：
+
+1. 当前 recovery generation 仍有效（`isRecoveryCurrent(g)`：未 dispose、仍 started、`g === recoveryGeneration`）；
+2. 权威 List/Journal 快照已完整应用（list：完整 `listFabCommands(...,'all')` 的每条记录经 `receiveAuthoritative` 被 applied/stale-covered；journal：分页到 `latestSequence` 且 epoch/序号/保留窗口校验通过）；
+3. post-snapshot 的 scheduler 对账批次已完成且每个仍活动命令收敛（无 failed/timed-out/cancelled/not-found，`batchFailure === undefined`）；
+4. 不存在未覆盖的 DropIntent（`pendingDrops` 为空，或所有 generation `<= snapshot.dropBarrier`；`overflowDropGeneration` 同样被覆盖）；
+5. 不存在待处理的 Recovery 请求（`pendingRecovery === undefined` 且 `recoveryPending === false`）；
+6. `CommandEventBridge.pendingCount === 0`（held events + conflict records）；
+7. 不存在未解决的 event conflict（`bridge.conflictCount === 0`）；
+8. transport ACK cover 明确返回 `status === 'covered'`；
+9. cover 之后 `source.cursors.pendingAcknowledgements === 0`（必填 number；缺失/undefined 视为失败，绝不当作 0）；
+10. `realtimeAvailability === 'ready'`；
+11. `connectionStatus === 'open'`（**严格条件**：idle-closed 的运行时不 Healthy，见 §13.3/§13.4；不得为了满足本条件强制打开连接）；
+12. 当前 generation 没有被新 Dirty/Conflict/Rejection 事件作废：cover 与 Healthy 提交之间不得有 async 让出点；期间出现的新事件必须置 `needsNextAuthoritativePass`、合并 list-only 恢复请求并阻止 Healthy。
+
+要点：**HTTP 恢复成功、List 应用、actor 批次完成、ACK cover 成功是四个彼此独立的事实**，任何一个都不能替代其他条件；“cover 成功”本身永远不意味着 Healthy。
+
+屏障失败语义（`handleHealthyBarrierFailure`）：**正确性失败**（pending request/queued pass、bridge held/conflict、未覆盖 drop、batchFailure）合并 list-only 请求并走有界补偿 List pass；**环境失败**（`realtimeAvailability !== 'ready'` 或 `connectionStatus !== 'open'`）只置 `Degraded`、不进补偿循环，由下一次连接状态迁移重新武装一次权威 pass。任一情况都不得清理 pending ACK/ledger、不得修改 `delivered`、不得 Healthy。完整流水线与失败语义见 `command-reconciliation.md` §14。
+
+### 13.2 expired-unresolved 语义（恢复处置，不是业务结果）
+
+- 只有 Recovery 在应用完整权威 List 后、证明某本地仍活动的命令不在权威集合中时，才调用 `workflow.markExpiredUnresolved()`；投影为 `recoveryDisposition === 'expired-unresolved'`，保留最后已知 revision/outcome。
+- **realtime 永远不能恢复它**：`receiveRealtime` 对 expired 工作流的任意 revision/outcome 都是 no-op（迟到的 `executing`/`succeeded`/`failed` 都不得复活）。
+- **只有经校验的权威记录能恢复它**：`receiveAuthoritative`（revision 相等可解决/修正，更高 revision 前进，更低 revision 拒绝回滚）应用后 disposition 回到 `tracked`。
+- **禁止伪造 succeeded/failed/cancelled**。expired-unresolved 对“投递/对账”而言是终态（不计入活动命令、不阻塞 Healthy、不会被无限 reconcile），但不是业务终态，UI 必须能展示“结果未知”。
+
+### 13.3 按需 Command SSE（`lazyCommandSubscription`）
+
+生产组合根设置 `lazyCommandSubscription: true`。命令流“需求”定义为任一成立：
+
+1. 存在未提交的 admission reservation（`reservations.size > 0`，含 HTTP POST 未返回的窗口）；
+2. 存在活动（非终态）tracked workflow；
+3. 存在未解决的 held event 或 conflict（`bridge.pendingCount > 0`）。
+
+`syncCommandSubscription()` 规则：有需求且 bridge 未启动 → `bridge.start()`；无需求且 bridge 已启动 → `bridge.stop()`（真实 transport 随后关闭 EventSource 并发布 `closed`）。调用点覆盖 start、reserveCommandAdmission 成功、reservation commit/release、createTrackedWorkflow、afterDelivery/recordTerminal、onBridgeUncorrelated/onBridgeConflict、bridge flush 与 consumer exit。
+
+约束：
+
+- **每个 FAB 至多一条 SSE 连接**；绝不按 workflow 建连接。
+- 有其他活动 workflow 需要时不得关闭连接；终态工作流只为 UI 投影保留时不得保持连接。
+- HTTP Journal/List 恢复**不需要** live SSE transport。
+- `closed` 是合法空闲：不得当作 `failed`、不得触发重连风暴、不得视为 `open`；也不得为了让 Healthy 成立而强行打开/保留连接（no forced-open）。但 idle-closed **不是 Healthy**：当前无需求的 FAB 保持 `Degraded`（环境就绪条件不满足），不是失败也不是重试循环；一旦出现需求，流打开（`connecting` → `open`），`open` 迁移重新武装一次权威 pass，才可能重新进入 Healthy。
+- 终态投递通过 microtask 延迟再评估（`scheduleCommandSubscriptionSync`），避免 bridge 在自己的 consumer fiber 内中断自身。
+
+### 13.4 ConnectionStatus：`closed` 与 `failed` 的区别
+
+- `connecting`：正在建立连接（在 factory 调用/计时器之前发布）；`open`：已建立；`reconnecting`：中断并已安排重连（含瞬时 factory throw/connect timeout）；`failed`：本环境永久不可用（无 EventSource factory，或有界打开尝试耗尽），只发布一次、之后关闭不得降级；`closed`：被主动关闭且当前没有连接（正常空闲态）。
+- 初始状态：transport 未打开时为 `closed`；runtime 初始 `connectionStatus = 'closed'`（空闲，尚无连接）。
+- 每个状态变化都发布到 `connectionStatus` 流（首个订阅者先看到当前状态）；不能只改本地字段。
+- runtime 对状态的解释：`open` → 进入 Dirty（list-only, reconnect）；`reconnecting`/`failed` → Dirty + `Degraded`（transport 失败永远不是命令结果）；`closed` → 置 `Degraded`（除 `Unrecoverable`/`Unavailable` 外），**不得**调度恢复循环；下一次 `open` 再武装一次权威 pass。
+- 永久不可用时 `availability` 保持 `unavailable`，phase 不得因普通关闭而降级为 Healthy。
+
+### 13.5 独立 TTL 与两个 sweep 定时器
+
+- `FabRuntimeRetentionOptions.correlationTerminalTtlMs`（默认 300000，`min: 0`）独立于 `resolvedWorkflowTtlMs`；传给 `CommandCorrelationRegistry({ terminalTtlMs })`（保留 `maxTerminalEntries/maxEntries/now`）。
+- 两个独立定时器，均由 FabRuntime 拥有、start() 启动、stop()/dispose() 清理，互不停止对方：
+  - `workflowSweepTimer`：按 `resolvedWorkflowTtlMs` 逐出已解决 workflow；`resolvedAt.size === 0` 或 TTL=0 时清除且不再调度（容量上限 `enforceTerminalLimit()` 仍然生效）。
+  - `correlationSweepTimer`：按 `sweepIntervalMs` 调用 `correlation.sweep()`；`correlationTerminalTtlMs === 0` 时清除且不再调度（terminal 数量/绝对容量上限仍然生效）。
+- **TTL=0 语义**：只关闭本类条目的“按时间逐出”，不得关闭另一类 TTL，不得关闭容量上限，不得留下空转定时器循环。
+- 当前实现不再使用单一 `sweepTimer`；没有全局定时器服务。
+
+### 13.6 与 bridge 的冲突/未关联回调
+
+FabRuntime 在构造时接入 `onUncorrelated` 与 `onConflict`：记录有界诊断、置 `needsNextAuthoritativePass = true`、合并 `{ listOnly: true }` 恢复请求、**不 ACK**，并在没有进行中 pass 时调度恢复（不得并行第二个恢复执行器）。详见 `command-event-bridge.md` §16 与 `command-reconciliation.md` §14.2。
+
+### 13.7 测试与验证
+
+- `web_app/tests/integration/fab-runtime.test.ts`：P1-01 屏障（post-snapshot 未关联事件、cover 成功但 pending ACK 仍存在）、P2-01 closed/failed 生命周期、P2-02 32 FAB 按需连接、P2-03 两个独立 TTL。
+- `web_app/tests/integration/fab-runtime-batch23.test.ts`：post-snapshot 竞态与补偿 List pass。
+- `web_app/tests/integration/runtime-bootstrap.test.tsx`：生产组合根 lazy 装配、无 32 条命令 SSE、卸载/销毁释放。
+- 真实浏览器/多 FAB 连接行为仍属 Phase C（见 19 号规范 §12.3），不得由 fake transport 测试宣称生产验收。

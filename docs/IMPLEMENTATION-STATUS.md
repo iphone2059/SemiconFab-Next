@@ -97,6 +97,6 @@ Babylon Lite 1.36   WebGPU-only 渲染（rendering/lite-backend.ts）
 - 当前产品语义不变：默认 1 FAB、架构支持 1–32；命令刷新恢复仍为 active-only（ADR-010 §6.6）。
 
 
-## Round 5（进行中）
+## Round 5 / Round 5.1（已实施）
 
-Round 5 整改进行中；源码变更、逐项复审、自动化门禁和真实浏览器验收均未完成，详见 architecture/18-round5-remediation-specification.md。
+Round 5 源码整改已由提交 `4c8f0c1` 实施（P1-01…P1-05、P2-01…P2-02），规范见 `architecture/18-round5-remediation-specification.md`。Round 5.1 复审发现的剩余 P1/P2 不变量缺口（P1-01…P2-04：恢复最终屏障、revision/outcome 冲突、realtime/authoritative 来源隔离、cover 不伪造 delivered、ConnectionStatus 生命周期、按需 SSE、独立 TTL、fake 协议保真）由 `architecture/19-round5.1-remediation-specification.md` 规范并整改；自动化门禁与真实浏览器/多 FAB 验收状态以最终门禁报告与该规范 §12.3/§15 为准，不得据此宣称最终验收 PASS。

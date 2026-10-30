@@ -99,7 +99,10 @@ export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode
     // One command SSE stream per FAB: the backend scopes + authorizes the stream
     // by the fabId query parameter and emits only that FAB's command results.
     // No site-level shared source exists (that would cross FAB identities and
-    // fail FAB-scoped authorization). The runtime opens the stream on startup.
+    // fail FAB-scoped authorization). Round 5.1 / P2-02: the production
+    // composition root explicitly opts into on-demand subscription - the runtime
+    // opens at most one Command SSE per FAB only while that FAB has an admission
+    // reservation, an active workflow or an unresolved held/conflict event.
     // R4-06: probe the environment once per assembled generation and derive the
     // explicit command capabilities from it. Missing realtime uses the pending source;
     // HTTP availability alone determines whether a gateway can be assembled.
@@ -125,7 +128,8 @@ export function RuntimeBootstrap({ children, appRuntime }: { children: ReactNode
       projectionRegistry,
       sourceFor,
       gateway: composition.gateway,
-      lazyCommandSubscription: false,
+      // P2-02: explicit production configuration; never rely on an implicit default.
+      lazyCommandSubscription: true,
     });
     for (const fab of fabs) registry.register(factory.create(fab.fabId, fab.siteId));
 

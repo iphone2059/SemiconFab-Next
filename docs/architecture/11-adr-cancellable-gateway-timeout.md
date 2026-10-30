@@ -55,6 +55,6 @@ export interface CommandGateway {
 - `trackCommand` 的 fire-and-forget 调度同样消费结果：失败/超时/取消（且命令仍需收敛）进入 Dirty 并由权威 pass 重试。
 
 
-## Round 5（进行中）
+## Round 5 / Round 5.1（已实施）
 
-Round 5 正在整改：每个 Scheduler 调用者拥有独立 waiter；最后一个 waiter 取消时中断对应请求，其他 waiter 不受影响。
+Round 5 已由提交 `4c8f0c1` 实施：每个 Scheduler 调用者拥有独立 waiter；最后一个 waiter 取消时中断对应请求，其他 waiter 不受影响。Round 5.1 将 Scheduler 独立 waiter 与 PhysicalRequestBudget 列为冻结模块（不改设计），见 `19-round5.1-remediation-specification.md` §2.5。

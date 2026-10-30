@@ -5,7 +5,21 @@ import {
   resolveTimeoutOption,
 } from '@/contracts/command-config';
 
-export type CorrelationDecision = 'new' | 'duplicate' | 'stale';
+/**
+ * Result of correlating one observed command-result revision (Round 5.1 / P1-02).
+ *
+ * - `new`: this observation is the first for the command, or it carries a newer
+ *   revision than the recorded watermark; the record now tracks it.
+ * - `duplicate`: same (highest) revision and the same outcome as the recorded
+ *   observation; no record mutation.
+ * - `stale`: older revision than the recorded watermark; no record mutation.
+ * - `conflict`: same (highest) revision but a *different* outcome than the one
+ *   recorded. The revision invariant "one revision has exactly one outcome" was
+ *   violated on the wire. The ordinary realtime path never mutates the record:
+ *   only an authoritative source may resolve/correct the recorded outcome
+ *   (`observeAuthoritative`).
+ */
+export type CorrelationDecision = 'new' | 'duplicate' | 'stale' | 'conflict';
 
 export interface CorrelationRetentionOptions {
   /** Max retained terminal correlation entries; the oldest *completed* terminals go first. */
@@ -30,12 +44,20 @@ interface CorrelationEntry {
   /** Highest revision observed on the wire; dedupe/ordering watermark. */
   readonly revision: number;
   /**
+   * Outcome recorded for the current highest observed revision (Round 5.1 /
+   * P1-02). A same-revision realtime observation with a different outcome is a
+   * conflict and must never mutate this value; only an authoritative observation
+   * may correct it.
+   */
+  readonly outcome: CommandOutcome;
+  /**
    * Highest revision the actor projection provably applied (R4-03). This advances
    * only forward and only through markApplied(); it is deliberately a different
    * watermark from the observed revision so an authoritative re-application can
    * bypass the SSE duplicate gate without lying about application.
    */
   appliedRevision?: number;
+  /** Derived from `outcome`; maintained so terminal retention stays O(1). */
   readonly terminal: boolean;
   updatedAt: number;
   /** Monotonic completion sequence for terminal entries; 0 for active entries. */
@@ -55,6 +77,13 @@ interface TerminalOrderEntry {
  * separate (R4-03): the observed watermark deduplicates the realtime stream,
  * while the applied watermark is only advanced after the actor projection proved
  * it advanced.
+ *
+ * Round 5.1 / P1-02: the registry also owns the *outcome* invariant for the
+ * current highest observed revision. A realtime observation with the same
+ * revision but a different outcome is a protocol conflict: it is reported but
+ * never mutates the record and never moves the applied watermark. Only the
+ * authoritative entry point may resolve/correct the recorded outcome, and it may
+ * never roll the revision or outcome back to an older revision.
  *
  * Retention is bounded: terminal entries expire by TTL / terminal count (the
  * runtime sweeps them), and maxEntries is a hard cap (R4-08). The registry keeps
@@ -96,40 +125,130 @@ export class CommandCorrelationRegistry {
     return `${fabId}\u0000${commandId}`;
   }
 
+  /**
+   * Ordinary (realtime) observation. This is the only entry point allowed to
+   * report a same-revision outcome disagreement as `conflict`; it never mutates
+   * an existing record for a duplicate/stale/conflict decision.
+   */
   observe(event: CommandResultEvent): CorrelationDecision {
     const key = CommandCorrelationRegistry.key(event.fabId, event.commandId);
     const last = this.revisions.get(key);
-    if (last === undefined || event.revision > last.revision) {
-      const terminal = TERMINAL_OUTCOMES.has(event.outcome);
-      // A superseded entry (rare: terminal command receiving a newer revision)
-      // leaves a stale order entry that the eviction/reconciliation paths skip.
-      if (last?.terminal) this.terminalEntries -= 1;
-      const entry: CorrelationEntry = {
-        revision: event.revision,
-        // Coverage of already-applied revisions survives a newer observation.
-        ...(last?.appliedRevision !== undefined ? { appliedRevision: last.appliedRevision } : {}),
-        terminal,
-        updatedAt: this.now(),
-        terminalSeq: terminal ? ++this.terminalSeq : 0,
-      };
-      this.revisions.set(key, entry);
-      if (terminal) {
-        this.terminalOrder.push({ key, seq: entry.terminalSeq });
-        this.terminalEntries += 1;
-      }
-      // Per-event bound enforcement: terminal additions can grow the terminal
-      // set, active additions can only relevantly hit the hard absolute cap.
-      this.enforceBounds();
+    if (last === undefined) {
+      this.recordNew(key, event, undefined);
       return 'new';
     }
-    return event.revision === last.revision ? 'duplicate' : 'stale';
+    if (event.revision > last.revision) {
+      this.recordNew(key, event, last);
+      return 'new';
+    }
+    if (event.revision < last.revision) return 'stale';
+    // Same revision: only an identical outcome may be treated as a duplicate.
+    return event.outcome === last.outcome ? 'duplicate' : 'conflict';
+  }
+
+  /**
+   * Authoritative observation (Round 5.1 / P1-02). The authoritative List/Journal
+   * snapshot is allowed to resolve a same-revision outcome conflict and correct
+   * the recorded outcome; it can never roll the watermark back:
+   *
+   * - no record / newer revision -> record it and return `new`;
+   * - same revision, same outcome -> `duplicate`;
+   * - same revision, different outcome -> correct the recorded outcome (and the
+   *   terminal bookkeeping) and return `new` (the correction must be re-delivered);
+   * - older revision -> `stale` with no revision/outcome rollback.
+   */
+  observeAuthoritative(event: CommandResultEvent): CorrelationDecision {
+    const key = CommandCorrelationRegistry.key(event.fabId, event.commandId);
+    const last = this.revisions.get(key);
+    if (last === undefined) {
+      this.recordNew(key, event, undefined);
+      return 'new';
+    }
+    if (event.revision > last.revision) {
+      this.recordNew(key, event, last);
+      return 'new';
+    }
+    if (event.revision < last.revision) return 'stale';
+    if (event.outcome === last.outcome) return 'duplicate';
+    this.correctOutcome(key, last, event.outcome);
+    return 'new';
+  }
+
+  /**
+   * Record a brand-new observed revision (first observation or newer revision).
+   * Preserves the applied watermark (coverage of already-applied revisions
+   * survives a newer observation) and keeps terminal retention bookkeeping
+   * coherent when a terminal entry is superseded by a newer revision.
+   */
+  private recordNew(
+    key: string,
+    event: CommandResultEvent,
+    previous: CorrelationEntry | undefined,
+  ): void {
+    const terminal = TERMINAL_OUTCOMES.has(event.outcome);
+    if (previous?.terminal) this.terminalEntries -= 1;
+    const entry: CorrelationEntry = {
+      revision: event.revision,
+      outcome: event.outcome,
+      // Coverage of already-applied revisions survives a newer observation.
+      ...(previous?.appliedRevision !== undefined ? { appliedRevision: previous.appliedRevision } : {}),
+      terminal,
+      updatedAt: this.now(),
+      terminalSeq: terminal ? ++this.terminalSeq : 0,
+    };
+    this.revisions.set(key, entry);
+    if (terminal) {
+      this.terminalOrder.push({ key, seq: entry.terminalSeq });
+      this.terminalEntries += 1;
+    }
+    // Per-event bound enforcement: terminal additions can grow the terminal
+    // set, active additions can only relevantly hit the hard absolute cap.
+    this.enforceBounds();
+  }
+
+  /**
+   * Authoritative same-revision outcome correction. The revision never changes,
+   * so the terminal-completion queue entry must be kept, added or dropped in a
+   * way that preserves the terminal-head invariant:
+   *
+   * - active -> terminal: assign a new completion seq and enqueue it;
+   * - terminal -> active: un-count it; its old queue entry is pruned lazily;
+   * - terminal -> terminal: keep the existing seq (the queue entry stays valid),
+   *   only the recorded outcome changes.
+   */
+  private correctOutcome(key: string, previous: CorrelationEntry, outcome: CommandOutcome): void {
+    const terminal = TERMINAL_OUTCOMES.has(outcome);
+    const terminalSeq = terminal
+      ? previous.terminal ? previous.terminalSeq : ++this.terminalSeq
+      : 0;
+    const entry: CorrelationEntry = {
+      revision: previous.revision,
+      outcome,
+      ...(previous.appliedRevision !== undefined ? { appliedRevision: previous.appliedRevision } : {}),
+      terminal,
+      updatedAt: this.now(),
+      terminalSeq,
+    };
+    if (previous.terminal && !terminal) {
+      this.terminalEntries -= 1;
+    } else if (!previous.terminal && terminal) {
+      this.terminalEntries += 1;
+    }
+    this.revisions.set(key, entry);
+    if (!previous.terminal && terminal) {
+      this.terminalOrder.push({ key, seq: terminalSeq });
+      this.enforceBounds();
+    }
   }
 
   /**
    * Record that the actor projection provably applied this revision (R4-03,
-   * ADR-010 §6.2). Forward-only: an older authoritative re-application can never
-   * regress the applied watermark. The entry is normally created by observe();
-   * a defensive observation is made if the caller skipped it.
+   * ADR-010 §6.2). Round 5.1 / P1-02: the applied watermark may only advance
+   * when the event's outcome matches the recorded outcome for the current
+   * highest revision — an ordinary conflicting event proves nothing and must be
+   * resolved by authority first. Forward-only: a call can never regress the
+   * applied watermark. The entry is normally created by observe(); a defensive
+   * observation is made if the caller skipped it.
    */
   markApplied(event: CommandResultEvent): void {
     const key = CommandCorrelationRegistry.key(event.fabId, event.commandId);
@@ -139,6 +258,7 @@ export class CommandCorrelationRegistry {
       entry = this.revisions.get(key);
       if (entry === undefined) return;
     }
+    if (entry.outcome !== event.outcome) return;
     if (entry.appliedRevision === undefined || event.revision > entry.appliedRevision) {
       entry.appliedRevision = event.revision;
     }
@@ -146,6 +266,11 @@ export class CommandCorrelationRegistry {
 
   lastObservedRevision(fabId: string, commandId: string): number | undefined {
     return this.revisions.get(CommandCorrelationRegistry.key(fabId, commandId))?.revision;
+  }
+
+  /** Outcome recorded for the current highest observed revision (Round 5.1 / P1-02). */
+  lastObservedOutcome(fabId: string, commandId: string): CommandOutcome | undefined {
+    return this.revisions.get(CommandCorrelationRegistry.key(fabId, commandId))?.outcome;
   }
 
   hasUnappliedObservation(fabId: string, commandId: string): boolean {

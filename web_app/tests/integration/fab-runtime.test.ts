@@ -1,16 +1,19 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FabRuntime } from '@/runtime/fab-runtime';
 import { XStateCommandWorkflowAdapter } from '@/runtime/xstate-command-workflow-adapter';
 import { FabLifecycleCoordinator } from '@/runtime/fab-lifecycle-coordinator';
 import { FabRuntimeRegistry } from '@/runtime/fab-runtime-registry';
-import type { CommandJournalPage, CommandJournalQuery } from '@/contracts/command-gateway.contract';
+import type { CommandJournalPage, CommandJournalQuery, CommandRecoveryList } from '@/contracts/command-gateway.contract';
 import {
   FakeCommandEventSource,
   FakeCommandWorkflow,
   type TestFab,
   type TestFabOptions,
+  commandCursor,
   commandRecord,
   commandResult,
+  createCommandTestRuntime,
+  createFabRuntime,
   createTestFab,
   emptyRecoveryList,
   fakeCommandGateway,
@@ -612,4 +615,383 @@ it('treats a 404 as unresolved until a later complete list proves the command ab
   await expect.poll(() => runtime.recoveryState.phase, { timeout: 1000 }).toBe('Healthy');
   expect(runtime.activeCommandCount).toBe(0);
   expect(runtime.getProjection(commandId)?.outcome).toBe('executing');
+});
+
+describe('Round 5.1 / P1-01 final Healthy barriers', () => {
+  it('does not become healthy when an uncorrelated event arrives during post-snapshot reconciliation', async () => {
+    const source = new FakeCommandEventSource();
+    type ListMode = 'initial' | 'track' | 'block' | 'resolved';
+    let listMode: ListMode = 'initial';
+    let blockedList!: (value: CommandRecoveryList) => void;
+    let pauseStatus = false;
+    let releaseStatus!: (value: ReturnType<typeof commandResult>) => void;
+    const trackedRecord = commandRecord({ fabId: 'fab-a', commandId, revision: 1, outcome: 'executing' });
+    const orphanTerminal = commandRecord({ fabId: 'fab-a', commandId: 'cmd-orphan', revision: 1, outcome: 'succeeded' });
+    const gateway = fakeCommandGateway({
+      listFabCommands: async () => {
+        if (listMode === 'initial') return emptyRecoveryList([]);
+        if (listMode === 'track') return emptyRecoveryList([trackedRecord]);
+        if (listMode === 'resolved') return emptyRecoveryList([trackedRecord, orphanTerminal]);
+        return new Promise<CommandRecoveryList>((resolve) => { blockedList = resolve; });
+      },
+      getCommandStatus: async (fabId, targetCommandId) => {
+        if (pauseStatus && targetCommandId === commandId) {
+          pauseStatus = false;
+          return new Promise((resolve) => { releaseStatus = resolve; });
+        }
+        return commandResult({ fabId, commandId: targetCommandId, revision: 1, outcome: 'executing' });
+      },
+    });
+    const { runtime } = createFab({ source, gateway, recovery: { backoffMs: [1], maxAttempts: 8 } });
+    runtime.start();
+    runtime.registerAcceptedCommand(commandId);
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
+
+    // Dirty -> List snapshot -> the post-snapshot batch pauses on the tracked command.
+    listMode = 'track';
+    pauseStatus = true;
+    source.emitDirty({ reason: 'overflow', droppedCount: 1 });
+    await expect.poll(() => typeof releaseStatus, { timeout: 1_000 }).toBe('function');
+
+    // A realtime event for a command with no workflow is held, never ACKed, and
+    // must force another authoritative pass before Healthy is re-earned.
+    source.emit(commandResult({ fabId: 'fab-a', commandId: 'cmd-orphan', revision: 1, outcome: 'succeeded' }));
+    await expect.poll(() => runtime.pendingCount, { timeout: 1_000 }).toBeGreaterThan(0);
+    expect(runtime.recoveryState.phase).not.toBe('Healthy');
+
+    listMode = 'block';
+    releaseStatus(commandResult({ fabId: 'fab-a', commandId, revision: 1, outcome: 'executing' }));
+    await expect.poll(() => typeof blockedList, { timeout: 1_000 }).toBe('function');
+    // The next List pass is running: the uncorrelated event is still unresolved, so
+    // the runtime is observably not Healthy and a new authoritative pass is pending.
+    expect(runtime.recoveryState.phase).not.toBe('Healthy');
+    expect(runtime.recoveryState.needsNextAuthoritativePass).toBe(true);
+    expect(runtime.recoveryHistory.some((entry) => /uncorrelated command result held/.test(entry.message ?? ''))).toBe(true);
+    expect(runtime.getProjection('cmd-orphan')).toBeUndefined();
+
+    listMode = 'resolved';
+    blockedList(emptyRecoveryList([trackedRecord, orphanTerminal]));
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 2_000 }).toBe('Healthy');
+    expect(runtime.pendingCount).toBe(0);
+    expect(source.pendingAcknowledgementCount).toBe(0);
+    expect(runtime.lastRecoverySnapshot?.needsNextAuthoritativePass).toBe(false);
+  });
+
+  it('does not become healthy when cover succeeds but delivered acknowledgements remain', async () => {
+    const source = new FakeCommandEventSource();
+    type CoverMode = 'initial' | 'below' | 'cover';
+    let mode: CoverMode = 'initial';
+    const list = (latestSequence: number): CommandRecoveryList => ({ epoch: 'epoch-1', latestSequence, commands: [] });
+    const gateway = fakeCommandGateway({
+      listFabCommands: async () => (mode === 'cover' ? list(1) : list(0)),
+    });
+    const { runtime } = createFab({ source, gateway, recovery: { backoffMs: [1], maxAttempts: 8, maxCompensationPasses: 4 } });
+    runtime.start();
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
+
+    // Delivered but not consumed: the transport ledger has a pending entry above
+    // the first snapshot watermark, so the cover succeeds but cannot be trusted.
+    source.deliverUnprocessed(
+      commandResult({ fabId: 'fab-a', commandId: 'cmd-unprocessed', revision: 1, outcome: 'succeeded' }),
+      commandCursor('epoch-1', 1),
+    );
+    expect(source.cursors.pendingAcknowledgements).toBe(1);
+    mode = 'below';
+    source.emitDirty({ reason: 'overflow', droppedCount: 1 });
+    await expect.poll(
+      () => runtime.recoveryHistory.some((entry) => /post-cover Healthy barrier rejected/.test(entry.message ?? '')),
+      { timeout: 1_500 },
+    ).toBe(true);
+    expect(runtime.recoveryState.phase).not.toBe('Healthy');
+    expect(source.pendingAcknowledgementCount).toBe(1);
+    expect(runtime.recoveryState.needsNextAuthoritativePass).toBe(true);
+
+    mode = 'cover';
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 2_000 }).toBe('Healthy');
+    expect(runtime.pendingCount).toBe(0);
+    expect(source.pendingAcknowledgementCount).toBe(0);
+  });
+
+  it('does not become healthy while a same-revision outcome conflict is unresolved', async () => {
+    const source = new FakeCommandEventSource();
+    type ConflictMode = 'initial' | 'block' | 'resolved';
+    let mode: ConflictMode = 'initial';
+    let blockedList!: (value: CommandRecoveryList) => void;
+    const failedRecord = commandRecord({ fabId: 'fab-a', commandId, revision: 3, outcome: 'failed' });
+    const gateway = fakeCommandGateway({
+      listFabCommands: async () => {
+        if (mode === 'initial') return emptyRecoveryList([]);
+        if (mode === 'resolved') return emptyRecoveryList([failedRecord]);
+        return new Promise<CommandRecoveryList>((resolve) => { blockedList = resolve; });
+      },
+      getCommandStatus: async (fabId, targetCommandId) => commandResult({
+        fabId,
+        commandId: targetCommandId,
+        revision: 3,
+        outcome: mode === 'resolved' ? 'failed' : 'accepted',
+      }),
+    });
+    const { runtime } = createFab({ source, gateway, recovery: { backoffMs: [1], maxAttempts: 8, maxCompensationPasses: 4 } });
+    runtime.start();
+    runtime.registerAcceptedCommand(commandId);
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
+
+    source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 3, outcome: 'accepted' }));
+    await expect.poll(() => runtime.getProjection(commandId)?.outcome, { timeout: 1_000 }).toBe('accepted');
+    // Same revision, different outcome: a wire conflict, never applied and never ACKed.
+    // The authoritative List triggered by the conflict is blocked so the unresolved
+    // state is observable: no Healthy may be claimed until authority resolves it.
+    mode = 'block';
+    source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 3, outcome: 'failed' }));
+    await expect.poll(() => runtime.pendingConflictCount, { timeout: 1_000 }).toBe(1);
+    await expect.poll(() => typeof blockedList, { timeout: 1_000 }).toBe('function');
+    expect(runtime.getProjection(commandId)?.outcome).toBe('accepted');
+    expect(runtime.recoveryState.phase).not.toBe('Healthy');
+    expect(source.cursors.pendingAcknowledgements).toBeGreaterThan(0);
+    expect(runtime.recoveryState.needsNextAuthoritativePass).toBe(true);
+
+    mode = 'resolved';
+    blockedList(emptyRecoveryList([failedRecord]));
+    await expect.poll(() => runtime.getProjection(commandId)?.outcome, { timeout: 2_000 }).toBe('failed');
+    await expect.poll(() => runtime.pendingConflictCount, { timeout: 2_000 }).toBe(0);
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 2_000 }).toBe('Healthy');
+    expect(source.pendingAcknowledgementCount).toBe(0);
+  });
+});
+
+describe('Round 5.1 / P2-01 connection lifecycle closed/failed/open', () => {
+  it('treats closed as idle (not failed, no retry loop) and only open re-earns Healthy', async () => {
+    const source = new FakeCommandEventSource();
+    const gateway = fakeCommandGateway({
+      listFabCommands: async () => emptyRecoveryList([commandRecord({ fabId: 'fab-a', commandId, revision: 1, outcome: 'accepted' })]),
+      getCommandStatus: async (fabId, targetCommandId) =>
+        commandResult({ fabId, commandId: targetCommandId, revision: 1, outcome: 'accepted' }),
+    });
+    const { runtime } = createFab({ source, gateway });
+    runtime.start();
+    runtime.registerAcceptedCommand(commandId);
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
+    expect(runtime.connectionState).toBe('open');
+    // Settle any late startup signal so the assertions below observe only the
+    // effect of the deliberate 'closed' lifecycle transition.
+    await flush(40);
+    const listCallsAtHealthy = gateway.listCalls.length;
+
+    // Deliberate idle close: never Healthy, never 'failed', and no recovery loop.
+    source.setConnectionStatus('closed');
+    await flush(30);
+    expect(runtime.connectionState).toBe('closed');
+    expect(runtime.recoveryState.phase).not.toBe('Healthy');
+    expect(runtime.recoveryState.phase).not.toBe('Unrecoverable');
+    expect(gateway.listCalls.length).toBe(listCallsAtHealthy);
+    expect(runtime.transportFailure).toBeUndefined();
+    expect(runtime.recoveryHistory.some((entry) => entry.cause === 'transport-failure')).toBe(false);
+
+    // A repeated closed notification is idempotent (no failed-retry storm).
+    source.setConnectionStatus('closed');
+    await flush(20);
+    expect(gateway.listCalls.length).toBe(listCallsAtHealthy);
+    expect(runtime.recoveryState.phase).not.toBe('Healthy');
+
+    // A real transport failure degrades the runtime and reconciles once, never Healthy.
+    source.setConnectionStatus('failed');
+    await expect.poll(() => gateway.listCalls.length, { timeout: 1_000 }).toBeGreaterThan(listCallsAtHealthy);
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Degraded');
+    expect(runtime.recoveryState.phase).not.toBe('Healthy');
+
+    // Only a live connection can re-earn Healthy (through an authoritative pass).
+    source.openStream();
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 2_000 }).toBe('Healthy');
+    expect(runtime.connectionState).toBe('open');
+  });
+});
+
+describe('Round 5.1 / P2-02 on-demand command stream', () => {
+  it('opens exactly one command stream per FAB, only while the FAB has command demand', async () => {
+    const FAB_COUNT = 32;
+    const harness = createCommandTestRuntime();
+    const runtimes = new Map<string, FabRuntime>();
+    const sources = new Map<string, FakeCommandEventSource>();
+    const recordsByFab = new Map<string, Array<ReturnType<typeof commandRecord>>>();
+    const gateway = fakeCommandGateway({
+      listFabCommands: async (_siteId, fabId) => {
+        // §8.3 scenario: keep FAB-33's authoritative List pending so the
+        // delivered-before-202 hold is observable until the commit flushes it.
+        if (fabId === 'fab-33') return new Promise<CommandRecoveryList>(() => {});
+        return emptyRecoveryList(recordsByFab.get(fabId) ?? []);
+      },
+      getCommandStatus: async (fabId, targetCommandId) =>
+        commandResult({
+          fabId,
+          commandId: targetCommandId,
+          revision: 1,
+          outcome: targetCommandId === 'cmd-early' ? 'accepted' : 'executing',
+        }),
+    });
+    const fabIds = Array.from({ length: FAB_COUNT }, (_value, index) => 'fab-' + String(index + 1).padStart(2, '0'));
+    try {
+      for (const fabId of fabIds) {
+        const source = new FakeCommandEventSource();
+        sources.set(fabId, source);
+        recordsByFab.set(fabId, []);
+        runtimes.set(fabId, createFabRuntime(harness, { fabId, source, gateway, lazyCommandSubscription: true }));
+      }
+      for (const runtime of runtimes.values()) runtime.start();
+      await flush(30);
+      // 32 assembled FABs => no 32 command SSE connections; idle FABs subscribe to nothing.
+      for (const source of sources.values()) expect(source.commandObservers).toBe(0);
+      for (const runtime of runtimes.values()) expect(runtime.recoveryState.phase).not.toBe('Unrecoverable');
+
+      const fab07 = runtimes.get('fab-07')!;
+      const source07 = sources.get('fab-07')!;
+      const fab08 = runtimes.get('fab-08')!;
+      const source08 = sources.get('fab-08')!;
+      const records07 = recordsByFab.get('fab-07')!;
+      // An admission reservation demands the stream BEFORE the HTTP POST returns.
+      const reservation07 = fab07.reserveCommandAdmission('key-07');
+      await expect.poll(() => source07.commandObservers, { timeout: 1_000 }).toBe(1);
+      expect(sources.get('fab-06')!.commandObservers).toBe(0);
+      // Ten commands share the one FAB-scoped stream.
+      for (let index = 0; index < 10; index += 1) {
+        const target = 'cmd-' + index;
+        records07.push(commandRecord({ fabId: 'fab-07', commandId: target, revision: 1, outcome: 'executing' }));
+        fab07.registerAcceptedCommand(target);
+      }
+      await flush(20);
+      expect(source07.commandObservers).toBe(1);
+      expect(sources.get('fab-06')!.commandObservers).toBe(0);
+      // The submit completed: demand now comes from the active workflows only.
+      reservation07.commit('cmd-0');
+
+      // A second FAB opens its own single connection; the first is unaffected.
+      const reservation08 = fab08.reserveCommandAdmission('key-08');
+      await expect.poll(() => source08.commandObservers, { timeout: 1_000 }).toBe(1);
+      expect(source07.commandObservers).toBe(1);
+      // A failed submit releases the reservation: that FAB's idle stream closes.
+      reservation08.release();
+      await expect.poll(() => source08.commandObservers, { timeout: 1_000 }).toBe(0);
+      expect(source07.commandObservers).toBe(1);
+
+      // Realtime terminal results: only the last one removes the final demand.
+      for (let index = 0; index < 9; index += 1) {
+        const target = 'cmd-' + index;
+        records07[index] = commandRecord({ fabId: 'fab-07', commandId: target, revision: 2, outcome: 'succeeded' });
+        source07.emit(commandResult({ fabId: 'fab-07', commandId: target, revision: 2, outcome: 'succeeded' }));
+      }
+      await expect.poll(() => fab07.terminalWorkflowCount, { timeout: 1_000 }).toBe(9);
+      expect(source07.commandObservers).toBe(1);
+
+      // The last active command converges through authority (never an SSE-only claim).
+      records07[9] = commandRecord({ fabId: 'fab-07', commandId: 'cmd-9', revision: 2, outcome: 'succeeded' });
+      fab07.requestAuthoritativeRecovery();
+      await expect.poll(() => fab07.terminalWorkflowCount, { timeout: 2_000 }).toBe(10);
+      await expect.poll(() => source07.commandObservers, { timeout: 2_000 }).toBe(0);
+      // The next reservation re-establishes exactly one connection.
+      const nextReservation = fab07.reserveCommandAdmission('key-07-next');
+      await expect.poll(() => source07.commandObservers, { timeout: 1_000 }).toBe(1);
+      nextReservation.release();
+      await expect.poll(() => source07.commandObservers, { timeout: 1_000 }).toBe(0);
+
+      // §8.3: the stream is demanded before the POST completes, so a result can be
+      // delivered while the command is still only reserved and flushed on commit.
+      const sourceEarly = new FakeCommandEventSource();
+      sources.set('fab-33', sourceEarly);
+      recordsByFab.set('fab-33', []);
+      const fab33 = createFabRuntime(harness, { fabId: 'fab-33', source: sourceEarly, gateway, lazyCommandSubscription: true });
+      runtimes.set('fab-33', fab33);
+      fab33.start();
+      await flush(20);
+      expect(sourceEarly.commandObservers).toBe(0);
+      const earlyReservation = fab33.reserveCommandAdmission('key-early');
+      await expect.poll(() => sourceEarly.commandObservers, { timeout: 1_000 }).toBe(1);
+      // SSE event arrives while the command is only reserved (before HTTP 202).
+      sourceEarly.emit(commandResult({ fabId: 'fab-33', commandId: 'cmd-early', revision: 1, outcome: 'accepted' }));
+      await expect.poll(() => fab33.pendingCount, { timeout: 1_000 }).toBeGreaterThan(0);
+      expect(fab33.getWorkflow('cmd-early')).toBeUndefined();
+      earlyReservation.commit('cmd-early');
+      // The commit creates the workflow and flushes the held result.
+      await expect.poll(() => fab33.getProjection('cmd-early')?.outcome, { timeout: 1_000 }).toBe('accepted');
+      expect(fab33.pendingCount).toBe(0);
+
+      // Closing one FAB never touches another FAB's stream.
+      expect(source07.commandObservers).toBe(0);
+      expect(sourceEarly.commandObservers).toBe(1);
+      await expect.poll(() => fab33.pendingCount, { timeout: 2_000 }).toBe(0);
+
+      // Dispose closes every stream.
+      for (const runtime of runtimes.values()) runtime.dispose();
+      await expect.poll(
+        () => [...sources.values()].every((source) => source.commandObservers === 0),
+        { timeout: 1_000 },
+      ).toBe(true);
+    } finally {
+      for (const runtime of runtimes.values()) runtime.dispose();
+      await harness.dispose();
+    }
+  });
+});
+
+describe('Round 5.1 / P2-03 independent workflow and correlation TTLs', () => {
+  it('expires correlation terminals independently while a zero workflow TTL retains the actor', async () => {
+    let now = 0;
+    const source = new FakeCommandEventSource();
+    const { runtime } = createFab({
+      source,
+      gateway: fakeCommandGateway(),
+      retention: { resolvedWorkflowTtlMs: 0, correlationTerminalTtlMs: 1_000, sweepIntervalMs: 10, now: () => now },
+    });
+    runtime.start();
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
+    runtime.registerAcceptedCommand(commandId);
+    source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'succeeded' }));
+    await expect.poll(() => runtime.terminalWorkflowCount, { timeout: 1_000 }).toBe(1);
+    await expect.poll(() => runtime.correlationTerminalWatermarkCount, { timeout: 1_000 }).toBe(1);
+    expect(runtime.correlationWatermarkCount).toBe(1);
+
+    now = 1_001;
+    await expect.poll(() => runtime.correlationTerminalWatermarkCount, { timeout: 1_000 }).toBe(0);
+    // Workflow TTL=0 means no time-based eviction; the actor stays retained.
+    expect(runtime.getWorkflow(commandId)).toBeDefined();
+    expect(runtime.terminalWorkflowCount).toBe(1);
+  });
+
+  it('a zero correlation TTL never disables the workflow TTL', async () => {
+    let now = 0;
+    const source = new FakeCommandEventSource();
+    const { runtime } = createFab({
+      source,
+      gateway: fakeCommandGateway(),
+      retention: { resolvedWorkflowTtlMs: 300_000, correlationTerminalTtlMs: 0, sweepIntervalMs: 10, now: () => now },
+    });
+    runtime.start();
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
+    runtime.registerAcceptedCommand(commandId);
+    source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'succeeded' }));
+    await expect.poll(() => runtime.terminalWorkflowCount, { timeout: 1_000 }).toBe(1);
+    await expect.poll(() => runtime.correlationTerminalWatermarkCount, { timeout: 1_000 }).toBe(1);
+
+    now = 1_000_000;
+    await expect.poll(() => runtime.terminalWorkflowCount, { timeout: 1_000 }).toBe(0);
+    // Correlation TTL=0 disables only time-based watermark expiry.
+    expect(runtime.correlationTerminalWatermarkCount).toBe(1);
+  });
+
+  it('dispose clears both retention timers', async () => {
+    const source = new FakeCommandEventSource();
+    const { runtime } = createFab({
+      source,
+      gateway: fakeCommandGateway(),
+      retention: { sweepIntervalMs: 10 },
+    });
+    runtime.start();
+    await expect.poll(() => runtime.recoveryState.phase, { timeout: 1_000 }).toBe('Healthy');
+    runtime.registerAcceptedCommand(commandId);
+    source.emit(commandResult({ fabId: 'fab-a', commandId, revision: 2, outcome: 'succeeded' }));
+    await expect.poll(() => runtime.terminalWorkflowCount, { timeout: 1_000 }).toBe(1);
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+    runtime.dispose();
+    // workflow sweep + correlation sweep are independently owned and both cleared.
+    expect(clearTimeoutSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+    clearTimeoutSpy.mockRestore();
+  });
 });

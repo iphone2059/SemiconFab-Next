@@ -180,6 +180,6 @@ HTTP 写入:  用户操作 -> mutation -> HTTP API -> 成功 -> invalidateQuerie
 - 场景端口与领域确定性见 [架构基线](architecture.md) §30；实时高频路径 `TelemetryRuntime` → Worker → `FrameRingBuffer` → 渲染 frame loop，UI 低频聚合经 `shared/scheduling/coalesced-dispatcher.ts`。
 
 
-## Round 5（进行中）
+## Round 5 / Round 5.1（已实施）
 
-Round 5 正在整改：Workflow 投影增加 recoveryDisposition，expired-unresolved 不表示成功、失败或取消。
+Round 5 已由提交 `4c8f0c1` 实施：Workflow 投影增加 recoveryDisposition，expired-unresolved 不表示成功、失败或取消。Round 5.1 的剩余不变量整改（realtime 永不复活 expired、仅经校验权威记录可恢复、终态投影可被权威同 revision 修正）见 `architecture/19-round5.1-remediation-specification.md`（P1-02/P1-03）。

@@ -359,7 +359,14 @@ describe('bridge acknowledges only after the actor applied (R3-02 three-state sp
     const sourceHarness = createTransportHarness({ capacity: 16, autoAck: false });
     const source = sourceHarness.source;
     const workflows = new FakeWorkflowRegistry();
-    const unverifiable = { events: [] as CommandResultEvent[], receive(event: CommandResultEvent) { this.events.push(event); }, markExpiredUnresolved() {}, async reconcile() {}, dispose() {} };
+    const unverifiableEvents: CommandResultEvent[] = [];
+    const unverifiable: CommandWorkflow = {
+      receiveRealtime(event: CommandResultEvent) { unverifiableEvents.push(event); },
+      receiveAuthoritative(event: CommandResultEvent) { unverifiableEvents.push(event); },
+      markExpiredUnresolved() {},
+      async reconcile() {},
+      dispose() {},
+    };
     workflows.register('fab-a', 'cmd-a', unverifiable);
     const bridge = new CommandEventBridge(source, workflows, {
       fabId: 'fab-a',
@@ -371,7 +378,7 @@ describe('bridge acknowledges only after the actor applied (R3-02 three-state sp
       const fake = await open(sourceHarness);
       fake.emit(commandEnvelope({ revision: 10, commandId: 'cmd-a' }), cursorId('epoch-1', 10));
       await flush(10);
-      expect(unverifiable.events).toHaveLength(1);
+      expect(unverifiableEvents).toHaveLength(1);
       // No projection => application cannot be proven => no ACK.
       expect(source.cursors.acknowledged).toBeUndefined();
       expect(source.cursors.pendingAcknowledgements).toBe(1);
@@ -398,18 +405,30 @@ describe('bridge acknowledges only after the actor applied (R3-02 three-state sp
   });
 });
 
-/** Test workflow that exposes a projection and advances it synchronously. */
+/**
+ * Test workflow that exposes a projection and advances it synchronously. Round 5.1
+ * source isolation: the realtime channel is strictly monotonic, while the
+ * authoritative channel may repair an equal revision but never roll one back.
+ */
 class ProjectionWorkflow implements CommandWorkflow {
   markExpiredUnresolved(): void {}
   received = 0;
+  realtimeReceived = 0;
+  authoritativeReceived = 0;
   private revisionValue = -1;
   private outcomeValue: CommandWorkflowProjection['outcome'] = 'pending';
 
-  receive(event: CommandResultEvent): void {
+  receiveRealtime(event: CommandResultEvent): void {
+    this.realtimeReceived += 1;
     if (event.revision <= this.revisionValue) return;
-    this.received += 1;
-    this.revisionValue = event.revision;
-    this.outcomeValue = event.outcome;
+    this.apply(event);
+  }
+
+  receiveAuthoritative(event: CommandResultEvent): void {
+    this.authoritativeReceived += 1;
+    if (event.revision < this.revisionValue) return;
+    if (event.revision === this.revisionValue && event.outcome === this.outcomeValue) return;
+    this.apply(event);
   }
 
   async reconcile(): Promise<void> {}
@@ -418,6 +437,12 @@ class ProjectionWorkflow implements CommandWorkflow {
 
   get projection(): CommandWorkflowProjection {
     return { state: this.outcomeValue === 'pending' ? 'idle' : this.outcomeValue, revision: this.revisionValue, outcome: this.outcomeValue, recoveryDisposition: 'tracked' };
+  }
+
+  private apply(event: CommandResultEvent): void {
+    this.received += 1;
+    this.revisionValue = event.revision;
+    this.outcomeValue = event.outcome;
   }
 }
 
@@ -435,3 +460,85 @@ it('does not mutate cursors when a list snapshot predates a new unknown gap', as
   expect(harness.cursors()).toEqual(before);
   expect(harness.source.cover({ epoch: 'epoch-1', sequence: 1 }, 'list', harness.source.lossGeneration).status).toBe('covered');
 });
+describe('Round 5.1 / P1-04 cover never forges the delivered cursor', () => {
+  it('advances acknowledged only over proven entries and keeps a delivered frame after the watermark pending', async () => {
+    const harness = transport({ capacity: 16, autoAck: false });
+    const source = await open(harness);
+    for (const sequence of [20, 21, 22]) {
+      source.emit(commandEnvelope({ revision: sequence }), cursorId('epoch-1', sequence));
+    }
+    await flush(10);
+    expect(harness.cursors().observed).toEqual({ epoch: 'epoch-1', sequence: 22 });
+    expect(harness.cursors().delivered).toEqual({ epoch: 'epoch-1', sequence: 22 });
+    expect(harness.cursors().pendingAcknowledgements).toBe(3);
+
+    harness.acknowledge(eventFor(harness, 20));
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 20 });
+
+    // Authoritative cover watermark 21: the tracked entry at 21 becomes covered, but
+    // the delivered frame at 22 is AFTER the watermark and must stay pending.
+    const cover = harness.source.cover({ epoch: 'epoch-1', sequence: 21 }, 'list', harness.source.lossGeneration);
+    expect(cover.status).toBe('covered');
+    await flush(5);
+    expect(harness.cursors()).toMatchObject({
+      observed: { epoch: 'epoch-1', sequence: 22 },
+      delivered: { epoch: 'epoch-1', sequence: 22 },
+      acknowledged: { epoch: 'epoch-1', sequence: 21 },
+      pendingAcknowledgements: 1,
+    });
+    // The safe prefix never jumps the pending delivered entry at 22.
+    expect(harness.cursors().acknowledged!.sequence).toBeLessThan(harness.cursors().delivered!.sequence);
+
+    // The after-watermark entry joins the safe prefix only when the actor applies it.
+    harness.acknowledge(eventFor(harness, 22));
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 22 });
+    expect(harness.cursors().pendingAcknowledgements).toBe(0);
+
+    // A later cover above every delivered frame still never moves delivered: a
+    // cover is authoritative coverage, not an SSE delivery.
+    harness.source.cover({ epoch: 'epoch-1', sequence: 25 }, 'list', harness.source.lossGeneration);
+    expect(harness.cursors().delivered).toEqual({ epoch: 'epoch-1', sequence: 22 });
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-1', sequence: 25 });
+  });
+
+  it('accepts a cross-epoch List cover as the safe watermark but keeps delivered in the old epoch', async () => {
+    const harness = transport({ capacity: 16, autoAck: false });
+    const source = await open(harness);
+    source.emit(commandEnvelope({ revision: 10 }), cursorId('epoch-a', 10));
+    source.emit(commandEnvelope({ revision: 11 }), cursorId('epoch-a', 11));
+    await flush(10);
+    expect(harness.cursors()).toMatchObject({
+      observed: { epoch: 'epoch-a', sequence: 11 },
+      delivered: { epoch: 'epoch-a', sequence: 11 },
+      pendingAcknowledgements: 2,
+    });
+    expect(harness.cursors().acknowledged).toBeUndefined();
+
+    // The authoritative List proves the journal moved to a new epoch. It replaces
+    // the ledger/safe watermark, but it is not an SSE frame: delivered must stay at
+    // the last frame actually published to the bounded consumer.
+    const cover = harness.source.cover({ epoch: 'epoch-b', sequence: 20 }, 'list', harness.source.lossGeneration);
+    expect(cover).toMatchObject({ status: 'covered', latchReleased: false });
+    await flush(5);
+    expect(harness.cursors()).toMatchObject({
+      observed: { epoch: 'epoch-a', sequence: 11 },
+      delivered: { epoch: 'epoch-a', sequence: 11 },
+      acknowledged: { epoch: 'epoch-b', sequence: 20 },
+      pendingAcknowledgements: 0,
+    });
+
+    // Only a real epoch-b frame that is successfully published moves delivered into
+    // the new epoch, and only to its actual sequence.
+    source.emit(commandEnvelope({ revision: 21 }), cursorId('epoch-b', 21));
+    await flush(10);
+    expect(harness.cursors()).toMatchObject({
+      observed: { epoch: 'epoch-b', sequence: 21 },
+      delivered: { epoch: 'epoch-b', sequence: 21 },
+      acknowledged: { epoch: 'epoch-b', sequence: 20 },
+      pendingAcknowledgements: 1,
+    });
+    harness.acknowledge(eventFor(harness, 21));
+    expect(harness.cursors().acknowledged).toEqual({ epoch: 'epoch-b', sequence: 21 });
+  });
+});
+

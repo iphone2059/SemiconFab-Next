@@ -301,7 +301,10 @@ function browserEventSourceFactory(): ((url: string) => EventSourceLike) | undef
  * Ownership: every consumer Stream is a child of the supplied
  * CommandTransportScope; the first commandResults consumer opens one EventSource,
  * the last consumer (or Scope close) closes it, and Scope finalizers clear every
- * timer. Each connection attempt carries a generation token: callbacks from a
+ * timer. A transport that has not opened is 'closed' (normal idle); open()
+ * publishes 'connecting', onopen 'open', onerror/transient attempt failure
+ * 'reconnecting', a deliberate close 'closed' and only permanent unavailability
+ * 'failed' (Round 5.1 / P2-01). Each connection attempt carries a generation token: callbacks from a
  * closed/replaced connection are rejected and reported as stale-generation dirty
  * signals instead of corrupting the current connection state.
  *
@@ -357,6 +360,13 @@ export function createSseCommandEventSource(
    */
   const eventSourceFactory = options.eventSourceFactory ?? browserEventSourceFactory();
   const decoder = new MessageDecoder();
+  /**
+   * Round 5.1 / P2-01 lifecycle: a transport that has not opened yet is 'closed'
+   * (normal idle — it is not trying to connect and it is not failed). An
+   * environment without an EventSource factory is knowable at construction and is
+   * permanently unavailable immediately, so it starts 'failed' without waiting for
+   * a consumer (same meaning as the pending source).
+   */
   const state: {
     status: CommandConnectionStatus;
     source: EventSourceLike | null;
@@ -368,7 +378,12 @@ export function createSseCommandEventSource(
     acknowledged?: CommandCursor;
     connectTimer?: ReturnType<typeof setTimeout>;
     reconnectTimer?: ReturnType<typeof setTimeout>;
-  } = { status: 'connecting', source: null, opened: false, generation: 0 };
+  } = {
+    status: eventSourceFactory === undefined ? 'failed' : 'closed',
+    source: null,
+    opened: false,
+    generation: 0,
+  };
   let stopped = false;
   let finalizerRegistered = false;
   let droppedTotal = 0;
@@ -652,6 +667,12 @@ export function createSseCommandEventSource(
    * insufficient cover keeps the latch and publishes `uncovered-gap` so the
    * consumer retries the authoritative List. A same-epoch acknowledged sequence
    * never regresses.
+   *
+   * Round 5.1 / P1-04: a cover only marks ledger entries covered, advances the
+   * acknowledged safe cursor, replaces ledgerEpoch and may release a proven ACK
+   * latch. It must never modify `delivered` (or `observed`): delivered is the
+   * last frame actually published to a bounded consumer, so a cross-epoch List
+   * cover leaves it in the old epoch until a real frame of the new epoch arrives.
    */
   const cover = (cursor: CommandCursor, authority: CommandCoverAuthority = 'journal', lossBarrier?: number) => {
     const previousEpoch = state.acknowledged?.epoch ?? ledgerEpoch;
@@ -686,12 +707,9 @@ export function createSseCommandEventSource(
     } else if (acknowledged.epoch === cursor.epoch && cursor.sequence > acknowledged.sequence) {
       state.acknowledged = { ...cursor };
     }
-    const delivered = state.delivered;
-    state.delivered = delivered === undefined || epochReplaced
-      ? { ...cursor }
-      : delivered.epoch === cursor.epoch
-        ? (cursor.sequence > delivered.sequence ? { ...cursor } : delivered)
-        : { ...cursor };
+    // Round 5.1 / P1-04: a cover NEVER advances `delivered`. `delivered` means
+    // "actually published to a bounded consumer" and only a real SSE delivery may
+    // move it — a cover (especially a cross-epoch List watermark) is not a frame.
     // 3) Release the latch only when the authoritative watermark covers the
     //    untracked range; otherwise keep it sticky and force another List pass.
     if (blocked) {
@@ -761,12 +779,28 @@ export function createSseCommandEventSource(
     pendingAcknowledgements: ledger.length,
   });
 
-  let lastStatus: CommandConnectionStatus = 'connecting';
+  /**
+   * Lifecycle publication (Round 5.1 / P2-01). Every transition is published on the
+   * bounded connectionStatus stream (never only stored in state); consecutive
+   * duplicates are suppressed so 'failed' is published exactly once. `lastStatus`
+   * starts at the initial lifecycle state so a first status subscriber observes the
+   * current state (onSubscriberChange replay) and then the next real transition.
+   */
+  let lastStatus: CommandConnectionStatus = state.status;
   const publishStatus = (status: CommandConnectionStatus): void => {
     state.status = status;
     if (status === lastStatus) return;
     lastStatus = status;
     publishControl(statuses, status);
+  };
+
+  /**
+   * Deliberate close: publish the normal idle lifecycle. A permanently unavailable
+   * transport keeps 'failed' — it must never be downgraded to 'closed'.
+   */
+  const publishClosed = (): void => {
+    if (permanentlyUnavailable) return;
+    publishStatus('closed');
   };
 
   /**
@@ -799,6 +833,12 @@ export function createSseCommandEventSource(
     clearReconnectTimer();
   };
 
+  /**
+   * Tear the current EventSource down without deciding the lifecycle. Deliberate
+   * close paths publish 'closed' explicitly; an interrupted attempt has already
+   * published 'reconnecting' (or the permanent 'failed') and must not emit a
+   * spurious 'closed' before the retry's 'connecting'.
+   */
   const closeSource = (): void => {
     const source = state.source;
     if (!source) return;
@@ -813,10 +853,12 @@ export function createSseCommandEventSource(
     clearTimers();
   };
 
+  /** Scope finalizer (ADR-007 §2/§5): closing the owned connection updates the lifecycle. */
   const closeTransport = (): void => {
     stopped = true;
     closeSource();
     state.opened = false;
+    publishClosed();
   };
 
   const scheduleReconnect = (): void => {
@@ -857,6 +899,10 @@ export function createSseCommandEventSource(
       return;
     }
     if (permanentlyUnavailable) return;
+    // P2-01: an attempt is in progress. Publish 'connecting' BEFORE the factory
+    // call / timer setup so the lifecycle never jumps from 'closed' straight to
+    // 'open' and every attempt (including a retry) is observable.
+    publishStatus('connecting');
     const generation = state.generation + 1;
     state.generation = generation;
     if (!finalizerRegistered) {
@@ -877,12 +923,15 @@ export function createSseCommandEventSource(
         detail: 'command stream connection failed',
         publishDirtySignal: false,
       });
-      publishStatus('failed');
       publishControl(failures, { message: 'command stream connection failed', cause });
       if (failedOpenAttempts >= maxConnectAttempts) {
         publishTransportUnavailable('command stream could not be opened after ' + failedOpenAttempts + ' failed attempts');
         return;
       }
+      // A transient failed attempt schedules a retry: the lifecycle is
+      // 'reconnecting' (an interrupted attempt with a scheduled retry), never the
+      // permanent 'failed' (P2-01).
+      publishStatus('reconnecting');
       scheduleReconnect();
       return;
     }
@@ -1003,7 +1052,6 @@ export function createSseCommandEventSource(
     };
     source.onerror = (event) => {
       if (isStale()) return;
-      publishStatus('reconnecting');
       publishControl(failures, { message: 'command stream transport error', cause: event });
       // R4-01: an interrupted stream can lose frames before they were tracked; the
       // position is unprovable, so the latch needs an authoritative List to release.
@@ -1020,18 +1068,18 @@ export function createSseCommandEventSource(
         state.opened = false;
         return;
       }
+      // The connection was interrupted and a retry is scheduled (P2-01).
+      publishStatus('reconnecting');
       // EventSource would auto-reconnect with an unowned timer; the transport owns
       // the single connection explicitly and reopens after reconnectDelayMs.
       restartConnection();
     };
 
-    publishStatus('connecting');
     state.connectTimer = setTimeout(() => {
       state.connectTimer = undefined;
       if (!isCurrent()) return;
       currentAttemptOpened = false;
       failedOpenAttempts += 1;
-      publishStatus('failed');
       publishControl(failures, { message: 'command stream connect timeout' });
       markUntrustedGap({
         reason: 'closed',
@@ -1044,6 +1092,9 @@ export function createSseCommandEventSource(
         state.opened = false;
         return;
       }
+      // A connect timeout is a transient attempt failure with a scheduled retry:
+      // 'reconnecting', never the permanent 'failed' (P2-01).
+      publishStatus('reconnecting');
       restartConnection();
     }, connectTimeoutMs);
   };
@@ -1055,9 +1106,12 @@ export function createSseCommandEventSource(
       if (!stopped && !state.source) open();
       return;
     }
+    // The last consumer left: the connection is deliberately closed (normal idle),
+    // never silently left 'open' and never downgraded over the permanent 'failed'.
     closeSource();
     state.opened = false;
     clearTimers();
+    publishClosed();
   });
   statuses.onSubscriberChange(() => {
     if (statuses.subscriberCount === 1) publishControl(statuses, state.status);

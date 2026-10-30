@@ -15,6 +15,8 @@ Round 5 — Command Runtime Correctness & Consistency Remediation Specification
 
 以下文档可以直接作为下一轮逐文件整改依据。
 
+> **历史记录说明（2026-10-30）：** 本文是 Round 5 的历史整改规范。Round 5 的源码整改已由提交 `4c8f0c1` 落地；Round 5.1 复审发现的剩余 P1/P2 不变量缺口由 `docs/architecture/19-round5.1-remediation-specification.md` 规范并实施（P1-01 恢复最终屏障、P1-02 revision/outcome 冲突与权威修正、P1-03 realtime/authoritative 来源隔离与 expired 语义、P1-04 cover 不伪造 delivered、P2-01 ConnectionStatus 生命周期、P2-02 按需 Command SSE、P2-03 独立 Workflow/Correlation TTL、P2-04 fake 协议保真）。**Round 5.1 取代本文中剩余的 P1/P2 义务**；本文保持原样作为历史记录，若本文与 19 号规范或 `web_app/src` 源码冲突，以 19 号规范与源码为准。
+
 # Round 5 — Command Runtime Correctness & Consistency Remediation Specification
 
 **项目：** SemiconFab-Next\
