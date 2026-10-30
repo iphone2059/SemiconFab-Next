@@ -638,7 +638,18 @@ export class FabRuntime {
     // are converged by the bounded post-recovery batch, not by one reconcile per
     // tracked record (that is what used to overflow the 128-item scheduler queue).
     if (!this.suppressSnapshotScheduling && (this.phase !== 'Healthy' || !this.hasLocalEvidence(commandId) || revision < 0)) {
-      void this.scheduler.schedule(commandId);
+      void this.scheduler.schedule(commandId).then(
+        (reconciled) => {
+          if (!reconciled && !this.isTerminalCommand(commandId) && !this.disposed) {
+            this.enterDirty({ listOnly: true, cause: 'transport-failure' });
+          }
+        },
+        (cause: unknown) => {
+          if (this.disposed) return;
+          this.recordDiagnostic('error', cause instanceof Error ? cause.message : String(cause));
+          this.enterDirty({ listOnly: true, cause: 'transport-failure' });
+        },
+      );
     }
     return workflow;
   }
@@ -1019,9 +1030,10 @@ export class FabRuntime {
   private runRecoveryPassFiber(request: PendingRecoveryRequest): void {
     const generation = ++this.recoveryGeneration;
     const dropsAtStart = this.dropGeneration;
+    const sourceVersion = this.source.recoveryVersion;
     this.coveredDropsThisPass = 0;
     const program = this.executeRecoveryEffect(generation, request, dropsAtStart).pipe(
-      Effect.flatMap((snapshot) => this.completeRecoveryEffect(generation, snapshot)),
+      Effect.flatMap((snapshot) => this.completeRecoveryEffect(generation, snapshot, sourceVersion)),
       Effect.catch((failure: RecoveryPassFailure) => Effect.sync(() => {
         if (this.isRecoveryCurrent(generation)) this.handleRecoveryFailure(failure, request, generation);
       })),
@@ -1380,11 +1392,18 @@ export class FabRuntime {
   private completeRecoveryEffect(
     generation: number,
     snapshot: RecoverySnapshot,
+    sourceVersion: number,
   ): Effect.Effect<void, RecoveryPassFailure> {
     const self = this;
     return Effect.gen(function* () {
       yield* self.ensureRecoveryCurrent(generation);
-      self.applyRecoverySnapshot(snapshot);
+      self.recoveryBatchRunning = true;
+      yield* self.reconcileActiveBatchEffect(generation).pipe(
+        Effect.ensuring(Effect.sync(() => {
+          self.recoveryBatchRunning = false;
+        })),
+      );
+      yield* self.ensureRecoveryCurrent(generation);
       const covered = self.resolveCoveredDrops(snapshot.dropBarrier);
       self.lastSnapshotState = {
         generation: snapshot.generation,
@@ -1399,13 +1418,6 @@ export class FabRuntime {
         startedAt: snapshot.startedAt,
         finishedAt: snapshot.finishedAt,
       };
-      self.recoveryBatchRunning = true;
-      yield* self.reconcileActiveBatchEffect(generation).pipe(
-        Effect.ensuring(Effect.sync(() => {
-          self.recoveryBatchRunning = false;
-        })),
-      );
-      yield* self.ensureRecoveryCurrent(generation);
       if (self.pendingDrops.length > 0) {
         self.needsNextAuthoritativePass = true;
         const previous = self.lastSnapshotState;
@@ -1413,6 +1425,12 @@ export class FabRuntime {
         self.scheduleCompensationPass(generation);
         return;
       }
+      const watermark: CommandCursor = { epoch: snapshot.epoch, sequence: snapshot.sequence };
+      if (!self.source.cover(watermark, sourceVersion, snapshot.kind)) {
+        const error = new Error('authoritative watermark did not cover every untracked event in the recovery generation');
+        return yield* Effect.fail(new RecoveryPassFailure(classifyRecoveryError(error), error));
+      }
+      self.applyRecoverySnapshot(snapshot);
       self.needsNextAuthoritativePass = false;
       self.compensationAttempts = 0;
       self.compensationNoProgressRounds = 0;
@@ -1426,21 +1444,12 @@ export class FabRuntime {
     });
   }
 
-  /**
-   * Apply the authoritative watermark and sign the transport safe watermark
-   * (R3-02 seam). Only the current recovery generation reaches this method, so
-   * source.cover() can never be driven by a stale/old-generation snapshot.
-   */
   private applyRecoverySnapshot(snapshot: RecoverySnapshot): void {
-    const watermark: CommandCursor = { epoch: snapshot.epoch, sequence: snapshot.sequence };
-    this.authoritativeWatermark = watermark;
+    this.authoritativeWatermark = { epoch: snapshot.epoch, sequence: snapshot.sequence };
     this.lastRecoveredAt = this.retention.now();
     this.attempts = 0;
     this.lastError = undefined;
     this.activeRecoveryRequest = undefined;
-    // R3-02/R3-05: mark ledger entries at/before the authoritative cursor covered.
-    // The transport never regresses the same-epoch acknowledged sequence.
-    this.source.cover(watermark);
   }
 
   /**
@@ -1481,16 +1490,15 @@ export class FabRuntime {
   private awaitSchedulerBatch(chunk: readonly string[]): Effect.Effect<void, RecoveryPassFailure> {
     const self = this;
     return Effect.tryPromise({
-      try: (signal) => new Promise<void>((resolve) => {
-        let settled = false;
-        const settle = (): void => {
-          if (settled) return;
-          settled = true;
-          resolve();
-        };
-        signal.addEventListener('abort', settle, { once: true });
-        void self.scheduler.scheduleMany(chunk).then(settle, settle);
-      }),
+      try: async (signal) => {
+        const results = await self.scheduler.scheduleManyDetailed(chunk);
+        if (signal.aborted) return;
+        const failed = results.filter((result) => result.outcome !== 'reconciled' && result.outcome !== 'terminal');
+        if (failed.length > 0) {
+          throw new Error('reconciliation batch did not converge: ' +
+            failed.map((result) => result.commandId + '=' + result.outcome).join(', '));
+        }
+      },
       catch: (cause) => new RecoveryPassFailure(classifyRecoveryError(cause), cause),
     });
   }
@@ -1626,7 +1634,7 @@ export class FabRuntime {
   }
 
   private isTerminalCommand(commandId: string): boolean {
-    return isTerminalOutcome(this.workflows.get(commandId)?.projection?.outcome);
+    return isTerminalOutcome(this.getProjection(commandId)?.outcome);
   }
 
   private afterDelivery(commandId: string): void {
