@@ -73,9 +73,18 @@ export function commitEquipmentStatusSnapshot(
   context: ResourceCommitContext<EquipmentStatusSnapshot>,
 ): CommitDecision<EquipmentStatusSnapshot> {
   const verdict = compareEquipmentStatusSnapshot(scope, FAB_LAYOUT.length, acceptedHighWater(context.current), next);
-  return verdict._tag === 'Accept'
-    ? { _tag: 'Publish', value: verdict.snapshot }
-    : { _tag: 'Ignore', reason: 'rejected' };
+  if (verdict._tag === 'Accept') return { _tag: 'Publish', value: verdict.snapshot };
+  // Only a valid read with identical version AND content confirms recovery. Equal
+  // counters with conflicting tool states remain rejected and cannot clear errors.
+  const current = Option.getOrUndefined(AsyncResult.value(context.current));
+  if (context.origin === 'read' && verdict.reason === 'stale' && current !== undefined &&
+      isValidEquipmentStatusSnapshot(next, scope, FAB_LAYOUT.length) &&
+      next.epoch === current.epoch && next.sequence === current.sequence &&
+      next.generatedAt === current.generatedAt &&
+      next.tools.every((tool, index) => tool.state === current.tools[index]?.state)) {
+    return { _tag: 'Ignore', reason: 'rejected', unchanged: true };
+  }
+  return { _tag: 'Ignore', reason: 'rejected' };
 }
 
 /**

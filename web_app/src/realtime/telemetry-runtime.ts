@@ -1,5 +1,6 @@
 import type { TelemetryFrame } from '@/contracts/command-events.contract';
 import {
+  FRAME_SIZE,
   boundTelemetryFrame,
   flattenTelemetryFrame,
   mergeTelemetryFrames,
@@ -20,6 +21,7 @@ export {
 
 interface EventSourceLike {
   onopen: (() => void) | null;
+  onerror?: ((event: unknown) => void) | null;
   onmessage: ((event: { data: string }) => void) | null;
   close(): void;
 }
@@ -32,7 +34,7 @@ interface WorkerLike {
   terminate(): void;
 }
 
-/** Observable Worker health; the renderer may show a stale/down indicator. */
+/** Observable stream/Worker health; the renderer may show a stale/down indicator. */
 export type TelemetryRuntimeStatus = 'stopped' | 'idle' | 'live' | 'stale';
 
 export interface TelemetryRuntimeOptions {
@@ -54,6 +56,8 @@ export interface TelemetryRuntimeOptions {
   readonly workerFactory?: () => WorkerLike;
   /** In-flight Worker reply timeout before the slot is released and rebuilt (0 disables). */
   readonly workerTimeoutMs?: number;
+  /** No accepted current-FAB frame within this interval marks SSE stale (0 disables). */
+  readonly frameTimeoutMs?: number;
 }
 
 export interface TelemetrySnapshot {
@@ -64,6 +68,8 @@ export interface TelemetrySnapshot {
 
 /** Default in-flight ceiling: a healthy Worker replies in microseconds; 2s only catches a wedged one. */
 const DEFAULT_WORKER_TIMEOUT_MS = 2_000;
+/** The backend currently emits every 50ms; tolerate transient network/browser stalls. */
+const DEFAULT_FRAME_TIMEOUT_MS = 15_000;
 
 /**
  * Accept a Worker reply payload without copying on the product path: the Worker
@@ -72,10 +78,11 @@ const DEFAULT_WORKER_TIMEOUT_MS = 2_000;
  * compatibility with an older worker build and are converted once there.
  */
 function workerFrameValues(payload: unknown): Float32Array | undefined {
-  if (payload instanceof Float32Array) return payload;
-  if (ArrayBuffer.isView(payload)) return Float32Array.from(payload as unknown as ArrayLike<number>);
-  if (Array.isArray(payload)) return Float32Array.from(payload as number[]);
-  return undefined;
+  const values = payload instanceof Float32Array ? payload
+    : ArrayBuffer.isView(payload) ? Float32Array.from(payload as unknown as ArrayLike<number>)
+    : Array.isArray(payload) ? Float32Array.from(payload as number[])
+    : undefined;
+  return values?.length === FRAME_SIZE && values.every(Number.isFinite) ? values : undefined;
 }
 
 /**
@@ -90,6 +97,11 @@ function workerFrameValues(payload: unknown): Float32Array | undefined {
  * still converge to the newest frame, while sparse/delta frames cannot lose
  * registered entity updates. The pending frame is submitted as soon as the
  * reply arrives.
+ *
+ * SSE liveness: errors or a deadline without an accepted current-FAB frame
+ * invalidate outstanding work and hide the retained snapshot from live rendering.
+ * Only a fresh accepted frame and its matching valid Worker reply restore live;
+ * onopen alone merely resets the connection-local sequence and deadline.
  *
  * Worker failure recovery: a Worker error/messageerror event or an in-flight
  * reply timeout releases the slot, marks the runtime stale (observable via
@@ -112,11 +124,14 @@ export class TelemetryRuntime {
   private workerFailed = false;
   private inFlightTimer?: ReturnType<typeof setTimeout>;
   private retryTimer?: ReturnType<typeof setTimeout>;
+  private frameTimer?: ReturnType<typeof setTimeout>;
   private inFlightFrame?: TelemetryFrame;
   private readonly workerTimeoutMs: number;
+  private readonly frameTimeoutMs: number;
 
   constructor(private readonly options: TelemetryRuntimeOptions) {
     this.workerTimeoutMs = Math.max(0, options.workerTimeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS);
+    this.frameTimeoutMs = Math.max(0, options.frameTimeoutMs ?? DEFAULT_FRAME_TIMEOUT_MS);
   }
 
   /** Immutable composite identity of this runtime; part of every registry key. */
@@ -128,12 +143,12 @@ export class TelemetryRuntime {
     return this.options.fabId;
   }
 
-  /** Observable health: 'stale' once a Worker fault released the slot until a valid frame applies. */
+  /** Observable health: stream/Worker faults stay stale until a current valid frame applies. */
   get status(): TelemetryRuntimeStatus {
     return this.statusValue;
   }
 
-  /** True while the last Worker reply is overdue/failed and the snapshot may be stale. */
+  /** True while the stream or Worker is unhealthy and the snapshot cannot drive live rendering. */
   get stale(): boolean {
     return this.statusValue === 'stale';
   }
@@ -156,6 +171,7 @@ export class TelemetryRuntime {
     const decoder = new MessageDecoder();
     let generation = 0;
     let acceptedSequence = -1;
+    let streamHealthy = false;
     let rebuilding = false;
     let retryDelayMs = 250;
     let immediateRebuildAvailable = true;
@@ -225,7 +241,6 @@ export class TelemetryRuntime {
         scheduleRetry();
         return;
       }
-      if (this.statusValue !== 'stale') this.statusValue = 'live';
     };
 
     const flushPending = (): void => {
@@ -275,7 +290,10 @@ export class TelemetryRuntime {
         // A reply from a previous SSE connection / Worker generation must not
         // restore the old watermark; its backend sequence belongs to the
         // obsolete stream.
-        if (data.generation !== generation) return;
+        if (data.generation !== generation || !streamHealthy || !this.inFlight ||
+          data.sequence !== this.inFlightFrame?.sequence) return;
+        const values = workerFrameValues(data.latest);
+        if (!values) return;
         this.inFlight = false;
         this.inFlightFrame = undefined;
         clearInFlightTimeout();
@@ -287,8 +305,7 @@ export class TelemetryRuntime {
           clearTimeout(this.retryTimer);
           this.retryTimer = undefined;
         }
-        const values = workerFrameValues(data.latest);
-        if (values && (!this.snapshot || data.sequence > this.snapshot.sequence)) {
+        if (!this.snapshot || data.sequence > this.snapshot.sequence) {
           // Store the reply typed array directly: the Worker already sent a copy.
           this.snapshot = { sequence: data.sequence, values, toolStates: toolStatesFromValues(values) };
         }
@@ -348,12 +365,40 @@ export class TelemetryRuntime {
       }
       const source = eventSourceFactory(this.options.url);
       this.source = source;
+      const clearFrameTimeout = (): void => {
+        if (this.frameTimer === undefined) return;
+        clearTimeout(this.frameTimer);
+        this.frameTimer = undefined;
+      };
+      const invalidateStream = (): void => {
+        if (!this.started || this.source !== source) return;
+        streamHealthy = false;
+        this.statusValue = 'stale';
+        clearFrameTimeout();
+        // Neither a queued reply nor Worker recovery may resurrect a frame from
+        // before this loss of liveness. Keep the watermark for same-stream recovery;
+        // only onopen establishes a connection that may restart its sequence.
+        generation += 1;
+        this.pendingFrame = undefined;
+        this.inFlight = false;
+        this.inFlightFrame = undefined;
+        clearInFlightTimeout();
+      };
+      const armFrameTimeout = (): void => {
+        clearFrameTimeout();
+        if (this.frameTimeoutMs <= 0) return;
+        this.frameTimer = setTimeout(invalidateStream, this.frameTimeoutMs);
+      };
+      armFrameTimeout();
+      source.onerror = invalidateStream;
       source.onopen = () => {
         if (!this.started || this.source !== source) return;
         // Backend sequences are local to each SSE connection. Start a new
         // generation, reset the Worker watermark, and drop any frame still in
         // flight/pending from the closed connection.
         generation += 1;
+        streamHealthy = false;
+        armFrameTimeout();
         acceptedSequence = -1;
         this.snapshot = undefined;
         this.pendingFrame = undefined;
@@ -380,6 +425,8 @@ export class TelemetryRuntime {
           if (decoded.event.fabId !== this.options.fabId) return;
           if (decoded.event.sequence <= acceptedSequence) return;
           acceptedSequence = decoded.event.sequence;
+          streamHealthy = true;
+          armFrameTimeout();
           // Bounded latest-wins with delta-safe merge: while one frame awaits its
           // reply, merge the newer decoded frame into the single pending slot
           // (no queue). Full snapshots keep the newest values; sparse/delta
@@ -430,9 +477,14 @@ export class TelemetryRuntime {
       clearTimeout(this.inFlightTimer);
       this.inFlightTimer = undefined;
     }
+    if (this.frameTimer !== undefined) {
+      clearTimeout(this.frameTimer);
+      this.frameTimer = undefined;
+    }
     // Detach first so a late SSE/Worker event cannot re-enter the runtime.
     if (source) {
       source.onopen = null;
+      source.onerror = null;
       source.onmessage = null;
       source.close();
     }

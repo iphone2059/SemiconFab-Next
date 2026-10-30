@@ -8,9 +8,9 @@ import type * as AtomRegistry from 'effect/reactivity/AtomRegistry';
  * FAB-scoped server/session projections for the Twin page.
  *
  * Owner: the EquipmentStatusPipeline / route-state controllers for one
- * (siteId, fabId) lifetime. Everything here is cleared by `liveScopeActivated`
- * before a new FAB can paint, so this atom is the only place a late frame from
- * the previous FAB could leak into. UI overlays, wafer playback frames, YMS
+ * (siteId, fabId) lifetime. FAB handover clears these projections atomically via
+ * `liveScopeActivated` before a new FAB can paint. This atom is the only place a
+ * late frame from the previous FAB could leak into. UI overlays, wafer playback frames, YMS
  * inputs and AMHS scene statistics live in their own atoms (they have different
  * owners and update frequencies) — see twin-page-ui.atom.ts, twin-wafer.atom.ts,
  * twin-yms.atom.ts, twin-amhs.atom.ts.
@@ -25,6 +25,7 @@ export interface TwinFabState {
    */
   liveStatusScope?: EquipmentStatusScope;
   liveToolStates: FabToolState[];
+  /** Fixed research baseline owned by liveStatusScope, not by the latest live frame. */
   replayBase: FabToolState[];
   statusFeed?: { updatedAt: string; stale: boolean };
   mesJobs: Record<number, MesJob>;
@@ -49,11 +50,16 @@ const reducers = {
   /**
    * A01: in-place scope handover in one atomic update. Clears every FAB-scoped
    * projection so the next FAB never renders the previous FAB's snapshot, feed or
-   * MES demo state before its own first accepted frame.
+   * MES demo state before its own first accepted frame. Replay uses the default
+   * FAB_TOOL_STATES on a composite scope change (including research deep links),
+   * never a previous FAB's captured baseline. Same-scope keepAlive remounts retain
+   * their fixed baseline; only explicit research entry captures current states.
+   * Live frames must not rebase playback, including equipment absent from replay.
    */
   liveScopeActivated: (state: TwinFabState, liveStatusScope: EquipmentStatusScope) => page(state, {
     liveStatusScope,
     liveToolStates: [...FAB_TOOL_STATES],
+    replayBase: sameScope(state.liveStatusScope, liveStatusScope) ? state.replayBase : [...FAB_TOOL_STATES],
     statusFeed: undefined,
     mesJobs: {},
     inspectorMes: {},

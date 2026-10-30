@@ -29,6 +29,8 @@ export interface ResourcePolicy {
   readonly idleTtlMs: number;
   /** Poll interval while at least one consumer is retained (never per component). */
   readonly pollMs?: number;
+  /** Whole read deadline (fetch + body + decode), default 30s; finite positive milliseconds. */
+  readonly loadTimeoutMs?: number;
 }
 
 /** Why a candidate was not published. Every Ignore appends a bounded diagnostic. */
@@ -40,10 +42,15 @@ export type IgnoreReason =
   | 'rejected'
   | 'capacity';
 
-/** The single commit exit: Publish writes the Atom exactly once; Ignore never writes. */
+/** Publish owns payload writes; Ignore may only complete current read control state. */
 export type CommitDecision<A> =
   | { readonly _tag: 'Publish'; readonly value: A }
-  | { readonly _tag: 'Ignore'; readonly reason: IgnoreReason };
+  | {
+      readonly _tag: 'Ignore';
+      readonly reason: IgnoreReason;
+      /** Valid read matches the retained version AND content; may clear an old error, not publish. */
+      readonly unchanged?: true;
+    };
 
 /** Synchronous commit context handed to {@link ResourceDefinition.accept}. */
 export interface ResourceCommitContext<A> {
@@ -87,10 +94,21 @@ export interface ResourceDefinition<A, E> {
   readonly accept?: (next: A, context: ResourceCommitContext<A>) => CommitDecision<A>;
 }
 
+export const DEFAULT_RESOURCE_LOAD_TIMEOUT_MS = 30_000;
+
+/** Infrastructure failure of a bounded read, distinct from business/API failures. */
+export class ResourceReadTimeoutError extends Error {
+  readonly _tag = 'ResourceReadTimeoutError';
+  constructor(readonly key: ResourceKey, readonly timeoutMs: number) {
+    super('Resource read exceeded ' + timeoutMs + 'ms: ' + key);
+    this.name = 'ResourceReadTimeoutError';
+  }
+}
+
 /** Stable handle for one (manager, key) resource; the Atom is the only value owner. */
 export interface ResourceHandle<A, E> {
   readonly key: ResourceKey;
-  readonly atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>;
+  readonly atom: Atom.Atom<AsyncResult.AsyncResult<A, E | ResourceReadTimeoutError>>;
   readonly definition: ResourceDefinition<A, E>;
 }
 
@@ -129,7 +147,7 @@ export interface ResourceManager<Runtime extends ResourceRuntime = ResourceRunti
   /** Stable handle for a definition key; creates the manager entry when absent. */
   handle<A, E>(definition: ResourceDefinition<A, E>): ResourceHandle<A, E>;
   /** Current Atom state (Initial / Loading / Ready / Refreshing / Failed*). */
-  state<A, E>(handle: ResourceHandle<A, E>): AsyncResult.AsyncResult<A, E>;
+  state<A, E>(handle: ResourceHandle<A, E>): AsyncResult.AsyncResult<A, E | ResourceReadTimeoutError>;
   /** Retained value (including the last success behind a typed failure). */
   value<A, E>(handle: ResourceHandle<A, E>): A | undefined;
   /** Freshness-on-mount read: reuse a fresh success, otherwise refresh (single-flight). */

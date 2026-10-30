@@ -4,7 +4,7 @@ import { createAtomTestScope } from '../../tests/support/atom-scope';
 import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
 import { act, cleanup, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createTestRuntime, seedSites, ResourceTestProviders } from '../support/resource-test-runtime.tsx';
+import { createTestRuntime, seedSites, seedEquipmentStatus, ResourceTestProviders } from '../support/resource-test-runtime.tsx';
 
 const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
@@ -19,7 +19,8 @@ import { createTelemetryWorkerHandler } from '@/realtime/telemetry-worker.logic'
 import { viewerActions, viewerSessionAtom } from '@/state/viewer.atom';
 import { twinDemoActions, twinDemoAtom } from '@/twin/twin-demo.atom';
 import { twinUiActions } from '@/twin/twin-ui.atom';
-import type { FabToolState } from '@/domain/fab-layout';
+import { FAB_LAYOUT, type FabToolState } from '@/domain/fab-layout';
+import { twinPageAtom } from '@/twin/twin-page.atom';
 import type { ScenePortStub } from '../../tests/support/scene-port-stub';
 
 const backend = vi.hoisted(() => ({ instances: [] as ScenePortStub[] }));
@@ -92,4 +93,60 @@ it('keeps paused DEMO states isolated while consuming telemetry in live mode', a
   twinUiActions.sourceSet(registry, 'demo');
   expect(toolStateSource()).toEqual(registry.get(twinDemoAtom).states);
   view.unmount(); telemetryRegistry.disposeAll();
+});
+
+it('falls back to accepted equipment status when telemetry disconnects and waits for a valid frame to recover', async () => {
+  vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+  vi.stubGlobal('EventSource', class { onmessage = null; onerror = null; close() {} });
+  const handler = createTelemetryWorkerHandler({ frameSize: 32 });
+  const source = {
+    onmessage: null as ((event: { data: string }) => void) | null,
+    onopen: null as (() => void) | null,
+    onerror: null as (() => void) | null,
+    close() {},
+  };
+  const worker = {
+    onmessage: null as ((event: { data: unknown }) => void) | null,
+    postMessage(message: unknown) { const result = handler.handle(message); if (result) this.onmessage?.({ data: result }); },
+    terminate() {},
+  };
+  const telemetry = new TelemetryRuntime({ siteId: site.siteId, fabId: 'fab-1', url: 'fake', eventSourceFactory: () => source, workerFactory: () => worker });
+  const telemetryRegistry = new FabTelemetryRegistry();
+  telemetryRegistry.replaceAll([telemetry]);
+  const client = createTestRuntime();
+  const scopedRegistry = client.registry;
+  seedSites(client, [site]);
+  twinDemoActions.playingSet(scopedRegistry, false);
+  const view = render(<ResourceTestProviders runtime={client}><TelemetryProvider registry={telemetryRegistry}><TwinPage siteId={site.siteId} fabId="fab-1" search={{ modal: 'arch' }} /></TelemetryProvider></ResourceTestProviders>);
+  const send = (sequence: number, state: number) => source.onmessage?.({ data: JSON.stringify({
+    topic: 'telemetry.frame', sequence,
+    payload: { fabId: 'fab-1', sequence, capturedAt: '2026-10-30T00:00:00Z', samples: [{ entityId: 'equipment-0', values: { state, utilization: 0.5 } }] },
+  }) });
+  try {
+    await waitFor(() => expect(backend.instances).toHaveLength(1));
+    await act(async () => {
+      twinUiActions.sourceSet(scopedRegistry, 'sse-live');
+      seedEquipmentStatus(client, site.siteId, 'fab-1', {
+        siteId: site.siteId, fabId: 'fab-1', epoch: 1, sequence: 10,
+        generatedAt: '2026-10-30T00:00:00Z', tools: FAB_LAYOUT.map(() => ({ state: 'down' })),
+      });
+    });
+    await waitFor(() => expect(scopedRegistry.get(twinPageAtom).liveToolStates[0]).toBe('down'));
+    const toolStateSource = frameSource();
+    act(() => { source.onopen?.(); send(1, 0); });
+    expect(toolStateSource()[0]).toBe('running');
+    act(() => { source.onerror?.(); });
+    expect(telemetry.stale).toBe(true);
+    expect(toolStateSource()[0]).toBe('down');
+    expect(scopedRegistry.get(twinPageAtom).statusFeed?.stale).toBe(false);
+    act(() => { source.onopen?.(); });
+    expect(toolStateSource()[0]).toBe('down');
+    act(() => { send(1, 3); });
+    expect(telemetry.status).toBe('live');
+    expect(toolStateSource()[0]).toBe('maint');
+  } finally {
+    view.unmount();
+    telemetryRegistry.disposeAll();
+    await client.dispose();
+  }
 });

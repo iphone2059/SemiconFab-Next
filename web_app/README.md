@@ -30,10 +30,14 @@ web_app/
 ## 关键边界
 
 - 一个应用一个 `AtomRegistry`；Router context 与 React 树共用 `AppRuntime`。
-- 远程快照唯一 owner 为 Resource Atom；Router loader 使用 `ensureResource`，与页面挂载共享同一 Atom/单飞读取。
+- 远程快照唯一 owner 为 Resource Atom；Router loader 使用 `runtime.resources.ensure(handle)`，与页面挂载共享同一 Atom/单飞读取。
 - XState 命令生命周期由 Effect Scope 管理 actor；SSE 命令结果经 Effect PubSub/Stream 进入 bridge。
 - 高频遥测/TypedArray/Worker/Babylon 对象不进入 AtomRegistry。
-- 设备状态 REST 与 SSE 共用 per-registry 顺序 Gate；快照只写 FAB 作用域 Resource Atom。
+- 设备状态 REST 与 SSE 共用 ResourceManager 内的同步顺序提交规则；快照只写 FAB 作用域 Resource Atom。
+- payload 的 Publish/Ignore 与读取控制态分离：有效同版本、同内容读取可结束刷新并清旧错误，但不替换 payload、推进 timestamp 或 writeSeq。
+- 资源 load 默认 30 秒超时（`ResourcePolicy.loadTimeoutMs` 可覆盖），实际中断 fetch/响应体消费；零订阅 GET 可短暂共享，但不得因挂起而续期 idleTTL。
+- 遥测 SSE 错误或默认 15 秒无有效递增帧会失活并回退设备基线；重连打开不等于恢复，只有当前有效帧及匹配 Worker 回复才能恢复 live。
+- research 回放基线随复合 FAB 身份原子隔离；跨 FAB/新身份深链接使用默认基线，同身份重挂载保留固定基线，后续 live 帧不重写回放。
 
 ## 命令
 

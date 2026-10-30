@@ -313,7 +313,7 @@ interface RecoveryWorker {
  * Worker-fault harness: replies can be withheld, postMessage failures injected and
  * every Worker generation created by a rebuild is observable.
  */
-function recoveryHarness(options: { deliverNow?: boolean; workerTimeoutMs?: number; failedConstructions?: readonly number[]; failedResets?: readonly number[] } = {}) {
+function recoveryHarness(options: { deliverNow?: boolean; workerTimeoutMs?: number; frameTimeoutMs?: number; open?: boolean; failedConstructions?: readonly number[]; failedResets?: readonly number[] } = {}) {
   const handler = createTelemetryWorkerHandler({ frameSize: 32 });
   const commands: PostedCommand[] = [];
   const replies: TelemetryWorkerEvent[] = [];
@@ -349,8 +349,9 @@ function recoveryHarness(options: { deliverNow?: boolean; workerTimeoutMs?: numb
   };
   const source = {
     onopen: null as (() => void) | null,
+    onerror: null as (() => void) | null,
     onmessage: null as ((event: { data: string }) => void) | null,
-    close() {},
+    close: vi.fn(),
   };
   const runtime = new TelemetryRuntime({
     siteId: 'site-1',
@@ -359,9 +360,10 @@ function recoveryHarness(options: { deliverNow?: boolean; workerTimeoutMs?: numb
     eventSourceFactory: () => source,
     workerFactory: factory,
     workerTimeoutMs: options.workerTimeoutMs ?? 0,
+    frameTimeoutMs: options.frameTimeoutMs ?? 0,
   });
   runtime.start();
-  source.onopen?.();
+  if (options.open !== false) source.onopen?.();
   const send = (sequence: number, state: number) => source.onmessage?.({ data: JSON.stringify({
     topic: 'telemetry.frame', sequence,
     payload: { fabId: 'fab-a', sequence, capturedAt: '2026-10-27T00:00:00Z',
@@ -381,6 +383,253 @@ function recoveryHarness(options: { deliverNow?: boolean; workerTimeoutMs?: numb
   const throwNextPostMessage = () => { throwNextPost = true; };
   return { runtime, source, workers, commands, replies, frames, current, deliver, fail, send, sendSamples, throwNextPostMessage, constructions: () => constructions };
 }
+
+it('marks a disconnected SSE stream stale immediately and recovers on a newer same-stream frame', () => {
+  const h = recoveryHarness();
+  try {
+    h.send(10, 2);
+    const previous = h.runtime.getSnapshot();
+    expect(h.runtime.status).toBe('live');
+    h.source.onerror?.();
+    expect(h.runtime.status).toBe('stale');
+    expect(h.runtime.getSnapshot()).toBe(previous); // diagnostics retain the last frame
+    expect(h.runtime.getToolStates()).toBeUndefined(); // renderer falls back instead
+    expect(h.constructions()).toBe(1); // SSE faults do not churn healthy Workers
+    h.send(10, 0); // duplicate from the lost stream is not recovery
+    expect(h.runtime.stale).toBe(true);
+    h.send(11, 1);
+    expect(h.runtime.status).toBe('live');
+    expect(h.runtime.getToolStates()?.[0]).toBe('idle');
+  } finally { h.runtime.stop(); }
+});
+
+it('invalidates pre-error Worker replies and pending frames before same-stream recovery', () => {
+  vi.useFakeTimers();
+  const h = recoveryHarness({ deliverNow: false, workerTimeoutMs: 100, frameTimeoutMs: 50 });
+  try {
+    h.send(1, 2);
+    h.send(2, 0); // pending behind an unanswered Worker reply
+    h.source.onerror?.();
+    expect(vi.getTimerCount()).toBe(0);
+    h.deliver(0);
+    expect(h.runtime.stale).toBe(true);
+    expect(h.runtime.getSnapshot()).toBeUndefined();
+    expect(h.frames().map(frame => frame.sequence)).toEqual([1]);
+    h.send(3, 3); // no onopen: increasing sequences still recover on this source
+    expect(h.frames().map(frame => frame.sequence)).toEqual([1, 3]);
+    expect(h.frames()[1].generation).toBeGreaterThan(h.frames()[0].generation!);
+    expect(h.runtime.stale).toBe(true); // receipt alone is not a healthy Worker reply
+    h.deliver(0); // old generation cannot release the new in-flight slot
+    expect(h.runtime.stale).toBe(true);
+    h.deliver(1);
+    expect(h.runtime.status).toBe('live');
+    expect(h.runtime.getToolStates()?.[0]).toBe('maint');
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
+
+it('waits for a current-generation valid Worker frame after SSE reconnect resets the wire sequence', () => {
+  const h = recoveryHarness({ deliverNow: false });
+  try {
+    h.send(100, 2);
+    h.source.onerror?.();
+    h.source.onopen?.();
+    expect(h.runtime.status).toBe('idle');
+    expect(h.runtime.getToolStates()).toBeUndefined();
+    h.deliver(0);
+    expect(h.runtime.getSnapshot()).toBeUndefined();
+    h.send(1, 3);
+    expect(h.runtime.status).not.toBe('live');
+    h.deliver(1);
+    expect(h.runtime.getSnapshot()?.sequence).toBe(1);
+    expect(h.runtime.getToolStates()?.[0]).toBe('maint');
+    expect(h.runtime.status).toBe('live');
+  } finally { h.runtime.stop(); }
+});
+
+it('bounds the initial no-open/no-frame wait and starts a fresh watchdog on open', () => {
+  vi.useFakeTimers();
+  const h = recoveryHarness({ open: false, frameTimeoutMs: 50 });
+  try {
+    expect(h.runtime.status).toBe('idle');
+    vi.advanceTimersByTime(50);
+    expect(h.runtime.stale).toBe(true);
+    h.source.onopen?.();
+    expect(h.runtime.status).toBe('idle');
+    vi.advanceTimersByTime(49);
+    expect(h.runtime.status).toBe('idle');
+    vi.advanceTimersByTime(1);
+    expect(h.runtime.stale).toBe(true);
+    expect(h.runtime.getToolStates()).toBeUndefined();
+    h.send(1, 1);
+    expect(h.runtime.status).toBe('live');
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
+
+it('uses a generous production watchdog and falls back when live frames silently stop', () => {
+  vi.useFakeTimers();
+  const h = harness(); // production default, not the disabled recovery-harness timer
+  try {
+    h.send(1, 2);
+    const previous = h.runtime.getSnapshot();
+    vi.advanceTimersByTime(14_999);
+    expect(h.runtime.status).toBe('live');
+    vi.advanceTimersByTime(1);
+    expect(h.runtime.stale).toBe(true);
+    expect(h.runtime.getSnapshot()).toBe(previous);
+    expect(h.runtime.getToolStates()).toBeUndefined();
+    h.send(2, 3);
+    expect(h.runtime.getToolStates()?.[0]).toBe('maint');
+    expect(h.runtime.status).toBe('live');
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
+
+it('refreshes the watchdog only when a newer valid frame arrives, not when its Worker replies', () => {
+  vi.useFakeTimers();
+  const h = recoveryHarness({ deliverNow: false, frameTimeoutMs: 50 });
+  try {
+    h.send(1, 2);
+    vi.advanceTimersByTime(30);
+    h.send(2, 1); // valid pending frame extends the stream deadline to t=80
+    vi.advanceTimersByTime(19);
+    h.deliver(0); // t=49; applies frame 1 and flushes pending frame 2
+    vi.advanceTimersByTime(30);
+    h.deliver(1); // t=79; Worker health does not extend the stream deadline
+    expect(h.runtime.status).toBe('live');
+    vi.advanceTimersByTime(1);
+    expect(h.runtime.stale).toBe(true);
+    expect(h.runtime.getToolStates()).toBeUndefined();
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
+
+const invalidLivenessMessages = [
+  ['malformed JSON', '{'],
+  ['invalid payload', JSON.stringify({ topic: 'telemetry.frame', payload: { fabId: 'fab-a', sequence: 11 } })],
+  ['wrong FAB', JSON.stringify({ topic: 'telemetry.frame', payload: {
+    fabId: 'fab-b', sequence: 11, capturedAt: 'now', samples: [],
+  } })],
+  ['duplicate sequence', JSON.stringify({ topic: 'telemetry.frame', payload: {
+    fabId: 'fab-a', sequence: 10, capturedAt: 'now', samples: [],
+  } })],
+  ['older sequence', JSON.stringify({ topic: 'telemetry.frame', payload: {
+    fabId: 'fab-a', sequence: 9, capturedAt: 'now', samples: [],
+  } })],
+  ['another topic', JSON.stringify({ topic: 'alarm.event', payload: {
+    fabId: 'fab-a', alarmId: 'alarm-1', severity: 'warning', message: 'warning', occurredAt: 'now',
+  } })],
+] as const;
+
+it.each(invalidLivenessMessages)('does not extend or restore SSE liveness for %s', (_label, data) => {
+  vi.useFakeTimers();
+  const h = recoveryHarness({ frameTimeoutMs: 50 });
+  try {
+    h.send(10, 2);
+    for (let i = 0; i < 4; i++) {
+      vi.advanceTimersByTime(10);
+      h.source.onmessage?.({ data });
+    }
+    expect(h.runtime.status).toBe('live');
+    vi.advanceTimersByTime(10);
+    expect(h.runtime.stale).toBe(true);
+    h.source.onmessage?.({ data });
+    expect(h.runtime.stale).toBe(true);
+    expect(h.runtime.getToolStates()).toBeUndefined();
+    h.send(11, 3);
+    expect(h.runtime.status).toBe('live');
+    expect(h.runtime.getToolStates()?.[0]).toBe('maint');
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
+
+it('drops late pre-timeout Worker replies and recovers only after a fresh valid frame applies', () => {
+  vi.useFakeTimers();
+  const h = recoveryHarness({ deliverNow: false, frameTimeoutMs: 50, workerTimeoutMs: 100 });
+  try {
+    h.send(1, 2);
+    vi.advanceTimersByTime(50);
+    expect(h.runtime.stale).toBe(true);
+    expect(vi.getTimerCount()).toBe(0); // old Worker timeout was released too
+    h.deliver(0);
+    expect(h.runtime.stale).toBe(true);
+    expect(h.runtime.getSnapshot()).toBeUndefined();
+    h.send(2, 1);
+    expect(h.runtime.stale).toBe(true);
+    h.deliver(1);
+    expect(h.runtime.status).toBe('live');
+    expect(h.runtime.getToolStates()?.[0]).toBe('idle');
+    expect(h.constructions()).toBe(1);
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
+
+it.each([undefined, [], [Number.NaN], Array(32).fill(Number.POSITIVE_INFINITY)].map(latest => ({ latest })))(
+  'does not recover from SSE loss using an invalid Worker payload ($latest)', ({ latest }) => {
+    const h = recoveryHarness({ deliverNow: false });
+    try {
+      h.send(1, 2);
+      h.source.onerror?.();
+      h.send(2, 3);
+      const frame = h.frames()[1];
+      h.current().onmessage?.({ data: { type: 'frame-written', sequence: 2, generation: frame.generation, latest } });
+      expect(h.runtime.stale).toBe(true);
+      expect(h.runtime.getToolStates()).toBeUndefined();
+      h.deliver(1);
+      expect(h.runtime.status).toBe('live');
+    } finally { h.runtime.stop(); }
+  },
+);
+
+it('does not replay expired pending data when Worker allocation recovers after the SSE deadline', () => {
+  vi.useFakeTimers();
+  const h = recoveryHarness({ deliverNow: false, frameTimeoutMs: 50, failedConstructions: [2] });
+  try {
+    h.send(1, 2);
+    h.fail('error'); // pending replay waits for a Worker allocation retry at t=250
+    expect(h.runtime.failed).toBe(true);
+    vi.advanceTimersByTime(50);
+    expect(h.runtime.stale).toBe(true);
+    vi.advanceTimersByTime(200);
+    expect(h.constructions()).toBe(3);
+    expect(h.runtime.failed).toBe(false);
+    expect(h.frames().map(frame => frame.sequence)).toEqual([1]);
+    expect(h.runtime.stale).toBe(true);
+    h.send(2, 3);
+    expect(h.runtime.stale).toBe(true);
+    h.deliver(1);
+    expect(h.runtime.status).toBe('live');
+    expect(h.runtime.getToolStates()?.[0]).toBe('maint');
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
+
+it('replaces rather than accumulates watchdogs on reopen and detaches/clears everything on stop', () => {
+  vi.useFakeTimers();
+  const h = recoveryHarness({ frameTimeoutMs: 50, workerTimeoutMs: 100 });
+  try {
+    h.send(1, 2);
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(30);
+    h.source.onopen?.();
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(20); // original deadline; reset timer must not fire
+    expect(h.runtime.status).toBe('idle');
+    const lateError = h.source.onerror;
+    const lateOpen = h.source.onopen;
+    const lateMessage = h.source.onmessage;
+    h.runtime.stop();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(h.source.onerror).toBeNull();
+    expect(h.source.onopen).toBeNull();
+    expect(h.source.onmessage).toBeNull();
+    expect(h.source.close).toHaveBeenCalledOnce();
+    lateError?.();
+    lateOpen?.();
+    lateMessage?.({ data: JSON.stringify({ topic: 'telemetry.frame', payload: {
+      fabId: 'fab-a', sequence: 2, capturedAt: 'now', samples: [],
+    } }) });
+    vi.advanceTimersByTime(1_000);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(h.runtime.status).toBe('stopped');
+    expect(h.runtime.getToolStates()).toBeUndefined();
+    expect(h.constructions()).toBe(1);
+  } finally { h.runtime.stop(); vi.useRealTimers(); }
+});
 
 it('retries transient Worker construction failure and preserves sparse pending slots', () => {
   vi.useFakeTimers();
@@ -649,7 +898,8 @@ it('bounds the pending merge by the registered render slots', () => {
 });
 
 it('accepts ArrayBuffer views and legacy number[] worker replies', () => {
-  const { runtime, worker } = harness(true);
+  const { runtime, worker, send } = harness(true);
+  send(1, 2);
   // The harness opens the SSE source once during setup, so the active Worker
   // generation is 1 (setup reset) before any frame is submitted.
   const generation = 1;
@@ -657,6 +907,7 @@ it('accepts ArrayBuffer views and legacy number[] worker replies', () => {
   worker.onmessage?.({ data: { type: 'frame-written', sequence: 1, latest: view, generation } });
   expect(runtime.getSnapshot()?.values).toBeInstanceOf(Float32Array);
   expect(runtime.getToolStates()?.[0]).toBe('down');
+  send(2, 1);
   const legacy = Array.from({ length: 32 }, (_, index) => (index === 0 ? 1 : 0));
   worker.onmessage?.({ data: { type: 'frame-written', sequence: 2, latest: legacy, generation } });
   expect(runtime.getSnapshot()?.sequence).toBe(2);
@@ -674,8 +925,9 @@ function identityHarness(siteId: string, fabId: string, url: string) {
   const requestedUrls: string[] = [];
   const source = {
     onopen: null as (() => void) | null,
+    onerror: null as (() => void) | null,
     onmessage: null as ((event: { data: string }) => void) | null,
-    close() {},
+    close: vi.fn(),
   };
   const worker = {
     onmessage: null as ((event: { data: unknown }) => void) | null,

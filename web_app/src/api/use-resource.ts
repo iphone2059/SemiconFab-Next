@@ -3,12 +3,12 @@ import { Option } from 'effect';
 import * as AsyncResult from 'effect/reactivity/AsyncResult';
 import { useEffect } from 'react';
 import type { AppRuntime } from '@/app/app-runtime';
-import type { ResourceDefinition } from '@/api/resource';
+import type { ResourceDefinition, ResourceReadTimeoutError } from '@/api/resource';
 
 export interface ResourceView<A, E> {
-  readonly result: AsyncResult.AsyncResult<A, E>;
+  readonly result: AsyncResult.AsyncResult<A, E | ResourceReadTimeoutError>;
   readonly data: A | undefined;
-  readonly error: E | undefined;
+  readonly error: E | ResourceReadTimeoutError | undefined;
   readonly isInitial: boolean;
   readonly isFetching: boolean;
   readonly isError: boolean;

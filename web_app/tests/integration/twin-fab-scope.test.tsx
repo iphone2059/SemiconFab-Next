@@ -2,7 +2,7 @@
 import { resetRuntimeState, resetTwinDemoState, resetTwinPageState, resetTwinUiState } from '../../tests/support/reset-ui-atoms';
 import { createAtomTestScope } from '../../tests/support/atom-scope';
 import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
-import { act, cleanup, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createTestRuntime, readEquipmentStatus, seedSites, ResourceTestProviders, type AppRuntime } from '../support/resource-test-runtime.tsx';
 
@@ -12,7 +12,7 @@ import { TwinPage } from '@/twin/twin-page';
 import { FAB_LAYOUT, FAB_TOOL_STATES, type FabToolState } from '@/domain/fab-layout';
 import { createMesJob } from '@/domain/fab-process-control';
 import type { EquipmentStatusSnapshot } from '@/realtime/equipment-status.protocol';
-import { twinUiActions } from '@/twin/twin-ui.atom';
+import { twinUiActions, twinUiAtom } from '@/twin/twin-ui.atom';
 import { twinPageActions, twinPageAtom } from '@/twin/twin-page.atom';
 
 
@@ -34,7 +34,13 @@ const sites = [{
   templateHash: 'test',
   fabs: [
     { fabId: 'fab-a', code: 'FAB-A' },
+    { fabId: 'fab-b', code: 'FAB-B' },
   ],
+}, {
+  siteId: 'site-2',
+  code: 'SITE-2',
+  templateHash: 'test',
+  fabs: [{ fabId: 'fab-a', code: 'FAB-A' }],
 }];
 
 class CapturingEventSource {
@@ -85,8 +91,8 @@ function renderTwin(client: AppRuntime<never>, fabId: string) {
   );
 }
 
-async function streamFor(fabId: string, expectedCount = 1): Promise<CapturingEventSource> {
-  const url = `/api/v1/sites/site-1/fabs/${fabId}/equipment-status/stream`;
+async function streamFor(fabId: string, expectedCount = 1, siteId = 'site-1'): Promise<CapturingEventSource> {
+  const url = `/api/v1/sites/${siteId}/fabs/${fabId}/equipment-status/stream`;
   await waitFor(() => expect(CapturingEventSource.instances.filter((source) => source.url === url)).toHaveLength(expectedCount));
   const source = CapturingEventSource.instances.filter((value) => value.url === url)[expectedCount - 1];
   if (!source) throw new Error('missing equipment-status stream for ' + fabId);
@@ -108,7 +114,7 @@ afterEach(() => {
   resetTwinUiState(registry); resetTwinPageState(registry); resetRuntimeState(registry); resetTwinDemoState(registry);
 });
 
-it('scopes status REST + SSE to the single configured canonical route FAB', async () => {
+it('scopes status REST + SSE to the selected canonical route FAB', async () => {
   const fetchUrls: string[] = [];
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
     fetchUrls.push(String(input));
@@ -236,4 +242,88 @@ it('A01: a disconnected status stream is labelled CACHE, never LIVE', async () =
   expect(registry.get(twinPageAtom).statusFeed?.stale).toBe(true);
   expect(feed()).toContain('CACHE');
   expect(feed()).not.toContain('LIVE');
+});
+
+it('still captures current tool states on explicit research entry and freezes them during live updates', async () => {
+  const client = setup();
+  const view = renderTwin(client, 'fab-a');
+  const source = await streamFor('fab-a');
+  act(() => twinUiActions.sourceSet(registry, 'sse-live'));
+  send(source, frame({ tools: tools({}, 'down') }));
+  await waitFor(() => expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('down'));
+  fireEvent.change(view.container.querySelector('#mode-select')!, { target: { value: 'research' } });
+  expect(registry.get(twinUiAtom).entryMode).toBe('research');
+  const baseline = registry.get(twinPageAtom).replayBase;
+  expect(baseline).toEqual(FAB_TOOL_STATES.map(() => 'down'));
+  expect(baseline).not.toBe(registry.get(twinPageAtom).liveToolStates);
+  send(source, frame({ sequence: 2, tools: tools({}, 'maint') }));
+  await flushProjection();
+  expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('maint');
+  expect(registry.get(twinPageAtom).replayBase).toBe(baseline);
+});
+
+it.each([
+  { siteId: 'site-1', fabId: 'fab-b' },
+  { siteId: 'site-2', fabId: 'fab-a' },
+])('isolates research replay on in-place A → $siteId/$fabId → A navigation', async (scopeB) => {
+  const client = setup();
+  const pageFor = (scope: { siteId: string; fabId: string }) => (
+    <ResourceTestProviders runtime={client}>
+      <TwinPage {...scope} search={{ mode: 'research', modal: 'arch' }} />
+    </ResourceTestProviders>
+  );
+  const scopeA = { siteId: 'site-1', fabId: 'fab-a' };
+  const view = render(pageFor(scopeA));
+  const sourceA = await streamFor('fab-a');
+  expect(registry.get(twinUiAtom).entryMode).toBe('research');
+  // Model an already captured research baseline in the keepAlive page atom.
+  act(() => twinPageActions.replayBaseSet(registry, FAB_TOOL_STATES.map(() => 'down')));
+  const lateA = sourceA.onmessage;
+  view.rerender(pageFor(scopeB));
+  expect(registry.get(twinPageAtom).liveStatusScope).toEqual(scopeB);
+  expect(registry.get(twinPageAtom).replayBase).toEqual(FAB_TOOL_STATES);
+  const baselineB = registry.get(twinPageAtom).replayBase;
+  const sourceB = await streamFor(scopeB.fabId, 1, scopeB.siteId);
+  // Deep-link research uses the default baseline, not the first/newest live frame.
+  send(sourceB, frame({ ...scopeB, tools: tools({}, 'maint') }));
+  await flushProjection();
+  expect(registry.get(twinPageAtom).liveToolStates[0]).toBe('maint');
+  expect(registry.get(twinPageAtom).replayBase).toBe(baselineB);
+  act(() => { lateA?.({ data: JSON.stringify(frame({ sequence: 99, tools: tools({}, 'down') })) }); });
+  await flushProjection();
+  expect(registry.get(twinPageAtom).replayBase).toBe(baselineB);
+
+  act(() => twinPageActions.replayBaseSet(registry, FAB_TOOL_STATES.map(() => 'idle')));
+  view.rerender(pageFor(scopeA));
+  expect(registry.get(twinPageAtom).liveStatusScope).toEqual(scopeA);
+  expect(registry.get(twinPageAtom).replayBase).toEqual(FAB_TOOL_STATES);
+});
+
+it.each([
+  { siteId: 'site-1', fabId: 'fab-b', sameScope: false },
+  { siteId: 'site-1', fabId: 'fab-a', sameScope: true },
+])('keeps replay ownership after unmount/remount into $siteId/$fabId', async ({ siteId, fabId, sameScope }) => {
+  const client = setup();
+  const view = renderTwin(client, 'fab-a');
+  await streamFor('fab-a');
+  act(() => {
+    twinPageActions.replayBaseSet(registry, FAB_TOOL_STATES.map(() => 'down'));
+    twinUiActions.modeSet(registry, 'research');
+  });
+  const captured = registry.get(twinPageAtom).replayBase;
+  view.unmount();
+  // Neither the Atom registry nor AppRuntime is reset between page lifetimes.
+  render(
+    <ResourceTestProviders runtime={client}>
+      <TwinPage siteId={siteId} fabId={fabId} search={{ mode: 'research', modal: 'arch' }} />
+    </ResourceTestProviders>,
+  );
+  expect(registry.get(twinPageAtom).liveStatusScope).toEqual({ siteId, fabId });
+  if (sameScope) expect(registry.get(twinPageAtom).replayBase).toBe(captured);
+  else expect(registry.get(twinPageAtom).replayBase).toEqual(FAB_TOOL_STATES);
+  const baseline = registry.get(twinPageAtom).replayBase;
+  const source = await streamFor(fabId, sameScope ? 2 : 1, siteId);
+  send(source, frame({ siteId, fabId, tools: tools({}, 'maint') }));
+  await flushProjection();
+  expect(registry.get(twinPageAtom).replayBase).toBe(baseline);
 });

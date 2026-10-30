@@ -1,6 +1,6 @@
 # ADR-006：资源身份、状态机与提交协议（Phase B 冻结接口）
 
-- 状态：Accepted（Phase A，2026-10-29）
+- 状态：Accepted（Phase A，2026-10-29；2026-10-30 补充读取控制态与有界生命周期）
 - 基线：`1fb25ffc36b5b65813f031c8d889063964b4d1bd`
 - 取代：`01-effect4-target-architecture.md` 中 Resource Atom 的模块级 single-flight/family 描述；`03-migration-plan.md` 中资源相关阶段
 - 关联不变量：INV-01/02/03/04/05/06/10；关联测试：CORE-001..006
@@ -52,14 +52,14 @@
 2. 读取 `const current = registry.get(handle.atom)`（与后续写入同一同步段）。
 3. 对 read 来源：
    - `candidate.requestId !== entry.currentRequestId` → `Ignore('stale-request')`；
-   - 成功候选：执行 `definition.accept?.(value, ctx)`，Ignore 则直接返回，不写 Atom；
+   - 成功候选：执行 `definition.accept?.(value, ctx)`。Ignore 不发布候选 payload，但当前 request 可结束等待控制态；仅明确标记 `unchanged: true` 的有效同版本、同内容读取可清除旧读取错误。控制态更新只使用同一 Atom 的当前/previousSuccess 值，保留原 timestamp，不增加 writeSeq；
    - 失败候选：若 `candidate.baselineWriteSeq !== entry.writeSeq`（请求开始后已有被接受的更高代写入，如 SSE）→ `Ignore('superseded-write')`；否则以 `failWithPrevious(error, { previous: 当前同一 Atom 的 previousSuccess })` 写入。
 4. 对 push/mutation/recovery 来源：必须执行 `accept`（如有），Publish 时写入并 `writeSeq += 1`；无 accept 的资源由 key 级 generation 保证幂等（相同值可写但需记录诊断；推荐调用方先去重）。
 5. 判定 Publish 时：`entry.writeSeq += 1`，`entry.lastWriteRequestId = requestId`，`registry.set(atom, nextState)` 恰好一次，返回 `Publish(next value)`。
-6. 所有 Ignore 只追加有界诊断（最近 32 条：key、origin、reason、requestId、writeSeq），**绝不调用 registry.set**。
+6. 所有 Ignore 都追加有界诊断（最近 32 条）。push/mutation/recovery 的 Ignore 不写 Atom；read 的 Ignore 仅允许完成当前 request 的控制态，不得安装被拒绝 payload，不得推进 timestamp/writeSeq。disposed、scope-closed、stale-request 或已被后续写入取代的读取不得覆盖新状态。
 
 顺序比较的唯一来源：
-- 设备快照：`accept` 从 `ctx.current` 的生效值（Success 或 failure.previousSuccess）读取上次已接受的 `(epoch, sequence)`，规则：无效帧 → Ignore('rejected')；`epoch < prev.epoch` 或 `epoch === prev.epoch && sequence <= prev.sequence` → Ignore('rejected')；否则 Publish。
+- 设备快照：`accept` 从 `ctx.current` 的生效值（Success 或 failure.previousSuccess）读取上次已接受的 `(epoch, sequence)`，规则：无效帧或不递增版本 → Ignore('rejected')；否则 Publish。read 来源中，结构/作用域有效、epoch/sequence/generatedAt 与各工具状态均等于已接受快照时，额外返回 `unchanged: true`，只确认读取恢复。旧版本、无效帧、同版本但内容冲突均不能清除旧错误。
 - 通用资源：read 成功由 requestId 单飞/最新请求胜出；push 由调用方保证值语义（mutation 结果视为权威快照）。
 
 ### 2.5 设备状态唯一提交端口（EquipmentStatusCommit）
@@ -71,10 +71,10 @@
 
 ### 2.6 单飞、订阅与轮询
 
-- `refresh/ensure` 按 (manager, key) 单飞：`inFlight` 存在即共享同一 Promise；不同 manager 不共享。
+- `refresh/ensure` 按 (manager, key) 单飞：`inFlight` 存在即共享同一 Promise；不同 manager 不共享。每次 load 使用原始启动时的有界 deadline：默认 30 秒，可通过 `policy.loadTimeoutMs` 覆盖（有限正数且不超过 2,147,483,647 ms）。超时中断真实 Effect，使 fetch 与响应体消费收到 abort，释放单飞槽并产生 `ResourceReadTimeoutError(key, timeoutMs)`；不自动重试 POST。
 - `retain(handle)` 返回 release：`subscribers += 1`；首个订阅者创建 ResourceScope（`Scope.forkUnsafe(appRootScope)`）、启动轮询 Fiber（若 policy.pollMs）、按 freshness 触发一次 ensure；最后一位 release 时停下轮询 Fiber、记录 `idleAt`，按 `idleTtlMs` 启动释放定时器。
 - 每个 key 最多一个轮询 Fiber；轮询体只调用 `refresh`（本身受单飞约束）。组件/loader 禁止自建 interval。
-- `idleTTL` 与 freshness 分离：freshness 决定 mount 时是否发请求；idleTTL 决定零订阅后多久释放控制元数据与 Atom 节点（同时设置 `Atom.setIdleTTL` 与 manager 定时器双重保障）。
+- `idleTTL` 与 freshness、读取 deadline 分离：freshness 决定 mount 时是否发请求；idleTTL 决定零订阅后多久释放控制元数据与 Atom 节点（同时设置 `Atom.setIdleTTL` 与 manager 定时器双重保障）。最后 release 后已启动 GET 可继续供 StrictMode 重挂载或 loader/prefetch 共享，但只能存活至原始 deadline 或固定 idleTTL 中较早者；在飞请求不得续期 idleTTL。TTL 淘汰会真实中断读取，迟到结果不得写入已移除或重新创建的资源。
 
 ### 2.7 有界保留（动态资源）
 
@@ -86,11 +86,11 @@
 
 ```ts
 export type ResourceKey = string;
-export interface ResourcePolicy { readonly freshnessMs: number; readonly idleTtlMs: number; readonly pollMs?: number }
+export interface ResourcePolicy { readonly freshnessMs: number; readonly idleTtlMs: number; readonly pollMs?: number; readonly loadTimeoutMs?: number }
 export type IgnoreReason = 'disposed' | 'scope-closed' | 'stale-request' | 'superseded-write' | 'rejected' | 'capacity';
 export type CommitDecision<A> =
   | { readonly _tag: 'Publish'; readonly value: A }
-  | { readonly _tag: 'Ignore'; readonly reason: IgnoreReason };
+  | { readonly _tag: 'Ignore'; readonly reason: IgnoreReason; readonly unchanged?: true };
 export interface ResourceCommitContext<A> {
   readonly current: AsyncResult.AsyncResult<A, unknown>;
   readonly origin: 'read' | 'push' | 'mutation' | 'recovery';
@@ -107,13 +107,13 @@ export interface ResourceDefinition<A, E> {
 }
 export interface ResourceHandle<A, E> {
   readonly key: ResourceKey;
-  readonly atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>;
+  readonly atom: Atom.Atom<AsyncResult.AsyncResult<A, E | ResourceReadTimeoutError>>;
   readonly definition: ResourceDefinition<A, E>;
 }
 export interface ResourceManager {
   readonly runtime: AppRuntime<never>;
   handle<A, E>(definition: ResourceDefinition<A, E>): ResourceHandle<A, E>;
-  state<A, E>(handle: ResourceHandle<A, E>): AsyncResult.AsyncResult<A, E>;
+  state<A, E>(handle: ResourceHandle<A, E>): AsyncResult.AsyncResult<A, E | ResourceReadTimeoutError>;
   value<A, E>(handle: ResourceHandle<A, E>): A | undefined;
   ensure<A, E>(handle: ResourceHandle<A, E>): Promise<A>;
   refresh<A, E>(handle: ResourceHandle<A, E>): Promise<A>;
@@ -125,6 +125,7 @@ export interface ResourceManager {
   dispose(): void;
 }
 export class ResourceCapacityError extends Error {}
+export class ResourceReadTimeoutError extends Error { readonly key: ResourceKey; readonly timeoutMs: number; }
 export function createResourceManager(host: {
   readonly registry: AtomRegistry.AtomRegistry;
   readonly services: ManagedRuntime.ManagedRuntime<never, never>;
@@ -152,7 +153,8 @@ export function createResourceManager(host: {
 
 - CORE-001..006 全部以受控 deferred/fake clock 实现 RED→GREEN；测试必须能在旧实现上失败（提交前用当前 HEAD 验证 RED 记录到证据文件）。
 - 语义性质测试：随机交错 REST/SSE 的 (epoch,sequence)（含同级、回退、重复、无效帧），最终 Atom 值等于最高代有效快照；失败只产生诊断，不改变已接受值。
-- 单飞/取消：慢请求 + 两个消费者；unmount 后无轮询、无 Fiber；scope 关闭后在飞回调不写 Atom。
+- 单飞/取消：慢请求 + 两个消费者；最后 unmount 后无轮询 Fiber，已启动读按原 deadline/固定 idleTTL 有界共享；资源淘汰或 AppRuntime 关闭后在飞回调不写 Atom。覆盖 fetch/响应体挂起、timeout 后重试、无订阅预读、StrictMode 重挂载及淘汰后迟到结果。
+- 控制态：同版本响应完成等待；失败后有效同版本同内容的 200 清除旧错误；旧版本/无效/冲突响应不得伪造恢复，控制更新不修改 payload/timestamp/writeSeq。
 - 有界性：1000+ 唯一 key 反复 mount/unmount/TTL 到期，`manager.stats.entries`、`scopes`、`getNodes()` 有界；`eventLoop` 无残留 timer。
 - 旧实现 RED 证据与 GREEN 证据写入 `docs/architecture/evidence/phase-b-*.md`，绑定 commit SHA。
 

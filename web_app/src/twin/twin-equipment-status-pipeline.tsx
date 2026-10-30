@@ -31,8 +31,9 @@ interface EquipmentStatusProjectionFrame {
  * §2.5). REST (manager poll) and SSE both commit through
  * `resources.publish(handle, snapshot, 'push')`: the definition's accept hook reads
  * the current (epoch, sequence) from the same Atom in the same synchronous commit
- * step and returns Publish | Ignore. An Ignore only appends a bounded manager
- * diagnostic — it never writes the Atom and therefore never reaches the page.
+ * step and returns Publish | Ignore. Ignore never replaces the accepted payload;
+ * a current read may still complete waiting or clear an error for a validated
+ * unchanged response. These control updates keep the payload reference stable.
  *
  * Scope handover is atomic: pending frames from the previous FAB are cancelled in
  * a layout effect, the old EventSource generation is aborted, and every FAB-scoped

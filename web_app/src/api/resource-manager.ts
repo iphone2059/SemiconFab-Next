@@ -2,6 +2,8 @@ import { Cause, Duration, Effect, Exit, Fiber, Option, Scope } from 'effect';
 import * as AsyncResult from 'effect/reactivity/AsyncResult';
 import * as Atom from 'effect/reactivity/Atom';
 import {
+  DEFAULT_RESOURCE_LOAD_TIMEOUT_MS,
+  ResourceReadTimeoutError,
   ResourceCapacityError,
   ResourceDefinitionConflictError,
   type CommitDecision,
@@ -69,6 +71,14 @@ const unrefTimer = (timer: TimerHandle): void => {
 
 const disposeError = (): Error => new Error('AppRuntime is disposed');
 const scopeClosedError = (key: ResourceKey): Error => new Error('Resource scope is closed: ' + key);
+
+const loadTimeoutMs = (policy: ResourcePolicy): number => {
+  const timeout = policy.loadTimeoutMs ?? DEFAULT_RESOURCE_LOAD_TIMEOUT_MS;
+  if (!Number.isFinite(timeout) || timeout <= 0 || timeout > 2_147_483_647) {
+    throw new RangeError('Resource loadTimeoutMs must be finite and in (0, 2147483647]');
+  }
+  return timeout;
+};
 
 interface ManagerEntry {
   readonly key: ResourceKey;
@@ -227,10 +237,8 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
     entry.idleTimer = setTimeout(() => {
       entry.idleTimer = undefined;
       if (entry.removed || entry.subscribers !== 0) return;
-      if (entry.inFlight) {
-        armIdleTimer(entry);
-        return;
-      }
+      // A shared loader/GET may outlive its last subscriber, but never renews idle TTL.
+      // releaseEntry interrupts the real load (including fetch/body) before eviction.
       releaseEntry(entry);
     }, ttl);
     unrefTimer(entry.idleTimer);
@@ -454,7 +462,8 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
     const admitted = entry.definition.policy;
     if (admitted.freshnessMs !== candidatePolicy.freshnessMs ||
         admitted.idleTtlMs !== candidatePolicy.idleTtlMs ||
-        admitted.pollMs !== candidatePolicy.pollMs) {
+        admitted.pollMs !== candidatePolicy.pollMs ||
+        loadTimeoutMs(admitted) !== loadTimeoutMs(candidatePolicy)) {
       conflict('policy');
     }
   };
@@ -488,7 +497,16 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
     if (AsyncResult.isSuccess(current)) {
       host.registry.set(entry.atom, AsyncResult.success(current.value, { waiting: true, timestamp: current.timestamp }));
     }
-    const fiber = host.services.runFork(entry.definition.load);
+    // Bound the REAL Effect, not just its Promise: interruption reaches transport's
+    // AbortSignal through fetch AND body consumption; no retry of mutations/POST.
+    const timeoutMs = loadTimeoutMs(entry.definition.policy);
+    const load = entry.definition.load.pipe(
+      Effect.timeoutOption(Duration.millis(timeoutMs)),
+      Effect.flatMap(outcome => Option.isSome(outcome)
+        ? Effect.succeed(outcome.value)
+        : Effect.fail(new ResourceReadTimeoutError(entry.key, timeoutMs))),
+    );
+    const fiber = host.services.runFork(load);
     const interrupt = (): void => {
       void host.services.runPromise(Fiber.interrupt(fiber)).catch(() => undefined);
     };
@@ -508,6 +526,18 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
       });
     entry.inFlight = { requestId, promise, interrupt };
     return promise;
+  };
+
+  /** Payload Ignore is not a publication. Only the current read may finish its
+   * waiting state; a validated unchanged result may also clear a retained failure.
+   * Never advance timestamp/writeSeq or install the rejected candidate payload. */
+  const completeIgnoredRead = (entry: ManagerEntry, current: AnyResult, unchanged: boolean): void => {
+    if (AsyncResult.isSuccess(current) && current.waiting) {
+      host.registry.set(entry.atom, AsyncResult.success(current.value, { timestamp: current.timestamp }));
+    } else if (unchanged && AsyncResult.isFailure(current) && Option.isSome(current.previousSuccess)) {
+      const previous = current.previousSuccess.value;
+      host.registry.set(entry.atom, AsyncResult.success(previous.value, { timestamp: previous.timestamp }));
+    }
   };
 
   const commitReadSuccess = (
@@ -536,6 +566,7 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
       const decision = entry.definition.accept(value, context);
       if (decision._tag === 'Ignore') {
         record(entry.key, 'read', decision.reason, requestId);
+        completeIgnoredRead(entry, current, decision.unchanged === true);
         return decision;
       }
       next = decision.value;
@@ -580,6 +611,7 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
     runtime: host.runtime,
     handle<A, E>(definition: ResourceDefinition<A, E>): ResourceHandle<A, E> {
       if (isDisposed()) throw disposeError();
+      loadTimeoutMs(definition.policy); // fail fast: invalid config must never disable the deadline
       const existing = entries.get(definition.identity.key);
       if (existing) {
         touch(existing);
@@ -597,7 +629,7 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
       // manager-owned and the caller's concrete A/E is restored here.
       return entry.handle as unknown as ResourceHandle<A, E>;
     },
-    state<A, E>(handle: ResourceHandle<A, E>): AsyncResult.AsyncResult<A, E> {
+    state<A, E>(handle: ResourceHandle<A, E>): AsyncResult.AsyncResult<A, E | ResourceReadTimeoutError> {
       return host.registry.get(handle.atom);
     },
     value<A, E>(handle: ResourceHandle<A, E>): A | undefined {
@@ -667,6 +699,8 @@ export function createResourceManager<Runtime extends ResourceRuntime>(
         if (entry.subscribers > 0) return;
         stopPolling(entry);
         closeScope(entry);
+        // Keep a shared loader/prefetch flight for StrictMode/remount, bounded by
+        // its original read deadline and the fixed idle TTL (whichever comes first).
         armIdleTimer(entry);
       };
     },
