@@ -126,9 +126,9 @@ it('parses the journal cursor and surfaces replay-gap as an explicit signal', ()
     topic: 'command.result', replayGap: true, epoch: 'epoch-2',
     requestedLastEventId: 'epoch-1:9', firstRetainedSequence: 10, latestSequence: 12,
   }), { epoch: 'epoch-1', sequence: 9 });
-  expect(gap).toEqual({ epoch: 'epoch-2', sequence: 9, cursor: 'epoch-1:9' });
-  // Malformed control frames still mean "reconcile"; they never throw.
-  expect(parseCommandReplayGap('<html>', { sequence: 3 })).toEqual({ sequence: 3 });
+  expect(gap).toEqual({ epoch: 'epoch-2', cursor: 'epoch-1:9' });
+  // A cursor inherited from another epoch is not combined with the new epoch.
+  expect(parseCommandReplayGap('<html>', { sequence: 3 })).toEqual({});
 });
 
 it('keeps reconnected and emits gaps once per backend replay-gap control frame', async () => {
@@ -149,7 +149,7 @@ it('keeps reconnected and emits gaps once per backend replay-gap control frame',
   }), 'epoch-1:8');
   await flush();
   expect(reconnects).toBe(1);
-  expect(gaps).toEqual([{ epoch: 'epoch-2', sequence: 8, cursor: 'epoch-1:8' }]);
+  expect(gaps).toEqual([{ epoch: 'epoch-2', cursor: 'epoch-1:8' }]);
   harness.host.runSync(Scope.close(scope, Exit.void));
   await flush();
   expect(sources[0].closed).toBe(true);
