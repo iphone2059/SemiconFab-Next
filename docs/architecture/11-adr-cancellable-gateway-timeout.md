@@ -39,3 +39,11 @@ export interface CommandGateway {
 3. 超时后旧 fetch resolve：其 revision 结果不得写入 actor（断言 worker 投影不变、无额外投影发布）。
 4. dispose/Scope 关闭：所有在途请求 abort，无未处理 rejection。
 5. 在修复前用 fake fetch + 永不 resolve 写 RED 测试并保存输出。
+
+## 3. Round 3 修订（2026-10-30，静态阶段；R3-05/R3-07/R3-08）
+
+- **RecoveryScope 所有权**：FabRuntime 恢复任务不再通过裸 `void runPromise(...)` 启动；每次恢复在 FabScope 的子 RecoveryScope 中 fork 一个带 generation 标记的 Effect pass fiber。请求前后、页面应用、phase 写入、retry timer、cover 调用均校验当前 generation；`interruptRecoveryPass` 先 bump generation 再 interrupt，陈旧结果不得写 projectionStore/phase、不得触发下一轮对账。
+- **统一 timeout 与物理预算**：Journal/List 请求走 FAB 共享 `PhysicalRequestBudget(4)` 与 `Effect.timeoutOption`（默认 10s）；中断信号传到 fetch，permit 在底层请求实际完成/abort 后才释放；stop() 暂停并中断当前恢复但保留意图，dispose() 先关闭 RecoveryScope 再关闭 scheduler/transport/command scopes/FabScope，cleanup 后无迟到回调。
+- **权威来源声明（R3-07）**：`FabRuntimeOptions.gateway`/`FabRuntimeFactoryOptions.gateway` 改为必填属性，类型 `CommandGateway | undefined`（显式声明权威来源）。缺少 gateway 时进入可观察 `Unavailable` 状态并保留 no-authority 诊断，永不进入 Healthy；组合根在缺少 fetch 的生产环境 fail-fast，显示用 runtime 必须显式标记 display-only。
+- **drop 覆盖闭环（R3-08）**：恢复 pass 记录 recoveryGeneration、权威快照水位与 dropGeneration/per-pass barrier。已被权威快照完整覆盖的 drop 记录为 covered、不重试；权威快照水位之后发生的新 drop 设置 `needsNextAuthoritativePass`/recoveryPending，不得直接 return 后宣告 Healthy。补偿 pass 有界 attempts/退避/进展证明，超限进入 Unrecoverable；恢复后的对账 batch 按剩余 scheduler 队列容量分块并优先处理 drop，禁止自造 128 队列溢出循环。
+- 被拒绝的旧设计：恢复成功后的 fire-and-forget `void scheduler.scheduleMany(active)`；无 owner 的裸 Promise 恢复；只关 retry timer 不中断 fetch 的取消；无 gateway -> Healthy 的静默路径。

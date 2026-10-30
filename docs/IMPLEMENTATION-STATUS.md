@@ -63,7 +63,7 @@ Babylon Lite 1.36   WebGPU-only 渲染（rendering/lite-backend.ts）
 
 - **命令**：Workbench `CommandConsole` → `POST /api/v1/sites/{siteId}/commands` → `FabRuntime.trackCommand` → 后端命令 SSE → `CommandEventBridge` → XState workflow；`GET /api/v1/commands/{id}` 供核对。浏览器实测 accepted → executing → succeeded。
 - **遥测/设备状态**：FAB 级 20Hz 遥测 SSE → 每 FAB `TelemetryRuntime`（传输/解码/帧/背压）→ MessageDecoder → Worker FrameRingBuffer → 渲染 frame loop；设备槽位与 `FabToolState` 投影在纯函数 `domain/equipment/tool-state-projection.ts`；设备状态 REST/SSE 同样按 FAB 作用域；不经过 Query/Zustand/XState（ARCH-11）。
-- **FAB 范围**：后端默认只提供 FAB-01；测试使用一个活动 FAB。`Fab:FabCount` 的 1..32 配置范围、按 FAB 装配的 Runtime/遥测/状态、集合形式的 Scenario 和复合身份仍保留，支持将来扩展。
+- **FAB 范围**：当前部署默认 1 个 FAB；架构支持 `Fab:FabCount` 1..32 个相互独立、完整配置的 FAB。按 FAB 装配的 Runtime/遥测/设备状态、集合形式的 Scenario 与复合身份 `(siteId,fabId)` 为架构默认语义；浏览器验收可聚焦单个 FAB 渲染，跨 FAB 隔离由显式多 FAB 配置的集成测试覆盖。命令恢复只保证活动命令，终态历史跨刷新不保证（ADR-010 §6.6）。
 - **命令可靠性**：Idempotency-Key 幂等、能力目录/前置条件、FAB 授权 seam、终态 TTL/容量保留；命令 SSE 带 epoch/sequence 与 Last-Event-ID，缺口触发 replay-gap + 权威核对。
 - **性能**：`tools/render_perf.mjs` 在 headless Chrome + 真实 WebGPU 上验证 `navigator.gpu`/adapter/canvas、renderer frames/draw calls/gpuErrors；dev 门禁 + 60Hz profile（p95/p99/heap trend/首帧，`scripts/perf-render.ps1 -Profile`）；静态结构构建期打包（`tools/pack_static_structure.mjs` → `src/generated/static-structure-packed.ts`）；`tests/performance/telemetry-load.test.ts` 覆盖 500/2000/5000 实体负载。命令见根 README。
 

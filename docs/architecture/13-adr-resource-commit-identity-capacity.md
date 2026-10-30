@@ -42,3 +42,8 @@ export interface ResourceDefinition<A, E> {
 - `startPolling` 捕获 `scopeGeneration` 与 `scope`；异步 `forkIn` 完成回调必须同时校验：entry 未 removed、polling 仍为 true、`entry.scopeGeneration === startedGeneration`、`entry.scope === startedScope`。不匹配 → interrupt 新 fiber，不得写入 `entry.pollFiber`。
 - release 时递增 `scopeGeneration` 并停止 polling；新 retain 创建新 scope 后旧回调不能夺取 pollFiber。
 - 测试：1000 次 retain/release 交错 + 微任务让位；断言任何时刻 pollFiber 数 ≤1、无旧 fiber 写入、dispose 后 0 活跃轮询。
+
+## 5. Round 3 静态整改修订（2026-10-30）
+
+- **R3-06 轮询失败分支 generation 守卫**：`startPolling` 的 fork promise `.catch` 与 `.then` 一样必须校验 `!entry.removed && entry.polling && entry.scopeGeneration === startedGeneration && entry.scope === startedScope` 后才能处置 `polling/pollFiber`；旧 generation 的拒绝只允许释放旧 owner，不得写新 entry。当前 generation 的 fiber 终止必须有明确策略（清除 owner 并按资源策略安全重试或置失败），不得出现 polling=true 但无活跃 fiber。
+- **R3-09 GPU 预算参数 fail-fast**：程序级 `recoveryBudget` 必须是 `Number.isSafeInteger` 且 1..96（硬上限 96），否则 `createLiteBackend` 立即抛配置异常；`?perf&recoveryBudget=N` 仅验收模式接受严格十进制安全整数，非法值保留默认并产生明确诊断，禁止 NaN/Infinity/非整数进入熔断器。

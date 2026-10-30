@@ -1,6 +1,6 @@
 # SemiconFab Next：Effect 4 与单层源码目录重构（已实施）
 
-**状态：** 2026-10-30 起执行第二轮“正确性审查整改”（Round 2）：ADR-010/011/012/013 与 `14-round2-remediation-matrix.md` 冻结 CR-01…CR-10 的修复与验收；F1–F6 代码与单测已提交，F7（全量 verify 绑定新 SHA、600s GPU 长稳/Compiler 等价重跑、真实后端 400/409 联调）待执行。第一轮 `05`–`09` 与对应证据仍为历史记录，冲突处以 Round 2 文档为准。
+**状态：** 2026-10-30 完成第三轮“静态整改”（Round 3）：`15-round3-static-remediation-spec.md` 冻结 R3-01…R3-11 的代码整改要求，生产代码/协议/ADR/测试 fixture 源码已按规范修改，逐文件静态审查见 `16-round3-static-review.md`。**本阶段未运行任何测试/typecheck/lint/verify**；Round 3 验证（typecheck/lint/Vitest/dotnet/真实 HTTP/浏览器/GPU/verify.ps1）待独立阶段执行，Round 2 的 F7 同样待执行。
 **基线：** 远端 `main` 的 `4fc8a94a3f10d185c8bef7929349ac6ccb2b8792`（独立 worktree `.local/worktrees/effect4-baseline` 仅用于 A/B）。
 **范围：** 仅 `web_app` 前端；后端不变，Babylon Lite + WebGPU-only 产品约束不变。
 **验收证据：** `docs/architecture/evidence/`；浏览器 e2e：`docs/perf/effect4-e2e.json`；性能/GPU：`docs/architecture/evidence/perf/`。
@@ -30,6 +30,8 @@
 | `12-adr-transactional-command-persistence.md` | ADR-012：SQLite WAL 事务化存储、唯一幂等、epoch journal 与故障注入（CR-03） |
 | `13-adr-resource-commit-identity-capacity.md` | ADR-013：通用资源 superseded-write、类型化身份、单一容量、轮询 generation（CR-05/07/09/10） |
 | `14-round2-remediation-matrix.md` | Round 2 缺陷→阶段→验收矩阵与执行记录 |
+| `15-round3-static-remediation-spec.md` | Round 3 静态整改规范（R3-01…R3-11，代码先行/暂不测试） |
+| `16-round3-static-review.md` | Round 3 逐文件静态审查记录、状态机/所有权表与推迟验证项 |
 
 ## 已实施的核心决定
 
@@ -80,7 +82,7 @@ web_app/src/
 
 ## 验收边界（如实记录）
 
-- 开发数据只有 1 个 FAB；跨 FAB 隔离由单元/集成测试覆盖，浏览器 S7 的跨 FAB 场景记为限制。
+- 当前部署默认 1 个 FAB；架构支持 `Fab:FabCount` 1–32 个独立 FAB。浏览器验收可聚焦单个 FAB 渲染，跨 FAB 隔离由显式多 FAB 配置的单元/集成测试覆盖。命令恢复只保证活动命令，终态历史跨刷新不保证（ADR-010 §6.6）。
 - GPU 设备丢失未做真实硬件注入端到端验证；由渲染生命周期测试覆盖。
 - 长时 heap 仅记录 600 帧窗口；非分钟级稳定性测试。
 - 生产构建产物已测量（raw/gzip），浏览器功能与性能基线使用 Vite dev server。

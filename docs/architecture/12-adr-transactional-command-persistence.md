@@ -57,3 +57,8 @@
 
 1. 每个注入点的“崩溃前缀”后重启一致性（按 2.3）。
 2. 257/1000 条 journal 多页 + epoch 替换 + 保留窗口裁剪后的一致性（与 ADR-010 联合）。
+
+## 5. Round 3 修订（2026-10-30，静态阶段；R3-01 保留窗口缺口语义）
+
+- Journal 读路径（`EquipmentCommandService.ReadCommandJournalPage`）在**同一 Site 锁与同一事务快照语义内**用 long 边界计算缺口：`outsideRetainedWindow = afterSequence < firstRetainedSequence - 1`、`beyondLatest = afterSequence > latestSequence`、`hasGap = outsideRetainedWindow || beyondLatest || dropped > 0`。合法空站点（latest=0/first=1/after=0）不判 gap；保留窗口被完全清空（first=latest+1）时旧 cursor 必须 hasGap=true，即使 FAB 过滤后的 events 为空。
+- `nextAfterSequence` 明确为“服务端已扫描覆盖的 Site 区间结束位置”：截断页=最后返回事件序号；耗尽/空 FAB 页=权威 `latestSequence`（cursor 已超前则回显，不回退）；`afterSequence < latestSequence` 时必前进，空页不得伪造完成。DTO 无变化，SQLite 事务/唯一幂等契约不变。

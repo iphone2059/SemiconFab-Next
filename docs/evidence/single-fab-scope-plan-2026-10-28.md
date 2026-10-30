@@ -1,5 +1,7 @@
 # Single-FAB product and test scope
 
+> **历史记录（Round 3 已确认产品决策）：** 当前部署仍默认 1 个 FAB；架构必须支持 1–32 个独立 FAB，且多 FAB 身份/隔离能力保留。本文件保留当时单 FAB 范围的历史证据。
+
 **Requirement:** The current product has one FAB. Keep the architecture extensible to multiple FABs; current automated and manual acceptance uses one active FAB only.
 
 **Approach:** Default the backend catalog to FAB-01; retain the configurable 1..32 range, collection-shaped contracts, composite identities and lifecycle isolation. Replace positive multi-FAB test setups with one active FAB and same-FAB lifecycle/scope cases. Unknown foreign identities and duplicate malformed input remain negative cases, not additional deployed FABs.

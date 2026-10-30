@@ -75,7 +75,7 @@
 - OS/工具链：Windows 11；Node 26.12.1；pnpm 12.16.1（项目锁 12.15.0，verify.ps1 使用固定安装）；.NET SDK 11.0.100-rc.3；Chrome 已安装；GPU：NVIDIA RTX 3050 Laptop + Intel Iris Xe（WebGPU 用 Chrome/NVIDIA）。
 - Rust 工具链（rustc/cargo）不在 PATH：Oxc React Compiler 通过 `oxc-transform-react` npm 包（预编译 Rust 二进制）使用，不需要本机 cargo；不得以“无 Rust”为由关闭 Compiler。
 - GPU CI：GitHub 托管 runner 无可用 WebGPU 硬件；本仓库新增 `gpu` workflow 需 self-hosted `[self-hosted, windows, gpu]` runner（若用户/组织未提供，登记为限制并在本机执行 GPU gate，保留原始日志与 SHA）。
-- 浏览器 E2E：开发数据仅 1 FAB；跨 FAB 由集成测试覆盖；生产构建用 `vite preview`。
+- 浏览器 E2E：当前部署默认 1 个 FAB（架构支持 1–32）；浏览器场景可聚焦单个 FAB 渲染，多 FAB 隔离由显式配置的集成测试覆盖；生产构建用 `vite preview`。
 - 网络：真实 HTTP/SSE 使用本地 API（127.0.0.1:5080）；不得 mock 生产浏览器 gate 的 HTTP 层。
 
 ## 5. 测试基础设施

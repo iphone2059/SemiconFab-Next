@@ -78,7 +78,7 @@ dispose():
 | 故障隔离 | 一个 FAB 启动失败/degraded 不影响其他 Runtime 的 running 状态 |
 | 销毁隔离 | `dispose(A)` 只清理 A 的订阅/actor/记录（CE-08 扩展） |
 
-当前产品与所有测试只使用 1 个 FAB（FAB-01）。`Fab:FabCount` 仍支持 1..32，前端 Runtime/遥测/设备状态/UI 按 FAB 数据驱动，121 台设备布局数据在 `src/domain/fab/fab-layout.ts`。每个 FAB 独立 Runtime/订阅/actor 的复合身份架构保留，供将来扩展；当前不要求多 FAB 部署或验收。
+当前部署默认 1 个 FAB；架构支持 `Fab:FabCount` 1..32 个相互独立、完整配置的 FAB。前端 Runtime/遥测/设备状态/UI 按 FAB 数据驱动并使用复合身份 `(siteId,fabId)`；121 台设备布局数据在 `src/domain/fab-layout.ts`，每 FAB 的实例标识以 FAB code 为前缀（R3-10）。跨 FAB 隔离由显式多 FAB 配置的集成测试与多 FAB Run 测试覆盖。
 
 ## 5. React 集成
 
@@ -115,7 +115,7 @@ dispose():
 | 方面 | 当前事实 | 目标 | 状态 |
 |---|---|---|---|
 | Runtime | `FabRuntime`/Factory/Registry/Lifecycle 已实现，RuntimeBootstrap 按 sites 装配 | `runtime` 四件套 | PASS |
-| FAB 数量 | 产品与测试仅 1 FAB，前端按 FAB 数据驱动 | 保留多 FAB 扩展与复合身份隔离 | 单 FAB 回归；多 FAB 扩展不属当前验收 |
+| FAB 数量 | 当前部署默认 1 个 FAB；架构支持 `Fab:FabCount` 1–32 个独立 FAB，前端按 FAB 数据驱动 | 多 FAB 隔离与复合身份 | 多 FAB 身份/隔离/聚合由显式配置验收（Round 3 验证阶段） |
 | 实时源 | 后端命令 SSE（`SseCommandEventSource`）+ 权威 HTTP gateway；测试环境回退空源 seam | WebSocket + typed stream（经 Runtime 注入） | 部分（HTTP/SSE 模拟链路） |
 | 生命周期 | Runtime/Provider 统一管理；页面只解除 UI 订阅 | Runtime/Provider 统一管理 | PASS |
 | 清理测试 | `tests/integration/fab-runtime.test.ts`、`tests/integration/runtime-bootstrap.test.tsx` 覆盖 dispose/缺口核对/StrictMode 幂等 | CE-08；StrictMode 幂等测试 | PASS |
