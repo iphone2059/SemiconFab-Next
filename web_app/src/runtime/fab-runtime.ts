@@ -851,15 +851,8 @@ export class FabRuntime {
       this.signalFibers.push(runCommandStream(this.runtime, this.transportScope, stream, handler));
     };
     if (this.source.gaps) {
-      subscribe(this.source.gaps, (gap) => {
-        const cursor = gap.epoch !== undefined && gap.sequence !== undefined
-          ? { epoch: gap.epoch, sequence: gap.sequence }
-          : undefined;
-        this.enterDirty({
-          ...(cursor !== undefined ? { cursor } : {}),
-          listOnly: cursor === undefined,
-          cause: 'replay-gap',
-        });
+      subscribe(this.source.gaps, () => {
+        this.enterDirty({ listOnly: true, cause: 'replay-gap' });
       });
     }
     if (this.source.reconnected) {
