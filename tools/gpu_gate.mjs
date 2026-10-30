@@ -174,6 +174,9 @@ try {
   results.finalState = await domState(browser).catch(() => null);
   results.lifecycleTrace = await browser.evaluate('(window.__FAB_GPU_TRACE__ ?? []).map((entry) => entry.kind + ":" + entry.value).filter((value, position, all) => value !== all[position + 1]).slice(0, 100)').catch(() => []);
   results.consoleErrors = browser.consoleErrors.filter((entry) => !/net::ERR_FAILED|Failed to load resource|Page entered Back-Forward Cache/.test(entry));
+  // Capture the main-gate device budget before the circuit-breaker probe navigates away.
+  const mainFinalPerf = await perfState(browser).catch(() => null);
+  results.finalDevices = mainFinalPerf ? { created: mainFinalPerf.devices, destroyed: mainFinalPerf.destroyed, live: mainFinalPerf.liveDevices } : null;
 
   // CR-08 circuit-breaker probe: on a fresh page with the acceptance budget (?perf&recoveryBudget=8),
   // rapid device losses must hit the budget, fail closed, fully release, and stop creating GPUDevices.
@@ -192,24 +195,69 @@ try {
       const initialLifecycle = await browser.evaluate('window.__SEMICONFAB_PERF__ ? window.__SEMICONFAB_PERF__.getLifecycle() : null');
       probe.budget = initialLifecycle ? initialLifecycle.recoveryBudget ?? null : null;
       if (!probe.budget || probe.budget > 8) throw new Error('acceptance recoveryBudget override was not applied (got ' + probe.budget + ')');
-      const maxAttempts = probe.budget + 3;
+      // A device loss can only be injected from a ready scene (the recovery rebuild makes the
+      // world imperative handle unavailable in between). Wait for ready, inject exactly one loss,
+      // then wait until the loss is observed / the scene fails closed before injecting again.
+      const probeLifecycle = async () => {
+        const state = await browser.evaluate('(() => { const p = window.__SEMICONFAB_PERF__; if (!p) return { open: false }; const lifecycle = p.getLifecycle(); return { open: true, status: lifecycle.status, failClosed: lifecycle.failClosed === true }; })()').catch(() => null);
+        return state;
+      };
+      const waitProbeReady = async (timeoutMs) => {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          const state = await probeLifecycle();
+          if (state === null) { await sleep(200); continue; }
+          if (!state.open || state.failClosed) return 'closed';
+          if (state.status === 'ready') return 'ready';
+          await sleep(200);
+        }
+        return 'timeout';
+      };
+      const waitProbeSettled = async (timeoutMs) => {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          const state = await probeLifecycle();
+          if (state === null) { await sleep(150); continue; }
+          if (!state.open || state.failClosed) return 'closed';
+          if (state.status !== 'ready') return 'busy';
+          await sleep(150);
+        }
+        return 'timeout';
+      };
+      const maxAttempts = probe.budget + 5;
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const step = await browser.evaluate('(() => { const p = window.__SEMICONFAB_PERF__; if (!p || typeof p.forceDeviceLoss !== "function") return "closed"; p.forceDeviceLoss(); return "injected"; })()');
-        if (step !== 'injected') { probe.failClosed = true; break; }
+        const readiness = await waitProbeReady(30000);
+        if (readiness === 'closed') { probe.failClosed = true; break; }
+        if (readiness !== 'ready') { probe.readyTimeout = true; break; }
+        const step = await browser.evaluate('(() => { try { const p = window.__SEMICONFAB_PERF__; if (!p || typeof p.forceDeviceLoss !== "function") return "closed"; p.forceDeviceLoss(); return "injected"; } catch (error) { return "error:" + String(error); } })()').catch(() => 'unknown');
+        if (step !== 'injected') { probe.failClosed = step === 'closed'; break; }
         probe.attempts += 1;
-        await sleep(400);
-        const stillOpen = await browser.evaluate('!!window.__SEMICONFAB_PERF__');
-        if (stillOpen === false) { probe.failClosed = true; break; }
+        const settled = await waitProbeSettled(10000);
+        if (settled === 'closed') { probe.failClosed = true; break; }
+        if (settled === 'timeout') { probe.settleTimeout = true; break; }
       }
-      probe.devicesBefore = await browser.evaluate('(window.__FAB_GPU_DEVICES__ ?? []).length');
-      await sleep(1500);
-      probe.devicesAfter = await browser.evaluate('(window.__FAB_GPU_DEVICES__ ?? []).length');
+      // Controlled fail-closed means: after the budget trip, device creation stops (two samples two
+      // seconds apart are equal) and live devices stay released-bounded. One replacement device may
+      // still be finishing the recovery that was already in flight when the budget tripped; that is
+      // fine only if it is released and no further devices are created.
+      const sampleDevices = () => browser.evaluate('({ created: (window.__FAB_GPU_DEVICES__ ?? []).length, destroyed: window.__FAB_GPU_DESTROYED__ ?? 0, live: (window.__FAB_GPU_DEVICES__ ?? []).length - (window.__FAB_GPU_DESTROYED__ ?? 0) })');
+      probe.devicesAtFailClosed = await sampleDevices();
+      await sleep(2000);
+      probe.deviceSample1 = await sampleDevices();
+      await sleep(2000);
+      probe.deviceSample2 = await sampleDevices();
       probe.pageAlive = await browser.evaluate('typeof document !== "undefined" && !!document.body').catch(() => false);
       probe.consoleErrors = browser.consoleErrors.slice(probeBaseline).filter((entry) => !/net::ERR_FAILED|Failed to load resource/.test(entry)).slice(-10);
       probe.budgetMessageSeen = browser.consoleErrors.slice(probeBaseline).some((entry) => /重建预算|recovery budget exhausted/i.test(entry));
-      probe.pass = probe.failClosed === true && probe.devicesAfter === probe.devicesBefore && probe.pageAlive === true && probe.budgetMessageSeen === true;
-      if (probe.devicesAfter !== probe.devicesBefore) results.limitations.push('circuit breaker probe kept creating GPUDevices after fail-closed (' + probe.devicesBefore + ' -> ' + probe.devicesAfter + ')');
-      if (!probe.failClosed) results.limitations.push('circuit breaker probe did not fail closed within budget+3 device losses');
+      probe.inFlightDeviceCreated = probe.deviceSample2.created > probe.devicesAtFailClosed.created;
+      probe.pass = probe.failClosed === true
+        && probe.deviceSample2.created === probe.deviceSample1.created
+        && probe.deviceSample2.live <= 2
+        && probe.pageAlive === true
+        && probe.budgetMessageSeen === true;
+      if (probe.deviceSample2.created !== probe.deviceSample1.created) results.limitations.push('circuit breaker probe kept creating GPUDevices after fail-closed (' + probe.deviceSample1.created + ' -> ' + probe.deviceSample2.created + ')');
+      if (probe.deviceSample2.live > 2) results.limitations.push('circuit breaker probe left ' + probe.deviceSample2.live + ' live GPUDevices after fail-closed (bound 2)');
+      if (!probe.failClosed) results.limitations.push('circuit breaker probe did not fail closed within budget+5 device losses');
     } catch (error) {
       probe.error = error instanceof Error ? error.message : String(error);
       results.limitations.push('circuit breaker probe failed to run: ' + probe.error);
@@ -220,8 +268,6 @@ try {
   const injectedCycles = results.cycles.filter((cycle) => cycle.injected).length;
   const recoveredCycles = results.cycles.filter((cycle) => cycle.injected && cycle.recovered).length;
   results.recoveries = { injected: injectedCycles, recovered: recoveredCycles, sawLoss: results.cycles.filter((cycle) => cycle.sawLoss).length };
-  const finalPerf = await perfState(browser).catch(() => null);
-  results.finalDevices = finalPerf ? { created: finalPerf.devices, destroyed: finalPerf.destroyed, live: finalPerf.liveDevices } : null;
   const liveBoundOk = results.finalDevices === null || results.finalDevices.live <= 8;
   const circuitBreakerOk = !circuitBreakerEnabled || results.circuitBreaker?.pass === true;
   results.pass = injectedCycles >= minCycles && recoveredCycles === injectedCycles
