@@ -18,6 +18,8 @@ export interface CommandEventBridgeOptions {
   readonly onUncorrelated?: (event: CommandResultEvent) => void;
   /** Called after a result is delivered to a workflow (used by Runtime projections). */
   readonly onResultDelivered?: (event: CommandResultEvent) => void;
+  /** Called when a workflow rejects an observed revision and authoritative recovery must retry it. */
+  readonly onRejected?: (event: CommandResultEvent) => void;
   /** Approved Effect execution boundary (AppRuntime satisfies it structurally). */
   readonly runtime: RuntimeHost;
   /** CommandTransportScope: the only owner of the command-result consumer fiber. */
@@ -76,6 +78,25 @@ export class CommandEventBridge {
     this.deliver(event);
   }
 
+  receiveAuthoritative(event: CommandResultEvent): 'applied' | 'unverifiable' | 'held' | 'rejected' | 'already-applied' | 'ignored' {
+    if (this.options.fabId && event.fabId !== this.options.fabId) return 'ignored';
+    if (this.correlation.isApplied(event)) return 'already-applied';
+    this.correlation.observe(event);
+    const workflow = this.workflows.get(event.fabId, event.commandId);
+    if (!workflow) {
+      const retained = this.recovery.hold(event);
+      this.options.onUncorrelated?.(event);
+      if (!retained) this.options.onRejected?.(event);
+      return retained ? 'held' : 'rejected';
+    }
+    const result = this.applyToWorkflow(workflow, event);
+    if (result === 'rejected') {
+      this.recovery.hold(event);
+      this.options.onRejected?.(event);
+    }
+    return result;
+  }
+
   /**
    * Retry pending results after a workflow is registered (for example when the
    * HTTP submit response finally creates the actor). Returns the number of
@@ -89,7 +110,12 @@ export class CommandEventBridge {
         this.recovery.hold(event);
         continue;
       }
-      if (this.applyToWorkflow(workflow, event)) delivered += 1;
+      const result = this.applyToWorkflow(workflow, event);
+      if (result === 'applied') delivered += 1;
+      if (result === 'rejected') {
+        this.recovery.hold(event);
+        this.options.onRejected?.(event);
+      }
     }
     return delivered;
   }
@@ -143,25 +169,30 @@ export class CommandEventBridge {
    * delivered (tests/custom adapters) but never acknowledged.
    * Returns whether the event was delivered to the actor.
    */
-  private applyToWorkflow(workflow: CommandWorkflow, event: CommandResultEvent): boolean {
+  private applyToWorkflow(
+    workflow: CommandWorkflow,
+    event: CommandResultEvent,
+  ): 'applied' | 'unverifiable' | 'rejected' {
     const before = workflow.projection?.revision;
     workflow.receive(event);
     const after = workflow.projection?.revision;
     const verifiable = before !== undefined || after !== undefined;
     const applied = verifiable && (after ?? -1) >= event.revision;
-    if (verifiable && !applied) {
-      // Observed by correlation but rejected by the actor (terminal/stale): no ack.
-      return false;
-    }
+    if (verifiable && !applied) return 'rejected';
     this.options.onResultDelivered?.(event);
-    if (applied) this.source.acknowledge(event);
-    return true;
+    if (!applied) return 'unverifiable';
+    this.correlation.markApplied(event);
+    this.source.acknowledge(event);
+    return 'applied';
   }
 
   private deliver(event: CommandResultEvent): void {
     const workflow = this.workflows.get(event.fabId, event.commandId);
     if (workflow) {
-      this.applyToWorkflow(workflow, event);
+      if (this.applyToWorkflow(workflow, event) === 'rejected') {
+        this.recovery.hold(event);
+        this.options.onRejected?.(event);
+      }
       return;
     }
     this.recovery.hold(event);
