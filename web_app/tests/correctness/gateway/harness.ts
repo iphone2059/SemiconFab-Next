@@ -7,7 +7,7 @@ import type {
   CommandRecoveryList,
 } from '@/contracts/command-gateway.contract';
 import type { CommandResultEvent } from '@/contracts/command-events.contract';
-import type { CommandWorkflow } from '@/contracts/command-workflow.contract';
+import type { CommandWorkflow, CommandWorkflowProjection } from '@/contracts/command-workflow.contract';
 import type { RuntimeHost } from '@/runtime/fab-runtime-host';
 import {
   FabReconciliationScheduler,
@@ -44,7 +44,19 @@ export function createGatewayTestRuntime(): GatewayTestRuntime {
 
 export class RecordingWorkflow implements CommandWorkflow {
   readonly received: CommandResultEvent[] = [];
-  receive(event: CommandResultEvent): void { this.received.push(event); }
+  private currentProjection?: CommandWorkflowProjection;
+
+  receive(event: CommandResultEvent): void {
+    this.received.push(event);
+    if (this.currentProjection === undefined || event.revision > this.currentProjection.revision) {
+      this.currentProjection = { state: event.outcome, revision: event.revision, outcome: event.outcome };
+    }
+  }
+
+  get projection(): CommandWorkflowProjection | undefined {
+    return this.currentProjection;
+  }
+
   async reconcile(): Promise<void> {}
   dispose(): void {}
 }
