@@ -525,6 +525,7 @@ export function createSseCommandEventSource(
     }
     const acknowledged = state.acknowledged;
     if (acknowledged && acknowledged.epoch !== cursor.epoch && kind !== 'list') return false;
+    if (ledgerEpoch !== undefined && ledgerEpoch !== cursor.epoch && kind !== 'list') return false;
     for (const entry of ledger) {
       if (entry.epoch !== cursor.epoch || entry.sequence <= cursor.sequence) entry.status = 'covered';
     }
