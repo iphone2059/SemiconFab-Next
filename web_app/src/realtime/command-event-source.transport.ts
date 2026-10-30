@@ -706,7 +706,6 @@ export function createSseCommandEventSource(
           'invalid-control-frame',
           'control-frame',
           'server dirty control frame could not be decoded',
-          parseFullCursor(event.lastEventId),
         );
         return;
       }
