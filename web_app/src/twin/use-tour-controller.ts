@@ -5,6 +5,7 @@ import type { RefObject } from 'react';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '@/domain/simulation-original-tour';
 import { twinUiActions } from '@/twin/twin-ui.atom';
+import { stopTwinWaferRuntime } from '@/twin/twin-wafer-runtime';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
 import type { TwinTourHudHandle } from '@/twin/twin-tour-hud';
 import type { TourHudSnapshot, TwinTourScheduler } from '@/twin/twin-tour-runtime';
@@ -75,6 +76,7 @@ export function useTourController({
   function startTour(): void {
     const runtime = runtimeRef.current;
     if (!runtime) throw new Error('TwinTourRuntime is not mounted');
+    stopTwinWaferRuntime(registry);
     setTourHudSeed(runtime.startTour(() => scene.current, language));
   }
   function endTour(): void {

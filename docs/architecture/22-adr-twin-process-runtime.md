@@ -2,7 +2,7 @@
 
 **Status:** Accepted; Phase A1 implementation.
 **Date:** 2026-10-31.
-**Scope:** The cinematic Tour vertical slice. Wafer Playback and Research Replay remain separate migration work and are not claimed as completed by this ADR.
+**Scope:** The cinematic Tour vertical slice. Wafer Playback is implemented separately by ADR-023; Research Replay remains a later migration phase.
 
 ## Context
 
@@ -43,7 +43,7 @@ They must not share one update channel.
 
 ### Process projection
 
-TwinUiState no longer contains Tour lifecycle fields. A waypoint event changes scene presentation (level, view, spatial mode) and resets the existing Wafer/Research UI projections; it never writes Tour state. XState owns active/waypoint, and twinTourAtom exposes that snapshot to the page.
+TwinUiState contains neither Tour nor Wafer process lifecycle fields. A waypoint event changes scene presentation (level, view, spatial mode) and closes the Research playback projection; it never writes Tour or Wafer Actor state. XState owns Tour active/waypoint, and twinTourAtom exposes that snapshot to the page.
 
 The runtime's projection subscription is the only production write path to twinTourAtom. The page reads the Atom through useTwinSlices.
 
@@ -77,11 +77,11 @@ No state reducer pretends to stop an Actor. The process owner receives an explic
 
 ## Deferred work
 
-Phase A2 migrates Wafer Playback to an Effect-scoped runtime and a discrete XState process model. Its per-frame position, rotation, trail, and camera follow remain imperative ScenePort writes; no frame enters AtomRegistry.
+Phase A2 is implemented by ADR-023: Wafer Playback uses an Effect-scoped runtime and a discrete XState process model. Its per-frame position, rotation, trail, and camera follow remain imperative SceneCommands writes; no frame enters AtomRegistry.
 
 Phase A3 migrates Research Replay parsing and playback clock. The JSONL parser remains a pure Domain parser; Effect owns resource execution and the clock; XState owns only discrete play/pause process state.
 
-A later parent TwinProcessMachine may coordinate cross-process exclusivity once Wafer and Research have moved to their runtime owners. Until then, the explicit stop use cases listed above are the authoritative coordination boundary. Do not introduce a speculative parent Actor that merely mirrors state still owned by React.
+A later parent TwinProcessMachine may coordinate cross-process exclusivity once Research Replay has moved to its runtime owner. Until then, the explicit stop use cases listed above are the authoritative coordination boundary. Do not introduce a speculative parent Actor that merely mirrors state still owned by React.
 
 ## Acceptance
 

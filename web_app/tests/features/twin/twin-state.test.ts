@@ -30,23 +30,18 @@ describe('single Twin UI state', () => {
     state = twinUiReducer(state, { type: 'spatial/toggle', mode: 'cut' });
     expect(projectTwinSceneState(state).xray).toBeNull();
   });
-  it('keeps Tour scene navigation separate from the process lifecycle projection', () => {
-    let state = twinUiReducer(
-      { ...createTwinUiState('research'), wafer: { active: true, playing: true, speed: 1 } },
-      { type: 'tour/scene-step', level: 'B1', view: 'iso' },
-    );
-    expect(state).toMatchObject({ entryMode: 'visitor', level: 'B1', view: 'iso', wafer: { active: false, playing: false }, onboarding: { open: false }, research: { playing: false } });
+  it('keeps Tour scene navigation separate from Wafer and Research process lifecycles', () => {
+    let state = twinUiReducer(createTwinUiState('research'), { type: 'tour/scene-step', level: 'B1', view: 'iso' });
+    expect(state).toMatchObject({ entryMode: 'visitor', level: 'B1', view: 'iso', onboarding: { open: false }, research: { playing: false } });
     expect('tour' in state).toBe(false);
+    expect('wafer' in state).toBe(false);
     state = twinUiReducer(state, { type: 'mode/set', mode: 'research' });
     expect(state.statusSource).toBe('research-replay');
     state = twinUiReducer(state, { type: 'research/play', playing: true });
-    state = twinUiReducer(state, { type: 'wafer/open' });
-    expect(state.entryMode).toBe('engineer');
-    expect(state.research.playing).toBe(false);
-    expect(state.wafer.active).toBe(true);
     state = twinUiReducer(state, { type: 'onboarding/open' });
-    expect(state.wafer.active).toBe(false);
+    expect(state.research.playing).toBe(false);
     expect(state.onboarding.open).toBe(true);
+    expect('wafer' in state).toBe(false);
   });
   it('keeps Escape presentation-only; the Tour runtime owns its stop transition', () => {
     let state = twinUiReducer(createTwinUiState('visitor'), { type: 'tour/scene-step', level: 'B1' });

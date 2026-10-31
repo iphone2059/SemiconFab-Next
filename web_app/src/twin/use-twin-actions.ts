@@ -11,6 +11,7 @@ import { twinDemoActions } from '@/twin/twin-demo.atom';
 import { twinPageActions } from '@/twin/twin-page.atom';
 import { twinPageUiAtom, twinPageUiActions } from '@/twin/twin-page-ui.atom';
 import { twinWaferActions } from '@/twin/twin-wafer.atom';
+import { stopTwinWaferRuntime } from '@/twin/twin-wafer-runtime';
 import { twinYmsActions } from '@/twin/twin-yms.atom';
 import { twinUiActions } from '@/twin/twin-ui.atom';
 import type { EntryMode, FabLevel, TwinView } from '@/twin/twin-state';
@@ -90,7 +91,7 @@ export function useTwinActions({
   const setOnboardingDontShow = (value: boolean) => twinPageUiActions.onboardingDontShowSet(registry, value);
   const setYmsOpen = (value: boolean) => twinYmsActions.ymsOpenSet(registry, value);
   const setYmsTab = (value: 'map' | 'yield') => twinYmsActions.ymsTabSet(registry, value);
-  const setWaferFollow = (value: boolean) => twinWaferActions.waferFollowSet(registry, value);
+  const setWaferFollow = (value: boolean) => twinWaferActions.followSet(registry, value);
   const setMesJobs = (updater: (current: Record<number, MesJob>) => Record<number, MesJob>) => {
     const next = updater(mesJobs);
     for (const [index, job] of Object.entries(next)) twinPageActions.mesJobSet(registry, { index: Number(index), job });
@@ -102,6 +103,7 @@ export function useTwinActions({
 
   function setMode(value: EntryMode): void {
     if (value !== 'visitor') endTour();
+    stopTwinWaferRuntime(registry);
     if (value === 'research' && mode !== 'research') setReplayBase(toolStates);
     twinUiActions.modeSet(registry, value);
   }
@@ -227,6 +229,7 @@ export function useTwinActions({
 
   function escape(): void {
     endTour();
+    stopTwinWaferRuntime(registry);
     twinUiActions.escape(registry);
     scene.current?.clearSelection();
     setSelected(undefined);

@@ -8,6 +8,7 @@ import { twinPageAtom } from '@/twin/twin-page.atom';
 import { twinPageUiAtom } from '@/twin/twin-page-ui.atom';
 import { twinUiAtom } from '@/twin/twin-ui.atom';
 import { twinTourAtom } from '@/twin/twin-tour.atom';
+import { twinWaferAtom } from '@/twin/twin-wafer.atom';
 import { twinYmsAtom } from '@/twin/twin-yms.atom';
 import { useTwinLocale } from '@/twin/twin-i18n';
 
@@ -15,8 +16,9 @@ import { useTwinLocale } from '@/twin/twin-i18n';
  * The exact slices TwinContent renders, kept in one place so the subscription
  * granularity stays auditable (and cheap).
  *
- * - UI: only the branches the page layout reads. Wafer playing/speed live with
- *   the wafer HUD child so its 20 Hz frames never rerender the page.
+ * - UI: only the branches the page layout reads. Wafer active is a discrete
+ *   process projection; playing/speed/HUD stay with the HUD child, and frame data
+ *   is written directly to the scene without entering AtomRegistry.
  * - DEMO: states feed the scene projection; keys feed the sidebar/inspector.
  * - FAB: the FAB-scoped server/session projection (status feed, tool states, MES).
  * - PAGE UI: overlays/preferences; merged with FAB for the layout only.
@@ -30,7 +32,8 @@ export function useTwinSlices() {
   const theme = useAtomValue(localeAtom, (state) => state.theme);
   const uiState = useAtomValue(twinContentUiAtom);
   const tour = useAtomValue(twinTourAtom);
-  const ui = { ...uiState, tour };
+  const waferActive = useAtomValue(twinWaferAtom, state => state.active);
+  const ui = { ...uiState, tour, waferActive };
   const demo = useAtomValue(twinContentDemoAtom);
   const fab = useAtomValue(twinFabSliceAtom);
   const overlays = useAtomValue(twinOverlaySliceAtom);
@@ -50,7 +53,6 @@ const twinContentUiAtom = Atom.map(twinUiAtom, (state) => ({
     explodePercent: state.explodePercent,
     aeroHeatmap: state.aeroHeatmap,
     onboarding: state.onboarding,
-    waferActive: state.wafer.active,
     research: state.research,
     statusSource: state.statusSource,
     preferredStatusSource: state.preferredStatusSource,
