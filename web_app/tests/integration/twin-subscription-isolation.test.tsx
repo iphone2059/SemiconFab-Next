@@ -24,17 +24,22 @@ import { twinAmhsActions } from '@/twin/twin-amhs.atom';
 import { twinDemoActions } from '@/twin/twin-demo.atom';
 
 import { localeAtom } from '@/state/locale.atom';
+import { viewerActions } from '@/state/viewer.atom';
 import type { AmhsStats } from '@/contracts/scene.port';
 
 // The hardware boundary stays out of these subscription tests: a render counter
 // stands in for FabViewport so "did TwinContent rerender?" becomes measurable.
-const viewport = vi.hoisted(() => ({ renders: 0 }));
+const viewport = vi.hoisted(() => ({ renders: 0, mounts: 0, unmounts: 0 }));
 vi.mock('@/twin/twin-viewer', async () => {
   const React = await import('react');
   return {
     // React 19 passes ref as a normal prop; this mock never uses it, so no forwardRef.
     FabViewport: function MockFabViewport() {
       viewport.renders += 1;
+      React.useEffect(() => {
+        viewport.mounts += 1;
+        return () => { viewport.unmounts += 1; };
+      }, []);
       return React.createElement('div', { className: 'scene twin-canvas' });
     },
   };
@@ -69,6 +74,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   viewport.renders = 0;
+  viewport.mounts = 0;
+  viewport.unmounts = 0;
   vi.unstubAllGlobals();
   resetTwinUiState(registry); resetTwinPageState(registry); resetTwinDemoState(registry); resetRuntimeState(registry);
 });
@@ -77,6 +84,16 @@ function renderTwin() {
   render(<ResourceTestProviders runtime={client}><TwinPage siteId="site-1" fabId="fab-1" search={{ modal: 'arch' }} /></ResourceTestProviders>);
 }
 
+it('keeps FabViewport mounted while the Wafer runtime is replaced by a viewer epoch', async () => {
+  renderTwin();
+  await waitFor(() => expect(viewport.mounts).toBe(1));
+  const rendersBeforeEpoch = viewport.renders;
+  act(() => viewerActions.viewerMounted(registry, 'viewer-epoch-next'));
+  await waitFor(() => expect(viewport.renders).toBeGreaterThan(rendersBeforeEpoch));
+  expect(viewport.mounts).toBe(1);
+  expect(viewport.unmounts).toBe(0);
+  expect(document.querySelector('.scene.twin-canvas')).not.toBeNull();
+});
 it('updates the AMHS readout from its own subscription without rerendering TwinContent/FabViewport', () => {
   renderTwin();
   expect(document.querySelector('#bottom-hud-footer')?.textContent).toContain('AMHS OHT 00/24');

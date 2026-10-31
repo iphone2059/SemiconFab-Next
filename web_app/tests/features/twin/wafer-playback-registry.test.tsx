@@ -150,7 +150,7 @@ async function startPlayback(
 }
 it('owns one RAF loop and preserves the timeline across user close/reopen', async () => {
   const { result, scheduler, handle } = mountPlayback();
-  await waitFor(() => expect(result.current.ready).toBe(true));
+  await waitFor(() => expect(result.current.initialized).toBe(true));
   await startPlayback(result, first);
   expect(first.get(twinWaferAtom)).toMatchObject({ active: true, playing: true, product: 'A', speed: 1 });
   expect(scheduler.pendingCount).toBe(1);
@@ -173,7 +173,7 @@ it('owns one RAF loop and preserves the timeline across user close/reopen', asyn
 });
 it('keeps 20 Hz frame writes on the imperative scene port without Atom notifications', async () => {
   const { result, scheduler, handle } = mountPlayback();
-  await waitFor(() => expect(result.current.ready).toBe(true));
+  await waitFor(() => expect(result.current.initialized).toBe(true));
   await startPlayback(result, first);
   first.get(twinWaferAtom);
   let notifications = 0;
@@ -190,7 +190,7 @@ it('keeps 20 Hz frame writes on the imperative scene port without Atom notificat
 });
 it('keeps product, speed, pause, locale and waypoint projections synchronized', async () => {
   const { result, scheduler } = mountPlayback();
-  await waitFor(() => expect(result.current.ready).toBe(true));
+  await waitFor(() => expect(result.current.initialized).toBe(true));
   await startPlayback(result, first);
   act(() => {
     result.current.changeWaferProduct('B');
@@ -214,7 +214,7 @@ it('keeps product, speed, pause, locale and waypoint projections synchronized', 
 });
 it('distinguishes a user pause from route completion', async () => {
   const { result, scheduler } = mountPlayback();
-  await waitFor(() => expect(result.current.ready).toBe(true));
+  await waitFor(() => expect(result.current.initialized).toBe(true));
   await startPlayback(result, first);
   act(() => result.current.setWaferSpeed(16));
   act(() => scheduler.advance(100));
@@ -229,7 +229,7 @@ it('distinguishes a user pause from route completion', async () => {
 });
 it('stops the old viewer epoch and rejects its late frame callback', async () => {
   const { result, scheduler, rerender, handle, replaceScene } = mountPlayback();
-  await waitFor(() => expect(result.current.ready).toBe(true));
+  await waitFor(() => expect(result.current.initialized).toBe(true));
   await startPlayback(result, first);
   for (let frame = 0; frame < 21; frame += 1) act(() => scheduler.advance(100));
   expect(first.get(twinWaferAtom).index).toBe(1);
@@ -250,7 +250,7 @@ it('keeps product and speed isolated when the AtomRegistry is replaced', async (
     active: false, playing: false, speed: 4, product: 'C', index: 0, completed: false,
   });
   const { result, scheduler, replaceRegistry } = mountPlayback();
-  await waitFor(() => expect(result.current.ready).toBe(true));
+  await waitFor(() => expect(result.current.initialized).toBe(true));
   await startPlayback(result, first);
   act(() => {
     result.current.changeWaferProduct('B');
@@ -289,7 +289,7 @@ it('retains the first route snapshot when the resource is reloaded after idle ev
 });
 it('routes external process exclusion and unmount through the same Scope teardown', async () => {
   const { result, scheduler, unmount } = mountPlayback();
-  await waitFor(() => expect(result.current.ready).toBe(true));
+  await waitFor(() => expect(result.current.initialized).toBe(true));
   await startPlayback(result, first);
   expect(scheduler.pendingCount).toBe(1);
   act(() => stopTwinWaferRuntime(first));

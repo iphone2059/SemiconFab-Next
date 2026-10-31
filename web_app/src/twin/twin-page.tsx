@@ -160,7 +160,7 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
   if (!site || !fab) {
     return <main className="twin-page twin-loading"><span>{t("正在加载 FAB…")}</span></main>;
   }
-  if (!tourReady || !wafer.ready) {
+  if (!tourReady || !wafer.initialized) {
     return <main className="twin-page twin-loading"><span>{t("正在初始化 Twin Runtime…")}</span></main>;
   }
 
