@@ -1,19 +1,22 @@
 import { RegistryContext } from '@effect/atom-react';
-import { useContext } from 'react';
-import { useEffect } from 'react';
-import { DEMO_TICK_MS } from '@/domain/simulation-twin-equipment';
-import { twinDemoActions } from '@/twin/twin-demo.atom';
+import { useContext, useEffect, useRef } from 'react';
+import { useAppRuntime } from '@/app/app-runtime-provider';
+import { browserTwinDemoScheduler, TwinDemoClockRuntime } from '@/twin/twin-demo-clock-runtime';
 import type { StatusSource } from '@/twin/twin-state';
-
-/**
- * DEMO status source advances its simulated cycle on its own 1600 ms clock while
- * it is the active source and playing. Live/replay modes never tick the demo.
- */
 export function useTwinDemoClock(statusSource: StatusSource, demoPlaying: boolean): void {
   const registry = useContext(RegistryContext);
+  const appRuntime = useAppRuntime();
+  const runtimeRef = useRef<TwinDemoClockRuntime | null>(null);
   useEffect(() => {
-    if (statusSource !== 'demo' || !demoPlaying) return;
-    const timer = window.setInterval(() => twinDemoActions.tick(registry), DEMO_TICK_MS);
-    return () => window.clearInterval(timer);
-  }, [statusSource, demoPlaying, registry]);
+    const runtime = new TwinDemoClockRuntime({ appRuntime, registry, scheduler: browserTwinDemoScheduler });
+    runtimeRef.current = runtime;
+    runtime.configure(statusSource, demoPlaying);
+    return () => {
+      runtimeRef.current = null;
+      runtime.dispose();
+    };
+  }, [appRuntime, registry]);
+  useEffect(() => {
+    runtimeRef.current?.configure(statusSource, demoPlaying);
+  }, [appRuntime, registry, statusSource, demoPlaying]);
 }
