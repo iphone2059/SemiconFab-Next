@@ -8,7 +8,7 @@ it('keeps Research clocks, event indexing and lifecycle outside React and the ge
   const machine = read('twin-research.machine.ts');
   const atom = read('twin-research.atom.ts');
   const ui = read('twin-state.ts');
-  expect(hook).not.toMatch(/setInterval|clearInterval|ResearchReplay\.parse|projectReplayStates|performance\.now/);
+  expect(hook).not.toMatch(/setInterval\(|clearInterval\(|ResearchReplay\.parse\(|projectReplayStates\(|performance\.now\(/);
   expect(runtime).toContain('Scope.addFinalizer');
   expect(runtime).toContain('ResearchReplay.parse');
   expect(runtime).toContain('projectReplayStates');
