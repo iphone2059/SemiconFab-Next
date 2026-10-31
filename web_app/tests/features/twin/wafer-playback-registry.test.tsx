@@ -10,7 +10,7 @@ import type { FabViewportHandle } from '@/twin/twin-viewer';
 import { twinWaferAtom, twinWaferActions } from '@/twin/twin-wafer.atom';
 import { localeActions, localeAtom } from '@/state/locale.atom';
 import type { TwinWaferScheduler } from '@/twin/twin-wafer-runtime';
-import { stopTwinWaferRuntime } from '@/twin/twin-wafer-runtime';
+import { stopTwinWaferRuntime, TwinWaferRuntime } from '@/twin/twin-wafer-runtime';
 import { createTestRuntime, seedWaferRoutes, ResourceTestProviders, type AppRuntime } from '../../support/resource-test-runtime.tsx';
 const routes: Record<WaferProduct, WaferRouteStep[]> = {
   A: [{ step: 1, tool_group: 'TG01_LITHO' }, { step: 2, tool_group: 'TG03_ETCH' }, { step: 3, tool_group: 'TG05_CVD' }],
@@ -265,6 +265,25 @@ it('keeps product and speed isolated when the AtomRegistry is replaced', async (
   await startPlayback(result, second);
   expect(second.get(twinWaferAtom)).toMatchObject({ active: true, product: 'C', speed: 4 });
   expect(scheduler.pendingCount).toBe(1);
+});
+it('retains the first route snapshot when the resource is reloaded after idle eviction', () => {
+  const scheduler = new VirtualFrames();
+  const handle = createSceneHandle();
+  const runtime = new TwinWaferRuntime({
+    appRuntime: firstRuntime,
+    registry: first,
+    scheduler,
+    scene: () => handle,
+    language: 'en',
+  });
+  runtime.setRoutes(routes);
+  expect(() => runtime.setRoutes(structuredClone(routes))).not.toThrow();
+  runtime.open();
+  expect(first.get(twinWaferAtom)).toMatchObject({ active: true, playing: true, product: 'A' });
+  expect(first.get(twinWaferAtom).hud?.toolGroup).toBe('TG01_LITHO');
+  expect(scheduler.pendingCount).toBe(1);
+  runtime.dispose();
+  expect(scheduler.pendingCount).toBe(0);
 });
 it('routes external process exclusion and unmount through the same Scope teardown', async () => {
   const { result, scheduler, unmount } = mountPlayback();

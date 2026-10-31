@@ -51,7 +51,6 @@ export class TwinWaferRuntime {
   private readonly scope: Scope.Closeable;
   private readonly actor: Actor<typeof twinWaferMachine>;
   private readonly subscription: { unsubscribe(): void };
-  private routes: Record<WaferProduct, WaferRouteStep[]> | null = null;
   private timeline: WaferTimeline | null = null;
   private session: WaferSession | null = null;
   private generation = 0;
@@ -86,11 +85,7 @@ export class TwinWaferRuntime {
   }
   setRoutes(routes: Record<WaferProduct, WaferRouteStep[]>): void {
     if (this.disposed) throw new Error('TwinWaferRuntime is disposed');
-    if (this.routes !== null) {
-      if (this.routes !== routes) throw new Error('Wafer routes are immutable within a TwinWaferRuntime');
-      return;
-    }
-    this.routes = routes;
+    if (this.timeline !== null) return;
     const context = this.actor.getSnapshot().context;
     const scenario = buildWaferScenario(routes, this.language);
     this.timeline = createWaferTimeline({
