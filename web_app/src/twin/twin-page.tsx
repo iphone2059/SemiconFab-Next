@@ -136,7 +136,7 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
   // Owner closure: caches the last merged frame array across the scene loop.
   const mergeToolStates = useMemo(() => createToolStateMerger(), []);
   const getToolStates = ((): readonly FabToolState[] => {
-    if (registry.get(twinUiAtom).entryMode === 'research') return readResearchToolStates(registry, registry.get(twinPageAtom).replayBase);
+    if (registry.get(twinUiAtom).entryMode === 'research') return readResearchToolStates(registry, playbackScopeKey, registry.get(twinPageAtom).replayBase);
     if (registry.get(twinUiAtom).statusSource === 'demo') return registry.get(twinDemoAtom).states;
     const base = registry.get(twinPageAtom).liveToolStates;
     // Telemetry Worker output is read inside the scene frame loop; no React

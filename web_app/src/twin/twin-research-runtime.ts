@@ -67,7 +67,8 @@ export class TwinResearchRuntime {
     if (this.disposed) throw new Error('TwinResearchRuntime is disposed');
     if (!this.actor.getSnapshot().matches('inactive')) return;
     this.actor.send({ type: 'ENTER' });
-    if (this.replay !== null) this.actor.send({ type: 'READY' });
+    if (this.parseError !== '') this.actor.send({ type: 'FAIL' });
+    else if (this.replay !== null) this.actor.send({ type: 'READY' });
   }
   exit(): void {
     if (this.disposed) return;

@@ -31,7 +31,7 @@ export const twinResearchActions = {
     registry.set(twinResearchAtom, value);
   },
 };
-export function readResearchToolStates(registry: AtomRegistry.AtomRegistry, baseline: readonly FabToolState[]): readonly FabToolState[] {
-  const projection = registry.get(twinResearchAtom).replayProjection;
-  return projection === undefined ? baseline : projection.states;
+export function readResearchToolStates(registry: AtomRegistry.AtomRegistry, scopeKey: string, baseline: readonly FabToolState[]): readonly FabToolState[] {
+  const projection = registry.get(twinResearchAtom);
+  return projection.scopeKey === scopeKey && projection.replayProjection !== undefined ? projection.replayProjection.states : baseline;
 }
