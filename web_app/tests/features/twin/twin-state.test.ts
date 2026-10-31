@@ -32,14 +32,13 @@ describe('single Twin UI state', () => {
   });
   it('keeps Tour scene navigation separate from Wafer and Research process lifecycles', () => {
     let state = twinUiReducer(createTwinUiState('research'), { type: 'tour/scene-step', level: 'B1', view: 'iso' });
-    expect(state).toMatchObject({ entryMode: 'visitor', level: 'B1', view: 'iso', onboarding: { open: false }, research: { playing: false } });
+    expect(state).toMatchObject({ entryMode: 'visitor', level: 'B1', view: 'iso', onboarding: { open: false } });
     expect('tour' in state).toBe(false);
     expect('wafer' in state).toBe(false);
     state = twinUiReducer(state, { type: 'mode/set', mode: 'research' });
     expect(state.statusSource).toBe('research-replay');
-    state = twinUiReducer(state, { type: 'research/play', playing: true });
     state = twinUiReducer(state, { type: 'onboarding/open' });
-    expect(state.research.playing).toBe(false);
+    expect('research' in state).toBe(false);
     expect(state.onboarding.open).toBe(true);
     expect('wafer' in state).toBe(false);
   });
@@ -50,12 +49,9 @@ describe('single Twin UI state', () => {
     expect(state).toMatchObject({ level: 'B1', onboarding: { open: false } });
     expect('tour' in state).toBe(false);
   });
-  it('separates demo/live authority, restores it after replay, and stops a completed replay clock', () => {
+  it('separates demo/live authority and restores it after Research mode', () => {
     let state = twinUiReducer(createTwinUiState(), { type: 'source/set', source: 'demo' });
     state = twinUiReducer(state, { type: 'mode/set', mode: 'research' });
-    state = twinUiReducer(state, { type: 'research/play', playing: true });
-    state = twinUiReducer(state, { type: 'research/advance', deltaSec: 50, durationSec: 20 });
-    expect(state.research).toMatchObject({ timeSec: 20, playing: false });
     state = twinUiReducer(state, { type: 'mode/set', mode: 'engineer' });
     expect(state.statusSource).toBe('demo');
   });

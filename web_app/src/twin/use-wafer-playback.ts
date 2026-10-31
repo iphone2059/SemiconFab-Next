@@ -7,6 +7,7 @@ import { useResource } from '@/api/use-resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import type { WaferProduct } from '@/domain/wafer-route';
 import { twinUiAtom, twinUiActions } from '@/twin/twin-ui.atom';
+import { stopTwinResearchRuntime } from '@/twin/twin-research-runtime';
 import { twinWaferActions, twinWaferAtom } from '@/twin/twin-wafer.atom';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
 import type { TwinLanguage } from '@/twin/twin-i18n';
@@ -103,7 +104,10 @@ export function useWaferPlayback({
   function startWafer(): void {
     const runtime = currentRuntime();
     endTour();
-    if (registry.get(twinUiAtom).entryMode === 'research') twinUiActions.modeSet(registry, 'engineer');
+    if (registry.get(twinUiAtom).entryMode === 'research') {
+      stopTwinResearchRuntime(registry);
+      twinUiActions.modeSet(registry, 'engineer');
+    }
     twinUiActions.levelSet(registry, 'L1');
     twinUiActions.onboardingClose(registry);
     runtime.open();

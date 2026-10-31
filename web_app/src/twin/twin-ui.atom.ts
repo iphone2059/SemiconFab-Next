@@ -36,10 +36,6 @@ export const twinUiActions = {
   onboardingOpen: (registry: AtomRegistry.AtomRegistry) => apply(registry, { type: 'onboarding/open' }),
   onboardingClose: (registry: AtomRegistry.AtomRegistry) => apply(registry, { type: 'onboarding/close' }),
   onboardingStep: (registry: AtomRegistry.AtomRegistry, step: number) => apply(registry, { type: 'onboarding/step', step }),
-  researchPlay: (registry: AtomRegistry.AtomRegistry, playing: boolean) => apply(registry, { type: 'research/play', playing }),
-  researchSeek: (registry: AtomRegistry.AtomRegistry, timeSec: number) => apply(registry, { type: 'research/seek', timeSec }),
-  researchAdvance: (registry: AtomRegistry.AtomRegistry, payload: { deltaSec: number; durationSec: number }) => apply(registry, { type: 'research/advance', ...payload }),
-  researchSpeedSet: (registry: AtomRegistry.AtomRegistry, speed: 1 | 10 | 100 | 500) => apply(registry, { type: 'research/speed', speed }),
   sourceSet: (registry: AtomRegistry.AtomRegistry, source: 'demo' | 'sse-live') => apply(registry, { type: 'source/set', source }),
   escape: (registry: AtomRegistry.AtomRegistry) => apply(registry, { type: 'escape' }),
 };

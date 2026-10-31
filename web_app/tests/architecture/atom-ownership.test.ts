@@ -79,6 +79,7 @@ it('splits the Twin page atoms by owner and update frequency', () => {
     'twin/twin-page.atom.ts',
     'twin/twin-page-ui.atom.ts',
     'twin/twin-wafer.atom.ts',
+    'twin/twin-research.atom.ts',
     'twin/twin-yms.atom.ts',
     'twin/twin-amhs.atom.ts',
   ]) {
@@ -95,6 +96,7 @@ it('splits the Twin page atoms by owner and update frequency', () => {
     'selected', 'selection', 'layerPreferences', 'infoDialog', 'showResearchUtil', 'onboardingDontShow', 'sidebar', 'oemDialog', 'archQuery',
   ]);
   expect(interfaceFields(read('twin/twin-wafer.atom.ts'), 'TwinWaferProjection')).toEqual(['active', 'playing', 'speed', 'product', 'index', 'follow', 'hud', 'completed']);
+  expect(interfaceFields(read('twin/twin-research.atom.ts'), 'TwinResearchProjection')).toEqual(['scopeKey', 'status', 'timeSec', 'speed', 'durationSec', 'eventCount', 'parseError', 'snapshot', 'replayProjection']);
   expect(typeAliasFields(read('twin/twin-yms.atom.ts'), 'YmsUiState')).toHaveLength(11);
 
   // Action namespaces are disjoint per owner.
