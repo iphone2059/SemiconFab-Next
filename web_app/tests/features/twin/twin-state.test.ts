@@ -30,13 +30,15 @@ describe('single Twin UI state', () => {
     state = twinUiReducer(state, { type: 'spatial/toggle', mode: 'cut' });
     expect(projectTwinSceneState(state).xray).toBeNull();
   });
-  it('owns Tour/Wafer/Research/Onboarding exclusion and stops the previous playback', () => {
-    let state = twinUiReducer(createTwinUiState(), { type: 'wafer/open' });
-    state = twinUiReducer(state, { type: 'wafer/play', playing: true });
-    state = twinUiReducer(state, { type: 'tour/step', waypoint: 2, view: 'etch' });
-    expect(state).toMatchObject({ tour: { active: true, waypoint: 2 }, wafer: { active: false, playing: false }, onboarding: { open: false } });
+  it('keeps Tour scene navigation separate from the process lifecycle projection', () => {
+    let state = twinUiReducer(
+      { ...createTwinUiState('research'), wafer: { active: true, playing: true, speed: 1 } },
+      { type: 'tour/scene-step', level: 'B1', view: 'iso' },
+    );
+    expect(state).toMatchObject({ entryMode: 'visitor', level: 'B1', view: 'iso', wafer: { active: false, playing: false }, onboarding: { open: false }, research: { playing: false } });
+    expect('tour' in state).toBe(false);
     state = twinUiReducer(state, { type: 'mode/set', mode: 'research' });
-    expect(state).toMatchObject({ tour: { active: false }, statusSource: 'research-replay' });
+    expect(state.statusSource).toBe('research-replay');
     state = twinUiReducer(state, { type: 'research/play', playing: true });
     state = twinUiReducer(state, { type: 'wafer/open' });
     expect(state.entryMode).toBe('engineer');
@@ -46,12 +48,12 @@ describe('single Twin UI state', () => {
     expect(state.wafer.active).toBe(false);
     expect(state.onboarding.open).toBe(true);
   });
-  it('Esc stops Tour at its current level; switching engineer also stops a tour', () => {
-    let state = twinUiReducer(createTwinUiState('visitor'), { type: 'tour/step', waypoint: 4, level: 'B1' });
+  it('keeps Escape presentation-only; the Tour runtime owns its stop transition', () => {
+    let state = twinUiReducer(createTwinUiState('visitor'), { type: 'tour/scene-step', level: 'B1' });
+    state = twinUiReducer(state, { type: 'onboarding/open' });
     state = twinUiReducer(state, { type: 'escape' });
-    expect(state).toMatchObject({ level: 'B1', tour: { active: false } });
-    state = twinUiReducer(state, { type: 'tour/step', waypoint: 0 });
-    expect(twinUiReducer(state, { type: 'mode/set', mode: 'engineer' }).tour.active).toBe(false);
+    expect(state).toMatchObject({ level: 'B1', onboarding: { open: false } });
+    expect('tour' in state).toBe(false);
   });
   it('separates demo/live authority, restores it after replay, and stops a completed replay clock', () => {
     let state = twinUiReducer(createTwinUiState(), { type: 'source/set', source: 'demo' });

@@ -7,6 +7,7 @@ import { twinDemoAtom } from '@/twin/twin-demo.atom';
 import { twinPageAtom } from '@/twin/twin-page.atom';
 import { twinPageUiAtom } from '@/twin/twin-page-ui.atom';
 import { twinUiAtom } from '@/twin/twin-ui.atom';
+import { twinTourAtom } from '@/twin/twin-tour.atom';
 import { twinYmsAtom } from '@/twin/twin-yms.atom';
 import { useTwinLocale } from '@/twin/twin-i18n';
 
@@ -27,7 +28,9 @@ export function useTwinSlices() {
 
   const { t, language, toggleLanguage } = useTwinLocale();
   const theme = useAtomValue(localeAtom, (state) => state.theme);
-  const ui = useAtomValue(twinContentUiAtom);
+  const uiState = useAtomValue(twinContentUiAtom);
+  const tour = useAtomValue(twinTourAtom);
+  const ui = { ...uiState, tour };
   const demo = useAtomValue(twinContentDemoAtom);
   const fab = useAtomValue(twinFabSliceAtom);
   const overlays = useAtomValue(twinOverlaySliceAtom);
@@ -46,7 +49,6 @@ const twinContentUiAtom = Atom.map(twinUiAtom, (state) => ({
     xray: state.xray,
     explodePercent: state.explodePercent,
     aeroHeatmap: state.aeroHeatmap,
-    tour: state.tour,
     onboarding: state.onboarding,
     waferActive: state.wafer.active,
     research: state.research,

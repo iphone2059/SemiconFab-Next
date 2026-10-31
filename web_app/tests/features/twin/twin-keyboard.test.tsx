@@ -114,7 +114,7 @@ it('re-centres the active Top preset after a manual camera move (ISO -> Top -> d
     const actions = useTwinActions({
       scene: ref, mode: 'engineer', view, level: 'L1', exploded: false,
       mesJobs: {}, layerPreferences: LAYERS, toolStates: TOOL_STATES,
-      onboardingDontShow: false, startTour: () => {},
+      onboardingDontShow: false, startTour: () => {}, endTour: () => {},
     });
     useTwinKeyboard({ onEscape: actions.escape, setCamera: actions.setCamera });
     return null;

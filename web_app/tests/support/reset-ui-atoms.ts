@@ -10,6 +10,7 @@ import { twinWaferAtom, initialWaferUiState } from '@/twin/twin-wafer.atom';
 import { twinYmsAtom, initialYmsUiState } from '@/twin/twin-yms.atom';
 import { twinAmhsAtom } from '@/twin/twin-amhs.atom';
 import { twinUiAtom } from '@/twin/twin-ui.atom';
+import { twinTourAtom, initialTwinTourProjection } from '@/twin/twin-tour.atom';
 import { twinDemoAtom } from '@/twin/twin-demo.atom';
 import { createTwinUiState } from '@/twin/twin-state';
 import { createDemoState } from '@/domain/simulation-twin-equipment';
@@ -32,5 +33,8 @@ export const resetTwinPageState = (registry: AtomRegistry.AtomRegistry) => {
   registry.set(twinYmsAtom, structuredClone(initialYmsUiState));
   registry.set(twinAmhsAtom, undefined);
 };
-export const resetTwinUiState = (registry: AtomRegistry.AtomRegistry) => registry.set(twinUiAtom, createTwinUiState('engineer'));
+export const resetTwinUiState = (registry: AtomRegistry.AtomRegistry) => {
+  registry.set(twinUiAtom, createTwinUiState('engineer'));
+  registry.set(twinTourAtom, initialTwinTourProjection);
+};
 export const resetTwinDemoState = (registry: AtomRegistry.AtomRegistry) => registry.set(twinDemoAtom, createDemoState(42));

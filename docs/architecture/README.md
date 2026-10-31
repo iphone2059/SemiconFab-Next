@@ -36,6 +36,7 @@
 | `18-round5-remediation-specification.md` | Round 5 整改规范与验收要求（已实施 4c8f0c1；历史记录，剩余义务由 19 号规范取代） |
 | `19-round5.1-remediation-specification.md` | Round 5.1 剩余 P1/P2 不变量整改规范与记录（P1-01…P2-04、四协议流程、Phase A/B/C 验收；2026-10-30） |
 | `20-round5.2-remediation-specification.md` | Round 5.2 定向整改（独立复审 P1-01…P1-03 / P2-01 / P2-02）：outcome 证明链、ACK 完整身份 + supersede、CORE-011 双后端隔离、三游标数学修正（2026-10-30） |
+| `22-adr-twin-process-runtime.md` | ADR-022：Twin Tour 的 XState 状态所有权、Effect Scope、RAF 驱动与 Atom 投影契约；Wafer/Research 后续分阶段迁移 |
 
 ## 已实施的核心决定
 
@@ -46,6 +47,7 @@
 5. `web_app/src` 严格 `src/<module>/<file>`：允许模块 `api app catalog components contracts domain generated lib localization realtime rendering routes runtime state twin workbench`，根只允许 `main.tsx`；无二级目录。
 6. 远程快照唯一 owner 为 Resource Atom（`api/resource.ts`）：`AsyncResult` + freshness/idle TTL/single-flight/错误保留/取消；Router loader 与页面共享 `ensureResource`。
 7. XState 仍拥有命令生命周期；Effect Scope 管理 actor acquire/release，命令事件经 Effect PubSub/Stream 进入 bridge；Flux/Redux/Query/RxJS 均不再参与命令状态。
+10. Twin Tour 已采用独立 XState Actor + TwinTourRuntime：Effect child Scope 管理 Actor/RAF/Timeline，twinTourAtom 仅保存只读投影；Wafer/Research 尚未迁移，不能视为已完成。
 8. 高频遥测/TypedArray/Worker/Babylon 引擎对象不进入 AtomRegistry；100ms UI 合批与 FAB Scope 顺序语义保留。
 9. 设备状态 REST 与 SSE 共用一个 per-registry 顺序 Gate；gate 只保存 epoch/sequence，快照存储只属于 FAB 作用域 Resource Atom。
 

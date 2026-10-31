@@ -53,10 +53,9 @@ interface TwinContentProps {
 /**
  * 3D FAB page = composition/layout + projections.
  *
- * Everything with a lifetime (URL sync, the scene, the tour and wafer playback
- * RAFs, the keyboard, the selected-tool projections) lives in the controllers
- * under ./controllers. This component only subscribes to the slices it renders,
- * wires the controllers to the layout and renders the frozen DOM.
+ * The page composes route state, the WebGPU viewer, scoped process runtimes and
+ * read-only Atom projections. The Tour actor and its RAF belong to TwinTourRuntime;
+ * React only mounts that runtime and connects its HUD and scene ports.
  */
 function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps) {
   const registry = useContext(RegistryContext);
@@ -92,7 +91,7 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
   // The tour controller is scoped to the viewer it writes to: a FAB switch or a
   // viewer recreation (new epoch) must stop the running tour, not drive the new scene.
   const {
-    tourHudRef, tourHudSeed, startTour, endTour, previousTour, advanceTour, finishTour, cancelTourIfRunning,
+    ready: tourReady, tourHudRef, tourHudSeed, startTour, endTour, previousTour, advanceTour, finishTour, cancelTourIfRunning,
   } = useTourController({ scene, language, scopeKey: `${selectedFabId ?? ''}:${viewerEpoch ?? ''}` });
   const wafer = useWaferPlayback({ scene, waferActive, language, endTour: finishTour, t });
   const {
@@ -120,7 +119,7 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
   const { selectedTelemetry, selectedSpc, selectedMes, spcPlot } = useTwinProcessProjection({ selected, toolStates, mesJobs });
   const actions = useTwinActions({
     scene, mode, view, level, exploded, selected, mesJobs, layerPreferences, toolStates,
-    onboardingDontShow, startTour,
+    onboardingDontShow, startTour, endTour: finishTour,
   });
   useTwinSceneSync({
     scene, lifecycle, viewerEpoch, view, language, level, basement, exploded, explodePercent,
@@ -159,6 +158,9 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
   }
   if (!site || !fab) {
     return <main className="twin-page twin-loading"><span>{t("正在加载 FAB…")}</span></main>;
+  }
+  if (!tourReady) {
+    return <main className="twin-page twin-loading"><span>{t("正在初始化 Twin Runtime…")}</span></main>;
   }
 
   return (
