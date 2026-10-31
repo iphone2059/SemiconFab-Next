@@ -110,6 +110,16 @@ it('publishes a new equipment array when an indexed mapped machine actually chan
   expect(before?.states[changed]).toBe('idle');
   expect(after?.states[changed]).toBe('running');
 });
+it('restarts from zero when play is requested after seeking to the duration', () => {
+  const { runtime, registry, scheduler } = create();
+  runtime.enter();
+  runtime.setEvents(events);
+  runtime.seek(20);
+  runtime.play();
+  expect(registry.get(twinResearchAtom)).toMatchObject({ status: 'playing', timeSec: 0 });
+  scheduler.advance(100);
+  expect(registry.get(twinResearchAtom)).toMatchObject({ status: 'playing', timeSec: 10 });
+});
 it('invalidates captured callbacks on pause, leave, re-entry and disposal', () => {
   const { runtime, registry, scheduler } = create();
   runtime.enter();
@@ -133,6 +143,23 @@ it('invalidates captured callbacks on pause, leave, re-entry and disposal', () =
   expect(scheduler.pendingCount).toBe(0);
   expect(() => runtime.play()).toThrow('TwinResearchRuntime is disposed');
 });
+it('copies the initial FAB baseline instead of observing later mutations', () => {
+  const baseline = [...FAB_TOOL_STATES];
+  const registry = AtomRegistry.make();
+  registry.set(twinUiAtom, createTwinUiState('research'));
+  const appRuntime = createTestRuntime(registry);
+  const scheduler = new VirtualIntervals();
+  const runtime = new TwinResearchRuntime({ appRuntime, registry, scheduler, replayBase: baseline, scopeKey: 'fab-snapshot' });
+  active.add(async () => { runtime.dispose(); await appRuntime.dispose(); });
+  runtime.enter();
+  runtime.setEvents(events);
+  runtime.seek(0);
+  const before = registry.get(twinResearchAtom).replayProjection?.states;
+  baseline[0] = baseline[0] === 'down' ? 'running' : 'down';
+  runtime.seek(1);
+  const after = registry.get(twinResearchAtom).replayProjection?.states;
+  expect(after).toEqual(before);
+});
 it('keeps scoped replay states separate from a prior viewer while retaining its fixed base', () => {
   const { runtime, registry } = create('fab-a:epoch-1');
   const base = FAB_TOOL_STATES;
@@ -143,7 +170,6 @@ it('keeps scoped replay states separate from a prior viewer while retaining its 
   expect(accepted.replayProjection).toBeDefined();
   expect(readResearchToolStates(registry, 'fab-a:epoch-1', base)).toBe(accepted.replayProjection?.states);
   expect(readResearchToolStates(registry, 'fab-b:epoch-1', base)).toBe(base);
-  runtime.setReplayBase(base);
   expect(registry.get(twinResearchAtom).replayProjection?.states).toHaveLength(FAB_LAYOUT.length);
 });
 it('keeps parse errors distinct from transport errors and does not start a timer after re-entry', () => {

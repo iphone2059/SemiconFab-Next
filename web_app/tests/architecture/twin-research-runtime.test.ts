@@ -24,4 +24,9 @@ it('keeps Research clocks, event indexing and lifecycle outside React and the ge
   expect(page).not.toContain('researchSnapshot');
   expect(hud).toContain('useResearchPlayback(');
   expect(runtime).toContain('lastReplayProjection');
+  expect(runtime).not.toContain('setReplayBase(');
+  expect(hook).not.toContain('setReplayBase(');
+  expect(page).not.toContain('<span>
+}););
+
 });

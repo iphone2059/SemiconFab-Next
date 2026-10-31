@@ -1,5 +1,5 @@
 # ADR-024 — Twin Research Playback Runtime
-**Status:** Implemented in Phase A3 branch (verification pending).
+**Status:** Merged into main; repository-wide verification pending.
 **Date:** 2026-10-31.
 ## Decision
 ResearchReplay continues to parse the 27,263-row JSONL display stream into indexed snapshots; the source is not a checkpoint or authoritative WAL. The runtime has one Effect child Scope, one XState Actor, one immutable replay index per viewer scope and one independently owned 100ms clock. React only installs the controller, subscribes to the bounded projection and submits typed commands. No React effect owns the interval or computes indexed snapshots.
@@ -24,5 +24,7 @@ ResearchReplay continues to parse the 27,263-row JSONL display stream into index
 | RPR-10 | The Research playback baseline is captured upon explicit mode entry; SSE updates cannot rebase it. |
 | RPR-11 | When only Research time/WIP changes, the equipment-state projection preserves object identity and cannot invalidate TwinContent. |
 | RPR-12 | High-frequency Research HUD and footer subscriptions stay in child components, not TwinContent. |
+| RPR-13 | The runtime copies the captured baseline exactly once; no later Atom or SSE update can replace it. |
+| RPR-14 | A paused playhead at the duration restarts at zero on Play. |
 ## Validation
 Add deterministic virtual-clock runtime tests, parse-error tests and source ownership tests. The repository-wide `scripts/verify.ps1`, production e2e and compiler ON/OFF equivalence checks remain required before claiming full verification.

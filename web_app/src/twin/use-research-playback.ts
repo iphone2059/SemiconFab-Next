@@ -73,9 +73,6 @@ export function useResearchPlayback({
     const runtime = runtimeRef.current;
     if (mode === 'research' && eventsView.data !== undefined && runtime) runtime.setEvents(eventsView.data);
   }, [mode, eventsView.data, runtimeGeneration]);
-  useEffect(() => {
-    runtimeRef.current?.setReplayBase(replayBase);
-  }, [replayBase, runtimeGeneration]);
   function currentRuntime(): TwinResearchRuntime {
     const runtime = runtimeRef.current;
     if (runtime === null) throw new Error('TwinResearchRuntime is not mounted');

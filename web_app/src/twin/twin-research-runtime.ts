@@ -41,7 +41,7 @@ export class TwinResearchRuntime {
   private readonly actor: Actor<typeof twinResearchMachine>;
   private readonly subscription: { unsubscribe(): void };
   private replay: ResearchReplay | null = null;
-  private replayBase: readonly FabToolState[];
+  private readonly replayBase: readonly FabToolState[];
   private lastReplayProjection: ReturnType<typeof projectReplayStates> | undefined;
   private timeSec = 0;
   private speed: TwinResearchSpeed = 100;
@@ -90,16 +90,11 @@ export class TwinResearchRuntime {
       this.publish();
     }
   }
-  setReplayBase(base: readonly FabToolState[]): void {
-    if (this.disposed) throw new Error('TwinResearchRuntime is disposed');
-    this.replayBase = [...base];
-    this.publish();
-  }
   play(): void {
     if (this.disposed) throw new Error('TwinResearchRuntime is disposed');
     const snapshot = this.actor.getSnapshot();
     if (!snapshot.matches('paused') && !snapshot.matches('completed')) throw new Error('Research playback is not paused or completed');
-    if (snapshot.matches('completed')) this.timeSec = 0;
+    if (this.timeSec >= this.requireReplay().durationSec) this.timeSec = 0;
     this.actor.send({ type: 'PLAY' });
     this.lastTimeMs = this.options.scheduler.now();
     this.startClock();
