@@ -5,12 +5,12 @@ it('owns route readiness, playback transitions and retained discrete progress', 
   const actor = createActor(twinWaferMachine);
   actor.start();
   expect(actor.getSnapshot().matches('closed')).toBe(true);
-  actor.send({ type: 'RESTORE', product: 'B', speed: 16, index: 1 });
+  actor.send({ type: 'RESTORE', product: 'B', speed: 16 });
   actor.send({ type: 'OPEN' });
   expect(actor.getSnapshot().matches('loading')).toBe(true);
   actor.send({ type: 'ROUTES_READY' });
   expect(actor.getSnapshot().matches('playing')).toBe(true);
-  expect(actor.getSnapshot().context).toMatchObject({ product: 'B', speed: 16, index: 1, routesReady: true });
+  expect(actor.getSnapshot().context).toMatchObject({ product: 'B', speed: 16, index: 0, routesReady: true });
   actor.send({ type: 'WAYPOINT', index: 2 });
   actor.send({ type: 'TOGGLE' });
   expect(actor.getSnapshot().matches('paused')).toBe(true);

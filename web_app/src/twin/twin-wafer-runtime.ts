@@ -81,7 +81,8 @@ export class TwinWaferRuntime {
       this.actor.stop();
     })));
     this.actor.start();
-    this.actor.send({ type: 'RESTORE', product: initial.product, speed: initial.speed, index: 0 });
+    this.actor.send({ type: 'RESTORE', product: initial.product, speed: initial.speed });
+    twinWaferActions.hudClear(options.registry);
   }
   setRoutes(routes: Record<WaferProduct, WaferRouteStep[]>): void {
     if (this.disposed) throw new Error('TwinWaferRuntime is disposed');
@@ -104,7 +105,7 @@ export class TwinWaferRuntime {
     if (wasLoading) this.activateTimeline();
   }
   setLanguage(language: TwinLanguage): void {
-    if (this.disposed) return;
+    if (this.disposed) throw new Error('TwinWaferRuntime is disposed');
     this.language = language;
     this.timeline?.setLanguage(language === 'zh' ? 'zh-CN' : 'en');
     if (this.timeline && !this.actor.getSnapshot().matches('closed')) this.publishHud(this.timeline.readFrame());
@@ -157,6 +158,7 @@ export class TwinWaferRuntime {
     this.options.appRuntime.runSync(Scope.close(this.scope, Exit.void));
   }
   private requireTimeline(): WaferTimeline {
+    if (this.disposed) throw new Error('TwinWaferRuntime is disposed');
     if (this.timeline === null) throw new Error('Wafer routes are not ready');
     return this.timeline;
   }

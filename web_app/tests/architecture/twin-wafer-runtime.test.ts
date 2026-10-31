@@ -8,6 +8,7 @@ it('keeps the Wafer Actor, timeline, RAF and scene writes inside TwinWaferRuntim
   const hook = read('twin/use-wafer-playback.ts');
   const runtime = read('twin/twin-wafer-runtime.ts');
   const machine = read('twin/twin-wafer.machine.ts');
+  const page = read('twin/twin-page.tsx');
   expect(hook).not.toMatch(/requestAnimationFrame|cancelAnimationFrame|createWaferTimeline|WaferTimeline|rafHandle|timelineRef|performance\.now/);
   expect(runtime).toContain('createActor(twinWaferMachine)');
   expect(runtime).toContain('Scope.addFinalizer');
@@ -20,6 +21,8 @@ it('keeps the Wafer Actor, timeline, RAF and scene writes inside TwinWaferRuntim
   expect(runtime).toContain('setCameraPose');
   expect(runtime).toContain('twinWaferActions.projectionSet');
   expect(runtime).toContain('twinWaferActions.hudSet');
+  expect(page).toContain('const playbackScopeKey = `${site?.siteId ?? \'\'}:${selectedFabId ?? \'\'}:${viewerEpoch ?? \'\'}`');
+  expect(page).toContain('scopeKey: playbackScopeKey');
   expect(machine).toContain("initial: 'closed'");
   expect(machine).toContain('loading:');
   expect(machine).toContain('playing:');

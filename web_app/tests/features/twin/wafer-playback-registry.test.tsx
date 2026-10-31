@@ -231,15 +231,19 @@ it('stops the old viewer epoch and rejects its late frame callback', async () =>
   const { result, scheduler, rerender, handle, replaceScene } = mountPlayback();
   await waitFor(() => expect(result.current.ready).toBe(true));
   await startPlayback(result, first);
+  for (let frame = 0; frame < 21; frame += 1) act(() => scheduler.advance(100));
+  expect(first.get(twinWaferAtom).index).toBe(1);
   const staleFrame = scheduler.frames()[0];
   const replacementScene = replaceScene();
   act(() => rerender({ scopeKey: 'fab-1:epoch-2' }));
   expect(scheduler.pendingCount).toBe(0);
-  expect(first.get(twinWaferAtom)).toMatchObject({ active: false, playing: false, hud: undefined });
+  expect(first.get(twinWaferAtom)).toMatchObject({ active: false, playing: false, index: 0, hud: undefined });
   act(() => staleFrame?.());
   expect(frameCount(replacementScene, 'setWaferPoint')).toBe(0);
   expect(scheduler.pendingCount).toBe(0);
   expect(frameCount(handle, 'setWaferPoint')).toBeGreaterThan(0);
+  await startPlayback(result, first);
+  expect(first.get(twinWaferAtom)).toMatchObject({ active: true, playing: true, index: 0 });
 });
 it('keeps product and speed isolated when the AtomRegistry is replaced', async () => {
   twinWaferActions.projectionSet(second, {

@@ -90,10 +90,11 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
   const layoutIdentities = useMemo(() => layoutIdentitiesForFab(fab?.code ?? 'FAB-01'), [fab?.code]);
   // The tour controller is scoped to the viewer it writes to: a FAB switch or a
   // viewer recreation (new epoch) must stop the running tour, not drive the new scene.
+  const playbackScopeKey = `${site?.siteId ?? ''}:${selectedFabId ?? ''}:${viewerEpoch ?? ''}`;
   const {
     ready: tourReady, tourHudRef, tourHudSeed, startTour, endTour, previousTour, advanceTour, finishTour, cancelTourIfRunning,
-  } = useTourController({ scene, language, scopeKey: `${selectedFabId ?? ''}:${viewerEpoch ?? ''}` });
-  const wafer = useWaferPlayback({ scene, waferActive, language, endTour: finishTour, scopeKey: `${selectedFabId ?? ''}:${viewerEpoch ?? ''}`, t });
+  } = useTourController({ scene, language, scopeKey: playbackScopeKey });
+  const wafer = useWaferPlayback({ scene, waferActive, language, endTour: finishTour, scopeKey: playbackScopeKey, t });
   const {
     research, loading: researchLoading, error: researchError, parseError: researchParseError,
     snapshot: researchSnapshot, replayProjection,

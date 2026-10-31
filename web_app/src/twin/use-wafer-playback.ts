@@ -46,17 +46,23 @@ export function useWaferPlayback({
   const registry = useContext(RegistryContext);
   const appRuntime = useAppRuntime();
   const runtimeRef = useRef<TwinWaferRuntime | null>(null);
-  const previousScopeRef = useRef(scopeKey);
+  const previousRuntimeRef = useRef({ appRuntime, registry, scheduler, scopeKey });
   const [ready, setReady] = useState(false);
   const [runtimeGeneration, setRuntimeGeneration] = useState(0);
   const waferRoutesView = useResource(appRuntime, waferRoutesDefinition, { enabled: waferActive });
   const waferRoutes = waferRoutesView.data;
   const error = waferRoutesView.isError ? t('路线加载失败') : '';
   useLayoutEffect(() => {
-    if (previousScopeRef.current === scopeKey) return;
-    previousScopeRef.current = scopeKey;
+    const previous = previousRuntimeRef.current;
+    if (previous.appRuntime === appRuntime
+      && previous.registry === registry
+      && previous.scheduler === scheduler
+      && previous.scopeKey === scopeKey) return;
+    previousRuntimeRef.current = { appRuntime, registry, scheduler, scopeKey };
     runtimeRef.current?.close();
-  }, [scopeKey]);
+    runtimeRef.current = null;
+    setReady(false);
+  }, [appRuntime, registry, scheduler, scopeKey]);
   useEffect(() => {
     const runtime = new TwinWaferRuntime({
       appRuntime,

@@ -11,7 +11,7 @@ const waferSetup = setup({
   schemas: {
     context: types<TwinWaferMachineContext>(),
     events: {
-      RESTORE: types<{ product: WaferProduct; speed: TwinWaferSpeed; index: number }>(),
+      RESTORE: types<{ product: WaferProduct; speed: TwinWaferSpeed }>(),
       OPEN: types<{}>(),
       CLOSE: types<{}>(),
       ROUTES_READY: types<{}>(),
@@ -31,7 +31,7 @@ export const twinWaferMachine = waferSetup.createMachine({
   states: {
     closed: {
       on: {
-        RESTORE: ({ context, event }) => ({ target: 'closed', context: { ...context, product: event.product, speed: event.speed, index: event.index } }),
+        RESTORE: ({ context, event }) => ({ target: 'closed', context: { ...context, product: event.product, speed: event.speed, index: 0 } }),
         OPEN: ({ context }) => ({ target: context.routesReady ? 'playing' : 'loading' }),
         ROUTES_READY: ({ context }) => ({ target: 'closed', context: { ...context, routesReady: true } }),
         PRODUCT: ({ context, event }) => ({ target: 'closed', context: { ...context, product: event.product, index: 0 } }),
