@@ -41,12 +41,17 @@ export function useResearchPlayback({
   const registry = useContext(RegistryContext);
   const appRuntime = useAppRuntime();
   const runtimeRef = useRef<TwinResearchRuntime | null>(null);
+  const ownerRef = useRef({ appRuntime, registry, scheduler, scopeKey });
   const [initialized, setInitialized] = useState(false);
   const [runtimeGeneration, setRuntimeGeneration] = useState(0);
   const eventsView = useResource(appRuntime, researchEventsDefinition, { enabled: mode === 'research' });
   const stored = useAtomValue(twinResearchAtom);
-  const projection = stored.scopeKey === scopeKey ? stored : initialTwinResearchProjection;
+  const owner = ownerRef.current;
+  const currentOwner = owner.appRuntime === appRuntime && owner.registry === registry
+    && owner.scheduler === scheduler && owner.scopeKey === scopeKey;
+  const projection = initialized && currentOwner && stored.scopeKey === scopeKey ? stored : initialTwinResearchProjection;
   useEffect(() => {
+    ownerRef.current = { appRuntime, registry, scheduler, scopeKey };
     const runtime = new TwinResearchRuntime({ appRuntime, registry, scheduler, replayBase, scopeKey });
     runtimeRef.current = runtime;
     const unregister = registerTwinResearchRuntime(registry, runtime);

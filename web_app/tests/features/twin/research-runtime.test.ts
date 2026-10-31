@@ -1,6 +1,7 @@
 import * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ResearchReplay } from '@/domain/simulation-research-replay';
+import { FAB_LAYOUT, FAB_TOOL_STATES } from '@/domain/fab-layout';
 import { createTwinUiState } from '@/twin/twin-state';
 import { twinUiAtom } from '@/twin/twin-ui.atom';
 import { readResearchToolStates, twinResearchAtom } from '@/twin/twin-research.atom';
@@ -55,7 +56,7 @@ function create(scopeKey = 'fab-a:epoch-1') {
     appRuntime,
     registry,
     scheduler,
-    replayBase: ['running', 'down'],
+    replayBase: FAB_TOOL_STATES,
     scopeKey,
   });
   const unregister = registerTwinResearchRuntime(registry, runtime);
@@ -113,7 +114,7 @@ it('invalidates captured callbacks on pause, leave, re-entry and disposal', () =
 });
 it('keeps scoped replay states separate from a prior viewer while retaining its fixed base', () => {
   const { runtime, registry } = create('fab-a:epoch-1');
-  const base = ['down', 'maint'] as const;
+  const base = FAB_TOOL_STATES;
   runtime.enter();
   runtime.setEvents(events);
   runtime.seek(10);
@@ -122,7 +123,7 @@ it('keeps scoped replay states separate from a prior viewer while retaining its 
   expect(readResearchToolStates(registry, 'fab-a:epoch-1', base)).toBe(accepted.replayProjection?.states);
   expect(readResearchToolStates(registry, 'fab-b:epoch-1', base)).toBe(base);
   runtime.setReplayBase(base);
-  expect(registry.get(twinResearchAtom).replayProjection?.states).toHaveLength(base.length);
+  expect(registry.get(twinResearchAtom).replayProjection?.states).toHaveLength(FAB_LAYOUT.length);
 });
 it('keeps parse errors distinct from transport errors and does not start a timer after re-entry', () => {
   const { runtime, registry, scheduler } = create();
