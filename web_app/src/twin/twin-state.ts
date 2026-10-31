@@ -15,7 +15,6 @@ export interface TwinUiState {
   xray: XRayFilter;
   explodePercent: number;
   aeroHeatmap: boolean;
-  tour: { active: boolean; waypoint: number };
   onboarding: { open: boolean; step: number };
   wafer: { active: boolean; playing: boolean; speed: 1 | 4 | 16 };
   research: { playing: boolean; timeSec: number; speed: 1 | 10 | 100 | 500 };
@@ -33,8 +32,7 @@ export type TwinUiEvent =
   | { type: 'xray/set'; filter: XRayFilter | null }
   | { type: 'explode/set'; percent: number }
   | { type: 'aero/heatmap' }
-  | { type: 'tour/step'; waypoint: number; level?: 'L1' | 'B1'; view?: TwinView }
-  | { type: 'tour/stop' }
+  | { type: 'tour/scene-step'; level?: 'L1' | 'B1'; view?: TwinView }
   | { type: 'onboarding/open' | 'onboarding/close' }
   | { type: 'onboarding/step'; step: number }
   | { type: 'wafer/open' | 'wafer/close' }
@@ -51,7 +49,7 @@ export function createTwinUiState(mode: EntryMode = 'engineer'): TwinUiState {
   return {
     entryMode: mode, view: 'iso', level: 'L1', spatialMode: null,
     cut: { axis: 'X', positionM: 0, invert: false }, xray: 'all', explodePercent: 100, aeroHeatmap: false,
-    tour: { active: false, waypoint: 0 }, onboarding: { open: false, step: 0 },
+    onboarding: { open: false, step: 0 },
     wafer: { active: false, playing: false, speed: 1 },
     research: { playing: false, timeSec: 0, speed: 100 },
     statusSource: mode === 'research' ? 'research-replay' : 'demo', preferredStatusSource: 'demo',
@@ -64,12 +62,6 @@ function spatialState(state: TwinUiState, mode: SpatialMode): TwinUiState {
     level: mode === 'exploded' ? 'EXPLODED' : state.level === 'EXPLODED' ? 'L1' : state.level,
     aeroHeatmap: mode === 'aerodynamics' && state.aeroHeatmap,
   };
-}
-
-function stopTour(state: TwinUiState): TwinUiState {
-  return state.tour.active
-    ? { ...state, tour: { ...state.tour, active: false } }
-    : state;
 }
 
 /** Presentation reducer only; long-lived process lifecycles are owned by their runtimes. */
@@ -86,32 +78,29 @@ export function twinUiReducer(state: TwinUiState, event: TwinUiEvent): TwinUiSta
     case 'explode/set': return { ...spatialState(state, 'exploded'), explodePercent: Math.max(0, Math.min(100, event.percent)) };
     case 'aero/heatmap': return { ...spatialState(state, 'aerodynamics'), aeroHeatmap: state.spatialMode !== 'aerodynamics' || !state.aeroHeatmap };
     case 'mode/set': {
-      const next = event.mode === 'visitor' ? state : stopTour(state);
-      return { ...next, entryMode: event.mode,
-        wafer: { ...next.wafer, active: false, playing: false },
-        onboarding: { ...next.onboarding, open: false },
-        research: { ...next.research, playing: false },
-        statusSource: event.mode === 'research' ? 'research-replay' : next.preferredStatusSource,
-        view: event.mode === 'research' ? 'iso' : next.view };
+      return { ...state, entryMode: event.mode,
+        wafer: { ...state.wafer, active: false, playing: false },
+        onboarding: { ...state.onboarding, open: false },
+        research: { ...state.research, playing: false },
+        statusSource: event.mode === 'research' ? 'research-replay' : state.preferredStatusSource,
+        view: event.mode === 'research' ? 'iso' : state.view };
     }
-    case 'tour/step': return {
+    case 'tour/scene-step': return {
       ...spatialState(state, null), level: event.level ?? 'L1', view: event.view ?? 'iso',
       entryMode: state.entryMode === 'research' ? 'visitor' : state.entryMode,
       statusSource: state.preferredStatusSource,
-      tour: { active: true, waypoint: Math.max(0, Math.min(4, event.waypoint)) },
       onboarding: { ...state.onboarding, open: false },
       wafer: { ...state.wafer, active: false, playing: false },
       research: { ...state.research, playing: false },
     };
-    case 'tour/stop': return stopTour(state);
     case 'onboarding/open': return {
-      ...stopTour(state), onboarding: { open: true, step: 0 },
+      ...state, onboarding: { open: true, step: 0 },
       wafer: { ...state.wafer, active: false, playing: false }, research: { ...state.research, playing: false },
     };
     case 'onboarding/close': return { ...state, onboarding: { ...state.onboarding, open: false } };
     case 'onboarding/step': return { ...state, onboarding: { ...state.onboarding, step: Math.max(0, Math.min(2, event.step)) } };
     case 'wafer/open': return {
-      ...stopTour(state), entryMode: state.entryMode === 'research' ? 'engineer' : state.entryMode,
+      ...state, entryMode: state.entryMode === 'research' ? 'engineer' : state.entryMode,
       level: 'L1', spatialMode: null, aeroHeatmap: false, statusSource: state.preferredStatusSource,
       wafer: { ...state.wafer, active: true, playing: true },
       onboarding: { ...state.onboarding, open: false }, research: { ...state.research, playing: false },
@@ -129,7 +118,7 @@ export function twinUiReducer(state: TwinUiState, event: TwinUiEvent): TwinUiSta
     case 'research/speed': return { ...state, research: { ...state.research, speed: event.speed } };
     case 'source/set': return { ...state, preferredStatusSource: event.source,
       statusSource: state.entryMode === 'research' ? 'research-replay' : event.source };
-    case 'escape': return { ...stopTour(state), onboarding: { ...state.onboarding, open: false } };
+    case 'escape': return { ...state, onboarding: { ...state.onboarding, open: false } };
   }
 }
 
