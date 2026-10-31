@@ -2,7 +2,7 @@ import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
 import { OriginalIcon } from '@/components/original-icons';
 import { TwinLocaleProvider } from '@/twin/twin-i18n';
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { AmhsStats, CutAxis } from '@/contracts/scene.port';
 import { FAB_TOOL_STATE_META, type FabToolState } from '@/domain/fab-layout';
 import { YIELD_SCENARIOS } from '@/domain/fab-yield';
@@ -35,6 +35,7 @@ import { useTwinDemoClock } from '@/twin/use-twin-demo-clock';
 import { useTwinKeyboard } from '@/twin/use-twin-keyboard';
 import { useTwinProcessProjection } from '@/twin/use-twin-process-projection';
 import { useResearchPlayback } from '@/twin/use-research-playback';
+import { readResearchToolStates } from '@/twin/twin-research.atom';
 import { useTourController } from '@/twin/use-tour-controller';
 import { useTwinRouteState } from '@/twin/use-twin-route-state';
 import { useTwinSlices } from '@/twin/use-twin-slices';
@@ -74,9 +75,6 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
   const exploded = ui.spatialMode === 'exploded';
   const basement = ui.level === 'B1';
   const waferActive = ui.waferActive;
-  const researchTime = ui.research.timeSec;
-  const researchPlaying = ui.research.playing;
-  const researchSpeed = ui.research.speed;
   const { siteId: pageSiteId, siteError: error, liveToolStates, replayBase, statusFeed, selected, selection, mesJobs, layerPreferences, infoDialog, showResearchUtil, onboardingDontShow, ymsOpen } = page;
 
   const { site, fab, selectedFabId } = useTwinRouteState({
@@ -96,10 +94,11 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
   } = useTourController({ scene, language, scopeKey: playbackScopeKey });
   const wafer = useWaferPlayback({ scene, waferActive, language, endTour: finishTour, scopeKey: playbackScopeKey, t });
   const {
-    research, loading: researchLoading, error: researchError, parseError: researchParseError,
+    research, researchTime, researchPlaying, researchSpeed,
+    loading: researchLoading, error: researchError, parseError: researchParseError,
     snapshot: researchSnapshot, replayProjection,
     setResearchPlaying, setResearchTime, setResearchSpeed,
-  } = useResearchPlayback({ mode, researchTime, researchPlaying, researchSpeed, replayBase, t });
+  } = useResearchPlayback({ mode, replayBase, scopeKey: playbackScopeKey, t });
 
   // projectTwinSceneState only reads the level/spatial/cut/xray/explode branches;
   // rebuilding the snapshot from the subscribed values keeps the same projection
@@ -134,14 +133,10 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
   const amhsBatcher = useMemo(() => createCoalescedDispatcher<AmhsStats>((stats) => twinAmhsActions.amhsSet(registry, stats), 100), [registry]);
   useEffect(() => () => amhsBatcher.cancel(), [amhsBatcher, registry]);
 
-  // The scene frame loop reads the Effect Atom snapshots directly for demo/live modes.
-  // Research replay keeps its derived array in a ref until the query state lands.
-  const directToolStates = useRef<readonly FabToolState[]>(toolStates);
-  useLayoutEffect(() => { directToolStates.current = toolStates; }, [toolStates]);
   // Owner closure: caches the last merged frame array across the scene loop.
   const mergeToolStates = useMemo(() => createToolStateMerger(), []);
   const getToolStates = ((): readonly FabToolState[] => {
-    if (registry.get(twinUiAtom).entryMode === 'research') return directToolStates.current;
+    if (registry.get(twinUiAtom).entryMode === 'research') return readResearchToolStates(registry, registry.get(twinPageAtom).replayBase);
     if (registry.get(twinUiAtom).statusSource === 'demo') return registry.get(twinDemoAtom).states;
     const base = registry.get(twinPageAtom).liveToolStates;
     // Telemetry Worker output is read inside the scene frame loop; no React

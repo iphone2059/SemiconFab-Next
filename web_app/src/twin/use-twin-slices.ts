@@ -53,7 +53,6 @@ const twinContentUiAtom = Atom.map(twinUiAtom, (state) => ({
     explodePercent: state.explodePercent,
     aeroHeatmap: state.aeroHeatmap,
     onboarding: state.onboarding,
-    research: state.research,
     statusSource: state.statusSource,
     preferredStatusSource: state.preferredStatusSource,
   })).pipe(Atom.withEquality(shallowRecordEqual));

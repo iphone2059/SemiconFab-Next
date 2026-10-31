@@ -1,111 +1,97 @@
-import { RegistryContext } from '@effect/atom-react';
-import { useContext } from 'react';
-import { useEffect, useMemo } from 'react';
+import { RegistryContext, useAtomValue } from '@effect/atom-react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { researchEventsDefinition } from '@/api/research.resource';
 import { useResource } from '@/api/use-resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import type { FabToolState } from '@/domain/fab-layout';
-import { ResearchReplay, type ResearchSnapshot } from '@/domain/simulation-research-replay';
-import { projectReplayStates } from '@/domain/simulation-twin-equipment';
-import { twinUiActions } from '@/twin/twin-ui.atom';
+import type { ResearchSnapshot } from '@/domain/simulation-research-replay';
+import type { projectReplayStates } from '@/domain/simulation-twin-equipment';
+import { initialTwinResearchProjection, twinResearchAtom, type TwinResearchSpeed } from '@/twin/twin-research.atom';
+import { browserTwinResearchScheduler, registerTwinResearchRuntime, TwinResearchRuntime, type TwinResearchScheduler } from '@/twin/twin-research-runtime';
 import type { EntryMode } from '@/twin/twin-state';
-
 export interface TwinResearchPlaybackParams {
-  mode: EntryMode;
-  researchTime: number;
-  researchPlaying: boolean;
-  researchSpeed: 1 | 10 | 100 | 500;
-  replayBase: readonly FabToolState[];
-  t: (text: string, parameters?: readonly unknown[]) => string;
+  readonly mode: EntryMode;
+  readonly replayBase: readonly FabToolState[];
+  readonly scopeKey: string;
+  readonly scheduler?: TwinResearchScheduler;
+  readonly t: (text: string, parameters?: readonly unknown[]) => string;
 }
-
 export interface TwinResearchPlayback {
-  research?: ResearchReplay;
-  loading: boolean;
-  /** Localised query failure message ('' when there is none). */
-  error: string;
-  /** A16: parse failure is a distinct visible state, never folded into the network error. */
-  parseError: string;
-  snapshot?: ResearchSnapshot;
-  replayProjection?: ReturnType<typeof projectReplayStates>;
+  readonly initialized: boolean;
+  readonly research?: { readonly durationSec: number; readonly eventCount: number };
+  readonly researchTime: number;
+  readonly researchPlaying: boolean;
+  readonly researchSpeed: TwinResearchSpeed;
+  readonly loading: boolean;
+  readonly error: string;
+  readonly parseError: string;
+  readonly snapshot?: ResearchSnapshot;
+  readonly replayProjection?: ReturnType<typeof projectReplayStates>;
   setResearchPlaying(playing: boolean): void;
   setResearchTime(timeSec: number): void;
-  setResearchSpeed(speed: 1 | 10 | 100 | 500): void;
+  setResearchSpeed(speed: TwinResearchSpeed): void;
 }
-
-/**
- * Research replay projection. Owns the JSONL query, the parse/error split, the
- * per-time snapshot projection and the 100 ms advance clock; the page keeps only
- * the subscribed UI values it renders.
- */
 export function useResearchPlayback({
   mode,
-  researchTime,
-  researchPlaying,
-  researchSpeed,
   replayBase,
+  scopeKey,
+  scheduler = browserTwinResearchScheduler,
   t,
 }: TwinResearchPlaybackParams): TwinResearchPlayback {
   const registry = useContext(RegistryContext);
   const appRuntime = useAppRuntime();
-  const researchView = useResource(appRuntime, researchEventsDefinition, { enabled: mode === 'research' });
-
-  // A16: a parse failure is a distinct, visible state; it must not silently become
-  // undefined and only reuse the network error owned by the Query.
-  const researchParse = useMemo<{ replay?: ResearchReplay; error: string }>(() => {
-    if (!researchView.data) return { replay: undefined, error: '' };
-    try {
-      return { replay: ResearchReplay.parse(researchView.data), error: '' };
-    } catch (error) {
-      return { replay: undefined, error: error instanceof Error ? error.message : String(error) };
-    }
-  }, [researchView.data]);
-  const research = researchParse.replay;
-  const researchParseError = researchParse.error;
-  const researchLoading = mode === 'research' && researchView.isInitial;
-  const researchError = researchView.isError ? t('回放数据加载失败') : '';
-
+  const runtimeRef = useRef<TwinResearchRuntime | null>(null);
+  const [initialized, setInitialized] = useState(false);
+  const [runtimeGeneration, setRuntimeGeneration] = useState(0);
+  const eventsView = useResource(appRuntime, researchEventsDefinition, { enabled: mode === 'research' });
+  const stored = useAtomValue(twinResearchAtom);
+  const projection = stored.scopeKey === scopeKey ? stored : initialTwinResearchProjection;
   useEffect(() => {
-    if (!research) return;
-    twinUiActions.researchSeek(registry, Math.min(3600, research.durationSec));
-  }, [research, registry]);
-
+    const runtime = new TwinResearchRuntime({ appRuntime, registry, scheduler, replayBase, scopeKey });
+    runtimeRef.current = runtime;
+    const unregister = registerTwinResearchRuntime(registry, runtime);
+    setInitialized(true);
+    setRuntimeGeneration(generation => generation + 1);
+    return () => {
+      runtimeRef.current = null;
+      unregister();
+      runtime.dispose();
+    };
+  }, [appRuntime, registry, scheduler, scopeKey]);
   useEffect(() => {
-    if (!researchPlaying || !research) return;
-    let last = performance.now();
-    const timer = window.setInterval(() => {
-      const now = performance.now();
-      const elapsed = ((now - last) / 1000) * researchSpeed;
-      last = now;
-      twinUiActions.researchAdvance(registry, { deltaSec: elapsed, durationSec: research.durationSec });
-    }, 100);
-    return () => window.clearInterval(timer);
-  }, [researchPlaying, research, researchSpeed, registry]);
-
-  const researchSnapshot = (research?.snapshot(researchTime));
-  const replayProjection = (researchSnapshot ? projectReplayStates(researchSnapshot, replayBase) : undefined);
-
-  function setResearchPlaying(playing: boolean): void {
-    twinUiActions.researchPlay(registry, playing);
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    if (mode === 'research') runtime.enter();
+    else runtime.exit();
+  }, [mode, runtimeGeneration]);
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (mode === 'research' && eventsView.data !== undefined && runtime) runtime.setEvents(eventsView.data);
+  }, [mode, eventsView.data, runtimeGeneration]);
+  useEffect(() => {
+    runtimeRef.current?.setReplayBase(replayBase);
+  }, [replayBase, runtimeGeneration]);
+  function currentRuntime(): TwinResearchRuntime {
+    const runtime = runtimeRef.current;
+    if (runtime === null) throw new Error('TwinResearchRuntime is not mounted');
+    return runtime;
   }
-
-  function setResearchTime(timeSec: number): void {
-    twinUiActions.researchSeek(registry, timeSec);
-  }
-
-  function setResearchSpeed(speed: 1 | 10 | 100 | 500): void {
-    twinUiActions.researchSpeedSet(registry, speed);
-  }
-
   return {
-    research,
-    loading: researchLoading,
-    error: researchError,
-    parseError: researchParseError,
-    snapshot: researchSnapshot,
-    replayProjection,
-    setResearchPlaying,
-    setResearchTime,
-    setResearchSpeed,
+    initialized,
+    research: projection.snapshot ? { eventCount: projection.eventCount, durationSec: projection.durationSec } : undefined,
+    researchTime: projection.timeSec,
+    researchPlaying: projection.status === 'playing',
+    researchSpeed: projection.speed,
+    loading: mode === 'research' && (eventsView.isInitial || projection.status === 'loading'),
+    error: mode === 'research' && eventsView.isError && projection.snapshot === undefined ? t('回放数据加载失败') : '',
+    parseError: projection.parseError,
+    snapshot: projection.snapshot,
+    replayProjection: projection.replayProjection,
+    setResearchPlaying: playing => {
+      if (playing) currentRuntime().play();
+      else currentRuntime().pause();
+    },
+    setResearchTime: timeSec => currentRuntime().seek(timeSec),
+    setResearchSpeed: speed => currentRuntime().setSpeed(speed),
   };
 }

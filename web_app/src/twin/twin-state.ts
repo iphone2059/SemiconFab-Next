@@ -16,7 +16,6 @@ export interface TwinUiState {
   explodePercent: number;
   aeroHeatmap: boolean;
   onboarding: { open: boolean; step: number };
-  research: { playing: boolean; timeSec: number; speed: 1 | 10 | 100 | 500 };
   statusSource: StatusSource;
   preferredStatusSource: Exclude<StatusSource, 'research-replay'>;
 }
@@ -34,10 +33,6 @@ export type TwinUiEvent =
   | { type: 'tour/scene-step'; level?: 'L1' | 'B1'; view?: TwinView }
   | { type: 'onboarding/open' | 'onboarding/close' }
   | { type: 'onboarding/step'; step: number }
-  | { type: 'research/play'; playing: boolean }
-  | { type: 'research/seek'; timeSec: number }
-  | { type: 'research/advance'; deltaSec: number; durationSec: number }
-  | { type: 'research/speed'; speed: 1 | 10 | 100 | 500 }
   | { type: 'source/set'; source: Exclude<StatusSource, 'research-replay'> }
   | { type: 'escape' };
 
@@ -46,7 +41,6 @@ export function createTwinUiState(mode: EntryMode = 'engineer'): TwinUiState {
     entryMode: mode, view: 'iso', level: 'L1', spatialMode: null,
     cut: { axis: 'X', positionM: 0, invert: false }, xray: 'all', explodePercent: 100, aeroHeatmap: false,
     onboarding: { open: false, step: 0 },
-    research: { playing: false, timeSec: 0, speed: 100 },
     statusSource: mode === 'research' ? 'research-replay' : 'demo', preferredStatusSource: 'demo',
   };
 }
@@ -59,7 +53,6 @@ function spatialState(state: TwinUiState, mode: SpatialMode): TwinUiState {
   };
 }
 
-/** Tour and Wafer lifecycles are runtime-owned; this reducer retains Twin presentation and Research projection state. */
 export function twinUiReducer(state: TwinUiState, event: TwinUiEvent): TwinUiState {
   switch (event.type) {
     case 'spatial/toggle': return spatialState(state, state.spatialMode === event.mode ? null : event.mode);
@@ -75,7 +68,6 @@ export function twinUiReducer(state: TwinUiState, event: TwinUiEvent): TwinUiSta
     case 'mode/set': {
       return { ...state, entryMode: event.mode,
         onboarding: { ...state.onboarding, open: false },
-        research: { ...state.research, playing: false },
         statusSource: event.mode === 'research' ? 'research-replay' : state.preferredStatusSource,
         view: event.mode === 'research' ? 'iso' : state.view };
     }
@@ -84,22 +76,12 @@ export function twinUiReducer(state: TwinUiState, event: TwinUiEvent): TwinUiSta
       entryMode: state.entryMode === 'research' ? 'visitor' : state.entryMode,
       statusSource: state.preferredStatusSource,
       onboarding: { ...state.onboarding, open: false },
-      research: { ...state.research, playing: false },
     };
     case 'onboarding/open': return {
       ...state, onboarding: { open: true, step: 0 },
-      research: { ...state.research, playing: false },
     };
     case 'onboarding/close': return { ...state, onboarding: { ...state.onboarding, open: false } };
     case 'onboarding/step': return { ...state, onboarding: { ...state.onboarding, step: Math.max(0, Math.min(2, event.step)) } };
-    case 'research/play': return { ...state, research: { ...state.research, playing: state.entryMode === 'research' && event.playing } };
-    case 'research/seek': return { ...state, research: { ...state.research, timeSec: Math.max(0, event.timeSec), playing: false } };
-    case 'research/advance': {
-      if (!state.research.playing || state.entryMode !== 'research') return state;
-      const timeSec = Math.min(event.durationSec, state.research.timeSec + Math.max(0, event.deltaSec));
-      return { ...state, research: { ...state.research, timeSec, playing: timeSec < event.durationSec } };
-    }
-    case 'research/speed': return { ...state, research: { ...state.research, speed: event.speed } };
     case 'source/set': return { ...state, preferredStatusSource: event.source,
       statusSource: state.entryMode === 'research' ? 'research-replay' : event.source };
     case 'escape': return { ...state, onboarding: { ...state.onboarding, open: false } };
