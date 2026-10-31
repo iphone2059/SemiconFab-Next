@@ -44,6 +44,7 @@ Only discrete process state and low-frequency HUD snapshots may enter Atom proje
 - Reopening resumes the retained route position. If the Domain Timeline is already at the terminal waypoint, its original open() semantics replay the route.
 - A composite FAB/viewer epoch change closes the old runtime Scope. The session captures its scene port, and the generation guard prevents an old callback from writing into the replacement scene. A replacement runtime retains product/speed preferences and starts a fresh timeline at waypoint zero. The Hook's `initialized` gate is one-shot: runtime replacement must not toggle the page-level gate or unmount `FabViewport`, because its unmount clears the epoch that triggered replacement.
 - The first route snapshot is immutable within one runtime lifetime. A later ResourceManager cache rehydration may return a new object identity after idle eviction; the runtime ignores that replacement and retains its existing Timeline and `routesReady` state. A runtime is replaced with its viewer scope rather than silently replacing route data underneath an active timeline.
+- Runtime playback commands require an active Actor state (playing, paused, or completed); closed/loading commands fail before changing the Timeline or writing to the scene. During runtime replacement, the page-level initialization gate remains set so FabViewport stays mounted, while Wafer controls are disabled until the replacement runtime is registered.
 
 ### Cross-process exclusion
 
@@ -71,10 +72,12 @@ Only discrete process state and low-frequency HUD snapshots may enter Atom proje
 | WPR-12 | Domain Wafer timing, product route, speed, and frozen-vector semantics remain unchanged |
 | WPR-13 | ResourceManager idle eviction cannot invalidate the retained route Timeline or its ready projection |
 | WPR-14 | Runtime replacement does not toggle the page initialization gate or unmount FabViewport |
+| WPR-15 | Playback commands cannot mutate a closed/loading Timeline or write to the scene |
+| WPR-16 | Wafer controls remain disabled while the runtime is being replaced |
 
 ## Verification
 
-- Runtime tests cover repeated start, close/reopen, 20 Hz direct scene writes with zero Atom notifications, pause/speed/product/locale synchronization, stale callbacks, viewer epoch replacement, registry replacement, external process stop, and unmount.
+- Runtime tests cover repeated start, close/reopen, 20 Hz direct scene writes with zero Atom notifications, ResourceManager idle eviction and route rehydration, closed-state command rejection, pause/speed/product/locale synchronization, stale callbacks, viewer epoch replacement, registry replacement, external process stop, and unmount.
 - Architecture gates reject RAF/Timeline ownership in useWaferPlayback, Wafer fields/events in TwinUiState, and missing runtime/Scope ownership.
 - Atom ownership tests freeze the new Wafer projection fields and action namespace.
 - Full repository verification (scripts/verify.ps1) remains the merge acceptance command.

@@ -116,7 +116,7 @@ export class TwinWaferRuntime {
     this.closeSession();
   }
   setProduct(product: WaferProduct): void {
-    const timeline = this.requireTimeline();
+    const timeline = this.requireActiveTimeline();
     timeline.setProduct(product);
     this.actor.send({ type: 'PRODUCT', product });
     this.resetSessionPlayback();
@@ -125,7 +125,7 @@ export class TwinWaferRuntime {
     this.applySceneFrame(frame, this.session?.scene ?? this.options.scene());
   }
   togglePlay(): void {
-    const timeline = this.requireTimeline();
+    const timeline = this.requireActiveTimeline();
     timeline.togglePlay();
     const frame = timeline.readFrame();
     this.actor.send({ type: 'TOGGLE' });
@@ -136,20 +136,17 @@ export class TwinWaferRuntime {
     this.publishHud(frame);
   }
   setSpeed(speed: TwinWaferSpeed): void {
-    this.requireTimeline().setSpeed(speed);
+    this.requireActiveTimeline().setSpeed(speed);
     this.actor.send({ type: 'SPEED', speed });
   }
   replay(): void {
-    const timeline = this.requireTimeline();
+    const timeline = this.requireActiveTimeline();
     timeline.replay();
     this.actor.send({ type: 'REPLAY' });
     this.resetSessionPlayback();
     const frame = timeline.readFrame();
     this.publishFrame(frame);
     this.applySceneFrame(frame, this.session?.scene ?? this.options.scene());
-  }
-  get routesReady(): boolean {
-    return this.timeline !== null;
   }
   dispose(): void {
     if (this.disposed) return;
@@ -159,6 +156,12 @@ export class TwinWaferRuntime {
     if (this.disposed) throw new Error('TwinWaferRuntime is disposed');
     if (this.timeline === null) throw new Error('Wafer routes are not ready');
     return this.timeline;
+  }
+  private requireActiveTimeline(): WaferTimeline {
+    const timeline = this.requireTimeline();
+    const snapshot = this.actor.getSnapshot();
+    if (snapshot.matches('closed') || snapshot.matches('loading')) throw new Error('Wafer playback is not active');
+    return timeline;
   }
   private activateTimeline(): void {
     const timeline = this.requireTimeline();

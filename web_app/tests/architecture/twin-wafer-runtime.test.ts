@@ -10,6 +10,9 @@ it('keeps the Wafer Actor, timeline, RAF and scene writes inside TwinWaferRuntim
   const machine = read('twin/twin-wafer.machine.ts');
   const page = read('twin/twin-page.tsx');
   expect(hook).not.toMatch(/requestAnimationFrame|cancelAnimationFrame|createWaferTimeline|WaferTimeline|rafHandle|timelineRef|performance\.now/);
+  expect(hook).toContain('commandsReady');
+  expect(page).toContain('disabled={!wafer.commandsReady}');
+  expect(runtime).toContain('requireActiveTimeline');
   expect(hook).not.toContain('setInitialized(false)');
   expect(page).toContain('wafer.initialized');
   expect(runtime).toContain('createActor(twinWaferMachine)');
