@@ -166,7 +166,7 @@ plugins: [react({ compiler: { target: '19', compilationMode: 'infer', reportDiag
 | `twin/twin-page.tsx` `mergeToolStates` | 帧循环引用缓存，必须跨 render 保留上一帧数组合并结果 |
 | `workbench/use-run-submission.ts` `submissionScope` | ScopeToken/幂等键生命周期 owner |
 | `twin/use-tour-controller.ts` `stop` / `cancelTourIfRunning` | 调度器/RAF 会话身份契约，effect 依赖其稳定 identity |
-| `twin/use-wafer-playback.ts` `syncWaferHud` | 被播放 effect 依赖，identity 变化会无谓重启 RAF effect |
+| `twin/use-wafer-playback.ts` | 仅保留 Resource 订阅与 Runtime 命令适配；Wafer Timeline/RAF 生命周期已迁移至 `TwinWaferRuntime` |
 
 其余纯派生值/对象/处理器全部交给 React Compiler 自动 memoize（含 catalog 派生列表、Twin 投影/HUD 计算、路由 search 回调、context value、useSyncExternalStore 回调等）。
 

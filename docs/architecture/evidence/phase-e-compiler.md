@@ -26,17 +26,17 @@
 |---|---|---|
 | `twin/twin-page.atom.ts` | FAB-scoped server/session（SSE 100ms 批量） | `TwinFabState`：siteId/siteError/liveStatusScope/liveToolStates/replayBase/statusFeed/mesJobs/inspectorMes；`twinPageActions` 仅 site/live/replay/mes 动作（EquipmentStatusPipeline 使用的 liveScopeActivated/liveSnapshotReceived/statusFeedStale 名称保留，pipeline 文件未改） |
 | `twin/twin-page-ui.atom.ts` | 页面 UI（用户交互，低频） | selection/dialogs/sidebar/layerPreferences/oemDialog/archQuery 等 + `twinPageUiActions` |
-| `twin/twin-wafer.atom.ts` | wafer 播放投影（~20Hz RAF） | `WaferUiState` + `twinWaferActions.{waferFrameReceived,waferFrameCleared,waferFollowSet}` |
+| `twin/twin-wafer.atom.ts` | Wafer 离散 Actor 投影、HUD 与 follow 偏好 | `TwinWaferProjection` + `twinWaferActions.{projectionSet,hudSet,hudClear,followSet}`；逐帧 SceneCommands 归 `TwinWaferRuntime` |
 | `twin/twin-yms.atom.ts` | YMS 分析工具（滑杆/悬停） | `YmsUiState` + `twinYmsActions.yms*` |
 | `twin/twin-amhs.atom.ts` | 场景 AMHS 统计（~10Hz） | `twinAmhsAtom` + `twinAmhsActions.amhsSet` |
 
-- 消费者更新：twin-viewer、use-twin-actions、use-twin-slices、use-twin-scene-sync、twin-page、twin-dialogs、twin-sidebar、twin-inspector（FAB MES 仍属页面 atom）、twin-yms、twin-wafer-hud、twin-amhs-hud、twin-wafer-session、use-wafer-playback、use-twin-route-state（后两者为 resource-owner 范围；仅 atom import/rename 行，映射已发 resource-owner，未再改动）。
+- 消费者更新：twin-viewer、use-twin-actions、use-twin-slices、use-twin-scene-sync、twin-page、twin-dialogs、twin-sidebar、twin-inspector（FAB MES 仍属页面 atom）、twin-yms、twin-wafer-hud、twin-amhs-hud、twin-wafer-runtime、use-wafer-playback、use-twin-route-state（后两者为 resource-owner 范围；仅 atom import/rename 行，映射已发 resource-owner，未再改动）。
 - `tests/support/reset-ui-atoms.resetTwinPageState` 一次重置全部 5 个 page atom，现有集成测试调用点无需改动。
 
 ### 1.3 通知面收窄的可执行证明
 
-- `web_app/tests/architecture/atom-ownership.test.ts`（3 用例）：旧模块不存在、`RuntimeState` 仅 `fatalError`、viewer atom 仅 4 字段且无 fatalError、`TwinFabState/TwinPageUiState/WaferUiState/YmsUiState` 字段冻结、action namespace 互斥、`*-store.ts` 命名门禁、每个 `*.atom.ts` 的 keepAlive 对象 ≤12 字段、`LocaleStoreState → LocaleState` 去 Store 命名。
-- `web_app/tests/state/atom-notification-surface.test.ts`（5 用例）：订阅 8 个源 atom（不依赖派生 selector 语义），断言 FAB 快照更新只通知 FAB atom；wafer 20 帧只通知 wafer；AMHS 10 次只通知 AMHS；YMS/page-UI 编辑不通知 FAB/wafer；viewer hover/selection-sync 独立于 session；被替换 FAB scope 的迟到帧不产生任何通知。
+- `web_app/tests/architecture/atom-ownership.test.ts`（3 用例）：旧模块不存在、`RuntimeState` 仅 `fatalError`、viewer atom 仅 4 字段且无 fatalError、`TwinFabState/TwinPageUiState/TwinWaferProjection/YmsUiState` 字段冻结、action namespace 互斥、`*-store.ts` 命名门禁、每个 `*.atom.ts` 的 keepAlive 对象 ≤12 字段、`LocaleStoreState → LocaleState` 去 Store 命名。
+- `web_app/tests/state/atom-notification-surface.test.ts`（5 用例）：订阅 8 个源 atom（不依赖派生 selector 语义），断言 FAB 快照更新只通知 FAB atom；Wafer HUD projection 更新只通知 Wafer atom；逐帧场景写入由 runtime 测试证明不通知 Atom；AMHS 10 次只通知 AMHS；YMS/page-UI 编辑不通知 FAB/wafer；viewer hover/selection-sync 独立于 session；被替换 FAB scope 的迟到帧不产生任何通知。
 - 命令：`cd web_app; pnpm test -- tests/architecture/atom-ownership.test.ts tests/state/atom-notification-surface.test.ts tests/architecture/ui-atoms.test.ts tests/architecture/remaining-state.test.ts` → 5 files / 19 tests passed。
 
 ---
@@ -45,7 +45,7 @@
 
 - 失效 mock：`tests/integration/twin-spc-strip.test.tsx` 的 `vi.mock('../../src/features/twin/fab-viewer')` 指向不存在的旧路径（mock 从未生效）。已改为 `vi.mock('@/twin/twin-viewer')`，并新增“mock 实际生效”断言（mock 渲染 `.scene.twin-canvas`，真实 FabViewport 会渲染 `<canvas>`，断言无 canvas）。该文件无其他 owner（Lead 已授权单文件修改）；`tests/integration/equipment-status-*`（resource-owner）未改。
 - 扫描：对 `tests/features/**`、`tests/state/**`、`tests/components/**`、`tests/architecture/**` 共 37 个测试文件做 `vi.mock` 目标解析（相对路径按测试文件所在目录 + `@/` 别名），结果 `unresolved-mock = 0`；`it.skip/only`、无断言文件为 0。
-- 同步更新的测试：ui-atoms（12 atom 快照）、remaining-state（wafer atom / tour 字段门禁）、fab-viewer-callbacks、wafer-playback-registry（twinWaferAtom）、oxc-react-compiler（生产 TSX 全量扫描 + peer 补丁门禁）、tests/types/store-action-types。
+- 同步更新的测试：ui-atoms（12 atom 快照）、remaining-state（Wafer projection / Tour 字段门禁）、fab-viewer-callbacks、wafer-playback-registry（twinWaferAtom）、oxc-react-compiler（生产 TSX 全量扫描 + peer 补丁门禁）、tests/types/store-action-types。
 
 ---
 

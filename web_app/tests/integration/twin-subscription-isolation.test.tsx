@@ -106,7 +106,7 @@ it('unit-renders the extracted AMHS readouts against the page slice', () => {
 
 it('keeps 20 Hz wafer-frame updates inside the wafer HUD child', () => {
   renderTwin();
-  act(() => twinUiActions.waferOpen(registry));
+  act(() => twinWaferActions.projectionSet(registry, { active: true, playing: true, speed: 1, product: 'A', index: 0, completed: false }));
   const panel = document.querySelector('#wafer-follow-panel');
   expect(panel).not.toBeNull();
   expect(panel?.getAttribute('class')).toBe('twin-wafer');
@@ -114,17 +114,18 @@ it('keeps 20 Hz wafer-frame updates inside the wafer HUD child', () => {
   expect(screen.getByText('正在加载 A/B/C 路线…')).toBeTruthy();
   const opened = viewport.renders;
 
-  act(() => twinWaferActions.waferFrameReceived(registry, { product: 'A', index: 0, hud: hud(), completed: false }));
+  act(() => twinWaferActions.hudSet(registry, hud()));
   expect(document.querySelector('#wafer-route-badge')?.textContent).toBe('Product A · 120 Steps');
   expect(viewport.renders, 'wafer frames must not rerender TwinContent/FabViewport').toBe(opened);
 
-  act(() => twinWaferActions.waferFrameReceived(registry, {
-    product: 'B', index: 1, hud: hud({ step: 'Step 2/104', width: '1.9%', badge: 'Product B · 104 Steps' }), completed: true,
-  }));
+  act(() => {
+    twinWaferActions.projectionSet(registry, { active: true, playing: false, speed: 16, product: 'B', index: 1, completed: true });
+    twinWaferActions.hudSet(registry, hud({ step: 'Step 2/104', width: '1.9%', badge: 'Product B · 104 Steps' }));
+  });
   expect(document.querySelector('#wafer-route-badge')?.textContent).toBe('Product B · 104 Steps');
   expect(viewport.renders).toBe(opened);
 
-  act(() => twinUiActions.waferSpeedSet(registry, 16));
+  act(() => twinWaferActions.projectionSet(registry, { active: true, playing: false, speed: 16, product: 'B', index: 1, completed: true }));
   expect(viewport.renders).toBe(opened);
 });
 
@@ -145,7 +146,7 @@ it('unit-renders the extracted wafer HUD rows from the page slice', () => {
   );
   expect(document.querySelector('#wafer-step-readout')).toBeNull();
 
-  act(() => twinWaferActions.waferFrameReceived(registry, { product: 'A', index: 0, hud: hud(), completed: false }));
+  act(() => twinWaferActions.hudSet(registry, hud()));
   expect(document.querySelector('#wafer-step-readout')?.textContent).toBe('Step 1/120');
   expect(document.querySelector('#wafer-status-readout')?.textContent).toBe('Navigating...');
   expect(document.querySelector('#wafer-progress-bar')?.getAttribute('style')).toBe('width: 0.8%;');
@@ -153,7 +154,7 @@ it('unit-renders the extracted wafer HUD rows from the page slice', () => {
   expect(document.querySelector('#wafer-recipe-val')?.textContent).toBe('REC_LITHO_193I');
   expect(document.querySelector('#wafer-bay-val')?.textContent).toBe(hud().bay);
 
-  act(() => twinWaferActions.waferFollowSet(registry, false));
+  act(() => twinWaferActions.followSet(registry, false));
   expect(document.querySelector('#wafer-cam-text')?.textContent).toBe('自由视角');
 });
 

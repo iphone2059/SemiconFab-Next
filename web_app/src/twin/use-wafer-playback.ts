@@ -1,172 +1,122 @@
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { waferRoutesDefinition } from '@/api/wafer.resource';
 import { useResource } from '@/api/use-resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import type { WaferProduct } from '@/domain/wafer-route';
-import { createWaferTimeline, type WaferHud, type WaferTimeline } from '@/domain/wafer-timeline';
-import { buildWaferScenario } from '@/domain/wafer-scenario';
-import { localeAtom } from '@/state/locale.atom';
-import { twinWaferActions, twinWaferAtom } from '@/twin/twin-wafer.atom';
 import { twinUiAtom, twinUiActions } from '@/twin/twin-ui.atom';
+import { twinWaferActions, twinWaferAtom } from '@/twin/twin-wafer.atom';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
 import type { TwinLanguage } from '@/twin/twin-i18n';
-import { closeWaferSession } from '@/twin/twin-wafer-session';
-
-/** Renderer cleanup is outside the hook so the RAF effect cleanup owns no memoized ref closure. */
-function clearWaferScene(scene: RefObject<FabViewportHandle | null>): void {
-  scene.current?.setWaferPoint(0, 0, 0, false, false);
-  scene.current?.setWaferTrail([]);
-}
-
+import { browserTwinWaferScheduler, registerTwinWaferRuntime, TwinWaferRuntime } from '@/twin/twin-wafer-runtime';
+import type { TwinWaferScheduler } from '@/twin/twin-wafer-runtime';
+import type { TwinWaferSpeed } from '@/twin/twin-wafer.machine';
 export interface TwinWaferPlaybackParams {
-  scene: RefObject<FabViewportHandle | null>;
-  waferActive: boolean;
-  language: TwinLanguage;
-  /** Starting the wafer walk stops any active tour first. */
-  endTour(): void;
-  t: (text: string, parameters?: readonly unknown[]) => string;
+  readonly scene: RefObject<FabViewportHandle | null>;
+  readonly waferActive: boolean;
+  readonly language: TwinLanguage;
+  readonly endTour(): void;
+  readonly scopeKey?: string;
+  readonly scheduler?: TwinWaferScheduler;
+  readonly t: (text: string, parameters?: readonly unknown[]) => string;
 }
-
 export interface TwinWaferPlayback {
-  routesReady: boolean;
-  /** Localised route-load failure message (empty when there is no error). */
-  error: string;
+  readonly ready: boolean;
+  readonly routesReady: boolean;
+  readonly error: string;
   startWafer(): void;
   closeWafer(): void;
   replayWafer(): void;
   changeWaferProduct(product: WaferProduct): void;
   toggleWaferPlay(): void;
-  setWaferSpeed(speed: 1 | 4 | 16): void;
-  /** User camera input ends follow mode; no-op when already free. */
+  setWaferSpeed(speed: TwinWaferSpeed): void;
   clearFollowOnCameraInteraction(): void;
 }
-
-/**
- * Wafer-follow playback controller: one timeline + one RAF across play/pause,
- * speed, follow and locale changes. Frame state is pushed into refs and the page
- * store projection; TwinContent/FabViewport never render per frame. Closing is
- * routed through the explicit closeWaferSession(registry) use case, while this controller
- * owns the renderer cleanup that stores must not touch.
- */
-export function useWaferPlayback({ scene, waferActive, language, endTour, t }: TwinWaferPlaybackParams): TwinWaferPlayback {
+export function useWaferPlayback({
+  scene,
+  waferActive,
+  language,
+  endTour,
+  scopeKey,
+  scheduler = browserTwinWaferScheduler,
+  t,
+}: TwinWaferPlaybackParams): TwinWaferPlayback {
   const registry = useContext(RegistryContext);
   const appRuntime = useAppRuntime();
+  const runtimeRef = useRef<TwinWaferRuntime | null>(null);
+  const previousScopeRef = useRef(scopeKey);
+  const [ready, setReady] = useState(false);
+  const [runtimeGeneration, setRuntimeGeneration] = useState(0);
   const waferRoutesView = useResource(appRuntime, waferRoutesDefinition, { enabled: waferActive });
-  const waferTimelineRef = useRef<WaferTimeline | null>(null);
-  const waferHudRef = useRef<WaferHud | null>(null);
   const waferRoutes = waferRoutesView.data;
-  const waferError = waferRoutesView.isError ? t('路线加载失败') : '';
-
-  // The retained controller belongs to this registry. Release it before the
-  // replacement registry's playback or locale effects can project another frame.
-  // Closing/reopening playback within one registry keeps its existing timeline.
-  useEffect(() => () => {
-    waferTimelineRef.current?.close();
-    waferTimelineRef.current = null;
-    waferHudRef.current = null;
-  }, [registry]);
-
-  // Identity constraint: the playback effects list this callback as a dependency.
-  const syncWaferHud = useCallback((): void => {
-    const controller = waferTimelineRef.current;
-    if (!controller) return;
-    const frame = controller.readFrame();
-    if (frame.hud !== waferHudRef.current) {
-      waferHudRef.current = frame.hud;
-      twinWaferActions.waferFrameReceived(registry, { product: frame.product as WaferProduct, index: frame.index,
-        hud: frame.hud, completed: controller.readStats().completed });
-    }
-    if (frame.playing !== registry.get(twinUiAtom).wafer.playing) twinUiActions.waferPlay(registry, frame.playing);
-  }, [registry]);
-
+  const error = waferRoutesView.isError ? t('路线加载失败') : '';
+  useLayoutEffect(() => {
+    if (previousScopeRef.current === scopeKey) return;
+    previousScopeRef.current = scopeKey;
+    runtimeRef.current?.close();
+  }, [scopeKey]);
   useEffect(() => {
-    if (!waferActive || !waferRoutes) return;
-    // Keep one controller and one RAF across play/pause, speed, follow and locale
-    // changes. Paused frames still apply the source camera, never a waypoint snap.
-    let controller = waferTimelineRef.current;
-    if (!controller) {
-      controller = createWaferTimeline({
-        ...buildWaferScenario(waferRoutes, registry.get(localeAtom).language),
-        product: registry.get(twinWaferAtom).product,
-      });
-      controller.setSpeed(registry.get(twinUiAtom).wafer.speed);
-      waferTimelineRef.current = controller;
-    }
-    controller.open();
-    const initial = controller.readFrame();
-    scene.current?.setWaferPoint(initial.position.x, initial.position.y, initial.position.z, true, false, initial.rotationY);
-    waferHudRef.current = null;
-    syncWaferHud();
-    let frame = 0;
-    let last = performance.now();
-    const tick = (now: number) => {
-      controller.step(Math.max(0, now - last));
-      last = now;
-      const current = controller.readFrame();
-      const { x, y, z } = current.position;
-      scene.current?.setWaferPoint(x, y, z, true, false, current.rotationY);
-      if (registry.get(twinWaferAtom).follow) {
-        scene.current?.setCameraPose([current.camera.x, current.camera.y, current.camera.z], [x, y, z], 0);
-      }
-      scene.current?.setWaferTrail(controller.readTrailPoints().map(point => [point.x, point.y, point.z]));
-      syncWaferHud();
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
+    const runtime = new TwinWaferRuntime({
+      appRuntime,
+      registry,
+      scheduler,
+      scene: () => scene.current,
+      language,
+    });
+    runtimeRef.current = runtime;
+    const unregister = registerTwinWaferRuntime(registry, runtime);
+    setReady(true);
+    setRuntimeGeneration(generation => generation + 1);
     return () => {
-      cancelAnimationFrame(frame);
-      controller.close();
-      clearWaferScene(scene);
+      runtimeRef.current = null;
+      unregister();
+      runtime.dispose();
     };
-  }, [waferActive, waferRoutes, registry, scene, syncWaferHud]);
-
+  }, [appRuntime, registry, scheduler, scopeKey]);
   useEffect(() => {
-    waferTimelineRef.current?.setLanguage(language === 'zh' ? 'zh-CN' : 'en');
-    syncWaferHud();
-  }, [language, registry, syncWaferHud]);
-
+    if (waferRoutes) runtimeRef.current?.setRoutes(waferRoutes);
+  }, [waferRoutes, registry, runtimeGeneration]);
+  useEffect(() => {
+    runtimeRef.current?.setLanguage(language);
+  }, [language, registry, runtimeGeneration]);
+  function currentRuntime(): TwinWaferRuntime {
+    const runtime = runtimeRef.current;
+    if (!runtime) throw new Error('TwinWaferRuntime is not mounted');
+    return runtime;
+  }
   function startWafer(): void {
     endTour();
-    twinUiActions.waferOpen(registry);
+    if (registry.get(twinUiAtom).entryMode === 'research') twinUiActions.modeSet(registry, 'engineer');
+    twinUiActions.levelSet(registry, 'L1');
+    twinUiActions.onboardingClose(registry);
+    currentRuntime().open();
   }
-
   function closeWafer(): void {
-    closeWaferSession(registry);
-    scene.current?.setWaferPoint(0, 0, 0, false, false);
-    scene.current?.setWaferTrail([]);
+    currentRuntime().close();
+    twinUiActions.viewSet(registry, 'iso');
     scene.current?.setView('iso');
   }
-
   function replayWafer(): void {
-    waferTimelineRef.current?.replay();
-    syncWaferHud();
+    currentRuntime().replay();
   }
-
   function changeWaferProduct(product: WaferProduct): void {
-    waferTimelineRef.current?.setProduct(product);
-    syncWaferHud();
+    currentRuntime().setProduct(product);
   }
-
   function toggleWaferPlay(): void {
-    waferTimelineRef.current?.togglePlay();
-    syncWaferHud();
+    currentRuntime().togglePlay();
   }
-
-  function setWaferSpeed(speed: 1 | 4 | 16): void {
-    waferTimelineRef.current?.setSpeed(speed);
-    twinUiActions.waferSpeedSet(registry, speed);
+  function setWaferSpeed(speed: TwinWaferSpeed): void {
+    currentRuntime().setSpeed(speed);
   }
-
   function clearFollowOnCameraInteraction(): void {
-    if (registry.get(twinWaferAtom).follow) twinWaferActions.waferFollowSet(registry, false);
+    if (registry.get(twinWaferAtom).follow) twinWaferActions.followSet(registry, false);
   }
-
   return {
-    routesReady: !!waferRoutes,
-    error: waferError,
+    ready,
+    routesReady: waferRoutes !== undefined,
+    error,
     startWafer,
     closeWafer,
     replayWafer,

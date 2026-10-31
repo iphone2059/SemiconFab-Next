@@ -6,7 +6,7 @@ import { catalogAtom, initialCatalogState } from '@/catalog/catalog.atom';
 import { workbenchAtom, initialWorkbenchState } from '@/workbench/workbench.atom';
 import { twinPageAtom, initialTwinFabState } from '@/twin/twin-page.atom';
 import { twinPageUiAtom, initialTwinPageUiState } from '@/twin/twin-page-ui.atom';
-import { twinWaferAtom, initialWaferUiState } from '@/twin/twin-wafer.atom';
+import { twinWaferAtom, initialTwinWaferProjection } from '@/twin/twin-wafer.atom';
 import { twinYmsAtom, initialYmsUiState } from '@/twin/twin-yms.atom';
 import { twinAmhsAtom } from '@/twin/twin-amhs.atom';
 import { twinUiAtom } from '@/twin/twin-ui.atom';
@@ -29,7 +29,7 @@ export const resetWorkbenchState = (registry: AtomRegistry.AtomRegistry) => regi
 export const resetTwinPageState = (registry: AtomRegistry.AtomRegistry) => {
   registry.set(twinPageAtom, structuredClone(initialTwinFabState));
   registry.set(twinPageUiAtom, structuredClone(initialTwinPageUiState));
-  registry.set(twinWaferAtom, structuredClone(initialWaferUiState));
+  registry.set(twinWaferAtom, structuredClone(initialTwinWaferProjection));
   registry.set(twinYmsAtom, structuredClone(initialYmsUiState));
   registry.set(twinAmhsAtom, undefined);
 };

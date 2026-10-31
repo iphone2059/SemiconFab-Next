@@ -36,13 +36,6 @@ export const twinUiActions = {
   onboardingOpen: (registry: AtomRegistry.AtomRegistry) => apply(registry, { type: 'onboarding/open' }),
   onboardingClose: (registry: AtomRegistry.AtomRegistry) => apply(registry, { type: 'onboarding/close' }),
   onboardingStep: (registry: AtomRegistry.AtomRegistry, step: number) => apply(registry, { type: 'onboarding/step', step }),
-  waferOpen: (registry: AtomRegistry.AtomRegistry) => apply(registry, { type: 'wafer/open' }),
-  // Store-only close: the page projection is cleared by the explicit
-  // closeWaferSession(registry) use case (twin/twin-wafer-session.ts), not by a
-  // hidden cross-store write from this store.
-  waferClose: (registry: AtomRegistry.AtomRegistry) => apply(registry, { type: 'wafer/close' }),
-  waferPlay: (registry: AtomRegistry.AtomRegistry, playing: boolean) => apply(registry, { type: 'wafer/play', playing }),
-  waferSpeedSet: (registry: AtomRegistry.AtomRegistry, speed: 1 | 4 | 16) => apply(registry, { type: 'wafer/speed', speed }),
   researchPlay: (registry: AtomRegistry.AtomRegistry, playing: boolean) => apply(registry, { type: 'research/play', playing }),
   researchSeek: (registry: AtomRegistry.AtomRegistry, timeSec: number) => apply(registry, { type: 'research/seek', timeSec }),
   researchAdvance: (registry: AtomRegistry.AtomRegistry, payload: { deltaSec: number; durationSec: number }) => apply(registry, { type: 'research/advance', ...payload }),

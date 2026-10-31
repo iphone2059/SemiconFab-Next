@@ -94,7 +94,7 @@ it('splits the Twin page atoms by owner and update frequency', () => {
   expect(interfaceFields(read('twin/twin-page-ui.atom.ts'), 'TwinPageUiState')).toEqual([
     'selected', 'selection', 'layerPreferences', 'infoDialog', 'showResearchUtil', 'onboardingDontShow', 'sidebar', 'oemDialog', 'archQuery',
   ]);
-  expect(typeAliasFields(read('twin/twin-wafer.atom.ts'), 'WaferUiState')).toEqual(['product', 'index', 'follow', 'hud', 'completed']);
+  expect(interfaceFields(read('twin/twin-wafer.atom.ts'), 'TwinWaferProjection')).toEqual(['active', 'playing', 'speed', 'product', 'index', 'follow', 'hud', 'completed']);
   expect(typeAliasFields(read('twin/twin-yms.atom.ts'), 'YmsUiState')).toHaveLength(11);
 
   // Action namespaces are disjoint per owner.
@@ -106,7 +106,7 @@ it('splits the Twin page atoms by owner and update frequency', () => {
   const uiActions = actionNames(read('twin/twin-page-ui.atom.ts'), 'twinPageUiActions');
   expect(uiActions).toEqual(expect.arrayContaining(['selectedSet', 'selectionSet', 'layerToggled', 'infoDialogSet', 'sidebarTabSet']));
   expect(uiActions.filter((name) => fabActions.includes(name))).toEqual([]);
-  expect(actionNames(read('twin/twin-wafer.atom.ts'), 'twinWaferActions')).toEqual(['waferFrameReceived', 'waferFrameCleared', 'waferFollowSet']);
+  expect(actionNames(read('twin/twin-wafer.atom.ts'), 'twinWaferActions')).toEqual(['projectionSet', 'hudSet', 'hudClear', 'followSet']);
   expect(actionNames(read('twin/twin-amhs.atom.ts'), 'twinAmhsActions')).toEqual(['amhsSet']);
   expect(actionNames(read('twin/twin-yms.atom.ts'), 'twinYmsActions')).toEqual(expect.arrayContaining(['ymsOpenSet', 'ymsTabSet', 'ymsHoverDieSet']));
 
@@ -115,7 +115,7 @@ it('splits the Twin page atoms by owner and update frequency', () => {
     expect(fabActions).toContain(actionName);
   }
   // Overlay/playback/tool actions must never live on the FAB atom.
-  for (const moved of ['selectedSet', 'layerToggled', 'sidebarTabSet', 'ymsOpenSet', 'waferFrameReceived', 'amhsSet']) {
+  for (const moved of ['selectedSet', 'layerToggled', 'sidebarTabSet', 'ymsOpenSet', 'projectionSet', 'amhsSet']) {
     expect(fabActions).not.toContain(moved);
   }
 });

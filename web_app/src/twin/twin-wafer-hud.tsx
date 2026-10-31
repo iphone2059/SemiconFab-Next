@@ -1,7 +1,6 @@
 import { useAtomValue } from '@effect/atom-react';
 import { OriginalIcon } from '@/components/original-icons';
 import { twinWaferAtom } from '@/twin/twin-wafer.atom';
-import { twinUiAtom } from '@/twin/twin-ui.atom';
 import type { WaferProduct } from '@/domain/wafer-route';
 import { useTwinLocale } from '@/twin/twin-i18n';
 
@@ -19,9 +18,9 @@ export interface TwinWaferHudProps {
 }
 
 /**
- * Wafer-follow HUD. Playback frames land in the page store at ~20 Hz while the
- * wafer travels; subscribing here keeps that cadence out of TwinContent and
- * FabViewport. Every id/class/label matches the former inline markup.
+ * Wafer-follow HUD. It subscribes to discrete process projections and HUD
+ * snapshots; position, trail and camera frames are applied directly to the scene.
+ * Every id/class/label matches the former inline markup.
  */
 export function TwinWaferHud({ routesReady, error, onClose, onProductChange, onTogglePlay, onSpeedChange, onFollowChange, onReplay }: TwinWaferHudProps) {
 
@@ -30,8 +29,8 @@ export function TwinWaferHud({ routesReady, error, onClose, onProductChange, onT
   const hud = useAtomValue(twinWaferAtom, (state) => state.hud);
   const completed = useAtomValue(twinWaferAtom, (state) => state.completed);
   const follow = useAtomValue(twinWaferAtom, (state) => state.follow);
-  const playing = useAtomValue(twinUiAtom, (state) => state.wafer.playing);
-  const speed = useAtomValue(twinUiAtom, (state) => state.wafer.speed);
+  const playing = useAtomValue(twinWaferAtom, (state) => state.playing);
+  const speed = useAtomValue(twinWaferAtom, (state) => state.speed);
   return (
     <section id="wafer-follow-panel" className="twin-wafer" aria-label="Wafer Follow">
       <div className="twin-wafer-head"><div><OriginalIcon name="wafer" /><strong>{t('跟随晶圆漫游')}</strong><span id="wafer-route-badge">{hud?.badge}</span></div><button type="button" onClick={onClose} aria-label={t("关闭晶圆跟随")}>×</button></div>

@@ -93,14 +93,14 @@ it('keeps FAB projection updates out of page-UI, wafer, YMS, AMHS and viewer ato
   } finally { s.dispose(); }
 });
 
-it('keeps wafer frame cadence inside the wafer atom', async () => {
+it('keeps Wafer HUD projection notifications inside the Wafer atom', async () => {
   const s = surface();
   await settle();
   s.reset();
   try {
     const base = s.snapshot();
     for (let index = 0; index < 20; index += 1) {
-      twinWaferActions.waferFrameReceived(registry, { product: 'A', index, hud: hud(), completed: false });
+      twinWaferActions.hudSet(registry, { ...hud(), step: `Step ${index + 1}/120` });
     }
     const after = s.snapshot();
     expect(after.wafer).toBe(base.wafer + 20);

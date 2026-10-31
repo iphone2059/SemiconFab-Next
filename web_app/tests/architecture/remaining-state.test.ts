@@ -5,15 +5,11 @@ import { viewerActions, viewerHoverAtom, viewerSessionAtom } from '@/state/viewe
 import { twinPageActions, twinPageAtom } from '@/twin/twin-page.atom';
 import { twinPageUiActions, twinPageUiAtom } from '@/twin/twin-page-ui.atom';
 import { twinWaferActions, twinWaferAtom } from '@/twin/twin-wafer.atom';
-import { twinUiActions, twinUiAtom } from '@/twin/twin-ui.atom';
+import { twinUiAtom } from '@/twin/twin-ui.atom';
 import { catalogActions, catalogAtom } from '@/catalog/catalog.atom';
 import { workbenchAtom, workbenchActions } from '@/workbench/workbench.atom';
 import { localeActions, localeAtom } from '@/state/locale.atom';
-import { createWaferTimeline } from '@/domain/wafer-timeline';
-import { buildWaferScenario } from '@/domain/wafer-scenario';
-import { parseWaferRoutes } from '@/domain/wafer-route';
-import { closeWaferSession } from '@/twin/twin-wafer-session';
-import { readFileSync } from 'node:fs';
+import type { WaferHud } from '@/domain/wafer-timeline';
 
 const { registry } = createAtomTestScope();
 beforeEach(() => {
@@ -49,29 +45,24 @@ it('owns viewer lifecycle and hover in the runtime store and ignores callbacks f
   expect(registry.get(viewerSessionAtom).status).not.toBe('WebGPU · stale');
 });
 
-it('projects controller HUD into the page store and closes the coordinated wafer session explicitly', () => {
-  const routes = parseWaferRoutes(JSON.parse(readFileSync(new URL('../../public/twin/routes.json', import.meta.url), 'utf8')));
-  const timeline = createWaferTimeline(buildWaferScenario(routes, 'en'));
-  timeline.setProduct('B');
-  const frame = timeline.readFrame();
-  twinUiActions.waferOpen(registry);
-  twinWaferActions.waferFrameReceived(registry, { product: 'B', index: frame.index, hud: frame.hud, completed: true });
-  expect(registry.get(twinWaferAtom)).toMatchObject({ product: 'B', index: 0, hud: { step: 'Step 1/104', status: 'Navigating...' } });
-  expect(registry.get(twinUiAtom).wafer).toMatchObject({ active: true, playing: true });
-
-  // The Twin UI store owns close/playback only. Closing it must never mutate the
-  // page store through a hidden cross-store call.
-  twinUiActions.waferClose(registry);
-  expect(registry.get(twinUiAtom).wafer).toMatchObject({ active: false, playing: false });
-  expect(registry.get(twinWaferAtom).hud).toBeDefined();
-  expect(registry.get(twinWaferAtom).completed).toBe(true);
-
-  // The application-level use case coordinates both stores; the scene cleanup
-  // stays with the wafer playback controller/page caller.
-  closeWaferSession(registry);
-  expect(registry.get(twinWaferAtom).hud).toBeUndefined();
-  expect(registry.get(twinWaferAtom).completed).toBe(false);
-  expect(registry.get(twinUiAtom).wafer).toMatchObject({ active: false, playing: false });
+it('keeps the Wafer process projection separate from Twin presentation state', () => {
+  const hud: WaferHud = {
+    step: 'Step 1/104', width: '1.0%', toolGroup: 'TG02_TRACK', recipe: 'REC',
+    bay: 'Track Bay', status: 'Navigating...', badge: 'Product B · 104 Steps',
+  };
+  twinWaferActions.projectionSet(registry, {
+    active: true, playing: true, speed: 16, product: 'B', index: 0, completed: false,
+  });
+  twinWaferActions.hudSet(registry, hud);
+  expect(registry.get(twinWaferAtom)).toMatchObject({
+    active: true, playing: true, speed: 16, product: 'B', index: 0, hud,
+  });
+  expect(registry.get(twinUiAtom)).not.toHaveProperty('wafer');
+  twinWaferActions.projectionSet(registry, {
+    active: false, playing: false, speed: 16, product: 'B', index: 0, completed: false,
+  });
+  twinWaferActions.hudClear(registry);
+  expect(registry.get(twinWaferAtom)).toMatchObject({ active: false, playing: false, hud: undefined, completed: false });
   expect(() => JSON.stringify(registry.get(twinWaferAtom))).not.toThrow();
 });
 
