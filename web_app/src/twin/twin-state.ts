@@ -64,7 +64,7 @@ function spatialState(state: TwinUiState, mode: SpatialMode): TwinUiState {
   };
 }
 
-/** Presentation reducer only; long-lived process lifecycles are owned by their runtimes. */
+/** Tour lifecycle is runtime-owned; this reducer retains presentation and the pending Wafer/Research projections. */
 export function twinUiReducer(state: TwinUiState, event: TwinUiEvent): TwinUiState {
   switch (event.type) {
     case 'spatial/toggle': return spatialState(state, state.spatialMode === event.mode ? null : event.mode);

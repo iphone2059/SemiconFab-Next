@@ -43,7 +43,7 @@ They must not share one update channel.
 
 ### Process projection
 
-TwinUiState no longer contains Tour lifecycle fields. Its reducer handles only scene presentation changes caused by a waypoint (level, view, spatial mode, and exclusion of other Twin experiences). XState owns active/waypoint, and twinTourAtom exposes that snapshot to the page.
+TwinUiState no longer contains Tour lifecycle fields. A waypoint event changes scene presentation (level, view, spatial mode) and resets the existing Wafer/Research UI projections; it never writes Tour state. XState owns active/waypoint, and twinTourAtom exposes that snapshot to the page.
 
 The runtime's projection subscription is the only production write path to twinTourAtom. The page reads the Atom through useTwinSlices.
 

@@ -47,9 +47,9 @@
 5. `web_app/src` 严格 `src/<module>/<file>`：允许模块 `api app catalog components contracts domain generated lib localization realtime rendering routes runtime state twin workbench`，根只允许 `main.tsx`；无二级目录。
 6. 远程快照唯一 owner 为 Resource Atom（`api/resource.ts`）：`AsyncResult` + freshness/idle TTL/single-flight/错误保留/取消；Router loader 与页面共享 `ensureResource`。
 7. XState 仍拥有命令生命周期；Effect Scope 管理 actor acquire/release，命令事件经 Effect PubSub/Stream 进入 bridge；Flux/Redux/Query/RxJS 均不再参与命令状态。
-10. Twin Tour 已采用独立 XState Actor + TwinTourRuntime：Effect child Scope 管理 Actor/RAF/Timeline，twinTourAtom 仅保存只读投影；Wafer/Research 尚未迁移，不能视为已完成。
 8. 高频遥测/TypedArray/Worker/Babylon 引擎对象不进入 AtomRegistry；100ms UI 合批与 FAB Scope 顺序语义保留。
 9. 设备状态 REST 与 SSE 共用一个 per-registry 顺序 Gate；gate 只保存 epoch/sequence，快照存储只属于 FAB 作用域 Resource Atom。
+10. Twin Tour 已采用独立 XState Actor + TwinTourRuntime：Effect child Scope 管理 Actor/RAF/Timeline，twinTourAtom 仅保存只读投影；Wafer/Research 尚未迁移，不能视为已完成。
 
 ## 当前布局（实际树）
 

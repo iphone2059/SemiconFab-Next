@@ -111,7 +111,7 @@ export class TwinTourRuntime {
       rafHandle: null,
       lastFrameMs: this.options.scheduler.now(),
       accumulatedMs: 0,
-      lastWaypoint: -1,
+      lastWaypoint: 0,
     };
     this.session = session;
     timeline.start();
