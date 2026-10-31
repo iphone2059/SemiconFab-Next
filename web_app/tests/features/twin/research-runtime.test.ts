@@ -2,6 +2,7 @@ import * as AtomRegistry from 'effect/reactivity/AtomRegistry';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ResearchReplay } from '@/domain/simulation-research-replay';
 import { FAB_LAYOUT, FAB_TOOL_STATES } from '@/domain/fab-layout';
+import { TWIN_LAYOUT_IDENTITIES } from '@/domain/fab-layout-identities';
 import { createTwinUiState } from '@/twin/twin-state';
 import { twinUiAtom } from '@/twin/twin-ui.atom';
 import { readResearchToolStates, twinResearchAtom } from '@/twin/twin-research.atom';
@@ -88,6 +89,26 @@ it('advances an indexed research snapshot with a scoped 100 ms interval and comp
   scheduler.advance(100);
   expect(registry.get(twinResearchAtom)).toMatchObject({ status: 'playing', timeSec: 1, speed: 10 });
   expect(scheduler.pendingCount).toBe(1);
+});
+it('publishes a new equipment array when an indexed mapped machine actually changes state', () => {
+  const { runtime, registry, scheduler } = create();
+  const identity = TWIN_LAYOUT_IDENTITIES.find(value => value.replayTarget)!;
+  const text = [
+    { timestamp_sec: 0, event_type: 'tool_state_change', payload: { machine_id: identity.machineId, tool_group_id: 'TG01', semi_e10_state: 'SBY_standby' } },
+    { timestamp_sec: 10, event_type: 'tool_state_change', payload: { machine_id: identity.machineId, tool_group_id: 'TG01', semi_e10_state: 'PR_productive' } },
+  ].map(value => JSON.stringify(value)).join('\n');
+  runtime.enter();
+  runtime.setEvents(text);
+  runtime.seek(0);
+  const before = registry.get(twinResearchAtom).replayProjection;
+  expect(before).toBeDefined();
+  runtime.play();
+  scheduler.advance(100);
+  const after = registry.get(twinResearchAtom).replayProjection;
+  expect(after).not.toBe(before);
+  const changed = TWIN_LAYOUT_IDENTITIES.findIndex(row => row.machineId === identity.machineId && row.replayTarget);
+  expect(before?.states[changed]).toBe('idle');
+  expect(after?.states[changed]).toBe('running');
 });
 it('invalidates captured callbacks on pause, leave, re-entry and disposal', () => {
   const { runtime, registry, scheduler } = create();

@@ -4,7 +4,7 @@ import { createAtomTestScope } from '../../tests/support/atom-scope';
 import { installNativeDialogPolyfill } from '../../tests/support/native-dialog';
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createTestRuntime, seedSites, ResourceTestProviders, type AppRuntime } from '../support/resource-test-runtime.tsx';
+import { createTestRuntime, seedResearchEvents, seedSites, ResourceTestProviders, type AppRuntime } from '../support/resource-test-runtime.tsx';
 
 const { registry, render } = createAtomTestScope();
 installNativeDialogPolyfill();
@@ -19,6 +19,7 @@ import { twinUiActions } from '@/twin/twin-ui.atom';
 import { twinPageActions } from '@/twin/twin-page.atom';
 import { twinPageUiActions } from '@/twin/twin-page-ui.atom';
 import { twinWaferActions } from '@/twin/twin-wafer.atom';
+import { twinResearchAtom, twinResearchActions } from '@/twin/twin-research.atom';
 import { twinYmsActions } from '@/twin/twin-yms.atom';
 import { twinAmhsActions } from '@/twin/twin-amhs.atom';
 import { twinDemoActions } from '@/twin/twin-demo.atom';
@@ -146,6 +147,26 @@ it('keeps 20 Hz wafer-frame updates inside the wafer HUD child', () => {
   expect(viewport.renders).toBe(opened);
 });
 
+it('updates Research HUD and footer without rerendering the FabViewport on unchanged tool states', async () => {
+  seedResearchEvents(client, [
+    { timestamp_sec: 0, event_type: 'wip_sample', payload: { wip_count: 5 } },
+    { timestamp_sec: 20, event_type: 'wip_sample', payload: { wip_count: 6 } },
+  ].map(event => JSON.stringify(event)).join('\n'));
+  renderTwin();
+  fireEvent.change(document.querySelector('#mode-select')!, { target: { value: 'research' } });
+  await waitFor(() => expect(document.querySelector('#research-wip-val')?.textContent).toBe('6 lots'));
+  const before = viewport.renders;
+  const current = registry.get(twinResearchAtom);
+  expect(current.snapshot).toBeDefined();
+  act(() => twinResearchActions.projectionSet(registry, {
+    ...current,
+    timeSec: current.timeSec + 0.1,
+    snapshot: { ...current.snapshot!, wip: 9 },
+  }));
+  expect(document.querySelector('#research-wip-val')?.textContent).toBe('9 lots');
+  expect(document.querySelector('#bottom-hud-footer')?.textContent).toContain('REPLAY · WIP 9');
+  expect(viewport.renders).toBe(before);
+});
 it('unit-renders the extracted wafer HUD rows from the page slice', () => {
   render(
     <TwinLocaleProvider>

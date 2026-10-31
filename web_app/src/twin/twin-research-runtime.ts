@@ -42,6 +42,7 @@ export class TwinResearchRuntime {
   private readonly subscription: { unsubscribe(): void };
   private replay: ResearchReplay | null = null;
   private replayBase: readonly FabToolState[];
+  private lastReplayProjection: ReturnType<typeof projectReplayStates> | undefined;
   private timeSec = 0;
   private speed: TwinResearchSpeed = 100;
   private parseError = '';
@@ -167,6 +168,13 @@ export class TwinResearchRuntime {
     const visible = status === 'paused' || status === 'playing' || status === 'completed';
     const snapshot: ResearchSnapshot | undefined = visible && this.replay !== null
       ? this.replay.snapshot(this.timeSec) : undefined;
+    const nextReplayProjection = snapshot === undefined ? undefined : projectReplayStates(snapshot, this.replayBase);
+    const previous = this.lastReplayProjection;
+    const replayProjection = nextReplayProjection !== undefined && previous !== undefined
+      && nextReplayProjection.states.length === previous.states.length
+      && nextReplayProjection.states.every((state, index) => state === previous.states[index])
+      ? previous : nextReplayProjection;
+    this.lastReplayProjection = replayProjection;
     const projection: TwinResearchProjection = {
       scopeKey: this.options.scopeKey,
       status,
@@ -176,7 +184,7 @@ export class TwinResearchRuntime {
       eventCount: this.replay?.eventCount ?? 0,
       parseError: this.parseError,
       snapshot,
-      replayProjection: snapshot === undefined ? undefined : projectReplayStates(snapshot, this.replayBase),
+      replayProjection,
     };
     twinResearchActions.projectionSet(this.options.registry, projection);
   }

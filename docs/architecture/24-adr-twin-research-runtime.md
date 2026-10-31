@@ -8,6 +8,7 @@ ResearchReplay continues to parse the 27,263-row JSONL display stream into index
 - `twinResearchMachine`: lifecycle states inactive/loading/paused/playing/completed/failed, never per-frame event or equipment arrays.
 - `twinResearchAtom`: read-only scoped projection of the clock, HUD metrics and mapped tool states. `twinUiAtom` retains presentation and selected mode, not the research clock.
 - `TwinPage`: emits commands and provides the immutable captured replay baseline. Scene frame reads the latest Research projection synchronously from the AtomRegistry; no React ref or timer is in this path.
+- `TwinResearchHud`: owns the Research hook and high-frequency HUD subscription; `TwinResearchFooter` owns its own readout. `TwinContent` observes only a stable replay equipment-state array reference. Research time and WIP-only events do not rerender `FabViewport`.
 ## Contracts
 | ID | Invariant |
 | --- | --- |
@@ -21,5 +22,7 @@ ResearchReplay continues to parse the 27,263-row JSONL display stream into index
 | RPR-08 | A FAB/viewer scope change invalidates the previous projection before the new scope uses it. |
 | RPR-09 | Network failure and JSONL parse failure remain distinct visible errors. |
 | RPR-10 | The Research playback baseline is captured upon explicit mode entry; SSE updates cannot rebase it. |
+| RPR-11 | When only Research time/WIP changes, the equipment-state projection preserves object identity and cannot invalidate TwinContent. |
+| RPR-12 | High-frequency Research HUD and footer subscriptions stay in child components, not TwinContent. |
 ## Validation
 Add deterministic virtual-clock runtime tests, parse-error tests and source ownership tests. The repository-wide `scripts/verify.ps1`, production e2e and compiler ON/OFF equivalence checks remain required before claiming full verification.
