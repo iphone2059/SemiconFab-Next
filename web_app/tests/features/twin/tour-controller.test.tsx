@@ -14,6 +14,7 @@ import {
 } from '@/twin/use-tour-controller';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
 import { twinTourAtom } from '@/twin/twin-tour.atom';
+import { stopTwinTourRuntime } from '@/twin/twin-tour-runtime';
 let appRuntime: AppRuntime<never>;
 class VirtualFrames implements TwinTourScheduler {
   private handle = 0;
@@ -179,6 +180,16 @@ it('routes manual camera input, finishTour and unmount through the same stop', (
   unmount();
   expect(scheduler.pendingCount).toBe(0);
   expect(tourActive()).toBe(false);
+});
+it('routes external process exclusion through the registered runtime', () => {
+  const { result, scheduler } = renderTour();
+  act(() => result.current.startTour());
+  expect(scheduler.pendingCount).toBe(1);
+  expect(tourActive()).toBe(true);
+  act(() => stopTwinTourRuntime(appRuntime.registry));
+  expect(scheduler.pendingCount).toBe(0);
+  expect(tourActive()).toBe(false);
+  expect(result.current.tourHudSeed).toBeNull();
 });
 it('mounts one controller under StrictMode and releases the loop on unmount', () => {
   const handle = createSceneHandle();

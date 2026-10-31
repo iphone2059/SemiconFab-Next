@@ -31,8 +31,7 @@ describe('single Twin UI state', () => {
     expect(projectTwinSceneState(state).xray).toBeNull();
   });
   it('keeps Tour scene navigation separate from the process lifecycle projection', () => {
-    let state = twinUiReducer(createTwinUiState('research'), { type: 'wafer/open' });
-    state = twinUiReducer(state, { type: 'wafer/play', playing: true });
+    let state = { ...createTwinUiState('research'), wafer: { active: true, playing: true, speed: 1 as const } };
     state = twinUiReducer(state, { type: 'tour/scene-step', level: 'B1', view: 'iso' });
     expect(state).toMatchObject({ entryMode: 'visitor', level: 'B1', view: 'iso', wafer: { active: false, playing: false }, onboarding: { open: false }, research: { playing: false } });
     expect('tour' in state).toBe(false);
