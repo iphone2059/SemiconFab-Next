@@ -223,6 +223,7 @@ it('tears the old session down with the old scheduler when the scheduler identit
   expect(scheduler.pendingCount).toBe(0);
   expect(nextScheduler.pendingCount).toBe(0);
   expect(tourActive()).toBe(false);
+  expect(result.current.tourHudSeed).toBeNull();
   act(() => oldFrame?.());
   expect(scheduler.pendingCount).toBe(0);
   expect(nextScheduler.pendingCount).toBe(0);

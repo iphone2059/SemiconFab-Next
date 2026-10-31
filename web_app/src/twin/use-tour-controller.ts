@@ -59,6 +59,7 @@ export function useTourController({
     });
     runtimeRef.current = runtime;
     const unregister = registerTwinTourRuntime(registry, runtime);
+    setTourHudSeed(null);
     setReady(true);
     return () => {
       runtimeRef.current = null;
