@@ -29,6 +29,7 @@ export interface TwinActionsParams {
   toolStates: readonly FabToolState[];
   onboardingDontShow: boolean;
   startTour(): void;
+  endTour(): void;
 }
 
 export interface TwinActions {
@@ -78,6 +79,7 @@ export function useTwinActions({
   toolStates,
   onboardingDontShow,
   startTour,
+  endTour,
 }: TwinActionsParams): TwinActions {
   const registry = useContext(RegistryContext);
   const setSelected = (value?: PickedTool) => twinPageUiActions.selectedSet(registry, value);
@@ -99,6 +101,7 @@ export function useTwinActions({
   };
 
   function setMode(value: EntryMode): void {
+    if (value !== 'visitor') endTour();
     if (value === 'research' && mode !== 'research') setReplayBase(toolStates);
     twinUiActions.modeSet(registry, value);
   }
@@ -223,6 +226,7 @@ export function useTwinActions({
   }
 
   function escape(): void {
+    endTour();
     twinUiActions.escape(registry);
     scene.current?.clearSelection();
     setSelected(undefined);

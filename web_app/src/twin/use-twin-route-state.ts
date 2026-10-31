@@ -12,6 +12,7 @@ import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
 import { twinPageUiActions } from '@/twin/twin-page-ui.atom';
 import { twinYmsActions } from '@/twin/twin-yms.atom';
 import { twinUiAtom, twinUiActions } from '@/twin/twin-ui.atom';
+import { stopTwinTourRuntime } from '@/twin/twin-tour-runtime';
 import type { EntryMode } from '@/twin/twin-state';
 import { ONBOARDING_KEY } from '@/twin/twin-page-data';
 import type { TwinLanguage } from '@/twin/twin-i18n';
@@ -139,7 +140,10 @@ export function useTwinRouteState({
 
   useEffect(() => {
     const requested = twinModeFrom(searchMode === undefined ? {} : { mode: searchMode });
-    if (requested && registry.get(twinUiAtom).entryMode !== requested) twinUiActions.modeSet(registry, requested);
+    if (requested && registry.get(twinUiAtom).entryMode !== requested) {
+      if (requested !== 'visitor') stopTwinTourRuntime(registry);
+      twinUiActions.modeSet(registry, requested);
+    }
   }, [searchMode, registry]);
 
   useEffect(() => {
@@ -178,7 +182,10 @@ export function useTwinRouteState({
 
   useEffect(() => {
     try {
-      if (!routeModal && localStorage.getItem(ONBOARDING_KEY) !== '1') twinUiActions.onboardingOpen(registry);
+      if (!routeModal && localStorage.getItem(ONBOARDING_KEY) !== '1') {
+        stopTwinTourRuntime(registry);
+        twinUiActions.onboardingOpen(registry);
+      }
     } catch {
       // Storage may be blocked; the page still works without onboarding memory.
     }

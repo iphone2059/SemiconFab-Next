@@ -72,7 +72,7 @@ function stopTour(state: TwinUiState): TwinUiState {
     : state;
 }
 
-/** All mode exclusion happens here, before React or the scene observes a transition. */
+/** Presentation reducer only; long-lived process lifecycles are owned by their runtimes. */
 export function twinUiReducer(state: TwinUiState, event: TwinUiEvent): TwinUiState {
   switch (event.type) {
     case 'spatial/toggle': return spatialState(state, state.spatialMode === event.mode ? null : event.mode);

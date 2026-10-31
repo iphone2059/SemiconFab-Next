@@ -1,13 +1,7 @@
 import { useImperativeHandle, useState, type Ref } from 'react';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '@/domain/simulation-original-tour';
 import { useTwinLocale } from '@/twin/twin-i18n';
-
-export interface TourHudSnapshot {
-  tag: string;
-  timerText: string;
-  progressWidth: string;
-  activeDot: number;
-}
+import type { TourHudSnapshot } from '@/twin/twin-tour-runtime';
 
 export interface TwinTourHudHandle {
   /** High-frequency tour frame values, pushed from the RAF loop without React state in TwinContent. */
