@@ -214,7 +214,7 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
         </section>
         <button type="button" className={`twin-yms-toggle${ymsOpen ? ' active' : ''}`} aria-pressed={ymsOpen} onClick={() => { actions.setYmsTab('map'); actions.setYmsOpen(!ymsOpen); }}><OriginalIcon name="wafer" />{t("YMS 晶圆图谱")}</button>
         <button id="btn-toggle-cut" type="button" className={classNames('twin-cut-toggle', { active: cutActive })} aria-pressed={cutActive} onClick={actions.toggleCut}><OriginalIcon name="cut" />{t("动态剖切")}</button>
-        <button id="btn-follow-wafer" type="button" className={classNames('twin-wafer-toggle', { active: waferActive })} aria-pressed={waferActive} onClick={() => { if (waferActive) wafer.closeWafer(); else wafer.startWafer(); }}><OriginalIcon name="wafer" />{t("跟随晶圆")}</button>
+        <button id="btn-follow-wafer" type="button" className={classNames('twin-wafer-toggle', { active: waferActive })} aria-pressed={waferActive} disabled={!wafer.commandsReady} onClick={() => { if (waferActive) wafer.closeWafer(); else wafer.startWafer(); }}><OriginalIcon name="wafer" />{t("跟随晶圆")}</button>
         <label className="twin-source"><select aria-label={t("状态来源")} value={ui.preferredStatusSource} disabled={mode === 'research'} onChange={(event) => twinUiActions.sourceSet(registry, event.target.value as 'demo' | 'sse-live')}>
           <option value="sse-live">SSE</option><option value="demo">DEMO</option>
         </select></label>
@@ -412,7 +412,7 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
           </section>
         )}
 
-        {waferActive && (
+        {waferActive && wafer.commandsReady && (
           <TwinWaferHud
             routesReady={wafer.routesReady}
             error={wafer.error}

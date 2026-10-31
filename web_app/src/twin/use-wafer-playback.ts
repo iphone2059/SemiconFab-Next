@@ -24,6 +24,7 @@ export interface TwinWaferPlaybackParams {
 }
 export interface TwinWaferPlayback {
   readonly initialized: boolean;
+  readonly commandsReady: boolean;
   readonly routesReady: boolean;
   readonly error: string;
   startWafer(): void;
@@ -48,11 +49,12 @@ export function useWaferPlayback({
   const runtimeRef = useRef<TwinWaferRuntime | null>(null);
   const previousRuntimeRef = useRef({ appRuntime, registry, scheduler, scopeKey });
   const [initialized, setInitialized] = useState(false);
+  const [commandsReady, setCommandsReady] = useState(false);
   const [routesReady, setRoutesReady] = useState(false);
   const [runtimeGeneration, setRuntimeGeneration] = useState(0);
   const waferRoutesView = useResource(appRuntime, waferRoutesDefinition, { enabled: waferActive });
   const waferRoutes = waferRoutesView.data;
-  const error = waferRoutesView.isError ? t('路线加载失败') : '';
+  const error = !routesReady && waferRoutesView.isError ? t('路线加载失败') : '';
   useLayoutEffect(() => {
     const previous = previousRuntimeRef.current;
     if (previous.appRuntime === appRuntime
@@ -62,6 +64,7 @@ export function useWaferPlayback({
     previousRuntimeRef.current = { appRuntime, registry, scheduler, scopeKey };
     runtimeRef.current?.close();
     runtimeRef.current = null;
+    setCommandsReady(false);
     setRoutesReady(false);
   }, [appRuntime, registry, scheduler, scopeKey]);
   useEffect(() => {
@@ -75,6 +78,7 @@ export function useWaferPlayback({
     runtimeRef.current = runtime;
     const unregister = registerTwinWaferRuntime(registry, runtime);
     setInitialized(true);
+    setCommandsReady(true);
     setRuntimeGeneration(generation => generation + 1);
     return () => {
       runtimeRef.current = null;
@@ -86,17 +90,18 @@ export function useWaferPlayback({
     const runtime = runtimeRef.current;
     if (!waferRoutes || !runtime) return;
     runtime.setRoutes(waferRoutes);
-    setRoutesReady(runtime.routesReady);
+    setRoutesReady(true);
   }, [waferRoutes, registry, runtimeGeneration]);
   useEffect(() => {
     runtimeRef.current?.setLanguage(language);
   }, [language, registry, runtimeGeneration]);
-  function currentRuntime(): TwinWaferRuntime | null {
-    return runtimeRef.current;
+  function currentRuntime(): TwinWaferRuntime {
+    const runtime = runtimeRef.current;
+    if (!runtime) throw new Error('TwinWaferRuntime is not mounted');
+    return runtime;
   }
   function startWafer(): void {
     const runtime = currentRuntime();
-    if (!runtime) return;
     endTour();
     if (registry.get(twinUiAtom).entryMode === 'research') twinUiActions.modeSet(registry, 'engineer');
     twinUiActions.levelSet(registry, 'L1');
@@ -105,29 +110,29 @@ export function useWaferPlayback({
   }
   function closeWafer(): void {
     const runtime = currentRuntime();
-    if (!runtime) return;
     runtime.close();
     twinUiActions.viewSet(registry, 'iso');
     scene.current?.setView('iso');
   }
   function replayWafer(): void {
-    currentRuntime()?.replay();
+    currentRuntime().replay();
   }
   function changeWaferProduct(product: WaferProduct): void {
-    currentRuntime()?.setProduct(product);
+    currentRuntime().setProduct(product);
   }
   function toggleWaferPlay(): void {
-    currentRuntime()?.togglePlay();
+    currentRuntime().togglePlay();
   }
   function setWaferSpeed(speed: TwinWaferSpeed): void {
-    currentRuntime()?.setSpeed(speed);
+    currentRuntime().setSpeed(speed);
   }
   function clearFollowOnCameraInteraction(): void {
     if (registry.get(twinWaferAtom).follow) twinWaferActions.followSet(registry, false);
   }
   return {
     initialized,
-    routesReady: runtimeRef.current?.routesReady ?? routesReady,
+    commandsReady,
+    routesReady,
     error,
     startWafer,
     closeWafer,
