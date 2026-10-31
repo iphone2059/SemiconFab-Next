@@ -48,6 +48,7 @@ export function useWaferPlayback({
   const runtimeRef = useRef<TwinWaferRuntime | null>(null);
   const previousRuntimeRef = useRef({ appRuntime, registry, scheduler, scopeKey });
   const [ready, setReady] = useState(false);
+  const [routesReady, setRoutesReady] = useState(false);
   const [runtimeGeneration, setRuntimeGeneration] = useState(0);
   const waferRoutesView = useResource(appRuntime, waferRoutesDefinition, { enabled: waferActive });
   const waferRoutes = waferRoutesView.data;
@@ -62,6 +63,7 @@ export function useWaferPlayback({
     runtimeRef.current?.close();
     runtimeRef.current = null;
     setReady(false);
+    setRoutesReady(false);
   }, [appRuntime, registry, scheduler, scopeKey]);
   useEffect(() => {
     const runtime = new TwinWaferRuntime({
@@ -82,7 +84,10 @@ export function useWaferPlayback({
     };
   }, [appRuntime, registry, scheduler, scopeKey]);
   useEffect(() => {
-    if (waferRoutes) runtimeRef.current?.setRoutes(waferRoutes);
+    const runtime = runtimeRef.current;
+    if (!waferRoutes || !runtime) return;
+    runtime.setRoutes(waferRoutes);
+    setRoutesReady(runtime.routesReady);
   }, [waferRoutes, registry, runtimeGeneration]);
   useEffect(() => {
     runtimeRef.current?.setLanguage(language);
@@ -121,7 +126,7 @@ export function useWaferPlayback({
   }
   return {
     ready,
-    routesReady: waferRoutes !== undefined,
+    routesReady: runtimeRef.current?.routesReady ?? routesReady,
     error,
     startWafer,
     closeWafer,

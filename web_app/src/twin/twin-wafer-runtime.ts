@@ -148,6 +148,9 @@ export class TwinWaferRuntime {
     this.publishFrame(frame);
     this.applySceneFrame(frame, this.session?.scene ?? this.options.scene());
   }
+  get routesReady(): boolean {
+    return this.timeline !== null;
+  }
   dispose(): void {
     if (this.disposed) return;
     this.options.appRuntime.runSync(Scope.close(this.scope, Exit.void));

@@ -43,7 +43,7 @@ Only discrete process state and low-frequency HUD snapshots may enter Atom proje
 - Closing sends CLOSE, cancels the frame loop, closes the Timeline, clears the HUD and scene marker/trail, and leaves product/speed/waypoint progress available for reopening.
 - Reopening resumes the retained route position. If the Domain Timeline is already at the terminal waypoint, its original open() semantics replay the route.
 - A composite FAB/viewer epoch change closes the old runtime Scope. The session captures its scene port, and the generation guard prevents an old callback from writing into the replacement scene. A replacement runtime retains product/speed preferences and starts a fresh timeline at waypoint zero.
-- The first route snapshot is immutable within one runtime lifetime. A later ResourceManager cache rehydration may return a new object identity after idle eviction; the runtime ignores that replacement and retains its existing Timeline. A runtime is replaced with its viewer scope rather than silently replacing route data underneath an active timeline.
+- The first route snapshot is immutable within one runtime lifetime. A later ResourceManager cache rehydration may return a new object identity after idle eviction; the runtime ignores that replacement and retains its existing Timeline and `routesReady` state. A runtime is replaced with its viewer scope rather than silently replacing route data underneath an active timeline.
 
 ### Cross-process exclusion
 

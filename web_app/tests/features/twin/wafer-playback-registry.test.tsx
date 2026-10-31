@@ -277,7 +277,9 @@ it('retains the first route snapshot when the resource is reloaded after idle ev
     language: 'en',
   });
   runtime.setRoutes(routes);
+  expect(runtime.routesReady).toBe(true);
   expect(() => runtime.setRoutes(structuredClone(routes))).not.toThrow();
+  expect(runtime.routesReady).toBe(true);
   runtime.open();
   expect(first.get(twinWaferAtom)).toMatchObject({ active: true, playing: true, product: 'A' });
   expect(first.get(twinWaferAtom).hud?.toolGroup).toBe('TG01_LITHO');
