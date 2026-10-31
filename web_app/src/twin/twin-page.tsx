@@ -374,7 +374,7 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
           <span>{fab ? `${fab.code} · ${t("独立 FAB")}` : t("FAB 视图")}</span>
           <span className="twin-footer-legend" aria-label={t("工艺分区图例")}>{[['光刻','#d99e3d'],['刻蚀','#c26b6b'],['薄膜','#d68a4a'],['Cu','#a98467'],['注入','#8b7bb5'],['扩散','#5c9b78'],['CMP/清洗','#4f9b9b'],['量测','#5b82b5'],['封装','#b06c96'],['Subfab','#4f6fa8']].map(([name,color])=><i key={name} title={name} style={{background:color}} />)}</span>
           <AmhsOhtReadout />
-          {mode === 'research' ? <TwinResearchFooter scopeKey={playbackScopeKey} /> : <span>${stateCounts.running} RUN · ${stateCounts.idle} IDLE · ${stateCounts.down} DOWN · ${stateCounts.maint} MAINT</span>}
+          {mode === 'research' ? <TwinResearchFooter scopeKey={playbackScopeKey} /> : <span>{stateCounts.running} RUN · {stateCounts.idle} IDLE · {stateCounts.down} DOWN · {stateCounts.maint} MAINT</span>}
         </footer>
 
 
