@@ -11,6 +11,7 @@ import { twinWaferAtom, twinWaferActions } from '@/twin/twin-wafer.atom';
 import { localeActions, localeAtom } from '@/state/locale.atom';
 import type { TwinWaferScheduler } from '@/twin/twin-wafer-runtime';
 import { stopTwinWaferRuntime, TwinWaferRuntime } from '@/twin/twin-wafer-runtime';
+import { waferRoutesDefinition } from '@/api/wafer.resource';
 import { createTestRuntime, seedWaferRoutes, ResourceTestProviders, type AppRuntime } from '../../support/resource-test-runtime.tsx';
 const routes: Record<WaferProduct, WaferRouteStep[]> = {
   A: [{ step: 1, tool_group: 'TG01_LITHO' }, { step: 2, tool_group: 'TG03_ETCH' }, { step: 3, tool_group: 'TG05_CVD' }],
@@ -142,8 +143,10 @@ async function startPlayback(
   result: { current: ReturnType<typeof useWaferPlayback> },
   registry: AtomRegistry.AtomRegistry,
 ): Promise<void> {
+  await waitFor(() => expect(result.current.commandsReady).toBe(true));
   act(() => result.current.startWafer());
   await waitFor(() => {
+    expect(result.current.commandsReady).toBe(true);
     expect(result.current.routesReady).toBe(true);
     expect(registry.get(twinWaferAtom)).toMatchObject({ active: true, playing: true });
   });
@@ -277,15 +280,55 @@ it('retains the first route snapshot when the resource is reloaded after idle ev
     language: 'en',
   });
   runtime.setRoutes(routes);
-  expect(runtime.routesReady).toBe(true);
-  expect(() => runtime.setRoutes(structuredClone(routes))).not.toThrow();
-  expect(runtime.routesReady).toBe(true);
+  const reloadedRoutes: Record<WaferProduct, WaferRouteStep[]> = {
+    ...routes,
+    A: routes.A.map((step, index) => index === 0 ? { ...step, tool_group: 'TG_RELOADED' } : step),
+  };
+  expect(() => runtime.setRoutes(reloadedRoutes)).not.toThrow();
   runtime.open();
   expect(first.get(twinWaferAtom)).toMatchObject({ active: true, playing: true, product: 'A' });
   expect(first.get(twinWaferAtom).hud?.toolGroup).toBe('TG01_LITHO');
   expect(scheduler.pendingCount).toBe(1);
   runtime.dispose();
   expect(scheduler.pendingCount).toBe(0);
+});
+it('keeps route readiness and the original timeline after ResourceManager idle eviction', async () => {
+  const { result, scheduler } = mountPlayback();
+  await waitFor(() => expect(result.current.commandsReady).toBe(true));
+  await startPlayback(result, first);
+  expect(result.current.routesReady).toBe(true);
+  act(() => result.current.closeWafer());
+  firstRuntime.resources.release(waferRoutesDefinition.identity.key);
+  const reloadedRoutes: Record<WaferProduct, WaferRouteStep[]> = {
+    ...routes,
+    A: routes.A.map((step, index) => index === 0 ? { ...step, tool_group: 'TG_RELOADED' } : step),
+  };
+  seedWaferRoutes(firstRuntime, reloadedRoutes);
+  await startPlayback(result, first);
+  expect(result.current.routesReady).toBe(true);
+  expect(first.get(twinWaferAtom).hud?.toolGroup).toBe('TG01_LITHO');
+  expect(scheduler.pendingCount).toBe(1);
+});
+it('rejects playback commands while routes are initialized but the runtime is closed', () => {
+  const scheduler = new VirtualFrames();
+  const handle = createSceneHandle();
+  const runtime = new TwinWaferRuntime({
+    appRuntime: firstRuntime,
+    registry: first,
+    scheduler,
+    scene: () => handle,
+    language: 'en',
+  });
+  runtime.setRoutes(routes);
+  const pointCalls = frameCount(handle, 'setWaferPoint');
+  const trailCalls = frameCount(handle, 'setWaferTrail');
+  expect(() => runtime.setProduct('B')).toThrow('Wafer playback is not active');
+  expect(() => runtime.togglePlay()).toThrow('Wafer playback is not active');
+  expect(() => runtime.setSpeed(4)).toThrow('Wafer playback is not active');
+  expect(() => runtime.replay()).toThrow('Wafer playback is not active');
+  expect(frameCount(handle, 'setWaferPoint')).toBe(pointCalls);
+  expect(frameCount(handle, 'setWaferTrail')).toBe(trailCalls);
+  runtime.dispose();
 });
 it('routes external process exclusion and unmount through the same Scope teardown', async () => {
   const { result, scheduler, unmount } = mountPlayback();
