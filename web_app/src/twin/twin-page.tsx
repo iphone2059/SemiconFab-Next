@@ -1,4 +1,4 @@
-import { RegistryContext } from '@effect/atom-react';
+import { RegistryContext, useAtomValue } from '@effect/atom-react';
 import { useContext } from 'react';
 import { OriginalIcon } from '@/components/original-icons';
 import { TwinLocaleProvider } from '@/twin/twin-i18n';
@@ -9,7 +9,6 @@ import { YIELD_SCENARIOS } from '@/domain/fab-yield';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '@/domain/simulation-original-tour';
 import { layoutIdentitiesForFab } from '@/domain/fab-layout-identities';
 import { cleanroomPressureField } from '@/domain/fab-cleanroom-pressure';
-import { researchClock } from '@/domain/simulation-research-replay';
 import { createTwinUiState, projectTwinSceneState, type EntryMode } from '@/twin/twin-state';
 import { classNames } from '@/components/class-names';
 import type { RouterSearch } from '@/routes/route-search';
@@ -25,7 +24,7 @@ import { TwinSidebar } from '@/twin/twin-sidebar';
 import { OriginalInspector } from '@/twin/twin-inspector';
 import { TwinInfoDialog } from '@/twin/twin-dialogs';
 import { createToolStateMerger } from '@/twin/tool-state-merge';
-import { AmhsOhtReadout, AmhsResearchBadge } from '@/twin/twin-amhs-hud';
+import { AmhsOhtReadout } from '@/twin/twin-amhs-hud';
 import { TwinTourHud } from '@/twin/twin-tour-hud';
 import { TwinWaferHud } from '@/twin/twin-wafer-hud';
 import { TwinYmsPanel, TwinYieldPill } from '@/twin/twin-yms';
@@ -34,8 +33,8 @@ import { useTwinActions } from '@/twin/use-twin-actions';
 import { useTwinDemoClock } from '@/twin/use-twin-demo-clock';
 import { useTwinKeyboard } from '@/twin/use-twin-keyboard';
 import { useTwinProcessProjection } from '@/twin/use-twin-process-projection';
-import { useResearchPlayback } from '@/twin/use-research-playback';
-import { readResearchToolStates } from '@/twin/twin-research.atom';
+import { TwinResearchFooter, TwinResearchHud } from '@/twin/twin-research-hud';
+import { readResearchToolStates, twinResearchAtom } from '@/twin/twin-research.atom';
 import { useTourController } from '@/twin/use-tour-controller';
 import { useTwinRouteState } from '@/twin/use-twin-route-state';
 import { useTwinSlices } from '@/twin/use-twin-slices';
@@ -93,12 +92,7 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
     ready: tourReady, tourHudRef, tourHudSeed, startTour, endTour, previousTour, advanceTour, finishTour, cancelTourIfRunning,
   } = useTourController({ scene, language, scopeKey: playbackScopeKey });
   const wafer = useWaferPlayback({ scene, waferActive, language, endTour: finishTour, scopeKey: playbackScopeKey, t });
-  const {
-    research, researchTime, researchPlaying, researchSpeed,
-    loading: researchLoading, error: researchError, parseError: researchParseError,
-    snapshot: researchSnapshot, replayProjection,
-    setResearchPlaying, setResearchTime, setResearchSpeed,
-  } = useResearchPlayback({ mode, replayBase, scopeKey: playbackScopeKey, t });
+  const researchStates = useAtomValue(twinResearchAtom, value => value.scopeKey === playbackScopeKey ? value.replayProjection?.states : undefined);
 
   // projectTwinSceneState only reads the level/spatial/cut/xray/explode branches;
   // rebuilding the snapshot from the subscribed values keeps the same projection
@@ -114,7 +108,7 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
   });
   const layers = (({ ...layerPreferences, airflow: projected.airflow, heatmap: projected.heatmap, xray: projected.xray !== null }));
 
-  const toolStates = ui.statusSource === 'research-replay' ? replayProjection?.states ?? replayBase
+  const toolStates = ui.statusSource === 'research-replay' ? researchStates ?? replayBase
     : ui.statusSource === 'demo' ? demo.states : liveToolStates;
   const { selectedTelemetry, selectedSpc, selectedMes, spcPlot } = useTwinProcessProjection({ selected, toolStates, mesJobs });
   const actions = useTwinActions({
@@ -354,57 +348,7 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
         )}
 
         {mode === 'research' && (
-          <section id="research-hud" className="twin-research-hud" aria-label="Research Replay">
-            <div className="twin-research-head">
-              <span className="technical">RESEARCH REPLAY · JSONL</span>
-              <span>{research ? `${research.eventCount.toLocaleString('en-US')} rows` : 'display projection'}</span>
-            </div>
-            {researchLoading && <p className="twin-research-status">{t("正在载入 27,263 行展示事件…")}</p>}
-            {researchError && <p className="twin-research-status error-text">{t("回放加载失败：")}{researchError}</p>}
-            {researchParseError && <p className="twin-research-status twin-research-parse-error error-text">{t("回放数据解析失败：")}{researchParseError}</p>}
-            {research && researchSnapshot && (
-              <>
-                <div className="twin-research-clock">
-                  <strong id="research-time-clock">{researchClock(researchTime)}</strong>
-                  <span>{researchTime.toFixed(0)} s / {research.durationSec.toFixed(0)} s</span>
-                </div>
-                <input
-                  id="research-scrubber"
-                  className="twin-research-scrubber"
-                  type="range"
-                  min={0}
-                  max={Math.max(1, research.durationSec)}
-                  step={1}
-                  value={researchTime}
-                  onChange={(event) => { setResearchPlaying(false); setResearchTime(Number(event.target.value)); }}
-                  aria-label={t("回放时间轴")}
-                />
-                <div className="twin-research-controls">
-                  <button id="research-play-btn" type="button" onClick={() => { if (researchTime >= research.durationSec) setResearchTime(0); setResearchPlaying(!researchPlaying); }}>{researchPlaying ? t("暂停") : t("播放")}</button>
-                  {([1, 10, 100, 500] as const).map((speed) => (
-                    <button type="button" key={speed} className={researchSpeed === speed ? 'active' : ''} onClick={() => setResearchSpeed(speed)}>{speed}×</button>
-                  ))}
-                </div>
-                <div className="twin-research-stats">
-                  <div><span>WIP</span><strong id="research-wip-val">{researchSnapshot.wip} lots</strong><small>{researchSnapshot.wip * 25} wafers</small></div>
-                  <div><span>ACTIVE</span><strong>{researchSnapshot.activeTools}</strong><small>tools</small></div>
-                  <div><span>TOP UTIL</span><strong>{(researchSnapshot.utilization[0]?.utilization ?? 0).toFixed(1)}%</strong><small>{researchSnapshot.utilization[0]?.toolGroup ?? '—'}</small></div>
-                </div>
-                <button id="btn-toggle-util-overlay" type="button" className="twin-research-util-toggle" aria-pressed={showResearchUtil} onClick={actions.toggleResearchUtil}>{t("利用率热力图")}</button>
-                {showResearchUtil && <div id="research-utilization-overlay" className="twin-research-util">
-                  {researchSnapshot.utilization.slice(0, 4).map((group) => (
-                    <div key={group.toolGroup}>
-                      <span>{group.toolGroup}</span>
-                      <i><b style={{ width: `${Math.min(100, group.utilization)}%` }} /></i>
-                      <em>{group.busy}/{group.total}</em>
-                    </div>
-                  ))}
-                </div>}
-                <AmhsResearchBadge />
-                <p className="twin-research-footnote">{t("只读展示事件流，不是 Checkpoint/WAL。原版别名命中")}{replayProjection?.mappedCount ?? 0}{t("/121 台；未映射设备保留进入回放前的状态。217 台仿真设备与布局不是一一对应。AMHS 为独立动画时钟，JSONL 无运输事件。")}</p>
-              </>
-            )}
-          </section>
+          <TwinResearchHud scopeKey={playbackScopeKey} replayBase={replayBase} showResearchUtil={showResearchUtil} onToggleResearchUtil={actions.toggleResearchUtil} t={t} />
         )}
 
         {waferActive && wafer.commandsReady && (
@@ -430,7 +374,7 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
           <span>{fab ? `${fab.code} · ${t("独立 FAB")}` : t("FAB 视图")}</span>
           <span className="twin-footer-legend" aria-label={t("工艺分区图例")}>{[['光刻','#d99e3d'],['刻蚀','#c26b6b'],['薄膜','#d68a4a'],['Cu','#a98467'],['注入','#8b7bb5'],['扩散','#5c9b78'],['CMP/清洗','#4f9b9b'],['量测','#5b82b5'],['封装','#b06c96'],['Subfab','#4f6fa8']].map(([name,color])=><i key={name} title={name} style={{background:color}} />)}</span>
           <AmhsOhtReadout />
-          <span>{mode === 'research' ? `REPLAY · WIP ${researchSnapshot?.wip ?? 0} · ACTIVE ${researchSnapshot?.activeTools ?? 0}` : `${stateCounts.running} RUN · ${stateCounts.idle} IDLE · ${stateCounts.down} DOWN · ${stateCounts.maint} MAINT`}</span>
+          {mode === 'research' ? <TwinResearchFooter scopeKey={playbackScopeKey} /> : <span>${stateCounts.running} RUN · ${stateCounts.idle} IDLE · ${stateCounts.down} DOWN · ${stateCounts.maint} MAINT</span>}
         </footer>
 
 

@@ -7,6 +7,8 @@ it('keeps Research clocks, event indexing and lifecycle outside React and the ge
   const runtime = read('twin-research-runtime.ts');
   const machine = read('twin-research.machine.ts');
   const atom = read('twin-research.atom.ts');
+  const page = read('twin-page.tsx');
+  const hud = read('twin-research-hud.tsx');
   const ui = read('twin-state.ts');
   expect(hook).not.toMatch(/setInterval\(|clearInterval\(|ResearchReplay\.parse\(|projectReplayStates\(|performance\.now\(/);
   expect(runtime).toContain('Scope.addFinalizer');
@@ -17,4 +19,9 @@ it('keeps Research clocks, event indexing and lifecycle outside React and the ge
   expect(atom).toContain('readonly scopeKey: string');
   expect(ui).not.toMatch(/research\/advance|research\/seek|research\/play|research\/speed/);
   expect(ui).not.toMatch(/research: \{/);
+  expect(page).toContain('<TwinResearchHud');
+  expect(page).not.toContain('useResearchPlayback(');
+  expect(page).not.toContain('researchSnapshot');
+  expect(hud).toContain('useResearchPlayback(');
+  expect(runtime).toContain('lastReplayProjection');
 });
