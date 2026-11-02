@@ -6,7 +6,7 @@ import type { FabToolState } from '@/domain/fab-layout';
 import { ResearchReplay, type ResearchSnapshot } from '@/domain/simulation-research-replay';
 import { projectReplayStates } from '@/domain/simulation-twin-equipment';
 import { twinUiAtom } from '@/twin/twin-ui.atom';
-import { twinResearchActions, type TwinResearchProjection, type TwinResearchSpeed, type TwinResearchStatus } from '@/twin/twin-research.atom';
+import { initialTwinResearchProjection, twinResearchActions, twinResearchAtom, type TwinResearchProjection, type TwinResearchSpeed, type TwinResearchStatus } from '@/twin/twin-research.atom';
 import { twinResearchMachine } from '@/twin/twin-research.machine';
 export interface TwinResearchScheduler {
   setInterval(callback: () => void, delayMs: number): number;
@@ -43,6 +43,7 @@ export class TwinResearchRuntime {
   private replay: ResearchReplay | null = null;
   private readonly replayBase: readonly FabToolState[];
   private lastReplayProjection: ReturnType<typeof projectReplayStates> | undefined;
+  private lastProjection: TwinResearchProjection | null = null;
   private timeSec = 0;
   private speed: TwinResearchSpeed = 100;
   private parseError = '';
@@ -60,6 +61,9 @@ export class TwinResearchRuntime {
       this.disposed = true;
       this.subscription.unsubscribe();
       this.actor.stop();
+      if (this.lastProjection !== null && options.registry.get(twinResearchAtom) === this.lastProjection) {
+        twinResearchActions.projectionSet(options.registry, initialTwinResearchProjection);
+      }
     })));
     this.actor.start();
     this.publish();
@@ -181,6 +185,7 @@ export class TwinResearchRuntime {
       snapshot,
       replayProjection,
     };
+    this.lastProjection = projection;
     twinResearchActions.projectionSet(this.options.registry, projection);
   }
 }

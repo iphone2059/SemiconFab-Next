@@ -183,6 +183,15 @@ it('keeps parse errors distinct from transport errors and does not start a timer
   expect(registry.get(twinResearchAtom)).toMatchObject({ status: 'failed', parseError: 'invalid research JSONL' });
   expect(scheduler.pendingCount).toBe(0);
 });
+it('does not erase a projection already published by a replacement owner', () => {
+  const { runtime, registry } = create();
+  runtime.enter();
+  runtime.setEvents(events);
+  const next = { ...registry.get(twinResearchAtom), scopeKey: 'site:replacement:epoch' };
+  registry.set(twinResearchAtom, next);
+  runtime.dispose();
+  expect(registry.get(twinResearchAtom)).toBe(next);
+});
 it('prevents direct play/seek before the actor and data are ready', () => {
   const { runtime } = create();
   expect(() => runtime.play()).toThrow('Research playback is not paused or completed');

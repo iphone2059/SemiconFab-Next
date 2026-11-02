@@ -38,6 +38,9 @@
 | `20-round5.2-remediation-specification.md` | Round 5.2 定向整改（独立复审 P1-01…P1-03 / P2-01 / P2-02）：outcome 证明链、ACK 完整身份 + supersede、CORE-011 双后端隔离、三游标数学修正（2026-10-30） |
 | `22-adr-twin-process-runtime.md` | ADR-022：Twin Tour 的 XState 状态所有权、Effect Scope、RAF 驱动与 Atom 投影契约 |
 | `23-adr-twin-wafer-runtime.md` | ADR-023：Wafer Playback 的 XState 状态机、Effect Scope、单 RAF、命令式场景帧与 Atom 投影契约 |
+| `24-adr-twin-research-runtime.md` | ADR-024：Research Playback 的 Effect Scope、XState、回放投影与 HUD 隔离 |
+| `25-adr-twin-demo-clock-runtime.md` | ADR-025：DEMO 1600ms 时钟的 Effect Scope 生命周期 |
+| `26-adr-twin-playback-lifecycle.md` | ADR-026：前台互斥、FAB/Viewer 生命周期、StrictMode 及跨 Runtime 协调 |
 
 ## 已实施的核心决定
 

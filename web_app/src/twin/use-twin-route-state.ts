@@ -12,9 +12,7 @@ import { twinPageAtom, twinPageActions } from '@/twin/twin-page.atom';
 import { twinPageUiActions } from '@/twin/twin-page-ui.atom';
 import { twinYmsActions } from '@/twin/twin-yms.atom';
 import { twinUiAtom, twinUiActions } from '@/twin/twin-ui.atom';
-import { stopTwinTourRuntime } from '@/twin/twin-tour-runtime';
-import { stopTwinWaferRuntime } from '@/twin/twin-wafer-runtime';
-import { stopTwinResearchRuntime } from '@/twin/twin-research-runtime';
+import { stopOtherTwinPlaybacks } from '@/twin/twin-playback-coordination';
 import type { EntryMode } from '@/twin/twin-state';
 import { ONBOARDING_KEY } from '@/twin/twin-page-data';
 import type { TwinLanguage } from '@/twin/twin-i18n';
@@ -143,9 +141,7 @@ export function useTwinRouteState({
   useEffect(() => {
     const requested = twinModeFrom(searchMode === undefined ? {} : { mode: searchMode });
     if (requested && registry.get(twinUiAtom).entryMode !== requested) {
-      if (requested !== 'visitor') stopTwinTourRuntime(registry);
-      stopTwinWaferRuntime(registry);
-      if (requested !== 'research') stopTwinResearchRuntime(registry);
+      stopOtherTwinPlaybacks(registry, requested === 'research' ? 'research' : requested === 'visitor' ? 'tour' : null);
       twinUiActions.modeSet(registry, requested);
     }
   }, [searchMode, registry]);
@@ -187,9 +183,7 @@ export function useTwinRouteState({
   useEffect(() => {
     try {
       if (!routeModal && localStorage.getItem(ONBOARDING_KEY) !== '1') {
-        stopTwinTourRuntime(registry);
-        stopTwinWaferRuntime(registry);
-        stopTwinResearchRuntime(registry);
+        stopOtherTwinPlaybacks(registry, null);
         twinUiActions.onboardingOpen(registry);
       }
     } catch {

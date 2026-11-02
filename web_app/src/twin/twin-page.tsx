@@ -91,7 +91,7 @@ function TwinContent({ siteId, fabId, search, onSearchChange }: TwinContentProps
   const {
     ready: tourReady, tourHudRef, tourHudSeed, startTour, endTour, previousTour, advanceTour, finishTour, cancelTourIfRunning,
   } = useTourController({ scene, language, scopeKey: playbackScopeKey });
-  const wafer = useWaferPlayback({ scene, waferActive, language, endTour: finishTour, scopeKey: playbackScopeKey, t });
+  const wafer = useWaferPlayback({ scene, waferActive, language, scopeKey: playbackScopeKey, t });
   const researchStates = useAtomValue(twinResearchAtom, value => value.scopeKey === playbackScopeKey ? value.replayProjection?.states : undefined);
 
   // projectTwinSceneState only reads the level/spatial/cut/xray/explode branches;
