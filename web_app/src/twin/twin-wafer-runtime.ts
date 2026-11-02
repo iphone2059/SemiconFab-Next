@@ -73,8 +73,8 @@ export class TwinWaferRuntime {
       });
     });
     options.appRuntime.runSync(Scope.addFinalizer(this.scope, Effect.sync(() => {
-      this.disposed = true;
       this.closeSession();
+      this.disposed = true;
       this.timeline = null;
       this.subscription.unsubscribe();
       this.actor.stop();

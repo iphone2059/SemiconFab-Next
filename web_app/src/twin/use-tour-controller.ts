@@ -1,12 +1,11 @@
 import { RegistryContext } from '@effect/atom-react';
 import { useContext } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import { ORIGINAL_TOUR_STOPS as TOUR_STOPS } from '@/domain/simulation-original-tour';
 import { twinUiActions } from '@/twin/twin-ui.atom';
-import { stopTwinWaferRuntime } from '@/twin/twin-wafer-runtime';
-import { stopTwinResearchRuntime } from '@/twin/twin-research-runtime';
+import { stopOtherTwinPlaybacks } from '@/twin/twin-playback-coordination';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
 import type { TwinTourHudHandle } from '@/twin/twin-tour-hud';
 import type { TourHudSnapshot, TwinTourScheduler } from '@/twin/twin-tour-runtime';
@@ -69,7 +68,7 @@ export function useTourController({
       runtime.dispose();
     };
   }, [appRuntime, registry, scheduler]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (previousScopeRef.current === scopeKey) return;
     previousScopeRef.current = scopeKey;
     runtimeRef.current?.stop();
@@ -77,8 +76,7 @@ export function useTourController({
   function startTour(): void {
     const runtime = runtimeRef.current;
     if (!runtime) throw new Error('TwinTourRuntime is not mounted');
-    stopTwinWaferRuntime(registry);
-    stopTwinResearchRuntime(registry);
+    stopOtherTwinPlaybacks(registry, 'tour');
     setTourHudSeed(runtime.startTour(() => scene.current, language));
   }
   function endTour(): void {

@@ -7,7 +7,7 @@ import { useResource } from '@/api/use-resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
 import type { WaferProduct } from '@/domain/wafer-route';
 import { twinUiAtom, twinUiActions } from '@/twin/twin-ui.atom';
-import { stopTwinResearchRuntime } from '@/twin/twin-research-runtime';
+import { stopOtherTwinPlaybacks } from '@/twin/twin-playback-coordination';
 import { twinWaferActions, twinWaferAtom } from '@/twin/twin-wafer.atom';
 import type { FabViewportHandle } from '@/twin/twin-viewer';
 import type { TwinLanguage } from '@/twin/twin-i18n';
@@ -18,7 +18,6 @@ export interface TwinWaferPlaybackParams {
   readonly scene: RefObject<FabViewportHandle | null>;
   readonly waferActive: boolean;
   readonly language: TwinLanguage;
-  readonly endTour(): void;
   readonly scopeKey?: string;
   readonly scheduler?: TwinWaferScheduler;
   readonly t: (text: string, parameters?: readonly unknown[]) => string;
@@ -40,7 +39,6 @@ export function useWaferPlayback({
   scene,
   waferActive,
   language,
-  endTour,
   scopeKey,
   scheduler = browserTwinWaferScheduler,
   t,
@@ -103,9 +101,8 @@ export function useWaferPlayback({
   }
   function startWafer(): void {
     const runtime = currentRuntime();
-    endTour();
+    stopOtherTwinPlaybacks(registry, 'wafer');
     if (registry.get(twinUiAtom).entryMode === 'research') {
-      stopTwinResearchRuntime(registry);
       twinUiActions.modeSet(registry, 'engineer');
     }
     twinUiActions.levelSet(registry, 'L1');

@@ -114,7 +114,6 @@ function mountPlayback() {
       scene,
       waferActive,
       language,
-      endTour() {},
       scopeKey,
       scheduler,
       t: text => text,
@@ -291,6 +290,7 @@ it('retains the first route snapshot when the resource is reloaded after idle ev
   expect(scheduler.pendingCount).toBe(1);
   runtime.dispose();
   expect(scheduler.pendingCount).toBe(0);
+  expect(first.get(twinWaferAtom)).toMatchObject({ active: false, playing: false, hud: undefined });
 });
 it('keeps route readiness and the original timeline after ResourceManager idle eviction', async () => {
   const { result, scheduler } = mountPlayback();

@@ -1,5 +1,5 @@
 import { RegistryContext, useAtomValue } from '@effect/atom-react';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { researchEventsDefinition } from '@/api/research.resource';
 import { useResource } from '@/api/use-resource';
 import { useAppRuntime } from '@/app/app-runtime-provider';
@@ -50,7 +50,7 @@ export function useResearchPlayback({
   const currentOwner = owner.appRuntime === appRuntime && owner.registry === registry
     && owner.scheduler === scheduler && owner.scopeKey === scopeKey;
   const projection = initialized && currentOwner && stored.scopeKey === scopeKey ? stored : initialTwinResearchProjection;
-  useEffect(() => {
+  useLayoutEffect(() => {
     ownerRef.current = { appRuntime, registry, scheduler, scopeKey };
     const runtime = new TwinResearchRuntime({ appRuntime, registry, scheduler, replayBase, scopeKey });
     runtimeRef.current = runtime;

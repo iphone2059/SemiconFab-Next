@@ -12,7 +12,7 @@ import { twinPageActions } from '@/twin/twin-page.atom';
 import { twinPageUiAtom, twinPageUiActions } from '@/twin/twin-page-ui.atom';
 import { twinWaferActions } from '@/twin/twin-wafer.atom';
 import { stopTwinWaferRuntime } from '@/twin/twin-wafer-runtime';
-import { stopTwinResearchRuntime } from '@/twin/twin-research-runtime';
+import { stopOtherTwinPlaybacks } from '@/twin/twin-playback-coordination';
 import { twinYmsActions } from '@/twin/twin-yms.atom';
 import { twinUiActions } from '@/twin/twin-ui.atom';
 import type { EntryMode, FabLevel, TwinView } from '@/twin/twin-state';
@@ -103,9 +103,7 @@ export function useTwinActions({
   };
 
   function setMode(value: EntryMode): void {
-    if (value !== 'visitor') endTour();
-    stopTwinWaferRuntime(registry);
-    if (value !== 'research') stopTwinResearchRuntime(registry);
+    stopOtherTwinPlaybacks(registry, value === 'research' ? 'research' : value === 'visitor' ? 'tour' : null);
     if (value === 'research' && mode !== 'research') setReplayBase(toolStates);
     twinUiActions.modeSet(registry, value);
   }
